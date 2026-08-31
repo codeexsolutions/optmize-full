@@ -56,6 +56,12 @@ let pecasEncaixe = [];
 let proximoIdPeca = 1;
 let ultimoResultado = null;
 
+// Uma vez que a pessoa mexe no campo "Procurar por" com a própria mão, ele é
+// dela: parar de sugerir sozinho, senão trocar de tamanho de lote no meio do
+// ajuste manual apagaria o que ela acabou de escrever.
+let tempoAjustadoPeloUsuario = false;
+encaixeTempoInput.addEventListener("input", () => { tempoAjustadoPeloUsuario = true; });
+
 // Paleta usada para diferenciar as peças no desenho (uma cor por imagem).
 const CORES_PECA = [
   "#2bd672", "#4aa8ff", "#f5a623", "#f0555b", "#b78bff",
@@ -1004,6 +1010,21 @@ function renderPecasEncaixe() {
 }
 
 /**
+ * Quanto tempo de busca sugerir para um lote deste tamanho.
+ *
+ * Medido nos arquivos de um teste real desta tela: um lote de 23 peças já
+ * não melhorava mais depois de uns 20s (rodou até 60s sem ganho); um de 57
+ * ainda estava melhorando aos 40s. A conta abaixo é a reta que passa perto
+ * dos dois pontos — não é ciência exata, é uma sugestão que erra para mais
+ * tempo, nunca para menos, porque sobrar segundo custa paciência e faltar
+ * custa tecido. O teto de 60s evita que um lote enorme sugira um número que
+ * ninguém pediu; quem quiser mais digita à mão.
+ */
+function tempoSugerido(copias) {
+  return Math.max(10, Math.min(60, Math.round(copias * 0.9)));
+}
+
+/**
  * O que a coluna e a faixa de status mostram ANTES de existir encaixe.
  *
  * Contagem de arquivos, de cópias e a largura do tecido não dependem de
@@ -1016,6 +1037,10 @@ function atualizarPainelDoTrabalho() {
 
   if (encaixeContagem) encaixeContagem.textContent = `${arquivos} · ${copias} cóp.`;
   if (btnLimparPecas) btnLimparPecas.classList.toggle("hidden", arquivos === 0);
+
+  if (!tempoAjustadoPeloUsuario && copias > 0) {
+    encaixeTempoInput.value = tempoSugerido(copias);
+  }
 
   // Com resultado na tela, quem manda na faixa é o resultado.
   if (ultimoResultado) return;

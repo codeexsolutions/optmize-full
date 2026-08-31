@@ -74,28 +74,24 @@ const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : ENCAIXE_PULO_PADRAO);
 /**
  * Quais encaixadores cada fatia usa.
  *
- * O encaixe por NFP (nfp.js) é de outra natureza: ele enxerga posição de lado,
- * encaixada num vão que só se alcança andando na diagonal, e por isso ganha
- * feio em trabalho de uma peça só que se aninha bem — numa fila de 24
- * camisetas ele fecha em 5,70 m contra 6,37 m do encaixe por perfil, 10% menos
- * tecido. Conferido: nenhuma peça sobrepondo outra, nenhuma fora do rolo.
+ * O encaixe por NFP (nfp.js) ficava de fora do padrão, entrando só numa fatia
+ * do automático (ver o histórico do arquivo para a medição de ganho — em
+ * trabalho de peça única que se aninha bem, fechava com 10% menos tecido).
  *
- * Em compensação uma passada dele custa **segundos**, enquanto as outras
- * custam milissegundos. Botando ele para disputar em todas as fatias, ele rouba
- * o tempo das receitas que estavam ganhando: medido, ganhava 10,45% em dois
- * trabalhos e perdia até 1,90% em quatro outros.
- *
- * Por isso ele fica com **uma fatia só**. Ali ele tem o tempo inteiro dela para
- * fazer as poucas passadas que consegue; as outras quatro fatias seguem como
- * antes. Quando ele ganha, ganha muito; quando não ganha, custou um quinto da
- * capacidade e o melhor das outras vale.
- *
- * Só vale no automático, quando os dois encaixadores normais estão na disputa:
- * quem pediu contorno na tela quer ver o contorno.
+ * DESLIGADO por enquanto: produção relatou peça saindo sobreposta a outra,
+ * mais frequente em mídia estreita (160 cm) — exatamente onde o NFP tem mais
+ * chance de entrar na disputa e vencer. Os outros dois encaixadores (perfil e
+ * retângulo) não sobrepõem peça por construção: o perfil só desce até onde o
+ * relevo do tecido já ocupado permite, e o retângulo reserva e recorta área
+ * livre a cada peça encaixada. O NFP depende de geometria de polígono
+ * (soma de Minkowski, decomposição convexa) para a mesma garantia, e é o
+ * único dos três sem essa prova estrutural — por isso é o primeiro suspeito
+ * até a causa ser encontrada. Religar é só devolver o `return ["nfp"]` do
+ * `if` comentado abaixo.
  */
 function motoresDaFatia(k, n, motores) {
-  const automatico = motores.includes("contorno") && motores.includes("retangulo");
-  if (automatico && n >= 3 && k === n - 1) return ["nfp"];
+  // const automatico = motores.includes("contorno") && motores.includes("retangulo");
+  // if (automatico && n >= 3 && k === n - 1) return ["nfp"];
   return motores;
 }
 

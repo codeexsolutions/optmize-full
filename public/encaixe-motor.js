@@ -248,7 +248,18 @@ function formaDePartes(partes) {
  * mesma conta servir para a segunda peça, a terceira e a quarta.
  */
 function encostarNaForma(bloco, movel) {
-  let melhor = null;
+  // A área de cada posição candidata é só a extensão da caixa combinada —
+  // dá para medir isso sem montar o bloco de verdade, que é o caro (percorre
+  // as partes todas e aloca duas grades novas). `formaDePartes` só é chamado
+  // no fim, uma vez, para a posição que já se sabe vencedora.
+  //
+  // Antes disto media a área remontando o bloco a cada `dx` testado — correto,
+  // mas custava uma remontagem inteira por posição. Numa dupla ou trio isso
+  // nem se notava (poucos deslocamentos). No encaixe entre peças diferentes
+  // (`montarUnidadesCruzadas`), que testa isto para cada par de formatos, o
+  // mesmo custo por posição virou 3 segundos de um orçamento de busca de 5 —
+  // e foi medindo isso que este trecho foi reescrito.
+  let melhorDx = null, melhorDy = 0, melhorArea = Infinity, melhorRows = Infinity;
 
   for (let dx = -(movel.mascara.cols - 1); dx <= bloco.cols - 1; dx++) {
     let dy = 0;
@@ -260,17 +271,17 @@ function encostarNaForma(bloco, movel) {
       if (precisa > dy) dy = precisa;
     }
 
-    const forma = formaDePartes([
-      ...bloco.partes,
-      { ...movel, dcol: dx, drow: dy },
-    ]);
-    const area = forma.cols * forma.rows;
-    if (!melhor || area < melhor.area || (area === melhor.area && forma.rows < melhor.forma.rows)) {
-      melhor = { area, forma };
+    const cols = Math.max(bloco.cols - 1, dx + movel.mascara.cols - 1) - Math.min(0, dx) + 1;
+    const rows = Math.max(bloco.rows - 1, dy + movel.mascara.rows - 1) - Math.min(0, dy) + 1;
+    const area = cols * rows;
+    if (melhorDx === null || area < melhorArea || (area === melhorArea && rows < melhorRows)) {
+      melhorDx = dx; melhorDy = dy; melhorArea = area; melhorRows = rows;
     }
   }
 
-  return melhor;
+  if (melhorDx === null) return null;
+  const forma = formaDePartes([...bloco.partes, { ...movel, dcol: melhorDx, drow: melhorDy }]);
+  return { area: forma.cols * forma.rows, forma };
 }
 
 /** As formas de uma peça sozinha: uma por rotação que ela aceita. */
@@ -330,6 +341,144 @@ function formasDoBloco(copias, tamanho) {
   const solta = m0.cols * m0.rows * tamanho;
   const uteis = arranjos.filter((a) => a.area < solta * 0.98).map((a) => a.forma);
   return uteis.length > 0 ? uteis : null;
+}
+
+/** A área da peça na sua rotação de referência — a mesma conta que decide se um bloco compensa. */
+function areaDaPeca(item) {
+  for (const rot of rotacoesDe(item)) {
+    const m = item.mascaras.rotacoes[rot];
+    if (m) return m.cols * m.rows;
+  }
+  return 0;
+}
+
+/**
+ * Tenta juntar UMA peça `a` com UMA peça `b` de formato diferente, cada uma
+ * na rotação que aceita — a mesma técnica de `formasDoBloco`, só que ali as
+ * duas metades são cópias da mesma peça e aqui não.
+ *
+ * Testa nos dois sentidos (a parada e b deslizando; depois o contrário),
+ * porque o vão de uma pode receber a outra bem de um lado e mal do outro — a
+ * manga desliza fácil no vão da gola, mas a gola pode não deslizar tão bem no
+ * vão da manga. As duas contagens são baratas perto do resto da busca, e as
+ * arrumações que passarem do corte de 2% ficam todas disponíveis: quem
+ * escolhe qual delas rende mais, encostada no resto do tecido, é a busca de
+ * posição de sempre — igual já acontece com os dois começos da dupla.
+ */
+function formasDoBlocoMisto(a, b) {
+  const arranjos = [];
+
+  const tentar = (base, movel) => {
+    rotacoesDe(base).forEach((rotBase) => {
+      const mascaraBase = base.mascaras.rotacoes[rotBase];
+      if (!mascaraBase) return;
+      const bloco = formaDePartes([{ item: base, mascara: mascaraBase, rot: rotBase, dcol: 0, drow: 0 }]);
+      let melhor = null;
+      rotacoesDe(movel).forEach((rotMovel) => {
+        const mascaraMovel = movel.mascaras.rotacoes[rotMovel];
+        if (!mascaraMovel) return;
+        const r = encostarNaForma(bloco, { item: movel, mascara: mascaraMovel, rot: rotMovel });
+        if (r && (!melhor || r.area < melhor.area)) melhor = r;
+      });
+      if (melhor) arranjos.push(melhor);
+    });
+  };
+  tentar(a, b);
+  tentar(b, a);
+  if (arranjos.length === 0) return null;
+
+  const areaSolta = areaDaPeca(a) + areaDaPeca(b);
+  const uteis = arranjos.filter((ar) => ar.area < areaSolta * 0.98).map((ar) => ar.forma);
+  if (uteis.length === 0) return null;
+
+  return {
+    melhorArea: Math.min(...uteis.map((f) => f.cols * f.rows)),
+    areaSolta,
+    formas: uteis,
+  };
+}
+
+// Acima disto o custo de conferir todo par de formatos deixa de valer a pena
+// — um trabalho assim já tem tanta variedade que uma dupla/trio de peça igual
+// dá conta do recado sozinha. Não é limite medido, é bom senso: 60 formatos
+// já são 1770 pares conferidos antes da primeira tentativa de posição.
+const CRUZADA_MAX_FORMATOS = 60;
+
+/**
+ * Monta unidades juntando peças de formatos DIFERENTES quando compensa — o
+ * mesmo espírito da dupla/trio, mas para a peça pequena entrar no vão da
+ * peça grande em vez de entrar no vão da cópia dela mesma.
+ *
+ * Guloso, não é o casamento perfeito entre todos os formatos (isso é um
+ * problema de emparelhamento que cresce rápido demais para valer a pena
+ * aqui): mede quanto cada PAR de formatos economiza, ordena do que mais
+ * economiza para o que menos, e vai casando cópia com cópia enquanto sobrar
+ * das duas pontas. O que sobrar sem parceiro — inclusive quando um formato
+ * não combina bem com nenhum outro — sai como peça solta, exatamente como
+ * hoje; esta receita nunca deixa uma peça pior do que ela já ficaria na
+ * receita "solta" que compete ao lado dela.
+ */
+function montarUnidadesCruzadas(itens) {
+  const porPeca = new Map();
+  itens.forEach((item) => {
+    if (!porPeca.has(item.indice)) porPeca.set(item.indice, []);
+    porPeca.get(item.indice).push(item);
+  });
+  const indices = [...porPeca.keys()];
+  // Formato demais para valer o custo de conferir todo par, ou nenhum par
+  // encontrado: `null` avisa quem chamou que esta receita não tem nada de
+  // diferente da "solta" para oferecer — e não vale gastar seis receitas de
+  // busca repetindo o que a "solta" já cobre.
+  if (indices.length > CRUZADA_MAX_FORMATOS) return null;
+
+  const candidatos = [];
+  for (let i = 0; i < indices.length; i++) {
+    for (let j = i + 1; j < indices.length; j++) {
+      const a = porPeca.get(indices[i])[0];
+      const b = porPeca.get(indices[j])[0];
+      const resultado = formasDoBlocoMisto(a, b);
+      if (resultado) {
+        candidatos.push({
+          ia: indices[i], ib: indices[j], formas: resultado.formas,
+          economia: 1 - resultado.melhorArea / resultado.areaSolta,
+        });
+      }
+    }
+  }
+  if (candidatos.length === 0) return null;
+  // As duplas que mais apertam primeiro: são elas que valem gastar a cópia.
+  candidatos.sort((x, y) => y.economia - x.economia);
+
+  const restante = new Map();
+  porPeca.forEach((copias, indice) => restante.set(indice, copias.slice()));
+
+  const unidades = [];
+  candidatos.forEach((c) => {
+    const copiasA = restante.get(c.ia);
+    const copiasB = restante.get(c.ib);
+    while (copiasA.length > 0 && copiasB.length > 0) {
+      const itemA = copiasA.shift();
+      const itemB = copiasB.shift();
+      unidades.push({
+        itens: [itemA, itemB],
+        // As formas foram medidas com a primeira cópia de cada formato; aqui
+        // cada bloco recebe as cópias de verdade, casadas pelo índice do
+        // formato — não pela posição, porque `tentar` monta o bloco nos dois
+        // sentidos e a peça que fica em primeiro lugar muda de arranjo para
+        // arranjo.
+        formas: c.formas.map((f) => ({
+          ...f,
+          partes: f.partes.map((p) => ({ ...p, item: p.item.indice === c.ia ? itemA : itemB })),
+        })),
+      });
+    }
+  });
+
+  restante.forEach((copias) => {
+    copias.forEach((item) => unidades.push({ itens: [item], formas: formasDaPeca(item) }));
+  });
+
+  return unidades;
 }
 
 // De que tamanho é o bloco de cada agrupamento. "solta" é a peça sozinha.
@@ -827,7 +976,13 @@ const HEURISTICAS_CONTORNO = ["fundo", "vazio"];
 // trio, ou seja, nada — e ele custa seis receitas a mais na passada base, que
 // em lote grande é o orçamento inteiro. Continua disponível por
 // `config.agrupamentos` para quem quiser estudar.
-const AGRUPAMENTOS_PADRAO = ["dupla", "solta", "trio"];
+//
+// "cruzada" é a dupla/trio entre formatos diferentes (ver
+// `montarUnidadesCruzadas`): a manga entrando no vão da gola, não só no vão
+// de outra manga. Ainda sem medição própria de bancada — entra na disputa
+// como mais uma receita, e só vence quando o resultado dela for realmente
+// menor; nunca deixa nada pior do que a receita "solta" já deixaria.
+const AGRUPAMENTOS_PADRAO = ["dupla", "solta", "trio", "cruzada"];
 const HEURISTICAS_RETANGULO = ["bl", "bssf", "blsf", "baf"];
 
 const ORDENS_CONTORNO = [
@@ -949,12 +1104,21 @@ async function buscarMelhorEncaixe(itens, config) {
   // Quais blocos entram na disputa. O trio empaca mais apertado que a dupla
   // (ver `formasDoBloco`), mas bloco maior é mais difícil de posicionar: quem
   // decide é o resultado, e por isso os dois correm.
-  const agrupamentos = config.agrupamentos || AGRUPAMENTOS_PADRAO;
+  let agrupamentos = config.agrupamentos || AGRUPAMENTOS_PADRAO;
   const unidades = {};
   if (motores.includes("contorno") || motores.includes("faixas")) {
     agrupamentos.forEach((nome) => {
-      unidades[nome] = montarUnidades(itens, TAMANHO_DO_AGRUPAMENTO[nome] || 1);
+      unidades[nome] = nome === "cruzada"
+        ? montarUnidadesCruzadas(itens)
+        : montarUnidades(itens, TAMANHO_DO_AGRUPAMENTO[nome] || 1);
     });
+    // Sem par que valha a pena, a "cruzada" fica idêntica à "solta" — e
+    // rodar as duas cobraria seis receitas de busca inteiras por nada. Nesse
+    // caso ela nem entra na disputa (ver `montarUnidadesCruzadas`).
+    if (unidades.cruzada === null) {
+      agrupamentos = agrupamentos.filter((nome) => nome !== "cruzada");
+      delete unidades.cruzada;
+    }
     // O encaixe por faixas parte sempre da dupla, esteja ela na disputa ou não.
     if (!unidades.dupla) unidades.dupla = montarUnidades(itens, 2);
   }
