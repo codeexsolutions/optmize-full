@@ -14,7 +14,8 @@
 // O encaixe-mascara.js entra por causa do nfp.js, que usa `engordar` para
 // dar a folga ao contorno antes de virar polígono. Sem ele o motor NFP quebra
 // aqui dentro — e só aqui, porque na página esse arquivo já está carregado.
-importScripts("geometria.js", "encaixe-giro.js", "encaixe-mascara.js", "nfp.js", "encaixe-wasm.js", "encaixe-motor.js");
+importScripts("geometria.js", "encaixe-giro.js", "encaixe-mascara.js", "nfp.js", "encaixe-rede.js",
+  "encaixe-wasm.js", "encaixe-motor.js");
 
 // O motor em WebAssembly é carregado uma vez, quando o worker nasce. Se não
 // der, `encaixarContornoWasm` devolve null e tudo segue em JavaScript.
@@ -42,6 +43,7 @@ function resultadoParaEnviar(r) {
     alcancouRecorde: r.alcancouRecorde,
     metaAproveitamento: r.metaAproveitamento,
     alcancouMeta: r.alcancouMeta,
+    usouRede: r.usouRede,
     tentativas: r.tentativas,
     paredes: r.paredes,
     decorridoMs: r.decorridoMs,

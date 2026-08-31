@@ -29,6 +29,7 @@ geometria.js        conta pura sobre contorno: área, caixa, simplificar
     |
     +-- nfp.js              encaixe por polígono de não-encaixe
     +-- encaixe-mascara.js  silhueta da arte na grade do encaixe
+    +-- encaixe-rede.js     rede neural das receitas (roda no navegador E no servidor)
     +-- vetor.js            imagem -> contorno -> curva
     +-- moldes.js           DXF/PLT/SVG/PDF -> contorno em cm
               |
@@ -43,6 +44,12 @@ geometria.js        conta pura sobre contorno: área, caixa, simplificar
                                 +-- projetos.js      a tela
                                 +-- vetor-tela.js    a tela
 ```
+
+`encaixe-rede.js` é o único arquivo do domínio que também roda **fora** do
+navegador: `encaixe-memoria.js` (servidor) importa ele com `require()` para
+treinar a rede a partir do histórico. Por isso o arquivo termina com um guard
+de `module.exports` — carrega igual nos três lugares (página, worker,
+servidor) sem precisar de três cópias.
 
 Quanto mais em baixo, menos o arquivo sabe do mundo. `geometria.js` só conhece
 números; `encaixe.js` conhece o DOM. **Dependência só aponta para baixo** — se
@@ -60,9 +67,11 @@ arquivo quebra o tema. As exceções estão comentadas onde estão: impressão
 
 ### 2. Nada de `document` ou `window` no que roda em worker
 `geometria.js`, `encaixe-mascara.js`, `encaixe-motor.js`, `encaixe-wasm.js`,
-`nfp.js` e `vetor.js` são carregados **também dentro de Web Workers**
-(`importScripts`), onde não existe página. Uma linha com `document` ali derruba
-o worker inteiro no carregamento.
+`nfp.js`, `encaixe-rede.js` e `vetor.js` são carregados **também dentro de Web
+Workers** (`importScripts`), onde não existe página. Uma linha com `document`
+ali derruba o worker inteiro no carregamento. `encaixe-rede.js` tem uma
+terceira plateia: o servidor, via `require()` — nem `document`/`window` nem
+nada de Web Worker (`importScripts`, `self`) pode entrar nele.
 
 ### 3. Os pixels são lidos na página, não no worker
 Só a página tem canvas de verdade. O worker recebe os **bytes já lidos**. A

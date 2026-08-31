@@ -935,6 +935,57 @@ igual ao de antes. Como sem meta a busca nunca parava mais cedo, isto só pode
 economizar tempo, nunca piorar o encaixe — por isso entrou como padrão sem
 precisar da disputa que os outros encaixadores passam.
 
+#### A rede das receitas
+
+O placar por assinatura (lá em cima) só enxerga trabalho **idêntico** a um já
+visto — mesmo balde de ocupação e proporção, arredondado para caber num texto.
+`public/encaixe-rede.js` é uma segunda camada de memória: uma rede neural
+pequena, escrita à mão (sem TensorFlow nem parecido — o motor roda em Web
+Worker sem acesso a nada de fora, e o instalador embute um Node standalone;
+uma biblioteca de ML pesaria dezenas de MB para um problema deste tamanho),
+que aprende do **formato** das peças — ocupação, proporção, quantidade — em
+vez do balde exato. Um trabalho novo, parecido mas não idêntico a nenhum já
+feito, ainda ganha um palpite que faz sentido.
+
+O servidor treina (retropropagação de verdade, ~150 épocas) toda vez que
+exemplo suficiente se acumula no histórico (`encaixe-memoria.js`,
+`REDE_RETREINO_A_CADA`), e manda os pesos prontos — só o passe para frente,
+puro JS — para a busca pontuar cada receita candidata. O uso é híbrido:
+
+- **Sempre** que existe rede treinada, a pontuação dela entra no mesmo peso
+  que já decidia a ordem da primeira passada, junto com o placar por
+  assinatura (o maior dos dois manda) — nunca tira receita nenhuma da
+  disputa, só ajuda a tentar as boas primeiro.
+- **Só depois de bastante histórico E de bastante variedade** (ver
+  `REDE_LIMIAR_MADUREZA` e `REDE_LIMIAR_DIVERSIDADE`, os dois em
+  `encaixe-memoria.js`), quando a rede já viu trabalho de sobra e formato de
+  sobra para a opinião dela valer alguma coisa, uma receita que ela pontua
+  muito mal (`REDE_CORTE_LIMIAR`) para de entrar na disputa — mas nunca um
+  motor inteiro: se nenhuma receita de um motor passou do corte, é sinal de
+  que a rede não tem opinião boa nenhuma para aquele motor neste trabalho, e
+  todas ficam.
+
+Testado com um servidor de verdade (Express + SQLite descartável): trabalho
+sintético foi suficiente para a rede acertar de 93% a 98% de um lote novo,
+numa regra que ela nunca tinha visto exemplificada daquele jeito.
+
+**Testado também contra o `dados.db` real** (só leitura) — e foi isso que
+achou o problema que fez nascer o `REDE_LIMIAR_DIVERSIDADE`. O banco real
+tinha só **6 formatos de trabalho distintos** (1.450 usos somados, mas todos
+espremidos nesses 6). Validação "deixa um formato de fora, treina nos outros
+5, testa nele" (o teste mais duro que dá para fazer com esse tamanho de dado):
+a rede acertou só **4 de 6** ao apontar a receita certa num formato nunca
+visto — e nos dois erros, deu menos de 1% para a receita que **de fato**
+tinha ganhado sempre. Volume sozinho (1.450 usos) já passaria fácil dos 200
+exemplos de `REDE_LIMIAR_MADUREZA` e deixaria o corte ligar; só que com 6
+formatos repetidos a rede não tinha aprendido a generalizar coisa nenhuma —
+tinha decorado aqueles 6. Por isso a maturidade agora exige as duas coisas:
+exemplo (`REDE_LIMIAR_MADUREZA`) **e** formato distinto
+(`REDE_LIMIAR_DIVERSIDADE`, hoje 20) — testado de novo depois do ajuste: 230
+exemplos na mesma assinatura, sozinhos, não ligam mais o corte. O número 20
+é um piso conservador, sem calibração ainda — precisa ser remedido quando
+houver histórico de produção variado de verdade para isso.
+
 ### Aba Vetor
 
 Transforma um PNG ou JPG em desenho **vetorial** (SVG): contornos com

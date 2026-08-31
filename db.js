@@ -186,6 +186,18 @@ db.exec(`
     tentativas INTEGER,
     criado_em TEXT NOT NULL
   );
+
+  -- Os pesos da rede das receitas (ver public/encaixe-rede.js): uma linha só
+  -- (id fixo em 1), reescrita a cada retreino. Guardar o número de exemplos
+  -- usados no último treino é o que deixa decidir quando vale a pena treinar
+  -- de novo (encaixe-memoria.js) e quando a rede já viu trabalho suficiente
+  -- para a busca confiar nela a ponto de cortar receita (config.redeMadura).
+  CREATE TABLE IF NOT EXISTS encaixe_rede_pesos (
+    id INTEGER PRIMARY KEY,
+    pesos TEXT NOT NULL,
+    exemplos INTEGER NOT NULL DEFAULT 0,
+    atualizado_em TEXT NOT NULL
+  );
 `);
 
 /**
@@ -198,6 +210,11 @@ function garantirColuna(tabela, coluna, definicao) {
 }
 
 garantirColuna("projeto_pecas", "miniatura", "TEXT");
+// O vetor de features do trabalho e o placar daquela busca específica — o que
+// treina a rede das receitas (ver public/encaixe-rede.js). Ficam nulos nas
+// linhas gravadas antes desta versão; a rede só usa quem tem os dois.
+garantirColuna("encaixe_historico", "features", "TEXT");
+garantirColuna("encaixe_historico", "placar", "TEXT");
 
 db.pragma("optimize");
 
