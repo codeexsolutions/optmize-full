@@ -81,6 +81,28 @@ fn subir_servidor(pasta: &PathBuf, dados: &PathBuf, porta: u16) -> std::io::Resu
         .env("PORT", porta.to_string())
         .env("OPTIMIZE_DADOS", dados);
 
+    // A versão instalada não tem console (ver o atributo no topo do
+    // arquivo), e um processo sem console não tem saída padrão válida para
+    // o filho herdar. Sem isto o Node morre na largada tentando escrever
+    // num identificador que não existe — silencioso, sem log nenhum — e a
+    // janela fica presa em "abrindo" para sempre, porque a porta nunca
+    // chega a atender. Redirigir para arquivo dá um identificador de
+    // verdade e ainda deixa rastro para a próxima vez que algo travar assim.
+    //
+    // No build de desenvolvimento o processo que abre TEM console (quem
+    // chama é `cargo`/`tauri dev`, de um terminal de verdade), e herdar dele
+    // continua sendo o mais direto: é onde o servidor cospe os erros dele
+    // enquanto se desenvolve.
+    #[cfg(not(debug_assertions))]
+    {
+        use std::fs::File;
+        use std::process::Stdio;
+        comando
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(File::create(dados.join("servidor-saida.log"))?))
+            .stderr(Stdio::from(File::create(dados.join("servidor-erro.log"))?));
+    }
+
     // CREATE_NO_WINDOW: sem isso o Node abre um console preto do lado da
     // janela toda vez que o app é aberto.
     #[cfg(windows)]
@@ -98,13 +120,23 @@ fn main() {
     tauri::Builder::default()
         .manage(Servidor(processo.clone()))
         .setup(move |app| {
-            let pasta = app
-                .path()
-                .resource_dir()
-                .expect("pasta de recursos")
-                .join("servidor");
+            // `resource_dir()`/`app_data_dir()` no Windows vêm no formato de
+            // caminho estendido (`\\?\C:\...`, para driblar o limite de 260
+            // caracteres). `dunce::simplified` devolve o mesmo lugar no
+            // formato de sempre — sem isto o Node.js recebe `server.js` como
+            // argumento e quebra tentando resolver o "C:" sozinho como se
+            // fosse uma pasta, porque a lógica dele de caminho não reconhece
+            // o prefixo estendido.
+            let recursos = dunce::simplified(
+                &app.path().resource_dir().expect("pasta de recursos"),
+            )
+            .to_path_buf();
+            let pasta = recursos.join("servidor");
 
-            let dados = app.path().app_data_dir().expect("pasta de dados");
+            let dados = dunce::simplified(
+                &app.path().app_data_dir().expect("pasta de dados"),
+            )
+            .to_path_buf();
             std::fs::create_dir_all(&dados)?;
 
             let porta = porta_livre()?;

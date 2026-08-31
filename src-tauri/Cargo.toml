@@ -10,6 +10,12 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+# `resource_dir()`/`app_data_dir()` no Windows vêm no formato de caminho
+# estendido (`\\?\C:\...`), que o Node.js não entende direito — a resolução
+# do módulo principal quebra tentando ler o "C:" sozinho como se fosse uma
+# pasta. `dunce` devolve o mesmo caminho no formato de sempre, sem o prefixo,
+# que é o que o Node espera.
+dunce = "1"
 
 # O executável é a casca: o peso está nos recursos (o Node e o servidor), não
 # no binário. Otimizar por tamanho aqui não custa velocidade de nada que o
