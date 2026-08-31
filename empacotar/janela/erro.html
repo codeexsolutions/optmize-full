@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<title>Optimize — não abriu</title>
+<!--
+  Quando o servidor não subiu. Dizer só "erro" não ajuda ninguém: o que a
+  pessoa precisa saber é o que fazer agora, e o que mandar para quem conserta.
+-->
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    background: #0d0d0f;
+    color: #f5f2ee;
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  .bloco { max-width: 520px; display: grid; gap: 16px; }
+  .selo {
+    width: 42px; height: 42px;
+    display: grid; place-items: center;
+    border-radius: 12px;
+    background: #3a1512;
+    color: #ef5f4c;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  h1 { margin: 0; font-size: 21px; font-weight: 600; }
+  p { margin: 0; color: #9d968d; font-size: 14px; line-height: 1.6; }
+  ol { margin: 4px 0 0; padding-left: 20px; color: #9d968d; font-size: 14px; line-height: 1.9; }
+  strong { color: #f5f2ee; font-weight: 600; }
+  code {
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: #1a1a1e;
+    color: #f0821e;
+    font-family: Consolas, "IBM Plex Mono", monospace;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+  <div class="bloco">
+    <span class="selo">!</span>
+    <h1>O Optimize não conseguiu abrir</h1>
+    <p>
+      O programa até iniciou, mas a parte que guarda os moldes não respondeu.
+      Quase sempre é um antivírus segurando o <code>node.exe</code> que vem
+      dentro do programa.
+    </p>
+    <ol>
+      <li>Feche esta janela e abra o Optimize de novo.</li>
+      <li>Se repetir, libere a pasta de instalação no seu antivírus.</li>
+      <li>
+        Continuando, seus dados estão salvos e intactos em
+        <strong>%APPDATA%\br.com.optimize.desktop</strong> — copie essa pasta antes
+        de reinstalar.
+      </li>
+    </ol>
+  </div>
+</body>
+</html>

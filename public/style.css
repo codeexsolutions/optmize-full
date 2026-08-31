@@ -1,0 +1,1043 @@
+
+
+/*
+ * Estrutura funcional das telas: grade, tabelas, formulários e componentes.
+ *
+ * A paleta NÃO mora aqui — todas as cores saem dos tokens de interface.css,
+ * que carrega depois desta folha. Escrever um hex neste arquivo quebra o tema.
+ */* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background-image: radial-gradient(circle at 78% -10%, rgba(249, 115, 22, .05), transparent 32%);
+}
+
+/* ==================== LAYOUT ==================== */.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 252px;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 26px 18px 20px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.15rem;
+  box-shadow: 0 10px 25px -12px rgba(0, 0, 0, .5);
+  flex-shrink: 0;
+}
+.brand-copy { display: flex; flex-direction: column; line-height: 1.15; }
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 11px 12px;
+  border-radius: 11px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.nav-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  max-width: 1220px;
+  margin: 0 auto;
+}
+
+/* O cabeçalho da página mora no index.html, em utilitários do Tailwind. */
+
+.page {
+  display: none;
+}
+
+.page.active {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+@media (max-width: 800px) {
+  .app-shell {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 14px;
+    overflow-x: auto;
+  }
+  .brand-name { display: none; }
+  .side-nav {
+    flex-direction: row;
+    gap: 4px;
+  }
+  .nav-btn span:last-child {
+    display: none;
+  }
+  .nav-btn {
+    padding: 9px;
+  }
+  .main {
+    padding: 20px 16px 56px;
+    max-width: 100%;
+  }
+}
+
+/* ==================== CARDS ==================== */
+
+.card h2 {
+  font-size: 1.06rem;
+  margin: 0 0 10px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+
+.card h3 {
+  font-size: 0.88rem;
+  margin: 0 0 8px;
+  color: var(--text-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.hint.error {
+  color: var(--danger);
+}
+
+/* ==================== FORM CONTROLS ==================== */code {
+  background: var(--card-bg-soft);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 0.85em;
+  color: var(--accent-bright);
+}
+
+textarea, input[type="number"], input[type="text"], input[type="date"], select {
+  width: 100%;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+textarea:focus, input:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+input[type="color"] {
+  width: 52px;
+  height: 38px;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg-soft);
+  cursor: pointer;
+}
+
+label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-top: 12px;
+}
+
+label:first-of-type { margin-top: 0; }
+
+label > input, label > select, label > textarea {
+  margin-top: 5px;
+}
+
+.row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.row:first-of-type { margin-top: 0; }
+
+.row label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+.row input[type="number"] { width: 100px; }
+
+/* ==================== BUTTONS ==================== */.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 17px;
+  font-size: 0.87rem;
+  font-weight: 550;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  transition: background 0.15s ease, transform 0.05s ease, opacity 0.15s ease;
+  font-family: inherit;
+}
+
+.btn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 650; }
+.btn.primary { box-shadow: 0 9px 20px -13px rgba(0, 0, 0, .5); }
+.btn.secondary { background: var(--card-bg-soft); border: 1px solid var(--border); }
+.btn.danger:hover { background: var(--danger-dark); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.file-label { position: relative; }
+
+.hidden { display: none !important; }
+
+/* ==================== TABLES ==================== */.table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  height: 220px;
+  overflow: auto;
+  background: var(--card-bg-soft);
+}
+
+.table-wrap.auto {
+  height: auto;
+  max-height: 320px;
+}
+
+.table-wrap td input,
+.table-wrap td select {
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  background: var(--bg);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+
+tbody tr:hover {
+  background: var(--card-bg-soft);
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: var(--card-bg-soft);
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ==================== ENCAIXE ==================== */.page[data-page="encaixe"].arrastando .card {
+  border-color: var(--accent);
+}
+
+.peca-thumb {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 7px;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.peca-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.peca-nome {
+  display: block;
+  font-weight: 550;
+  word-break: break-word;
+}
+
+.peca-px {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}
+
+.peca-qtd-auto {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 20px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/*
+ * Os números do trabalho, no pé da mesa.
+ *
+ * Eram oito cartões grandes empilhando em duas fileiras acima do desenho. Na
+ * bancada eles viram uma faixa de uma linha só: ficam sempre no mesmo lugar,
+ * na mesma ordem, e o operador aprende a olhar para o canto em vez de
+ * procurar. Sem caixa e sem fundo, porque a caixa já é o rodapé.
+ *
+ * O HTML continua sendo o mesmo que o encaixe.js gera — valor primeiro,
+ * rótulo depois. O `row-reverse` é o que põe o rótulo na frente sem precisar
+ * mexer no gerador.
+ */
+.encaixe-stats {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  align-items: baseline;
+  margin: 0;
+  scrollbar-width: thin;
+}
+
+.encaixe-stats .stat {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.encaixe-stats .stat-valor {
+  font-size: 0.93rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.encaixe-stats .stat:first-child .stat-valor,
+.encaixe-stats .stat:nth-child(2) .stat-valor {
+  color: var(--accent);
+}
+
+.encaixe-stats .stat-label {
+  font-size: 0.66rem;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/*
+ * A caixa do risco. Sem `max-height`: quem decide a altura é a mesa, que
+ * ocupa o que sobra da tela. O `flex: 1` é o que faz o desenho crescer até o
+ * rodapé em vez de parar em 75% da janela como antes.
+ *
+ * O `encaixe.js` mede `canvas.parentElement.clientWidth` para escolher a
+ * escala do desenho — esta caixa é esse pai, e é por isso que ela precisa ter
+ * largura própria e rolagem própria.
+ */
+.encaixe-canvas-wrap {
+  flex: 1;
+  min-height: 0;
+  padding: 10px;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.encaixe-canvas-wrap canvas {
+  display: block;
+  border-radius: 4px;
+}
+
+/* Ao imprimir, só o encaixe interessa: nada de menu, formulário ou botão. */@media print {
+  body { background: #fff; }
+  .sidebar, .pageheader, .actions, .btn { display: none !important; }
+  .page:not([data-page="encaixe"]) { display: none !important; }
+  .page[data-page="encaixe"] .card:not(#encaixe-resultado) { display: none !important; }
+  .app-shell, .main { display: block; padding: 0; }
+  #encaixe-resultado {
+    border: none;
+    box-shadow: none;
+    background: #fff;
+    color: #000;
+    padding: 0;
+  }
+  .encaixe-canvas-wrap {
+    max-height: none;
+    overflow: visible;
+    border: none;
+    background: #fff;
+    padding: 0;
+  }
+  .encaixe-stats .stat { border-color: #ccc; background: #fff; }
+  .encaixe-stats .stat-valor, .encaixe-stats .stat-label { color: #000; }
+}
+
+.tempo-de-procura {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 0 auto;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.tempo-de-procura input {
+  width: 68px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.etiqueta-tamanho {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border);
+  font-size: 0.76rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ---- o passo a passo de criar molde ---- */.modal-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(2px);
+}
+.modal-fundo.hidden { display: none; }
+body.modal-aberto { overflow: hidden; }
+
+.modal {
+  width: min(860px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.modal-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.modal-topo h3 { margin: 0; font-size: 1.02rem; }
+.modal-corpo {
+  padding: 18px 20px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.modal-rodape {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-soft);
+}
+.modal-rodape .passo-conta { margin: 0 auto 0 0; }
+.modal-rodape #btn-molde-voltar + .passo-conta { margin-left: 0; }
+
+.btn-x {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.passo-pergunta {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+/* passo 1: o que vai ser criado */.escolhas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.escolha {
+  flex: 1 1 130px;
+  min-width: 118px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 10px;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.escolha:hover { border-color: var(--text-faint); }
+.escolha.escolhida {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.escolha-risco { font-size: 1.7rem; line-height: 1; }
+.escolha-nome { font-size: 0.88rem; }
+
+/* passo 3: um espaço por pedaço */.parte-molde {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.parte-molde.parte-pronta { border-color: var(--accent-dark); }
+.parte-campos {
+  flex: 1 1 320px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.parte-campos label { flex: 1 1 140px; margin: 0; }
+.parte-campos input,
+.parte-campos select { width: 100%; padding: 6px 8px; font-size: 0.84rem; }
+.parte-arquivo {
+  flex: 0 1 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.parte-arquivo .hint { font-size: 0.74rem; }
+.peca-vazia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-faint);
+  font-size: 0.9rem;
+}
+
+/* ---- arte no molde: prévia e ajustes ---- */.modal-largo { width: min(1080px, 100%); }
+
+.partes-arte {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+}
+.parte-arte {
+  flex: 1 1 320px;
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.parte-arte.com-arte { border-color: var(--accent-dark); }
+
+.parte-arte-previa {
+  flex: 0 0 132px;
+  height: 168px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: repeating-conic-gradient(#1c1c20 0% 25%, #161619 0% 50%) 50% / 14px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
+.parte-arte-previa img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.parte-arte-lado {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+.parte-arte-lado .peca-nome { text-transform: capitalize; }
+.parte-arte-lado .hint { font-size: 0.74rem; word-break: break-word; }
+
+/* Os dois jeitos de a imagem virar peça: só a arte ou rapport. O escolhido
+   fica com o botão cheio, o outro fica secundário — dá para ver de relance
+   qual está valendo sem precisar ler. */.tipo-de-arte {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+
+.hint.aviso {
+  color: var(--aviso, var(--warn));
+}
+
+.ajustes-arte {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+}
+.ajustes-arte label {
+  flex: 1 1 96px;
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+.ajustes-arte input,
+.ajustes-arte select {
+  width: 100%;
+  padding: 5px 6px;
+  font-size: 0.78rem;
+}
+.ajustes-arte .ajustes-botoes {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+.modal-rodape .hint { margin: 0 auto 0 0; }
+
+/* ---- estampas guardadas no molde ---- */.estampas-guardadas {
+  padding: 12px;
+  margin-top: 12px;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.estampas-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.estampas-guardadas .hint { margin: 8px 0 0; }
+
+.estampa {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
+.estampa.em-edicao { border-color: var(--accent); }
+.estampa-nome {
+  flex: 0 0 auto;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.estampa .hint {
+  flex: 1 1 140px;
+  margin: 0;
+  font-size: 0.74rem;
+}
+.estampa-qtd {
+  flex: 0 0 128px;
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+.estampa-qtd input { width: 100%; padding: 5px 6px; font-size: 0.8rem; }
+.estampa-botoes { display: flex; gap: 6px; }
+
+.estampa-titulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0 2px;
+}
+.estampa-salvar { display: flex; gap: 8px; align-items: center; }
+.estampa-salvar input { padding: 6px 8px; font-size: 0.82rem; min-width: 220px; }
+
+/* ==================== FEEDBACK DIALOG ==================== */.ui-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+  animation: backdrop-in .16s ease both;
+}
+.ui-dialog-backdrop.closing { animation: backdrop-out .14s ease both; }
+.ui-dialog {
+  width: min(440px, 100%);
+  padding: 26px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card-bg);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .62);
+  animation: dialog-in .2s cubic-bezier(.2,.85,.3,1) both;
+}
+.ui-dialog-backdrop.closing .ui-dialog { animation: dialog-out .14s ease both; }
+.ui-dialog-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  color: var(--accent-ink);
+  background: var(--accent);
+  font-size: 1.1rem;
+  font-weight: 800;
+  box-shadow: 0 12px 30px -14px rgba(0, 0, 0, .5);
+}
+.danger-dialog .ui-dialog-icon { color: var(--accent-ink); background: var(--danger); box-shadow: 0 12px 30px -14px rgba(0, 0, 0, .5); }
+.danger-dialog .eyebrow { color: var(--danger); }
+.ui-dialog-content h2 { margin: 5px 0 8px; font-size: 1.3rem; }
+.ui-dialog-content p { margin: 0; color: var(--text-dim); font-size: .9rem; line-height: 1.55; }
+.ui-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.dialog-open { overflow: hidden; }
+@keyframes backdrop-in { from { opacity: 0; } }
+@keyframes backdrop-out { to { opacity: 0; } }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+@keyframes dialog-out { to { opacity: 0; transform: translateY(8px) scale(.98); } }
+
+@media (max-width: 800px) {
+  .brand-copy small { display: none; }
+}
+@media (max-width: 520px) {
+  .card { padding: 19px 17px; border-radius: 14px; }
+  .ui-dialog { padding: 22px; }
+  .ui-dialog-actions { flex-direction: column-reverse; }
+  .ui-dialog-actions .btn { justify-content: center; width: 100%; }
+}
+
+/* ---- abas de tamanho no passo 3 do molde ---- */.abas-tamanho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.abas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.aba {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  background: var(--card-bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color .12s, background .12s, color .12s;
+}
+.aba:hover { border-color: var(--text-faint); color: var(--text); }
+.aba-nome { font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: .02em; }
+.aba-conta { font-size: 0.72rem; opacity: 0.75; }
+.aba.completa .aba-conta { color: var(--accent); opacity: 1; }
+.aba-x {
+  margin-left: 2px;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--text-faint);
+}
+.aba-x:hover { background: var(--danger-dark); color: var(--accent-ink); }
+.aba-nova { display: flex; gap: 6px; align-items: center; }
+.aba-nova input { padding: 6px 8px; font-size: 0.8rem; width: 130px; }
+.partes-de-que-tamanho { margin: 0 0 10px; }
+
+/* ---- o melhor encaixe já conseguido, oferecido de volta ---- */.aviso-guardado {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-dark);
+  border-radius: var(--radius);
+  font-size: 0.84rem;
+  color: var(--text);
+}
+.aviso-guardado.hidden { display: none; }
+
+/* o campo de texto da caixa de pergunta */#ui-dialog-input {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+#ui-dialog-input.hidden { display: none; }
+@keyframes recado-entra {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes recado-sai {
+  to { opacity: 0; transform: translateX(16px); }
+}
+
+/* ==================== ORÇAMENTOS ==================== */
+
+/* O bloco das três saídas, no pé do editor. *//* ==================== GERADOR DE VETOR ==================== */.vetor-solta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 14px 0 4px;
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--card-bg-soft);
+  transition: border-color .15s, background .15s;
+}
+.vetor-solta.arrastando {
+  border-color: var(--primary, var(--accent));
+  background: var(--card-bg);
+}
+
+/* Os atalhos vêm antes dos controles de propósito: seis controles em fila são
+   muitos para quem só quer o logo vetorizado, e um deles já entrega o ajuste
+   pronto para o trabalho que a pessoa tem na mão. */.vetor-atalhos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 4px;
+}
+
+.vetor-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  margin: 16px 0;
+}
+.vetor-controles label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.vetor-controles input[type="range"] { width: 160px; }
+.vetor-controles input[type="number"] { width: 110px; }
+.vetor-controles .vetor-check { flex-direction: row; align-items: center; gap: 6px; }
+.vetor-controles output { font-weight: 600; }
+
+/* A barra da lupa. Sem aproximar, as duas prévias só dizem se as cores estão
+   certas — e o que separa "traçado" de "vetorizado" é a borda, que nesse
+   tamanho não se enxerga. */.vetor-zoom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.vetor-zoom label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.vetor-zoom input[type="range"] { width: 200px; }
+.vetor-zoom output { font-weight: 600; }
+.vetor-zoom .hint { flex: 1 1 240px; }
+
+/* As duas imagens do mesmo tamanho, lado a lado: é comparando que se vê se o
+   número de cores já chegou onde precisa. O xadrez atrás mostra onde o
+   desenho ficou transparente, que sem ele passaria por branco. */.vetor-lado-a-lado {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.vetor-lado-a-lado figure { margin: 0; }
+.vetor-lado-a-lado figcaption {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  opacity: .7;
+  margin-bottom: 6px;
+}
+.vetor-caixa {
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #e9e9e9 25%, transparent 25%, transparent 75%, #e9e9e9 75%),
+    linear-gradient(45deg, #e9e9e9 25%, transparent 25%, transparent 75%, #e9e9e9 75%);
+  background-size: 18px 18px;
+  background-position: 0 0, 9px 9px;
+}
+
+/* A camada que aproxima e anda. As duas caixas têm o mesmo tamanho e a mesma
+   transformação, então o mesmo pedaço do desenho fica no mesmo lugar nas duas —
+   é isso que deixa olhar a borda de uma e da outra sem procurar. */.vetor-lupa {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  cursor: grab;
+}
+.vetor-lupa.arrastando { cursor: grabbing; }
+
+/* As duas prévias têm que ocupar a caixa **do mesmo jeito**, senão a lupa
+   compara pedaços diferentes. O `object-fit: contain` é exatamente o que o SVG
+   faz sozinho com o viewBox dele (o `xMidYMid meet`): centraliza e encosta no
+   lado mais apertado, crescendo ou diminuindo conforme precise.
+
+   O `max-width: 100%` que estava aqui não fazia isso — ele encolhe uma imagem
+   grande, mas não aumenta uma pequena. Um logo de 442 pontos numa caixa de 624
+   ficava no tamanho dele, enquanto o vetor ao lado ocupava a caixa inteira: as
+   duas prévias em escalas diferentes, que era justamente o que a lupa não pode
+   ter. */.vetor-caixa img, .vetor-caixa .vetor-svg, .vetor-caixa svg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Aproximado, o que interessa é o pixel: sem isto o navegador borra a imagem
+   original e a comparação perde justamente a borda, que é o que se foi olhar.
+   Longe, borrar é o certo — uma arte de 1800 pontos reduzida para 600 sem
+   suavizar sai serrilhada, e o serrilhado é da tela, não do arquivo. */.vetor-caixa.perto img { image-rendering: pixelated; }
+
+.vetor-camadas { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.vetor-camada {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.vetor-camada i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,.2);
+}
+
+.vetor-acoes { display: flex; align-items: center; gap: 10px; margin-top: 14px; }

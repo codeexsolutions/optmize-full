@@ -1,0 +1,56 @@
+/*
+ * ===========================================================================
+ * TOKENS — a paleta Optimize, num arquivo só
+ * ===========================================================================
+ *
+ * Âmbar sobre preto, num tema só. Este é o ÚNICO lugar do projeto onde um hex
+ * é escrito: o `estilo/entrada.css` traduz cada token daqui num utilitário do
+ * Tailwind (`bg-topo`, `text-ambar`), e o CSS à mão das telas antigas lê as
+ * mesmas variáveis. Mudar o âmbar continua sendo mudar uma linha.
+ *
+ * Ele vivia dentro do `public/interface.css`, que é a folha da tela antiga.
+ * Saiu de lá quando a tela nova (React) passou a precisar da mesma paleta sem
+ * ter que carregar junto 33 KB de regras que não são dela.
+ */
+
+:root {
+  /* Fundos, do mais fundo para o mais próximo do olho. */
+  --bg: #0b0b0c;
+  --sidebar-bg: #0e0e10;
+  --card-bg: #141416;
+  --card-bg-soft: #1a1a1d;
+  --surface-hover: #1e1e22;
+  --header-bg: rgba(11, 11, 12, 0.92);
+
+  --border: #2a2a2f;
+  --border-soft: #202024;
+  --border-hairline: rgba(244, 242, 239, 0.07);
+
+  /* Texto: os três níveis passam em contraste AA sobre --bg. */
+  --text: #f4f2ef;
+  --text-dim: #a09a93;
+  --text-faint: #857e76;
+
+  /* Âmbar da marca. --accent-ink é o que se escreve EM CIMA do âmbar:
+     branco sobre laranja dá 2.8:1 e reprova, preto-queimado dá 6.7:1. */
+  --accent: #f97316;
+  --accent-dark: #ea6a0a;
+  --accent-bright: #ffa04d;
+  --accent-soft: rgba(249, 115, 22, 0.12);
+  --accent-line: rgba(249, 115, 22, 0.3);
+  --accent-ink: #180c02;
+
+  --danger: #f26d6d;
+  --danger-dark: #d44949;
+  --warn: #f5b740;
+  --success: #4ed18a;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 40px -28px rgba(0, 0, 0, 0.9);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.45), 0 26px 60px -30px rgba(0, 0, 0, 0.95);
+  --radius: 12px;
+  --radius-sm: 9px;
+
+  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
+  --font-body: "Inter", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, monospace;
+}

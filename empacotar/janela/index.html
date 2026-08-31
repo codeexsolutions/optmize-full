@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<title>Optimize</title>
+<!--
+  A tela dos primeiros segundos: o servidor ainda está subindo e a janela já
+  está aberta. Sem ela o app abria em branco e parecia travado.
+
+  As cores estão escritas à mão aqui de propósito — é a única página do
+  sistema que não tem como carregar o `interface.css`, porque o servidor que
+  serve o CSS é justamente o que ainda não subiu.
+-->
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: grid;
+    place-items: center;
+    background: #0d0d0f;
+    color: #f5f2ee;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    user-select: none;
+  }
+  .bloco { display: grid; justify-items: center; gap: 22px; }
+  .marca {
+    width: 62px; height: 62px;
+    display: grid; place-items: center;
+    border-radius: 16px;
+    background: #f0821e;
+    color: #17120c;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: .04em;
+  }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: .01em; }
+  p { margin: 0; color: #9d968d; font-size: 13.5px; }
+  .barra {
+    width: 190px; height: 3px;
+    border-radius: 999px;
+    background: #26262a;
+    overflow: hidden;
+  }
+  .barra i {
+    display: block;
+    width: 40%; height: 100%;
+    border-radius: 999px;
+    background: #f0821e;
+    animation: anda 1.1s ease-in-out infinite;
+  }
+  @keyframes anda {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(250%); }
+  }
+</style>
+</head>
+<body>
+  <div class="bloco">
+    <span class="marca">OP</span>
+    <h1>Optimize</h1>
+    <div class="barra"><i></i></div>
+    <p>Abrindo o sistema…</p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,82 @@
+/*
+ * ===========================================================================
+ * TAILWIND — a folha de entrada
+ * ===========================================================================
+ *
+ * Gera `public/tailwind.css` (`npm run css`). O que entra aqui é só o
+ * vocabulário: as classes utilitárias saem daqui, mas **nenhuma cor nasce
+ * aqui**. Todo token abaixo aponta para a variável que já existe em
+ * `interface.css`, que continua sendo o único lugar onde a paleta é escrita —
+ * mexer no âmbar lá muda o utilitário aqui na mesma hora.
+ *
+ * Duas escolhas que valem explicação:
+ *
+ * 1. O preflight (o reset do Tailwind) NÃO entra. O `style.css` e o
+ *    `interface.css` já estilizam a interface inteira à mão; soltar um reset
+ *    por cima apagaria margem, borda e tipografia de tudo que já está pronto.
+ *    Por isso só o `theme` e o `utilities` são importados.
+ *
+ * 2. Utilitário só vale onde não existe CSS escrito à mão para o mesmo
+ *    elemento: o CSS das duas folhas antigas está fora de camada, e fora de
+ *    camada sempre ganha de camada, independente da ordem dos arquivos.
+ *    Então a regra é: tela migrada para o Tailwind perde as regras antigas
+ *    dela — as duas não convivem no mesmo elemento.
+ */
+
+/* A paleta vem primeiro, e fora de camada: é dela que todo o resto depende. */
+@import "./tokens.css";
+
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+
+/* Onde procurar por classes: a tela antiga (HTML + JS) e a tela nova (React). */
+@source "../public/index.html";
+@source "../public/*.js";
+@source "../src/**/*.{ts,tsx}";
+@source "../index.html";
+
+@theme {
+  /*
+   * O app troca para o layout de celular em 800px (é onde o menu lateral vira
+   * botão flutuante). O `tela:` é o outro lado dessa mesma linha, para o
+   * utilitário e o CSS antigo virarem no mesmo pixel — o `md:` do Tailwind,
+   * em 768px, deixaria 32px de terra de ninguém com o menu por cima do texto.
+   */
+  --breakpoint-tela: 801px;
+
+  /* Fundos e superfícies. */
+  --color-fundo: var(--bg);
+  --color-painel: var(--card-bg);
+  --color-painel-suave: var(--card-bg-soft);
+  --color-topo: var(--header-bg);
+
+  /* Traços. */
+  --color-linha: var(--border);
+  --color-linha-suave: var(--border-soft);
+
+  /* Texto, nos três níveis de contraste. */
+  --color-tinta: var(--text);
+  --color-tinta-fraca: var(--text-dim);
+  --color-tinta-apagada: var(--text-faint);
+
+  /* Âmbar da marca. `ambar-tinta` é o que se escreve EM CIMA do âmbar. */
+  --color-ambar: var(--accent);
+  --color-ambar-claro: var(--accent-bright);
+  --color-ambar-escuro: var(--accent-dark);
+  --color-ambar-tinta: var(--accent-ink);
+
+  --color-alerta: var(--danger);
+  --color-atencao: var(--warn);
+  --color-certo: var(--success);
+
+  /*
+   * `--font-display` e `--font-mono` não podem ser redeclarados aqui: os dois
+   * nomes já existem em `interface.css`, e `--font-display: var(--font-display)`
+   * é uma variável apontando para ela mesma — o navegador descarta e a fonte
+   * some. Daí os nomes novos; `font-mono` continua vindo do `interface.css`.
+   */
+  --font-titulo: var(--font-display);
+  --font-texto: var(--font-body);
+}
