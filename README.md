@@ -909,6 +909,32 @@ busca roda nos workers, então a tela não sente. O atalho saiu. O que "lote
 grande" ainda decide é só o ritmo — uma tentativa por rodada, para o botão de
 parar continuar respondendo.
 
+#### A meta de aproveitamento
+
+Antes, a busca nunca parava antes do tempo pedido — mesmo tendo achado um
+encaixe ótimo no primeiro segundo, ela continuava tentando até o cronômetro
+zerar (ou a pessoa apertar "Parar e usar este"). `config.metaAproveitamento`
+(em `encaixe-motor.js`) dá a ela um segundo motivo para parar sozinha: além do
+recorde da memória, ela agora também persegue um número fixo — hoje, **95%**,
+ligado por padrão em `encaixe.js` — e para assim que bater essa marca com toda
+peça encaixada. Não bateu, cai de volta no que já fazia: usa o tempo pedido
+inteiro e entrega o melhor que achou.
+
+O alvo perseguido é sempre o mais exigente entre os dois (recorde da memória e
+meta), porque bater o mais apertado já garante o outro. E como a busca roda
+espalhada pelos núcleos (`encaixe-paralelo.js`), a fatia que bate a meta manda
+as outras pararem também — sem isso a fatia mais lenta seguraria o resultado
+até o fim do tempo à toa, e a meta batida cedo por uma não economizaria nada.
+
+Medido com peças sintéticas de contorno realista (decote, cava, gancho —
+silhueta lisa demais esconde esse tipo de efeito, como já registrado na "Nota
+sobre as peças de teste" mais abaixo): quando a meta é alcançável, o tempo de
+busca cai em torno da metade sem perder tecido; quando não é (a maioria das
+peças de vestuário, mais irregulares, fica bem abaixo de 95%), o resultado sai
+igual ao de antes. Como sem meta a busca nunca parava mais cedo, isto só pode
+economizar tempo, nunca piorar o encaixe — por isso entrou como padrão sem
+precisar da disputa que os outros encaixadores passam.
+
 ### Aba Vetor
 
 Transforma um PNG ou JPG em desenho **vetorial** (SVG): contornos com

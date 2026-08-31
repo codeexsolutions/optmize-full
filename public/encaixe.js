@@ -1895,6 +1895,15 @@ btnEncaixar.addEventListener("click", async () => {
       // Recorde de encaixes parecidos: a busca não entrega pior que isso sem
       // antes tentar de verdade alcançar.
       alvo: aprendido ? aprendido.melhorAntes : null,
+      // Meta fixa: 95% de aproveitamento também é perseguido, do mesmo jeito
+      // que o recorde da memória — e assim que é alcançado (com toda peça
+      // encaixada), a busca para em vez de gastar o tempo pedido inteiro.
+      // Medido: quando alcançável, corta o tempo de busca praticamente pela
+      // metade sem perder tecido; quando não é (a maioria das peças de
+      // vestuário fica bem abaixo de 95%), cai de volta no que a busca já
+      // fazia — sem meta nenhuma, ela nunca parava mais cedo que o tempo
+      // pedido, então isto só pode ajudar, nunca atrapalhar.
+      metaAproveitamento: 0.95,
       tempoMaximoMs: tempoDeProcuraMs(),
       // Desistir por empacar tem que acompanhar o tempo pedido: com um limite
       // fixo de 1 segundo, pedir 30 segundos de procura não mudaria nada,
