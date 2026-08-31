@@ -395,7 +395,7 @@
         </div>
 
         <!-- ================= ENCAIXE ================= -->
-        <div class="page" data-page="encaixe">
+        <div class="page h-full" data-page="encaixe">
           <!--
             BANCADA DO ENCAIXE
             ==================
@@ -408,8 +408,14 @@
             A regra da coluna, herdada do lite: o ARQUIVO domina. Ajuste é
             coisa de uma vez por trabalho e vive recolhido; a lista e o botão
             de encaixar são o que se usa o tempo todo.
+
+            A página pede `h-full` (ver o comentário sobre isso em
+            interface.css) para que esta linha tenha uma altura de verdade a
+            distribuir — sem isso o `flex-1` abaixo não tem o que dividir, a
+            coluna de peças cresce do tamanho da lista inteira, e quem rola
+            é a página toda em vez da lista.
           -->
-          <div class="flex flex-col gap-3 tela:min-h-[380px] tela:flex-1 tela:flex-row">
+          <div class="flex flex-col gap-3 tela:min-h-0 tela:flex-1 tela:flex-row">
 
             <!-- ============ COLUNA DOS ARQUIVOS ============ -->
             <aside class="flex max-h-[60vh] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-linha bg-painel tela:max-h-none tela:w-80">
@@ -437,10 +443,13 @@
                 </span>
               </div>
 
-              <!-- Ajustes do trabalho: uma vez por serviço, então recolhidos -->
+              <!-- Ajustes do trabalho: uma vez por serviço, então recolhidos — mas
+                   precisam ser fáceis de achar da primeira vez, por isso o resumo
+                   maior, com ícone e cor, em vez do texto cinza-claro de antes. -->
               <details class="shrink-0 border-b border-linha [&[open]>summary]:text-tinta">
-                <summary class="cursor-pointer list-none px-3 py-2 text-[11px] text-tinta-apagada select-none hover:text-tinta">
-                  Tecido e leitura dos arquivos
+                <summary class="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2.5 text-[0.8rem] font-semibold text-tinta select-none hover:bg-painel-suave">
+                  <svg class="size-3.5 shrink-0 text-ambar" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#blocks" /></svg>
+                  Tecido, espaço e leitura dos arquivos
                 </summary>
                 <div class="px-3 pb-3">
                   <div class="grid grid-cols-3 gap-2">
@@ -506,7 +515,16 @@
                 <div id="encaixe-resumo-lateral" class="hidden rounded-xl border border-linha bg-painel-suave p-3"></div>
                 <button id="btn-encaixar" class="btn primary w-full justify-center">Fazer encaixe</button>
                 <label class="tempo-de-procura mt-0! w-full justify-center">Procurar por
-                  <input type="number" id="encaixe-tempo" min="1" max="300" step="1" value="5" />
+                  <!--
+                    10 é só o valor de repouso, antes de qualquer peça
+                    entrar — `tempoSugerido()` em encaixe.js troca este
+                    número sozinho assim que a lista de peças muda, subindo
+                    para lotes maiores (medido: 23 peças não pediam mais que
+                    uns 20s; 57 ainda melhoravam aos 40s). Some de vez a
+                    sugestão automática no instante em que a pessoa mexe no
+                    campo com a própria mão.
+                  -->
+                  <input type="number" id="encaixe-tempo" min="1" max="300" step="1" value="10" />
                   segundos
                 </label>
               </div>
