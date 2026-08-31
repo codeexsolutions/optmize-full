@@ -40,6 +40,8 @@ function resultadoParaEnviar(r) {
     receita: r.receita,
     alvo: r.alvo,
     alcancouRecorde: r.alcancouRecorde,
+    metaAproveitamento: r.metaAproveitamento,
+    alcancouMeta: r.alcancouMeta,
     tentativas: r.tentativas,
     paredes: r.paredes,
     decorridoMs: r.decorridoMs,

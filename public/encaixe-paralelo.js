@@ -247,6 +247,12 @@ async function buscarMelhorEncaixeEmParalelo(itens, config) {
   const resultados = [];
   let quebrou = false;
   let vigia = null;
+  // Assim que UMA fatia bate a meta de aproveitamento (ver `config.metaAproveitamento`
+  // em encaixe-motor.js), não vale a pena esperar as outras terminarem o tempo
+  // pedido inteiro — elas também são mandadas parar e entregam o melhor que
+  // tiverem. Sem isso a fatia mais lenta seguraria o Promise.all até o fim, e a
+  // meta batida cedo por uma fatia não economizaria tempo nenhum.
+  let pediuPararPorMeta = false;
 
   try {
     // 1) Manda as peças. As máscaras atravessam uma vez por worker e ficam lá.
@@ -268,7 +274,15 @@ async function buscarMelhorEncaixeEmParalelo(itens, config) {
       const aoResponder = (evento) => {
         const msg = evento.data;
         if (!msg) return;
-        if (msg.tipo === "andamento") { andamentos[k] = msg.estado; relatar(); return; }
+        if (msg.tipo === "andamento") {
+          andamentos[k] = msg.estado;
+          relatar();
+          if (!pediuPararPorMeta && msg.estado.alcancouMeta) {
+            pediuPararPorMeta = true;
+            workers.forEach((outro) => outro.postMessage({ tipo: "parar" }));
+          }
+          return;
+        }
         if (msg.tipo === "resultado") {
           w.removeEventListener("message", aoResponder);
           resultados.push(msg.resultado);

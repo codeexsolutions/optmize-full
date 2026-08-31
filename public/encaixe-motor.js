@@ -1137,6 +1137,29 @@ async function buscarMelhorEncaixe(itens, config) {
   const temGiroLivre = itens.some(podeDeitar);
   const memoria = config.memoria || {};
 
+  // Meta de aproveitamento (opcional): em vez de só perseguir o recorde da
+  // memória, a busca pode mirar um número fixo — "não desiste enquanto não
+  // bater 95%, mas se não bater fica com o melhor que achou". Convertida para
+  // consumo (a mesma conta que a tela usa para mostrar o aproveitamento:
+  // areaReal / (larguraTecido * consumo)) para poder ser comparada direto com
+  // `melhor.consumo`, sem esperar nenhuma tentativa terminar.
+  //
+  // Fica de fora por padrão — só entra quando `config.metaAproveitamento` é
+  // passado — porque muda *quando a busca para*, e isso não se troca sem medir.
+  const metaFracao = config.metaAproveitamento > 0 && config.metaAproveitamento <= 1
+    ? config.metaAproveitamento : null;
+  const areaTotalItens = metaFracao
+    ? itens.reduce((soma, it) => soma + (it.mascaras ? it.mascaras.areaReal : 0), 0)
+    : 0;
+  const metaConsumo = metaFracao && config.larguraTecido > 0
+    ? areaTotalItens / (config.larguraTecido * metaFracao)
+    : null;
+  // Só conta como "bateu a meta" um encaixe que coube inteiro — do contrário a
+  // busca comemoraria uma tentativa que sobrou peça de fora só porque, com
+  // menos peça, o consumo caiu.
+  const bateuAMeta = () => metaConsumo != null && melhor && melhor.naoEncaixadas.length === 0 &&
+    melhor.consumo <= metaConsumo * 1.0001;
+
   // Preparo pesado feito uma vez só e reaproveitado em toda tentativa.
   //
   // Quais blocos entram na disputa. O trio empaca mais apertado que a dupla
@@ -1328,6 +1351,12 @@ async function buscarMelhorEncaixe(itens, config) {
   // Recorde de encaixes parecidos: enquanto não alcançar, não desiste por
   // falta de ganho. É o que impede entregar pior do que já se sabe fazer.
   const alvo = config.alvo > 0 ? config.alvo : null;
+  // O que a busca persegue de fato: o mais exigente entre o recorde da
+  // memória e a meta de aproveitamento — consumo menor é mais difícil de
+  // alcançar, então o menor dos dois manda. Perseguir o mais apertado dos
+  // dois já cobre o outro: quem bate o mais exigente bate os dois.
+  const alvoDaPersistencia = alvo != null && metaConsumo != null ? Math.min(alvo, metaConsumo)
+    : alvo != null ? alvo : metaConsumo;
   const historicoDeGanhos = [];
 
   // O melhor de cada motor, para a tela poder dizer quanto o outro teria
@@ -1390,6 +1419,11 @@ async function buscarMelhorEncaixe(itens, config) {
         tentativas, semGanho, alvo, paredes, modo,
         consumo: melhor ? melhor.consumo : null,
         receita: melhorChave,
+        // Vai junto no andamento, não só no resultado final, porque é o que
+        // deixa a busca paralela (encaixe-paralelo.js) mandar as outras fatias
+        // pararem assim que uma bater a meta — sem isso cada fatia só sabia da
+        // própria conta, e a fatia mais lenta segurava as outras até o fim.
+        alcancouMeta: bateuAMeta(),
         decorridoMs: Date.now() - inicio,
       });
     }
@@ -1421,6 +1455,9 @@ async function buscarMelhorEncaixe(itens, config) {
   for (let i = 0; i < ordenadasPorMemoria.length; i++) {
     const receita = ordenadasPorMemoria[i];
     considerar(rodar(receita, null), chaveDaReceita(receita));
+    // Bateu a meta já na passada base: não tem por que rodar as receitas que
+    // faltam. Ver `bateuAMeta` para o que conta como bater.
+    if (bateuAMeta()) break;
 
     // O tempo pedido também vale aqui. Em lote grande cada receita custa caro,
     // e sem esta parada a passada base sozinha estouraria o tempo — o campo da
@@ -1452,6 +1489,7 @@ async function buscarMelhorEncaixe(itens, config) {
 
   while (Date.now() - inicio < tetoMs) {
     if (config.deveParar && config.deveParar()) break;
+    if (bateuAMeta()) break;
 
     // O recorde é do *tipo* de trabalho, não deste trabalho exato: pode ter
     // vindo de um pedido parecido que simplesmente encaixa melhor, e aí ele é
@@ -1460,7 +1498,7 @@ async function buscarMelhorEncaixe(itens, config) {
     // 1,55% de tecido. Depois de gastar boa parte do tempo sem alcançar, ela
     // desiste do recorde e volta a refinar.
     const PRAZO_DE_PERSEGUIR = 0.6;   // parte do tempo dedicada à perseguição
-    const faltaAlcancar = alvo != null && melhor && melhor.consumo > alvo * 1.0001;
+    const faltaAlcancar = alvoDaPersistencia != null && melhor && melhor.consumo > alvoDaPersistencia * 1.0001;
     const aindaVale = Date.now() - inicio < tetoMs * PRAZO_DE_PERSEGUIR;
     perseguindo = faltaAlcancar && aindaVale;
 
@@ -1538,6 +1576,9 @@ async function buscarMelhorEncaixe(itens, config) {
       const lista = sortear() < PODA_FRESTA ? todas : naRoda;
       const escolhida = lista[Math.floor(sortear() * lista.length)] || todas[0];
       considerar(rodar(escolhida.receita, mutar, refinando), chaveDaReceita(escolhida.receita));
+      // Não espera o lote inteiro para parar: a meta pode bater na primeira
+      // tentativa dele, e as outras sete não comprariam nada.
+      if (bateuAMeta()) break;
     }
 
     avisar("melhorando");
@@ -1550,6 +1591,9 @@ async function buscarMelhorEncaixe(itens, config) {
   melhor.receita = melhorChave;
   melhor.alvo = alvo;
   melhor.alcancouRecorde = alvo == null ? null : melhor.consumo <= alvo * 1.0001;
+  melhor.metaAproveitamento = metaFracao;
+  melhor.metaConsumo = metaConsumo;
+  melhor.alcancouMeta = metaConsumo == null ? null : bateuAMeta();
   melhor.tentativas = tentativas;
   melhor.paredes = paredes;
   melhor.decorridoMs = Date.now() - inicio;
