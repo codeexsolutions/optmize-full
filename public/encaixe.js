@@ -1740,6 +1740,25 @@ btnEncaixar.addEventListener("click", async () => {
     return;
   }
 
+  const modoDeEncaixe = encaixeModoSelect.value || "auto";
+
+  // O aviso de "procurando" aparece JÁ AQUI, antes da espera do fundo logo
+  // abaixo — não depois dela. Quando alguma arte ainda estava com o fundo
+  // saindo (comum logo depois de mandar um lote grande), a tela ficava
+  // parada por alguns segundos sem nenhum sinal depois do clique: parecia
+  // que ele não tinha feito nada. A contagem aqui é a de cópias já
+  // conhecida (soma de qtd); o texto é atualizado com o número exato de
+  // peças mais abaixo, depois que a lista se expande de verdade.
+  pararBusca = false;
+  iniciarCarregamento(pecasEncaixe.reduce((soma, p) => soma + (Number(p.qtd) || 0), 0), modoDeEncaixe);
+  btnEncaixar.disabled = true;
+  btnEncaixar.textContent = "Procurando…";
+  btnPararBusca.disabled = false;
+  btnPararBusca.textContent = "Cancelar preparação";
+  btnPararBusca.classList.remove("hidden");
+  encaixeAndamento.classList.add("hidden");
+  encaixeAndamento.textContent = "";
+
   // Se o fundo de alguma arte ainda estiver saindo, espera aqui.
   //
   // Tem de ser ANTES da cópia logo abaixo, e não depois: `{ ...peca }` leva
@@ -1761,20 +1780,14 @@ btnEncaixar.addEventListener("click", async () => {
 
   if (itens.length === 0) {
     mostrarErroEncaixe("As peças precisam ter largura e altura maiores que zero.");
+    finalizarCarregamento("com-erro");
+    btnEncaixar.disabled = false;
+    btnEncaixar.textContent = "Fazer encaixe";
+    btnPararBusca.classList.add("hidden");
     return;
   }
 
-  const modoDeEncaixe = encaixeModoSelect.value || "auto";
-
-  pararBusca = false;
-  iniciarCarregamento(itens.length, modoDeEncaixe);
-  btnEncaixar.disabled = true;
-  btnEncaixar.textContent = "Procurando…";
-  btnPararBusca.disabled = false;
-  btnPararBusca.textContent = "Cancelar preparação";
-  btnPararBusca.classList.remove("hidden");
-  encaixeAndamento.classList.add("hidden");
-  encaixeAndamento.textContent = "";
+  encaixeLoadingPecas.textContent = `${itens.length} peça${itens.length === 1 ? "" : "s"} no trabalho`;
   // Devolve a vez ao navegador para o aviso aparecer antes do trabalho pesado.
   // O timer é de propósito: requestAnimationFrame não dispara com a aba em
   // segundo plano, e aí o encaixe nunca começaria.
