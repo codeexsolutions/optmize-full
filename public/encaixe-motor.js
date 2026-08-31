@@ -793,6 +793,12 @@ function encaixarContorno(unidades, config) {
   const posicoes = [];
   const naoEncaixadas = [];
   let fundoMax = 0;
+  // A unidade cuja posição escolhida deixou mais buraco morto acima dela —
+  // "vazio" já é medido para toda posição (ver `melhorPosicaoDaUnidade`),
+  // então guardar o pior daqui não custa nada a mais. É o que a busca usa
+  // para tentar reparar a tentativa em vez de só sacudir tudo (ver
+  // `repararPior` em `buscarMelhorEncaixe`).
+  let piorUnidade = null, piorVazio = -Infinity;
 
   unidades.forEach((unidade) => {
     const escolha = melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, config.saltoX);
@@ -802,9 +808,13 @@ function encaixarContorno(unidades, config) {
     }
     assentarUnidade(perfil, posicoes, escolha, passo, margem);
     if (escolha.fundo > fundoMax) fundoMax = escolha.fundo;
+    if (escolha.vazio > piorVazio) { piorVazio = escolha.vazio; piorUnidade = unidade; }
   });
 
-  return resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo, margem);
+  const resultado = resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo, margem);
+  resultado.piorUnidade = piorUnidade;
+  resultado.piorVazio = piorVazio;
+  return resultado;
 }
 
 // ==================== ENCAIXE POR FAIXAS ====================
@@ -926,11 +936,18 @@ function encaixarPorFaixas(unidades, config) {
   const deslocamento = corteCols * passo;
   naDireita.posicoes.forEach((p) => { p.x += deslocamento; });
 
+  // O pior das duas faixas, para o mesmo reparo guiado que o contorno simples
+  // já expõe (ver `encaixarContorno`).
+  const piorEsquerda = naEsquerda.piorVazio ?? -Infinity;
+  const piorDireita = naDireita.piorVazio ?? -Infinity;
+
   return {
     posicoes: [...naEsquerda.posicoes, ...naDireita.posicoes],
     naoEncaixadas: [...naEsquerda.naoEncaixadas, ...naDireita.naoEncaixadas],
     consumo: Math.max(naEsquerda.consumo, naDireita.consumo),
     areaReal: naEsquerda.areaReal + naDireita.areaReal,
+    piorUnidade: piorEsquerda >= piorDireita ? naEsquerda.piorUnidade : naDireita.piorUnidade,
+    piorVazio: Math.max(piorEsquerda, piorDireita),
   };
 }
 
@@ -1079,6 +1096,27 @@ function baguncar(lista, sortear, forca) {
   return saida;
 }
 
+/**
+ * Tira `alvo` de onde está e devolve ela mais cedo na fila, num lugar
+ * sorteado entre o começo e a posição em que ela estava.
+ *
+ * É o reparo guiado: em vez de sacudir a ordem inteira sem direção, mexe só
+ * na peça que se sabe que ficou mal na última tentativa — a que sobrou mais
+ * buraco morto (ver `piorUnidade` em `encaixarContorno`). Entrar mais cedo dá
+ * a ela a chance de escolher uma posição melhor, antes que o relevo do
+ * tecido já esteja mais ocupado. Se `alvo` não estiver na lista (receita
+ * diferente da que gerou o `piorUnidade`), devolve a lista como está.
+ */
+function repararPior(lista, alvo, sortear) {
+  const de = lista.indexOf(alvo);
+  if (de <= 0) return lista.slice();
+  const saida = lista.slice();
+  saida.splice(de, 1);
+  const para = Math.floor(sortear() * de);
+  saida.splice(para, 0, alvo);
+  return saida;
+}
+
 const melhorQue = (candidato, atual) => {
   if (!atual) return true;
   if (candidato.naoEncaixadas.length !== atual.naoEncaixadas.length) {
@@ -1168,7 +1206,7 @@ async function buscarMelhorEncaixe(itens, config) {
     const base = listaDaReceita(receita);
     const guardada = partirDoMelhor ? melhoresOrdens.get(base.chave) : null;
     let lista = guardada ? guardada.lista.slice() : base.crua.slice().sort(base.ordem.comparar);
-    if (embaralhar) lista = embaralhar(lista);
+    if (embaralhar) lista = embaralhar(lista, guardada);
 
     let resultado;
     if (receita.motor === "faixas") {
@@ -1251,6 +1289,10 @@ async function buscarMelhorEncaixe(itens, config) {
   const PODA_TOLERANCIA = 1.06;  // até 6% acima do melhor continua na roda
   const PODA_MINIMO = 4;         // nunca deixa a roda com menos que isso
   const PODA_FRESTA = 0.15;      // parte do sorteio que ignora a poda
+  // Chance de, ao refinar, reparar a peça que mais atrapalhou em vez de
+  // sacudir a ordem toda sem direção (ver `repararPior`). Só refinando: em
+  // "explorar" ainda não existe uma ordem-base cujo pior valha a pena mirar.
+  const REPARO_CHANCE = 0.3;
 
   const receitasNaRoda = () => {
     const linhas = [...placar.values()];
@@ -1305,7 +1347,7 @@ async function buscarMelhorEncaixe(itens, config) {
     const antes = melhoresOrdens.get(resultado.chaveDaLista);
     if (!antes || resultado.consumo < antes.consumo) {
       melhoresOrdens.set(resultado.chaveDaLista,
-        { lista: resultado.ordemUsada, consumo: resultado.consumo });
+        { lista: resultado.ordemUsada, consumo: resultado.consumo, piorUnidade: resultado.piorUnidade });
     }
   };
 
@@ -1485,12 +1527,17 @@ async function buscarMelhorEncaixe(itens, config) {
       ? (teimosia < 0.5 ? 0.05 : 0.15)
       : (teimosia < 0.34 ? 0.08 : teimosia < 0.67 ? 0.2 : 0.4);
 
+    const mutar = (l, guardada) => {
+      if (refinando && guardada && guardada.piorUnidade && sortear() < REPARO_CHANCE) {
+        return repararPior(l, guardada.piorUnidade, sortear);
+      }
+      return baguncar(l, sortear, forca);
+    };
+
     for (let lote = 0; lote < tentativasNesteLote; lote++) {
       const lista = sortear() < PODA_FRESTA ? todas : naRoda;
       const escolhida = lista[Math.floor(sortear() * lista.length)] || todas[0];
-      considerar(
-        rodar(escolhida.receita, (l) => baguncar(l, sortear, forca), refinando),
-        chaveDaReceita(escolhida.receita));
+      considerar(rodar(escolhida.receita, mutar, refinando), chaveDaReceita(escolhida.receita));
     }
 
     avisar("melhorando");
