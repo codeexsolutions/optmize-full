@@ -1827,6 +1827,10 @@ btnEncaixar.addEventListener("click", async () => {
     itens.forEach((item) => { item.mascaras = pecasEncaixe[item.indice]._cacheMascaras; });
 
     const assinatura = assinaturaDoTrabalho(pecasEncaixe, larguraTecido);
+    // O mesmo formato que vira a assinatura, mas sem arredondar para caber
+    // num texto de balde — é o que a rede das receitas usa para generalizar
+    // (ver public/encaixe-rede.js e a nota em cima de `buscarMelhorEncaixe`).
+    const vetorTrabalho = vetorDoTrabalho(pecasEncaixe, larguraTecido);
     const chave = chaveDoTrabalho(pecasEncaixe, larguraTecido, espaco, margem);
     atualizarCarregamento({
       etapa: "Consultando histórico",
@@ -1895,6 +1899,16 @@ btnEncaixar.addEventListener("click", async () => {
       // Recorde de encaixes parecidos: a busca não entrega pior que isso sem
       // antes tentar de verdade alcançar.
       alvo: aprendido ? aprendido.melhorAntes : null,
+      // A rede das receitas (public/encaixe-rede.js): pontua cada receita
+      // candidata pela chance dela ganhar ESTE trabalho, generalizando a
+      // partir do formato das peças em vez de só do balde exato da
+      // assinatura. `redeMadura` só fica true depois de um bocado de
+      // histórico (ver REDE_LIMIAR_MADUREZA em encaixe-memoria.js) — antes
+      // disso a rede só empurra a ordem da primeira passada, nunca corta
+      // receita nenhuma da disputa.
+      rede: aprendido && aprendido.rede ? aprendido.rede : null,
+      vetorTrabalho,
+      redeMadura: aprendido ? aprendido.redeMadura === true : false,
       // Meta fixa: 95% de aproveitamento também é perseguido, do mesmo jeito
       // que o recorde da memória — e assim que é alcançado (com toda peça
       // encaixada), a busca para em vez de gastar o tempo pedido inteiro.
@@ -1973,6 +1987,9 @@ btnEncaixar.addEventListener("click", async () => {
       consumo: ultimoResultado.consumo,
       aproveitamento,
       tentativas: ultimoResultado.tentativas,
+      // O dado de treino da rede das receitas — ver a nota lá em cima de
+      // `vetorTrabalho` e o cabeçalho de public/encaixe-rede.js.
+      features: vetorTrabalho,
     });
 
     mostrarResumoDaBusca(ultimoResultado, aprendido, anotado);

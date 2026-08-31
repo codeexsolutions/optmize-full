@@ -13,10 +13,101 @@
 
 const express = require("express");
 const db = require("./db");
+const rede = require("./public/encaixe-rede.js");
 
 const router = express.Router();
 
 const agora = () => new Date().toISOString();
+
+// ==================== A REDE DAS RECEITAS ====================
+//
+// Além do placar por assinatura exata (acima), o servidor treina uma rede
+// pequena (ver public/encaixe-rede.js) que generaliza para trabalho parecido,
+// não só idêntico. Ver o cabeçalho daquele arquivo para o porquê de ser uma
+// rede escrita à mão em vez de uma biblioteca.
+
+// Não vale treinar de novo a cada encaixe salvo — o ganho de um exemplo a
+// mais é pequeno e o treino, mesmo rápido, é desperdício. Só retreina quando
+// pelo menos essa quantidade de exemplos novos se acumulou desde o último
+// treino.
+const REDE_RETREINO_A_CADA = 20;
+// Abaixo disso nem vale treinar: poucas dezenas de exemplos não bastam pra a
+// rede aprender nada melhor que chute.
+const REDE_MINIMO_PARA_TREINAR = 30;
+// Só a partir daqui a busca confia na rede a ponto de CORTAR receita (ver
+// `config.redeMadura` em encaixe-motor.js). Antes disso ela só empurra a
+// ordem da primeira passada, do mesmo jeito que o placar por assinatura já
+// fazia — nunca tira ninguém da disputa.
+const REDE_LIMIAR_MADUREZA = 200;
+// Volume sozinho engana: uma loja que repete os mesmos 6 formatos de peça
+// pode acumular milhares de exemplos sem a rede nunca ter visto um formato
+// diferente. Testado contra o histórico real: com 6 formatos distintos, a
+// rede acertou só 4 de 6 ao apontar a receita certa num formato que nunca
+// tinha visto — e nos dois erros, pontuou a receita VENCEDORA de verdade
+// perto de 0%. Por isso a maturidade também exige um mínimo de formatos
+// (assinaturas) diferentes vistos, não só de exemplos. Este número ainda não
+// foi calibrado com histórico grande de verdade — é um piso conservador,
+// para remedir quando houver dado suficiente para isso valer a pena.
+const REDE_LIMIAR_DIVERSIDADE = 20;
+
+/**
+ * Reconstrói os exemplos de treino a partir do histórico: um exemplo por
+ * (trabalho, receita tentada) — não só a vencedora. Uma receita que foi
+ * tentada e perdeu é tão exemplo quanto a que ganhou; sem as perdedoras a
+ * rede nunca aprenderia a diferença.
+ */
+function montarExemplosDeTreino() {
+  const linhas = db.prepare(
+    "SELECT features, placar FROM encaixe_historico WHERE features IS NOT NULL AND placar IS NOT NULL"
+  ).all();
+
+  const exemplos = [];
+  linhas.forEach((linha) => {
+    let features, placar;
+    try {
+      features = JSON.parse(linha.features);
+      placar = JSON.parse(linha.placar);
+    } catch (erro) {
+      return; // linha antiga ou corrompida: não entra no treino
+    }
+    if (!Array.isArray(features) || !Array.isArray(placar)) return;
+
+    placar.forEach((p) => {
+      if (!p || !p.receita || !(p.tentativas > 0)) return;
+      exemplos.push({
+        entrada: [...features, ...rede.vetorDaReceita(p.receita)],
+        alvo: p.vitorias > 0 ? 1 : 0,
+      });
+    });
+  });
+  return exemplos;
+}
+
+/**
+ * Treina de novo quando exemplo suficiente se acumulou. Roda dentro do
+ * pedido de salvar (POST /memoria) — a rede é pequena e o treino é rápido
+ * o bastante para não atrasar a resposta de forma perceptível — mas nunca
+ * derruba o salvamento: um erro aqui fica só no console, do mesmo jeito que
+ * o resto da memória trata falha (ver a nota no topo do arquivo).
+ */
+function talvezRetreinar() {
+  const exemplos = montarExemplosDeTreino();
+  if (exemplos.length < REDE_MINIMO_PARA_TREINAR) return;
+
+  const linhaAtual = db.prepare("SELECT exemplos FROM encaixe_rede_pesos WHERE id = 1").get();
+  const exemplosAntes = linhaAtual ? linhaAtual.exemplos : 0;
+  if (exemplos.length - exemplosAntes < REDE_RETREINO_A_CADA) return;
+
+  const nova = rede.criarRede([rede.REDE_DIM_ENTRADA, 16, 8, 1]);
+  rede.treinarRede(nova, exemplos, { epocas: 150, taxa: 0.05 });
+
+  db.prepare(`
+    INSERT INTO encaixe_rede_pesos (id, pesos, exemplos, atualizado_em)
+    VALUES (1, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      pesos = excluded.pesos, exemplos = excluded.exemplos, atualizado_em = excluded.atualizado_em
+  `).run(rede.pesosParaJSON(nova), exemplos.length, agora());
+}
 
 /**
  * O que já se sabe sobre um tipo de trabalho.
@@ -53,12 +144,29 @@ router.get("/memoria", (req, res) => {
   const melhorAntes = db.prepare(
     "SELECT MIN(consumo) AS melhor FROM encaixe_historico WHERE assinatura = ?").get(assinatura).melhor;
 
-  res.json({ memoria, encaixesDoTipo, encaixesNoTotal, melhorAntes });
+  const pesosDaRede = db.prepare("SELECT pesos, exemplos FROM encaixe_rede_pesos WHERE id = 1").get();
+  // Diversidade, não só volume — ver a nota em REDE_LIMIAR_DIVERSIDADE.
+  const diversidadeDeFormatos = db.prepare(
+    "SELECT COUNT(DISTINCT assinatura) AS n FROM encaixe_historico WHERE features IS NOT NULL AND placar IS NOT NULL"
+  ).get().n;
+
+  res.json({
+    memoria, encaixesDoTipo, encaixesNoTotal, melhorAntes,
+    // `rede` já vem como o objeto pronto (não a string), para a tela só
+    // repassar para o motor sem ter que saber o formato interno dela.
+    rede: pesosDaRede ? JSON.parse(pesosDaRede.pesos) : null,
+    redeExemplos: pesosDaRede ? pesosDaRede.exemplos : 0,
+    redeFormatosDistintos: diversidadeDeFormatos,
+    redeMadura: pesosDaRede
+      ? (pesosDaRede.exemplos >= REDE_LIMIAR_MADUREZA && diversidadeDeFormatos >= REDE_LIMIAR_DIVERSIDADE)
+      : false,
+  });
 });
 
 /** Registra como foi um encaixe: quem ganhou, quem tentou e o resultado. */
 router.post("/memoria", (req, res) => {
-  const { assinatura, receita, placar, larguraTecido, pecas, consumo, aproveitamento, tentativas } = req.body || {};
+  const { assinatura, receita, placar, larguraTecido, pecas, consumo, aproveitamento, tentativas, features } =
+    req.body || {};
   if (!assinatura || !receita) {
     return res.status(400).json({ error: "Faltou a assinatura ou a receita vencedora." });
   }
@@ -85,14 +193,22 @@ router.post("/memoria", (req, res) => {
 
     db.prepare(`
       INSERT INTO encaixe_historico
-        (assinatura, largura_tecido, pecas, consumo, aproveitamento, receita, tentativas, criado_em)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (assinatura, largura_tecido, pecas, consumo, aproveitamento, receita, tentativas, criado_em,
+         features, placar)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(assinatura, Number(larguraTecido) || null, Number(pecas) || null,
       Number(consumo) || null, Number(aproveitamento) || null, String(receita),
-      Number(tentativas) || null, agora());
+      Number(tentativas) || null, agora(),
+      Array.isArray(features) ? JSON.stringify(features) : null,
+      Array.isArray(placar) && placar.length > 0 ? JSON.stringify(placar) : null);
   });
 
   anotar();
+
+  // A rede é um acelerador, não um requisito — a mesma regra do resto da
+  // memória (ver a nota no topo do arquivo): um treino que falhasse não pode
+  // derrubar o registro do encaixe que já foi salvo.
+  try { talvezRetreinar(); } catch (erro) { console.warn("[encaixe] retreino da rede falhou:", erro); }
 
   const encaixesDoTipo = db.prepare(
     "SELECT COUNT(*) AS total FROM encaixe_historico WHERE assinatura = ?").get(assinatura).total;
@@ -181,6 +297,7 @@ router.delete("/memoria", (req, res) => {
   db.prepare("DELETE FROM encaixe_receitas").run();
   db.prepare("DELETE FROM encaixe_historico").run();
   db.prepare("DELETE FROM encaixe_guardados").run();
+  db.prepare("DELETE FROM encaixe_rede_pesos").run();
   res.json({ ok: true });
 });
 

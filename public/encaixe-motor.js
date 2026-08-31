@@ -1022,6 +1022,32 @@ const ladoDaUnidade = (u) => u.formas.reduce((maior, f) => Math.max(maior, f.col
 const chaveDaReceita = (r) =>
   [r.motor, r.agrupamento, r.ordem, r.heuristica, r.corte == null ? "" : r.corte].join("/");
 
+// Abaixo desta pontuação (a chance de ganhar, segundo a rede — ver
+// encaixe-rede.js) uma receita para de entrar na disputa, quando a rede já
+// tiver visto trabalho suficiente para a opinião dela valer algo (ver
+// `config.redeMadura`, decidido no servidor por `encaixe-memoria.js`).
+const REDE_CORTE_LIMIAR = 0.05;
+
+/**
+ * Tira da disputa as receitas que a rede julga sem chance nenhuma — mas nunca
+ * um motor inteiro: se NENHUMA receita de um motor passou do corte, é sinal
+ * de que a rede não tem opinião boa nenhuma para aquele motor neste trabalho,
+ * e cortar todas deixaria o motor de fora sem ter tido chance.
+ */
+function filtrarPorRede(base, pontos, limiar) {
+  const porMotor = new Map();
+  base.forEach((r) => {
+    if (!porMotor.has(r.motor)) porMotor.set(r.motor, []);
+    porMotor.get(r.motor).push(r);
+  });
+  const saida = [];
+  porMotor.forEach((receitasDoMotor) => {
+    const acimaDoCorte = receitasDoMotor.filter((r) => pontos.get(chaveDaReceita(r)) >= limiar);
+    (acimaDoCorte.length > 0 ? acimaDoCorte : receitasDoMotor).forEach((r) => saida.push(r));
+  });
+  return saida;
+}
+
 /** Todas as receitas base, sem embaralhar nada ainda. */
 function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAMENTOS_PADRAO) {
   const receitas = [];
@@ -1263,6 +1289,16 @@ async function buscarMelhorEncaixe(itens, config) {
   // cima junto com as do de faixas.
   if (base.length === 0) base = receitasBase(["contorno"], temGiroLivre, [], agrupamentos);
 
+  // A rede das receitas (opcional — ver encaixe-rede.js): pontua cada
+  // candidata pela chance dela ganhar ESTE trabalho, generalizando a partir
+  // do formato das peças em vez de só do balde exato da assinatura. Precisa
+  // vir antes da fatia do portfólio: cortar cedo é o que evita gastar um
+  // worker inteiro numa receita que a rede já sabe que não tem chance.
+  const pontosDaRede = config.rede && config.vetorTrabalho
+    ? pontuarReceitas(config.rede, config.vetorTrabalho, base.map(chaveDaReceita))
+    : null;
+  if (pontosDaRede && config.redeMadura) base = filtrarPorRede(base, pontosDaRede, REDE_CORTE_LIMIAR);
+
   // Fatia do portfólio que cabe a esta busca. Rodando em paralelo (ver
   // encaixe-paralelo.js), cada worker recebe `{ k, n }` e fica com as receitas
   // de índice k, k+n, k+2n… — assim as N buscas cobrem o portfólio inteiro uma
@@ -1284,7 +1320,13 @@ async function buscarMelhorEncaixe(itens, config) {
   base.forEach((receita) => {
     const chave = chaveDaReceita(receita);
     const antes = memoria[chave] || { usos: 0, vitorias: 0 };
-    const historico = antes.usos > 0 ? antes.vitorias / antes.usos : 0;
+    const historicoDoBalde = antes.usos > 0 ? antes.vitorias / antes.usos : 0;
+    // O maior entre o placar do balde exato e o palpite da rede: o balde só
+    // enxerga trabalho idêntico a um já visto, a rede enxerga parecido — cada
+    // um cobre o buraco do outro, e nenhum dos dois piora o que o outro já
+    // sabia.
+    const pontoRede = pontosDaRede ? pontosDaRede.get(chave) : null;
+    const historico = pontoRede != null ? Math.max(historicoDoBalde, pontoRede) : historicoDoBalde;
     placar.set(chave, { receita, historico, tentativas: 0, vitorias: 0, melhorConsumo: Infinity });
   });
 
@@ -1594,6 +1636,7 @@ async function buscarMelhorEncaixe(itens, config) {
   melhor.metaAproveitamento = metaFracao;
   melhor.metaConsumo = metaConsumo;
   melhor.alcancouMeta = metaConsumo == null ? null : bateuAMeta();
+  melhor.usouRede = pontosDaRede != null;
   melhor.tentativas = tentativas;
   melhor.paredes = paredes;
   melhor.decorridoMs = Date.now() - inicio;
