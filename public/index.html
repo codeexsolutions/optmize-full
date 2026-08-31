@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Optimize</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="interface.css" />
+<link rel="stylesheet" href="tailwind.css" />
+</head>
+<body class="optimize-shell">
+  <a class="skip-link" href="#main-content">Pular para o conteúdo</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">OP</span>
+        <span class="brand-copy"><span class="brand-name">Optimize</span><small>Moldes &amp; encaixe</small></span>
+      </div>
+
+      <nav class="side-nav">
+        <button class="nav-btn active" data-page="moldes" data-title="Moldes">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#shapes" /></svg>
+          <span>Moldes</span>
+        </button>
+        <button class="nav-btn" data-page="projetos" data-title="Projetos">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#folder-open" /></svg>
+          <span>Projetos</span>
+        </button>
+        <button class="nav-btn" data-page="encaixe" data-title="Encaixe">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#blocks" /></svg>
+          <span>Encaixe</span>
+        </button>
+        <button class="nav-btn" data-page="vetor" data-title="Vetor">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#spline" /></svg>
+          <span>Vetor</span>
+        </button>
+      </nav>
+    </aside>
+
+    <main class="main" id="main-content">
+      <button id="mobile-menu-btn" class="mobile-menu-btn" type="button" aria-label="Abrir menu" aria-expanded="false">
+        <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#menu" /></svg>
+      </button>
+      <!--
+        CABEÇALHO DA PÁGINA — escrito em utilitários do Tailwind.
+
+        As regras de `.topbar` saíram do style.css e do interface.css junto
+        com esta troca, e não por capricho de faxina: CSS fora de camada vence
+        utilitário sempre, então as duas versões brigariam pelo mesmo elemento
+        e a antiga ganharia calada.
+
+        Os `id` são contrato com o interface.js, que escreve o título, a linha
+        de apoio e o relógio a cada troca de tela — renomear aqui apaga o topo.
+      -->
+      <header class="pageheader relative flex shrink-0 items-center gap-3 border-b border-linha bg-topo py-2 pr-3 pl-16 backdrop-blur-[18px] tela:gap-3.5 tela:py-2.5 tela:pr-[30px] tela:pl-[30px]">
+
+        <!-- Brilho âmbar vindo do canto superior direito: o único ornamento. -->
+        <span aria-hidden="true" class="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_150%_at_92%_-60%,var(--accent-soft),transparent_62%)]"></span>
+
+        <!--
+          Selo da aba. O ícone troca junto com a tela: quem escreve o `href`
+          é o interface.js, a partir do nome guardado no navMeta.
+        -->
+        <span aria-hidden="true" class="relative hidden size-9 shrink-0 items-center justify-center rounded-[10px] border border-[var(--accent-line)] bg-[var(--accent-soft)] text-ambar shadow-[0_10px_22px_-16px_var(--accent)] tela:flex">
+          <svg class="size-[18px]" viewBox="0 0 24 24"><use id="page-icone" href="icones.svg#shapes" /></svg>
+        </span>
+
+        <!--
+          Título e apoio na MESMA linha. É o que tira altura do topo sem tirar
+          informação: a identidade da aba fica no selo âmbar ao lado, e o
+          "OPTIMIZE" já está no menu, escrito uma vez só.
+        -->
+        <div class="relative flex min-w-0 flex-1 items-baseline gap-2.5">
+          <h1 id="page-title" class="m-0 shrink-0 font-titulo text-[17px] font-semibold tracking-[-0.03em] text-tinta tela:text-[19px]">Moldes</h1>
+          <span aria-hidden="true" class="hidden size-[3px] shrink-0 rounded-full bg-[var(--accent-line)] tela:block"></span>
+          <p id="page-subtitle" class="m-0 hidden min-w-0 truncate text-[12.5px] text-tinta-fraca tela:block">Centralize moldes, tamanhos e estampas da produção.</p>
+        </div>
+
+        <div class="relative hidden shrink-0 items-center gap-2.5 rounded-[9px] border border-linha bg-painel px-2.5 py-1.5 tela:flex">
+          <svg class="size-3.5 shrink-0 text-ambar" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#clock" /></svg>
+          <span id="current-date" class="text-[11px] capitalize text-tinta-fraca">Hoje</span>
+          <span aria-hidden="true" class="h-3.5 w-px bg-linha"></span>
+          <strong id="current-time" class="font-mono text-xs font-semibold text-tinta">--:--</strong>
+        </div>
+
+        <!-- Fio âmbar que fecha o topo, apagando nas duas pontas. -->
+        <span aria-hidden="true" class="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,var(--accent-line),transparent)]"></span>
+      </header>
+
+      <!--
+        O OUTLET: o único pedaço da casca que rola. O cabeçalho fica parado
+        no alto e as telas passam por aqui — é isso que deixa a bancada do
+        encaixe pedir a altura toda sem descontar o topo na mão.
+      -->
+      <div class="outlet">
+        <!-- ================= MOLDES ================= -->
+        <div class="page active" data-page="moldes">
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-copy">
+                <h2>Moldes guardados</h2>
+                <p class="hint">Cada molde guarda o contorno em centímetros, então volta sempre na medida certa.</p>
+              </div>
+              <button id="btn-molde-novo" class="btn primary"><span aria-hidden="true">+</span> Adicionar molde</button>
+            </div>
+
+            <details class="ajuda">
+              <summary>Que arquivo eu mando para cá?</summary>
+              <div class="ajuda-corpo">
+                <p>
+                  O desenho é feito no seu programa (CorelDRAW, Audaces, Illustrator...) e mandado para
+                  cá em <strong>DXF</strong>, <strong>PLT</strong>, <strong>SVG</strong> ou
+                  <strong>PDF</strong> vetorial — são os formatos que trazem o contorno de verdade.
+                </p>
+              </div>
+            </details>
+
+            <div class="molde-lista" id="moldes-body"></div>
+          </section>
+
+        </div>
+
+        <!-- ---- arte no molde, prévia e envio para o encaixe ---- -->
+        <div class="modal-fundo hidden" id="molde-envio">
+          <div class="modal modal-largo">
+            <header class="modal-topo">
+              <h3 id="molde-envio-nome">Arte e encaixe</h3>
+              <button type="button" id="btn-molde-envio-fechar" class="btn-x" title="Fechar">&times;</button>
+            </header>
+            <div class="modal-corpo">
+              <p class="hint">
+                Mande a arte de cada parte — o retângulo que saiu do seu programa de desenho. O sistema
+                coloca a arte dentro do contorno do molde, no tamanho escolhido, e recorta pela linha da
+                peça. A mesma arte serve para todos os tamanhos: trocando o tamanho aqui em cima, ela se
+                ajusta sozinha ao contorno novo. Parte sem arte vai para o encaixe só como contorno.
+              </p>
+              <div class="row">
+                <label style="flex: 0 0 130px;">Tamanho
+                  <select id="molde-envio-tamanho"></select>
+                </label>
+                <label style="flex: 0 0 170px;">Quantas peças prontas
+                  <input type="number" id="molde-envio-unidades" min="1" step="1" value="20" />
+                </label>
+                <label style="flex: 0 0 150px;">Qualidade da arte
+                  <select id="molde-envio-dpi">
+                    <option value="100">100 dpi</option>
+                    <option value="150" selected>150 dpi</option>
+                    <option value="200">200 dpi</option>
+                    <option value="300">300 dpi</option>
+                  </select>
+                </label>
+              </div>
+
+              <section class="estampas-guardadas">
+                <div class="estampas-topo">
+                  <strong>Estampas guardadas neste molde</strong>
+                  <button type="button" id="btn-arte-nova" class="btn secondary btn-sm">Começar outra estampa</button>
+                </div>
+                <div id="molde-estampas"></div>
+                <p class="hint">
+                  Ponha quantas peças prontas quer de cada estampa guardada. As que ficarem em zero
+                  não vão para o encaixe. Dá para mandar várias estampas de uma vez no mesmo tecido.
+                </p>
+              </section>
+
+              <div class="estampa-titulo">
+                <strong id="molde-arte-titulo">Estampa nova</strong>
+                <span class="estampa-salvar">
+                  <input type="text" id="molde-arte-nome" placeholder="Nome da estampa (ex: caveira)" />
+                  <button type="button" id="btn-arte-salvar" class="btn secondary btn-sm">Salvar no molde</button>
+                </span>
+              </div>
+
+              <div id="molde-envio-partes" class="partes-arte"></div>
+
+              <p class="hint" id="molde-envio-resumo"></p>
+              <p id="molde-envio-erro" class="hint error hidden"></p>
+            </div>
+            <footer class="modal-rodape">
+              <span class="hint" id="molde-envio-qualidade"></span>
+              <button type="button" id="btn-molde-enviar" class="btn primary">Mandar para o encaixe</button>
+            </footer>
+          </div>
+        </div>
+
+        <!-- ---- o passo a passo de criar molde ---- -->
+        <div class="modal-fundo hidden" id="molde-modal">
+          <div class="modal">
+            <header class="modal-topo">
+              <h3 id="molde-modal-titulo">Novo molde</h3>
+              <button type="button" id="btn-molde-modal-fechar" class="btn-x" title="Fechar">&times;</button>
+            </header>
+            <div class="modal-corpo">
+
+              <!-- passo 1: o que é -->
+              <section class="modal-passo" data-passo="1">
+                <p class="passo-pergunta">O que você vai criar?</p>
+                <div class="escolhas" id="molde-tipos"></div>
+                <label class="hidden" id="molde-tipo-outro-campo">Então é o quê?
+                  <input type="text" id="molde-tipo-outro" placeholder="Ex: avental, boné, almofada, toalha" />
+                </label>
+              </section>
+
+              <!-- passo 2: quantos pedaços -->
+              <section class="modal-passo hidden" data-passo="2">
+                <p class="passo-pergunta" id="molde-passo2-pergunta">Quantos pedaços tem?</p>
+                <div class="row">
+                  <label style="flex: 0 0 130px;">Pedaços
+                    <input type="number" id="molde-pedacos" min="1" max="60" step="1" value="5" />
+                  </label>
+                  <label style="flex: 1 1 220px;">Nome do molde
+                    <input type="text" id="molde-nome" placeholder="Ex: Camiseta básica gola careca" />
+                  </label>
+                  <label style="flex: 1 1 200px;">Tamanhos
+                    <input type="text" id="molde-tamanhos" value="único"
+                           placeholder="Ex: P M G GG" />
+                  </label>
+                  <label style="flex: 0 0 210px;">Como ler o arquivo
+                    <select id="molde-modo-vetor">
+                      <option value="marcador">Marcador: cada peça separada</option>
+                      <option value="inteiro">Arte: o arquivo inteiro é uma peça</option>
+                    </select>
+                  </label>
+                  <label style="flex: 0 0 180px;">Unidade do arquivo
+                    <select id="molde-unidade">
+                      <option value="">Automático</option>
+                      <option value="mm">Milímetro</option>
+                      <option value="cm">Centímetro</option>
+                      <option value="polegada">Polegada</option>
+                      <option value="m">Metro</option>
+                      <option value="unidade de plotter">Unidade de plotter (PLT)</option>
+                    </select>
+                  </label>
+                </div>
+                <label>Observações (opcional)
+                  <textarea id="molde-observacoes" rows="2" placeholder="Tecido indicado, detalhes de costura, o que for útil lembrar"></textarea>
+                </label>
+                <p class="hint">
+                  Conte os pedaços diferentes. Manga direita e esquerda contam como dois; se a mesma
+                  peça é cortada duas vezes, conte uma só e escreva a quantidade lá na frente.
+                </p>
+                <p class="hint">
+                  Nos <strong>tamanhos</strong>, escreva todos que este molde vai ter, separados por
+                  espaço ou vírgula ("P M G GG"). Cada um ganha a sua aba no passo seguinte, para você
+                  mandar o arquivo tamanho por tamanho — e dá para acrescentar mais tamanhos lá.
+                </p>
+              </section>
+
+              <!-- passo 3: cada parte, com seu arquivo -->
+              <section class="modal-passo hidden" data-passo="3">
+                <p class="passo-pergunta" id="molde-passo3-pergunta">Diga o que é cada parte e mande o arquivo</p>
+
+                <div class="abas-tamanho">
+                  <div id="molde-abas" class="abas"></div>
+                  <span class="aba-nova">
+                    <input type="text" id="molde-aba-nova" placeholder="outro tamanho" size="10" />
+                    <button type="button" id="btn-molde-aba-nova" class="btn secondary btn-sm">+ tamanho</button>
+                  </span>
+                </div>
+                <p class="hint" id="molde-aba-recado"></p>
+
+                <div id="molde-partes"></div>
+                <button type="button" id="btn-molde-mais-parte" class="btn secondary btn-sm">+ mais uma parte</button>
+              </section>
+
+              <p id="molde-erro" class="hint error hidden"></p>
+            </div>
+
+            <footer class="modal-rodape">
+              <button type="button" id="btn-molde-voltar" class="btn secondary hidden">Voltar</button>
+              <span class="passo-conta hint" id="molde-passo-conta">Passo 1 de 3</span>
+              <button type="button" id="btn-molde-avancar" class="btn primary">Continuar</button>
+            </footer>
+          </div>
+        </div>
+
+        <!-- ================= PROJETOS ================= -->
+        <div class="page" data-page="projetos">
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-copy">
+                <h2 id="projetos-titulo">Clientes</h2>
+                <p class="hint" id="projetos-subtitulo">Cada cliente tem a sua pasta; dentro dela, uma pasta por projeto.</p>
+              </div>
+              <span class="card-head-acoes">
+                <button id="btn-projeto-voltar" class="btn secondary hidden" type="button">← Todos os clientes</button>
+                <button id="btn-cliente-novo" class="btn primary" type="button"><span aria-hidden="true">+</span> Novo cliente</button>
+                <button id="btn-projeto-novo" class="btn primary hidden" type="button"><span aria-hidden="true">+</span> Novo projeto</button>
+              </span>
+            </div>
+
+            <details class="ajuda">
+              <summary>Para que serve esta tela</summary>
+              <div class="ajuda-corpo">
+                <p>
+                  Aqui fica o trabalho que <strong>se repete</strong>. A arte entra já pronta — a
+                  estampa aplicada na camisa, na bandeira, no que for — junto com a medida real e
+                  quantas vão em cada unidade.
+                </p>
+                <p>
+                  É diferente de <strong>Moldes</strong>, e de propósito. No molde guarda-se o
+                  contorno da peça, para a estampa ser aplicada nele depois, em qualquer tamanho.
+                  Aqui a estampa já está aplicada: a peça vai direto para o encaixe.
+                </p>
+                <p>
+                  O projeto guarda também a largura do tecido, a folga, a margem e o giro que deram
+                  certo. Repetir o pedido é abrir, dizer quantas unidades e mandar calcular.
+                </p>
+              </div>
+            </details>
+
+            <div class="projeto-lista" id="projetos-lista"></div>
+          </section>
+        </div>
+
+        <!-- ---- a pasta do projeto: peças, medidas e ajustes do encaixe ---- -->
+        <div class="modal-fundo hidden" id="projeto-editor">
+          <section class="modal modal-projeto" role="dialog" aria-modal="true" aria-labelledby="projeto-editor-titulo">
+            <header class="modal-topo">
+              <div>
+                <span class="eyebrow" id="projeto-editor-cliente">CLIENTE</span>
+                <h3 id="projeto-editor-titulo">Projeto</h3>
+              </div>
+              <button type="button" class="btn-x" id="btn-projeto-fechar" aria-label="Fechar projeto">&times;</button>
+            </header>
+
+            <div class="modal-corpo">
+              <div class="row">
+                <label style="flex: 2 1 260px;">Nome do projeto
+                  <input type="text" id="projeto-nome" maxlength="120" placeholder="Camisa Time Azul 2026" />
+                </label>
+                <label style="flex: 3 1 300px;">Observações
+                  <input type="text" id="projeto-observacoes" maxlength="500" placeholder="opcional" />
+                </label>
+              </div>
+
+              <h4 class="projeto-secao">Peças da produção</h4>
+              <p class="hint">
+                A arte já finalizada. A medida vem do dpi gravado no arquivo; quando ele não traz,
+                digite os centímetros — fica guardado para a próxima vez.
+              </p>
+
+              <div class="row">
+                <label class="btn secondary file-label">
+                  Adicionar arte
+                  <input type="file" id="projeto-arquivos" accept="image/png,image/jpeg,image/webp" multiple class="hidden" />
+                </label>
+                <span class="hint" id="projeto-envio-status"></span>
+              </div>
+
+              <div class="projeto-pecas" id="projeto-pecas"></div>
+
+              <h4 class="projeto-secao">Ajustes do encaixe</h4>
+              <p class="hint">Guardados com o projeto, para a repetição já sair calculada do mesmo jeito.</p>
+              <div class="row">
+                <label>Largura do tecido (cm)
+                  <input type="number" id="projeto-largura-tecido" min="10" step="1" placeholder="160" />
+                </label>
+                <label>Folga entre peças (mm)
+                  <input type="number" id="projeto-espaco" min="0" max="100" step="1" placeholder="5" />
+                </label>
+                <label>Margem nas bordas (cm)
+                  <input type="number" id="projeto-margem" min="0" step="0.1" placeholder="1" />
+                </label>
+                <label>Giro das peças
+                  <select id="projeto-giro">
+                    <option value="180">180° — vira de cabeça para baixo</option>
+                    <option value="livre">90° — a volta inteira</option>
+                    <option value="fixa">Fixa — não gira</option>
+                  </select>
+                </label>
+              </div>
+
+              <p id="projeto-erro" class="hint error hidden"></p>
+            </div>
+
+            <footer class="modal-rodape projeto-rodape">
+              <div class="projeto-repetir">
+                <label>Unidades
+                  <input type="number" id="projeto-unidades" min="1" step="1" value="1" />
+                </label>
+                <span class="hint" id="projeto-conta"></span>
+                <span class="hint projeto-aviso">O cálculo não começa sozinho: no Encaixe você escolhe o tempo de procura e aperta <strong>Fazer encaixe</strong>.</span>
+              </div>
+              <span class="card-head-acoes">
+                <button id="btn-projeto-excluir" class="btn ghost-danger" type="button">Excluir projeto</button>
+                <button id="btn-projeto-salvar" class="btn secondary" type="button">Salvar</button>
+                <button id="btn-projeto-encaixar" class="btn primary" type="button">Salvar e levar pro Encaixe</button>
+              </span>
+            </footer>
+          </section>
+        </div>
+
+        <!-- ================= ENCAIXE ================= -->
+        <div class="page" data-page="encaixe">
+          <!--
+            BANCADA DO ENCAIXE
+            ==================
+            Mesma bancada do Optmize Lite: coluna de arquivos à esquerda, rolo
+            deitado no centro, números numa faixa no pé. O que muda é o que o
+            full tem a mais e o lite não — contorno de verdade, motor de tirar
+            o fundo, unidade de molde, tempo de procura — e isso não some: fica
+            no lugar onde não atrapalha quem só quer soltar arquivo e encaixar.
+
+            A regra da coluna, herdada do lite: o ARQUIVO domina. Ajuste é
+            coisa de uma vez por trabalho e vive recolhido; a lista e o botão
+            de encaixar são o que se usa o tempo todo.
+          -->
+          <div class="flex flex-col gap-3 tela:min-h-[380px] tela:flex-1 tela:flex-row">
+
+            <!-- ============ COLUNA DOS ARQUIVOS ============ -->
+            <aside class="flex max-h-[60vh] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-linha bg-painel tela:max-h-none tela:w-80">
+
+              <!-- Cabeçalho: o que tem na lista, e as duas ações dela -->
+              <div class="flex shrink-0 items-center justify-between gap-2 border-b border-linha bg-painel-suave px-3 py-2">
+                <span class="flex min-w-0 items-baseline gap-2">
+                  <span class="text-[10px] font-bold tracking-widest text-tinta-fraca uppercase">Arquivos</span>
+                  <span id="encaixe-contagem" class="truncate font-mono text-[10px] text-tinta-apagada">0 · 0 cóp.</span>
+                </span>
+                <span class="flex shrink-0 items-center gap-1">
+                  <label class="btn secondary btn-sm file-label mt-0!">
+                    Adicionar
+                    <input type="file" id="encaixe-files" accept="image/*,.dxf,.plt,.hpgl,.svg,.pdf" multiple class="hidden" />
+                  </label>
+                  <!--
+                    Limpar só aparece com lista para limpar: botão que não faz
+                    nada é botão a mais para ler. Ícone, e não palavra, porque
+                    o vizinho é a ação de 99% das aberturas — quem procura
+                    "Adicionar" não pode tropeçar em "Limpar" do mesmo peso.
+                  -->
+                  <button id="btn-limpar-pecas" class="hidden grid size-7 shrink-0 place-items-center rounded-md text-tinta-apagada transition-colors hover:text-[var(--danger)]" type="button" title="Limpar a lista">
+                    <svg class="size-[15px]" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#trash-2" /></svg>
+                  </button>
+                </span>
+              </div>
+
+              <!-- Ajustes do trabalho: uma vez por serviço, então recolhidos -->
+              <details class="shrink-0 border-b border-linha [&[open]>summary]:text-tinta">
+                <summary class="cursor-pointer list-none px-3 py-2 text-[11px] text-tinta-apagada select-none hover:text-tinta">
+                  Tecido e leitura dos arquivos
+                </summary>
+                <div class="px-3 pb-3">
+                  <div class="grid grid-cols-3 gap-2">
+                    <label class="mt-0! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>input]:mt-1 [&>input]:px-2 [&>input]:py-1.5 [&>input]:text-[0.82rem]">Largura (cm)
+                      <input type="number" id="encaixe-largura" min="10" step="1" value="160" />
+                    </label>
+                    <label class="mt-0! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>input]:mt-1 [&>input]:px-2 [&>input]:py-1.5 [&>input]:text-[0.82rem]">Espaço (mm)
+                      <input type="number" id="encaixe-espaco" min="0" max="100" step="1" value="5" />
+                    </label>
+                    <label class="mt-0! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>input]:mt-1 [&>input]:px-2 [&>input]:py-1.5 [&>input]:text-[0.82rem]">Margem (cm)
+                      <input type="number" id="encaixe-margem" min="0" step="0.1" value="1" />
+                    </label>
+                  </div>
+
+                  <label class="mt-2.5! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>select]:mt-1 [&>select]:px-2 [&>select]:py-1.5 [&>select]:text-[0.82rem]">Como encaixar
+                    <select id="encaixe-modo">
+                      <option value="auto" selected>Automático: rápido e econômico</option>
+                      <option value="contorno">Sempre pelo contorno</option>
+                      <option value="retangulo">Sempre pela caixa em volta</option>
+                    </select>
+                  </label>
+
+                  <label class="mt-2! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>select]:mt-1 [&>select]:px-2 [&>select]:py-1.5 [&>select]:text-[0.82rem]">Giro de todas as peças
+                    <select id="encaixe-giro-todas">
+                      <option value="180" selected>180° — vira de cabeça para baixo</option>
+                      <option value="livre">90° — a volta inteira</option>
+                      <option value="fixa">Fixa — não gira</option>
+                    </select>
+                  </label>
+
+                  <label class="mt-2! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>select]:mt-1 [&>select]:px-2 [&>select]:py-1.5 [&>select]:text-[0.82rem]">Unidade do molde
+                    <select id="encaixe-unidade-molde">
+                      <option value="">Automático</option>
+                      <option value="mm">Milímetro</option>
+                      <option value="cm">Centímetro</option>
+                      <option value="polegada">Polegada</option>
+                      <option value="m">Metro</option>
+                      <option value="unidade de plotter">Unidade de plotter (PLT)</option>
+                      <option value="1000 por polegada">1000 por polegada (PLT)</option>
+                    </select>
+                  </label>
+
+                  <label class="mt-2! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>select]:mt-1 [&>select]:px-2 [&>select]:py-1.5 [&>select]:text-[0.82rem]">Como ler o vetor
+                    <select id="encaixe-modo-vetor">
+                      <option value="marcador">Marcador: cada peça separada</option>
+                      <option value="inteiro">Arte: o arquivo inteiro é uma peça</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
+
+              <!-- A lista. É o único pedaço que rola. -->
+              <div id="encaixe-pecas-body" class="min-h-0 flex-1 overflow-y-auto"></div>
+
+              <!--
+                O pé da coluna: o resultado fica JUNTO do botão que o produziu.
+                A metragem também aparece na faixa lá embaixo, mas ali é número
+                solto no meio da barra; aqui é a resposta ao clique, e é para cá
+                que o olho volta depois de apertar.
+              -->
+              <div class="shrink-0 space-y-2.5 border-t border-linha p-3">
+                <p id="encaixe-error" class="hint error hidden m-0!"></p>
+                <div id="encaixe-resumo-lateral" class="hidden rounded-xl border border-linha bg-painel-suave p-3"></div>
+                <button id="btn-encaixar" class="btn primary w-full justify-center">Fazer encaixe</button>
+                <label class="tempo-de-procura mt-0! w-full justify-center">Procurar por
+                  <input type="number" id="encaixe-tempo" min="1" max="300" step="1" value="5" />
+                  segundos
+                </label>
+              </div>
+            </aside>
+
+            <!-- ============ A MESA ============ -->
+            <section class="flex min-h-[60vh] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-linha bg-painel tela:min-h-[380px]">
+
+              <!-- Barra de ferramentas -->
+              <div class="flex shrink-0 items-center gap-3 border-b border-linha bg-painel-suave px-3 py-1.5">
+                <span class="eyebrow shrink-0">RISCO</span>
+                <p id="encaixe-andamento" class="hint hidden m-0! min-w-0 truncate"></p>
+
+                <!--
+                  A seleção por área. Aparece só quando há peça marcada no
+                  risco: arrastar uma caixa sobre o desenho é o caminho curto
+                  para virar um punhado de peças sem caçar cada uma na lista.
+                -->
+                <span id="encaixe-selecao" class="hidden flex shrink-0 items-center gap-2 rounded-[9px] border border-[var(--accent-line)] bg-[var(--accent-soft)] px-2.5 py-1">
+                  <span id="encaixe-selecao-contagem" class="text-[0.76rem] font-semibold text-ambar">0 peças</span>
+                  <select id="encaixe-selecao-giro" class="w-auto! px-2! py-1! text-[0.78rem]!" aria-label="Giro das peças selecionadas">
+                    <option value="180">Vira 180°</option>
+                    <option value="livre">Livre (90°)</option>
+                    <option value="fixa">Fixa</option>
+                  </select>
+                  <button id="btn-selecao-aplicar" class="btn primary btn-sm" type="button">Aplicar e encaixar</button>
+                  <button id="btn-selecao-limpar" class="btn secondary btn-sm" type="button">Limpar</button>
+                </span>
+
+                <!-- A saída fecha a linha: é o fim do trabalho. -->
+                <span class="ml-auto flex shrink-0 items-center gap-2">
+                  <button id="btn-encaixe-pdf" class="btn primary btn-sm">PDF em tamanho real</button>
+                  <button id="btn-baixar-encaixe" class="btn secondary btn-sm">PNG</button>
+                  <button id="btn-imprimir-encaixe" class="btn secondary btn-sm">Imprimir</button>
+                </span>
+              </div>
+
+              <!-- A vista: o rolo deitado ocupa tudo que sobra -->
+              <div class="relative min-h-0 flex-1">
+                <div id="encaixe-resultado" class="peer absolute inset-0 hidden flex flex-col overflow-hidden p-3">
+                  <div class="encaixe-largura-resumo hidden" id="encaixe-largura-resumo" aria-live="polite"></div>
+                  <div class="encaixe-canvas-wrap relative">
+                    <canvas id="encaixe-canvas" class="cursor-crosshair"></canvas>
+                  </div>
+                </div>
+
+                <!-- Mesa vazia: o convite flutua sobre o tecido, sem escondê-lo -->
+                <div class="pointer-events-none absolute inset-0 hidden place-items-center p-6 peer-[.hidden]:grid">
+                  <div class="max-w-sm rounded-2xl border border-linha bg-painel-suave/90 p-6 text-center backdrop-blur-sm">
+                    <span class="mx-auto grid size-12 place-items-center rounded-xl border border-linha text-tinta-apagada">
+                      <svg class="size-[22px]" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#blocks" /></svg>
+                    </span>
+                    <p class="mt-3 mb-0 font-titulo text-base font-semibold text-tinta">Arraste seus arquivos aqui</p>
+                    <p class="mt-1 mb-0 text-[0.8rem] leading-relaxed text-tinta-fraca">
+                      Moldes em DXF, PLT, SVG ou PDF, ou artes em PNG e JPG. A medida vem do próprio
+                      arquivo e a quantidade sai do nome — <span class="font-mono">frente 5x.png</span>.
+                    </p>
+                  </div>
+                </div>
+
+                <!--
+                  O andamento da busca. Não leva classe de posição: o
+                  `.encaixe-carregamento` do interface.css já o deixa fixo no
+                  canto da janela, flutuando sobre a mesa.
+                -->
+                <section id="encaixe-carregamento" class="encaixe-carregamento hidden" aria-live="polite" aria-busy="false">
+                  <div class="encaixe-loading-topo">
+                    <span class="encaixe-spinner" aria-hidden="true"></span>
+                    <div class="encaixe-loading-copy">
+                      <span class="eyebrow" id="encaixe-loading-etapa">CALCULANDO ENCAIXE</span>
+                      <strong id="encaixe-loading-titulo">Preparando as peças</strong>
+                      <p id="encaixe-loading-detalhe">Aguarde enquanto o sistema organiza o trabalho.</p>
+                    </div>
+                    <div class="encaixe-loading-tempo">
+                      <span>Tempo</span>
+                      <strong id="encaixe-loading-tempo">0,0 s</strong>
+                    </div>
+                  </div>
+                  <div class="encaixe-loading-barra" role="progressbar" aria-label="Andamento do encaixe" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <span id="encaixe-loading-fill"></span>
+                  </div>
+                  <div class="encaixe-loading-rodape">
+                    <div class="encaixe-loading-infos">
+                      <span id="encaixe-loading-pecas">0 peças no trabalho</span>
+                      <span class="encaixe-prioridade-badge">Outras telas pausadas</span>
+                    </div>
+                    <button id="btn-parar-busca" class="btn secondary btn-sm" type="button">Parar e usar este</button>
+                  </div>
+                </section>
+              </div>
+
+              <!--
+                A faixa de status, como em software de produção: os números do
+                trabalho sempre no mesmo lugar, na mesma ordem, sem disputar
+                espaço com botão. O zoom mora à direita porque é ajuste de
+                vista, não de produção.
+              -->
+              <div class="flex shrink-0 items-center gap-4 border-t border-linha bg-painel-suave px-3 py-1.5">
+                <div class="encaixe-stats" id="encaixe-stats"></div>
+
+                <span class="ml-auto flex shrink-0 items-center gap-0.5">
+                  <button id="btn-zoom-menos" class="grid size-7 place-items-center rounded-md text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Diminuir zoom">
+                    <svg class="size-[14px]" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#zoom-out" /></svg>
+                  </button>
+                  <button id="btn-zoom-ajustar" class="w-12 rounded-md py-1 text-center font-mono text-[11px] text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Voltar ao tamanho que cabe na tela">100%</button>
+                  <button id="btn-zoom-mais" class="grid size-7 place-items-center rounded-md text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Aumentar zoom">
+                    <svg class="size-[14px]" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#zoom-in" /></svg>
+                  </button>
+                </span>
+              </div>
+
+              <!-- O que não cabe na faixa, mas a produção precisa poder ler -->
+              <div class="shrink-0 border-t border-linha px-3 py-1.5">
+                <p id="encaixe-sobras" class="hint error hidden m-0! mb-1.5"></p>
+                <details class="[&[open]>summary]:text-tinta">
+                  <summary class="cursor-pointer list-none text-[0.72rem] text-tinta-apagada select-none hover:text-tinta">Como este encaixe foi feito</summary>
+                  <div id="encaixe-numeros" class="encaixe-stats mt-2"></div>
+                  <p id="encaixe-guardado-aviso" class="aviso-guardado hidden"></p>
+                  <p id="encaixe-resumo" class="hint mt-2"></p>
+                </details>
+              </div>
+            </section>
+          </div>
+
+          <!-- As explicações longas, fora da bancada -->
+          <div class="mt-3 grid shrink-0 gap-2 tela:grid-cols-3">
+            <details class="ajuda">
+              <summary>Qual jeito de encaixar escolher?</summary>
+              <div class="ajuda-corpo">
+                <p>
+                  No <strong>automático</strong> os dois jeitos correm e fica o que gastar menos tecido,
+                  em qualquer tamanho de lote — é o que serve para quase tudo.
+                </p>
+                <p>
+                  <strong>Sempre pelo contorno</strong> mostra a peça entrando no vão da outra mesmo
+                  quando a caixa sai melhor. <strong>Sempre pela caixa</strong> serve quando o corte é
+                  na tesoura e a produção precisa entender o risco de relance.
+                </p>
+              </div>
+            </details>
+
+            <details class="ajuda">
+              <summary>De onde vem a medida, o contorno e a quantidade</summary>
+              <div class="ajuda-corpo">
+                <p>
+                  <strong>Formatos.</strong> <code>DXF</code> (Audaces, Modaris, Optitex, AutoCAD),
+                  <code>PLT</code> (mesa de corte, eCut, CorelDRAW), <code>SVG</code> e <code>PDF</code>
+                  vetorial (Illustrator, Inkscape, CorelDRAW), ou as artes em <code>PNG</code> e
+                  <code>JPG</code>.
+                </p>
+                <p>
+                  <strong>Medida.</strong> Vem sempre do próprio arquivo: do desenho, no molde
+                  vetorial; da resolução gravada na imagem (dpi), no PNG e no JPG.
+                </p>
+                <p>
+                  <strong>Contorno.</strong> A peça é recortada pelo contorno — no molde pelo desenho,
+                  na imagem pelo fundo — e o branco em volta da arte é apagado ao carregar. É o que o
+                  Lite não tem: lá a peça é sempre a caixa em volta da arte.
+                </p>
+                <p>
+                  <strong>Quantidade.</strong> Se o nome do arquivo já vier com a quantidade ao lado de
+                  um <code>x</code> (<code>frente 5x.png</code>, <code>x3 manga.png</code>,
+                  <code>costas-12x.png</code>), ela é preenchida sozinha. Medida não conta:
+                  <code>camisa 30x40.png</code> continua sendo 1 peça.
+                </p>
+                <p>
+                  <strong>Giro de todas as peças.</strong> Vale para a produção inteira de uma vez, e
+                  também para as peças que você adicionar depois. <em>180°</em> vira de cabeça para
+                  baixo mantendo o sentido do fio — é o que quase todo tecido aceita. <em>90°</em>
+                  libera a volta inteira: a peça pode deitar, então serve para malha lisa e arte sem
+                  sentido, e costuma render mais tecido. <em>Fixa</em> não gira nada, para listrado,
+                  xadrez e estampa com direção.
+                </p>
+              </div>
+            </details>
+
+            <details class="ajuda">
+              <summary>Quanto tempo vale a pena dar?</summary>
+              <div class="ajuda-corpo">
+                <p>
+                  O sistema usa o tempo todo que você der, espalhado pelos núcleos do computador.
+                  Quando um caminho empaca, ele não desiste: volta para o melhor encaixe que já achou
+                  e tenta por outro lado.
+                </p>
+                <p>
+                  Mais tempo rende de verdade — 8 segundos no lugar de 3 valeu <strong>1,25% menos
+                  tecido</strong> nos testes. Vale aumentar num lote grande que vai repetir muito;
+                  para conferir um trabalho, 5 segundos está de bom tamanho. Dá para cortar a qualquer
+                  momento em <em>Parar e usar este</em>.
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+
+
+<!-- ================= VETOR ================= -->
+        <div class="page" data-page="vetor">
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-copy">
+                <h2>Imagem em vetor</h2>
+                <p class="hint">Transforma um PNG ou JPG em desenho vetorial (SVG): contornos que crescem sem perder qualidade.</p>
+              </div>
+            </div>
+
+            <details class="ajuda">
+              <summary>Para que serve e para onde vai a imagem</summary>
+              <div class="ajuda-corpo">
+                <p>
+                  O vetor é o que a plotter, a faca de corte e a impressão grande pedem: em vez de
+                  pontos, o desenho vira contorno com preenchimento e cresce no tamanho que precisar
+                  sem serrilhar.
+                </p>
+                <p>
+                  <strong>A imagem não sai do seu computador.</strong> A conta toda roda aqui no
+                  navegador — nada é enviado para nenhum servidor.
+                </p>
+              </div>
+            </details>
+
+            <div id="vetor-solta" class="vetor-solta">
+              <label class="btn primary">
+                Escolher imagem
+                <input type="file" id="vetor-arquivo" accept="image/*" class="hidden" />
+              </label>
+              <span class="hint">ou arraste o arquivo para cá</span>
+            </div>
+            <p id="vetor-erro" class="hint error hidden"></p>
+
+            <div id="vetor-painel" class="hidden">
+              <div class="vetor-atalhos">
+                <span class="hint">Comece por:</span>
+                <button type="button" class="btn secondary btn-sm" data-vetor-jeito="chapada">Logo e arte chapada</button>
+                <button type="button" class="btn secondary btn-sm" data-vetor-jeito="silhueta">Silhueta para faca</button>
+                <button type="button" class="btn secondary btn-sm" data-vetor-jeito="sombra">Arte com sombra</button>
+                <button type="button" class="btn secondary btn-sm" data-vetor-jeito="fino">Detalhe fino</button>
+              </div>
+
+              <div class="vetor-controles">
+                <label>Cores <output id="vetor-cores-valor">8</output>
+                  <input type="range" id="vetor-cores" min="1" max="24" step="1" value="8" />
+                </label>
+                <label>Detalhe mínimo (pontos)
+                  <input type="number" id="vetor-detalhe" min="0" max="500" step="2" value="12" />
+                </label>
+                <label>Suavidade
+                  <input type="number" id="vetor-suavidade" min="0" max="6" step="0.2" value="1.2" />
+                </label>
+                <label>Quina a partir de (graus)
+                  <input type="number" id="vetor-quina" min="10" max="120" step="5" value="55" />
+                </label>
+                <label>Juntar sombras <output id="vetor-sombras-valor">0</output>
+                  <input type="range" id="vetor-sombras" min="0" max="100" step="5" value="0" />
+                </label>
+                <label>Arredondar <output id="vetor-tensao-valor">1</output>
+                  <input type="range" id="vetor-tensao" min="0" max="2" step="0.1" value="1" />
+                </label>
+                <label class="vetor-check">
+                  <input type="checkbox" id="vetor-redondas" checked />
+                  Círculo vira círculo
+                </label>
+                <label class="vetor-check">
+                  <input type="checkbox" id="vetor-subpixel" checked />
+                  Borda no subpixel
+                </label>
+                <label class="vetor-check">
+                  <input type="checkbox" id="vetor-tirar-fundo" />
+                  Tirar o fundo
+                </label>
+                <button type="button" id="btn-vetor-gerar" class="btn secondary btn-sm">Gerar de novo</button>
+              </div>
+
+              <div class="vetor-zoom">
+                <label>Aproximar <output id="vetor-zoom-valor">1×</output>
+                  <input type="range" id="vetor-zoom" min="1" max="20" step="0.25" value="1" />
+                </label>
+                <button type="button" id="btn-vetor-inteiro" class="btn secondary btn-sm">Ver inteiro</button>
+                <span class="hint">a roda do mouse aproxima onde o ponteiro está e arrastar move —
+                  as duas prévias andam juntas, que é o que deixa comparar a borda</span>
+              </div>
+
+              <div class="vetor-lado-a-lado">
+                <figure>
+                  <figcaption>Imagem original</figcaption>
+                  <div class="vetor-caixa"><div id="vetor-original" class="vetor-lupa"></div></div>
+                </figure>
+                <figure>
+                  <figcaption>Vetor gerado</figcaption>
+                  <div class="vetor-caixa"><div id="vetor-saida" class="vetor-lupa"></div></div>
+                </figure>
+              </div>
+
+              <p id="vetor-resumo" class="hint"></p>
+              <div id="vetor-camadas" class="vetor-camadas"></div>
+
+              <div class="vetor-acoes">
+                <button type="button" id="btn-vetor-baixar" class="btn primary" disabled>Baixar SVG</button>
+                <button type="button" id="btn-vetor-copiar" class="btn secondary" disabled>Copiar o SVG</button>
+                <span id="vetor-copiado" class="hint hidden">copiado</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+
+      </div>
+    </main>
+  </div>
+
+  <div class="ui-dialog-backdrop hidden" id="ui-dialog" role="presentation">
+    <section class="ui-dialog" role="dialog" aria-modal="true" aria-labelledby="ui-dialog-title" aria-describedby="ui-dialog-message">
+      <div class="ui-dialog-icon" id="ui-dialog-icon">!</div>
+      <div class="ui-dialog-content">
+        <span class="eyebrow" id="ui-dialog-kicker">CONFIRMAÇÃO</span>
+        <h2 id="ui-dialog-title">Confirmar ação</h2>
+        <p id="ui-dialog-message"></p>
+        <input type="text" id="ui-dialog-input" class="hidden" maxlength="120" />
+      </div>
+      <div class="ui-dialog-actions">
+        <button class="btn secondary" id="ui-dialog-cancel">Cancelar</button>
+        <button class="btn primary" id="ui-dialog-confirm">Confirmar</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="ui.js"></script>
+  <script src="interface.js"></script>
+  <script src="geometria.js"></script>
+  <script src="moldes.js"></script>
+  <script src="encaixe-giro.js"></script>
+  <script src="nfp.js"></script>
+  <script src="encaixe-motor.js"></script>
+  <script src="encaixe-paralelo.js"></script>
+  <script src="encaixe-wasm.js"></script>
+  <script src="encaixe-mascara.js"></script>
+  <script src="encaixe-prepara.js"></script>
+  <script src="encaixe.js"></script>
+  <script src="arte-molde.js"></script>
+  <script src="moldes-tela.js"></script>
+  <script src="projetos.js"></script>
+  <script src="vetor.js"></script>
+  <script src="vetor-tela.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Optimize",
+  "version": "2.0.0",
+  "identifier": "br.com.optimize.desktop",
+  "build": {
+    "frontendDist": "../empacotar/janela",
+    "beforeBuildCommand": "node empacotar/preparar.js",
+    "beforeDevCommand": "node empacotar/preparar.js"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Optimize",
+    "copyright": "",
+    "category": "Productivity",
+    "shortDescription": "Moldes, encaixe e vetor",
+    "longDescription": "Biblioteca de moldes, encaixe das peças no tecido e vetorização de imagem.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "resources": ["servidor/**/*"],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["PortugueseBR"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+[package]
+name = "optimize"
+version = "2.0.0"
+description = "Optimize — moldes, encaixe e vetor"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+# O executável é a casca: o peso está nos recursos (o Node e o servidor), não
+# no binário. Otimizar por tamanho aqui não custa velocidade de nada que o
+# usuário perceba — quem calcula encaixe é o JavaScript, dentro do WebView.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -1,0 +1,22 @@
+node_modules/
+
+# Tauri: o compilado do Rust e a cópia do servidor que o instalador leva.
+# Os dois são gerados por `npm run build:app` e pesam ~100 MB cada.
+src-tauri/target/
+src-tauri/servidor/
+*.log
+dados.db
+dados.db-wal
+dados.db-shm
+uploads/
+.backup-*/
+.front-backup-*/
+.tmp-migracao/
+.env
+.env.*
+!.env.example
+*.tmp
+*.bak
+Thumbs.db
+.DS_Store
+dist/

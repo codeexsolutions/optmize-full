@@ -1,0 +1,6 @@
+[target.wasm32-unknown-unknown]
+rustflags = [
+  # O JavaScript precisa saber a partir de que endereço pode escrever sem
+  # pisar na pilha nem nos dados do módulo.
+  "-C", "link-arg=--export=__heap_base",
+]

@@ -1,0 +1,46 @@
+{
+  "name": "optimize",
+  "version": "2.0.0",
+  "description": "Optimize: biblioteca de moldes, encaixe de peças no tecido e vetorização de imagem.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "icones": "node empacotar/icones.js",
+    "css": "tailwindcss -i estilo/entrada.css -o public/tailwind.css --minify",
+    "front": "npm run icones && npm run css && vite build",
+    "dev:app": "vite",
+    "css:dev": "tailwindcss -i estilo/entrada.css -o public/tailwind.css --watch",
+    "prestart": "npm run front",
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js",
+    "tipos": "tsc --noEmit",
+    "app": "npm run front && tauri dev",
+    "build:app": "npm run front && tauri build",
+    "tauri": "tauri",
+    "build:wasm": "cargo build --release --manifest-path wasm/Cargo.toml --target wasm32-unknown-unknown && node -e \"require('fs').copyFileSync('wasm/target/wasm32-unknown-unknown/release/encaixe.wasm','estatico/encaixe.wasm')\""
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^4.19.2",
+    "pdfkit": "^0.15.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.0.1",
+    "lucide-static": "^1.37.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}
