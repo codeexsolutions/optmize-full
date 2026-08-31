@@ -1183,8 +1183,16 @@ async function buscarMelhorEncaixe(itens, config) {
   // Só conta como "bateu a meta" um encaixe que coube inteiro — do contrário a
   // busca comemoraria uma tentativa que sobrou peça de fora só porque, com
   // menos peça, o consumo caiu.
+  //
+  // O corte é contra `alvoDaPersistencia` (definido mais abaixo), não contra
+  // `metaConsumo` sozinho: comparar só com a meta fixa foi um bug real — um
+  // trabalho com recorde de 37 m parava em 40 m assim que cruzasse 95%,
+  // porque a meta fixa nem olhava para o recorde já conhecido. `bateuAMeta`
+  // só é chamada depois que `alvoDaPersistencia` já foi calculada (a
+  // primeira chamada é lá na passada base), então a referência aqui em cima,
+  // apesar de vir antes no arquivo, resolve certa quando é usada de verdade.
   const bateuAMeta = () => metaConsumo != null && melhor && melhor.naoEncaixadas.length === 0 &&
-    melhor.consumo <= metaConsumo * 1.0001;
+    melhor.consumo <= alvoDaPersistencia * 1.0001;
 
   // Preparo pesado feito uma vez só e reaproveitado em toda tentativa.
   //
