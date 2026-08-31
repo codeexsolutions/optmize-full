@@ -2035,15 +2035,18 @@ function comoFoiEncaixado(r) {
     .filter(([, consumo]) => consumo > 0)
     .sort((a, b) => a[1] - b[1]);
 
-  const oQueFoi = r.venceuFaixas ? NOMES.faixas
-    : r.venceuContorno ? NOMES.contorno : NOMES.retangulo;
+  // Tirado da receita vencedora ("contorno/dupla/...", "nfp/solta/...") em vez
+  // de uma bandeira por motor: com "nfp" na disputa, uma bandeira a mais teria
+  // que ser criada e mantida toda vez que um motor novo entrasse na roda.
+  const motorVencedor = r.receita ? r.receita.split("/")[0] : (r.venceuContorno ? "contorno" : "retangulo");
+  const oQueFoi = NOMES[motorVencedor] || NOMES.retangulo;
   if (disputaram.length < 2) return `Encaixe feito ${oQueFoi}.`;
 
   const conta = disputaram
     .map(([motor, consumo]) => `${NOMES[motor] || motor} ${metros(consumo)}`).join(", ");
   return `Cada jeito de encaixar deu um resultado — ${conta} — e ficou o melhor deles, ${oQueFoi}.`
     // Só faz sentido oferecer o contorno quando não foi ele que venceu.
-    + (r.venceuContorno ? "" : ` Para ver as peças entrando uma no vão da outra mesmo `
+    + (motorVencedor === "contorno" ? "" : ` Para ver as peças entrando uma no vão da outra mesmo `
       + `assim, troque "Como encaixar" para "sempre pelo contorno".`);
 }
 
