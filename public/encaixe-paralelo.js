@@ -71,32 +71,28 @@ const ENCAIXE_PULO_PADRAO = 3;
 const FATIAS_EXATAS = 2;
 const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : ENCAIXE_PULO_PADRAO);
 
-/**
- * Quais encaixadores cada fatia usa.
+/*
+ * Cada fatia usa os mesmos encaixadores: quem escolhe o encaixador é a tela, e
+ * a fatia só reparte o portfólio de receitas dele.
  *
- * O encaixe por NFP (nfp.js) ficava de fora do padrão, entrando só numa fatia
- * do automático (ver o histórico do arquivo para a medição de ganho — em
- * trabalho de peça única que se aninha bem, fechava com 10% menos tecido).
+ * Já houve um `motoresDaFatia` aqui, para dar a última fatia ao encaixe por NFP
+ * (nfp.js). Ele saiu do projeto, e a função saiu junto. O histórico, em uma
+ * frase: o NFP pôs peça em cima de peça em produção — o traçador de contorno
+ * dele seguia uma borda só, e peça com a silhueta em dois blocos tinha o
+ * segundo invisível. O defeito foi achado e consertado pela bancada, e mesmo
+ * consertado ele não pagava o próprio custo: numa fatia só para ele, a soma dos
+ * sete trabalhos deu 26,458 m contra 26,437 m sem ele, e ele não venceu nenhum.
+ * O que ele cobrava era caro — uma passada custa segundos, não milissegundos, e
+ * as outras receitas perdiam o quinto de orçamento que ia para lá (105 mil
+ * tentativas caíam para 62 mil no maior trabalho).
  *
- * DESLIGADO por enquanto: produção relatou peça saindo sobreposta a outra,
- * mais frequente em mídia estreita (160 cm) — exatamente onde o NFP tem mais
- * chance de entrar na disputa e vencer. Os outros dois encaixadores (perfil e
- * retângulo) não sobrepõem peça por construção: o perfil só desce até onde o
- * relevo do tecido já ocupado permite, e o retângulo reserva e recorta área
- * livre a cada peça encaixada. O NFP depende de geometria de polígono
- * (soma de Minkowski, decomposição convexa) para a mesma garantia, e é o
- * único dos três sem essa prova estrutural — por isso é o primeiro suspeito
- * até a causa ser encontrada. Religar é só devolver o `return ["nfp"]` do
- * `if` comentado abaixo.
+ * Está tudo no histórico do repositório, inclusive já consertado, se um dia
+ * valer a pena revisitar.
  */
-function motoresDaFatia(k, n, motores) {
-  // const automatico = motores.includes("contorno") && motores.includes("retangulo");
-  // if (automatico && n >= 3 && k === n - 1) return ["nfp"];
-  return motores;
-}
 
-// O pool sobrevive entre encaixes: abrir worker custa (cada um recarrega
-// nfp.js e encaixe-motor.js), e a pessoa costuma apertar "Fazer encaixe"
+
+// O pool sobrevive entre encaixes: abrir worker custa (cada um recarrega o
+// motor inteiro), e a pessoa costuma apertar "Fazer encaixe"
 // várias vezes seguidas mexendo na largura ou na folga.
 let poolEncaixe = [];
 
@@ -129,8 +125,40 @@ function pecaParaWorker(item) {
     indice: item.indice, copia: item.copia,
     nome: item.nome, qtd: item.qtd, giro: item.giro,
     largura: item.largura, altura: item.altura,
-    mascaras: item.mascaras,
+    mascaras: mascarasParaBusca(item.mascaras),
   };
+}
+
+// A máscara sem o `desenho`: só o que a BUSCA lê.
+//
+// O worker nunca toca no `desenho` — ele posiciona por topo/base, e desenhar é
+// coisa da página. Mas o `desenho` é o vetor grande da máscara (uma célula por
+// posição da caixa da peça, contra uma por coluna no topo/base), e ele estava
+// atravessando inteiro: o postMessage NÃO transfere aqui, ele clona, e são
+// oito workers. No lote grande da bancada eram 281 KB de máscara clonados oito
+// vezes; sem o `desenho` (e sem o `cheio`, que saiu com o NFP) sobram 13 KB.
+//
+// O cache é por objeto de máscara, e não por peça: quarenta cópias da mesma
+// peça apontam para a mesma máscara, então a versão enxuta é montada uma vez
+// só — e é o MESMO objeto nas quarenta, que é o que faz o postMessage mandar
+// os dados uma vez só em vez de quarenta.
+const enxutas = new WeakMap();
+
+function mascarasParaBusca(mascaras) {
+  if (!mascaras) return mascaras;
+  const pronta = enxutas.get(mascaras);
+  if (pronta) return pronta;
+
+  const rotacoes = {};
+  Object.entries(mascaras.rotacoes).forEach(([rot, m]) => {
+    rotacoes[rot] = m ? {
+      cols: m.cols, rows: m.rows, topo: m.topo, base: m.base,
+      alturaUtil: m.alturaUtil, offX: m.offX, offY: m.offY,
+    } : m;
+  });
+  const enxuta = { ...mascaras, rotacoes };
+  enxutas.set(mascaras, enxuta);
+  return enxuta;
 }
 
 /** Tira do config o que não atravessa: as funções de retorno para a tela. */
@@ -187,7 +215,19 @@ function devolverAsPecas(resultado, itens) {
   itens.forEach((item) => porEndereco.set(`${item.indice}#${item.copia}`, item));
   const achar = (ref) => porEndereco.get(`${ref.indice}#${ref.copia}`) || ref;
 
-  resultado.posicoes.forEach((p) => { p.item = achar(p.item); });
+  resultado.posicoes.forEach((p) => {
+    p.item = achar(p.item);
+    // A máscara não volta do worker: ela é remontada aqui, do cache da própria
+    // página. Antes ela atravessava de volta em cada resultado — dado que a
+    // página já tinha, clonado outra vez por worker.
+    //
+    // E remontar assim é melhor que receber: o `faixas` (o contorno pronto para
+    // desenhar) fica guardado no objeto da máscara, e com a cópia do worker ele
+    // nascia vazio a cada encaixe. Agora é o mesmo objeto de sempre, e o
+    // contorno só é calculado na primeira vez que a peça é desenhada.
+    if (p.comMascara && p.item.mascaras) p.mascara = p.item.mascaras.rotacoes[p.rot];
+    delete p.comMascara;
+  });
   resultado.naoEncaixadas = resultado.naoEncaixadas.map(achar);
   return resultado;
 }
@@ -302,7 +342,7 @@ async function buscarMelhorEncaixeEmParalelo(itens, config) {
         pronto();
       }, { once: true });
       w.postMessage({ tipo: "buscar", config: configLimpo, fatia: { k, n },
-        saltoX: puloDaFatia(k), motores: motoresDaFatia(k, n, configLimpo.motores || []) });
+        saltoX: puloDaFatia(k), motores: configLimpo.motores || [] });
     }));
 
     // 3) O botão de parar mora na tela; daqui ele vira um aviso para as fatias.

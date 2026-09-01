@@ -960,7 +960,7 @@ function renderPecasEncaixe() {
             <span class="truncate text-[11px] font-medium text-tinta">${escapeHtml(peca.nome)}</span>
             <svg class="size-3 shrink-0 text-tinta-apagada transition-colors group-hover:text-ambar" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#chevron-down" /></svg>
           </button>
-          <span class="block truncate font-mono text-[9px] text-tinta-apagada">${peca.largura.toFixed(1).replace(".", ",")} × ${peca.altura.toFixed(1).replace(".", ",")} cm${peca.qtdDoArquivo ? " · qtd do nome" : ""}</span>
+          <span class="block truncate font-mono text-[9px] text-tinta-apagada">${formatarNumero(peca.largura, 1)} × ${formatarNumero(peca.altura, 1)} cm${peca.qtdDoArquivo ? " · qtd do nome" : ""}</span>
         </span>
 
         <input type="number" min="1" step="1" value="${peca.qtd}" data-campo="qtd" data-id="${peca.id}"
@@ -1434,7 +1434,7 @@ async function usarEncaixeGuardado(guardado) {
 
   renderResultado();
   encaixeAndamento.textContent =
-    `Este é o melhor encaixe já conseguido com estas peças: ${(guardado.consumo / 100).toFixed(2)} m, `
+    `Este é o melhor encaixe já conseguido com estas peças: ${formatarMetros(guardado.consumo)}, `
     + `de ${new Date(guardado.atualizado_em || guardado.criado_em).toLocaleDateString("pt-BR")}.`;
   encaixeAndamento.classList.remove("hidden");
   esconderOfertaDoGuardado();
@@ -1446,7 +1446,7 @@ function mostrarOfertaDoGuardado(guardado, consumoAgora) {
   const texto = document.createElement("span");
   texto.textContent =
     `O melhor encaixe já conseguido com estas mesmas peças gastou `
-    + `${(guardado.consumo / 100).toFixed(2)} m — este saiu ${(consumoAgora / 100).toFixed(2)} m.`;
+    + `${formatarMetros(guardado.consumo)} — este saiu ${formatarMetros(consumoAgora)}.`;
   const botao = document.createElement("button");
   botao.type = "button";
   botao.className = "btn secondary btn-sm";
@@ -1635,10 +1635,10 @@ function tempoDeProcuraMs() {
 }
 
 function mostrarAndamento(estado, aprendido) {
-  const metros = estado.consumo ? `${(estado.consumo / 100).toFixed(2)} m` : "—";
-  const decorrido = (estado.decorridoMs / 1000).toFixed(1);
+  const metros = estado.consumo ? formatarMetros(estado.consumo) : "—";
+  const decorrido = formatarNumero(estado.decorridoMs / 1000, 1);
   const totalMs = tempoDeProcuraMs();
-  const total = (totalMs / 1000).toFixed(0);
+  const total = formatarNumero(totalMs / 1000, 0);
   const partes = [`tentativa ${estado.tentativas}`, `${decorrido}s de ${total}s`, `melhor: ${metros}`];
   // Com a busca espalhada pelos núcleos, "tentativa 652" sozinho parece erro de
   // conta para quem está acostumado com o número de antes. Dizer quantos estão
@@ -1647,7 +1647,7 @@ function mostrarAndamento(estado, aprendido) {
   // Quantas vezes a busca empacou e trocou de caminho em vez de desistir.
   if (estado.paredes > 0) partes.push(`${estado.paredes} recomeço(s)`);
   if (estado.fase === "perseguindo" && estado.alvo) {
-    partes.push(`buscando alcançar o recorde de ${(estado.alvo / 100).toFixed(2)} m`);
+    partes.push(`buscando alcançar o recorde de ${formatarMetros(estado.alvo)}`);
   } else if (estado.fase === "melhorando") {
     partes.push(`${estado.semGanho} sem ganho`);
   }
@@ -1803,11 +1803,6 @@ btnEncaixar.addEventListener("click", async () => {
     // Com o contorno ligado os dois encaixadores disputam: peça quase
     // retangular não ganha nada com o contorno, e aí o de retângulo gasta
     // menos. Ligar o contorno nunca piora o resultado.
-    // O encaixe por NFP (public/nfp.js) existe e está correto, mas medindo ele
-    // perde do encaixe por perfil em todo trabalho testado — uma passada
-    // gulosa não alcança o perfil somado à dupla, aos reinícios e ao recorde.
-    // Fica de fora do padrão para não cobrar tempo de todo encaixe à toa;
-    // basta acrescentar "nfp" aqui para colocá-lo na disputa.
     // "auto" põe os dois para disputar e fica com o que gastar menos tecido.
     // As outras duas opções existem porque nem sempre o que gasta menos é o
     // que a produção quer: quem pediu contorno quer ver a peça entrando no vão
@@ -1964,7 +1959,7 @@ btnEncaixar.addEventListener("click", async () => {
 /** Conta o que a busca fez e o quanto a memória já pesa. */
 function mostrarResumoDaBusca(resultado, aprendido, anotado) {
   const partes = [
-    `${resultado.tentativas} tentativas em ${(resultado.decorridoMs / 1000).toFixed(1)}s`,
+    `${resultado.tentativas} tentativas em ${formatarSegundos(resultado.decorridoMs)}`,
   ];
   if (resultado.ganhos && resultado.ganhos.length > 0) {
     partes.push(`melhorou ${resultado.ganhos.length}x durante a procura`);
@@ -1976,8 +1971,8 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado) {
 
   if (aprendido && aprendido.melhorAntes > 0) {
     const diferenca = ((aprendido.melhorAntes - resultado.consumo) / aprendido.melhorAntes) * 100;
-    if (diferenca > 0.05) partes.push(`${diferenca.toFixed(1)}% melhor que o recorde anterior`);
-    else if (diferenca < -0.05) partes.push(`recorde do tipo segue em ${(aprendido.melhorAntes / 100).toFixed(2)} m`);
+    if (diferenca > 0.05) partes.push(`${formatarPorcento(diferenca)} melhor que o recorde anterior`);
+    else if (diferenca < -0.05) partes.push(`recorde do tipo segue em ${formatarMetros(aprendido.melhorAntes)}`);
     else partes.push("empatou com o recorde deste tipo");
   }
 
@@ -1990,7 +1985,7 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado) {
  * outro teria gasto. É o número que decide se vale trocar o modo na mão.
  */
 function comoFoiEncaixado(r) {
-  const metros = (cm) => `${(cm / 100).toFixed(2)} m`;
+  const metros = formatarMetros;
   const porMotor = r.melhorPorMotor || {};
   const modo = r.modoDeEncaixe || "auto";
 
@@ -2006,15 +2001,14 @@ function comoFoiEncaixado(r) {
     contorno: "pelo contorno",
     retangulo: "pela caixa em volta",
     faixas: "dividindo o rolo em faixas",
-    nfp: "por polígono de não-encaixe",
   };
   const disputaram = Object.entries(porMotor)
     .filter(([, consumo]) => consumo > 0)
     .sort((a, b) => a[1] - b[1]);
 
-  // Tirado da receita vencedora ("contorno/dupla/...", "nfp/solta/...") em vez
-  // de uma bandeira por motor: com "nfp" na disputa, uma bandeira a mais teria
-  // que ser criada e mantida toda vez que um motor novo entrasse na roda.
+  // Tirado da receita vencedora ("contorno/dupla/...", "faixas/dupla/...") em
+  // vez de uma bandeira por motor: com uma bandeira, cada encaixador novo
+  // obrigaria a criar e manter mais uma.
   const motorVencedor = r.receita ? r.receita.split("/")[0] : (r.venceuContorno ? "contorno" : "retangulo");
   const oQueFoi = NOMES[motorVencedor] || NOMES.retangulo;
   if (disputaram.length < 2) return `Encaixe feito ${oQueFoi}.`;
@@ -2070,14 +2064,7 @@ function medidasLateraisDoEncaixe(r) {
   };
 }
 
-function formatarCm(valor) {
-  return `${Number(valor || 0).toLocaleString("pt-BR", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  })} cm`;
-}
-
-function renderLarguraDoEncaixe(medidas) {
+function renderLarguraDoEncaixe(medidas, rendimento) {
   if (!encaixeLarguraResumo || !(medidas.larguraTecido > 0)) return;
 
   const percentual = (valor) => Math.max(0, Math.min(100,
@@ -2097,6 +2084,8 @@ function renderLarguraDoEncaixe(medidas) {
       <div><span>Sobra lateral total</span><strong>${formatarCm(medidas.sobraTotal)}</strong></div>
     </div>
     <div class="encaixe-largura-barra" role="img" aria-label="${descricao}">
+      <!-- Estes três não passam pelos formatadores de propósito: são valores de
+           CSS, e ali o ponto decimal é a gramática do formato. Vírgula quebra. -->
       <span class="encaixe-lateral-vazia" style="width:${esquerdaPct.toFixed(4)}%"></span>
       <span class="encaixe-largura-ocupada" style="width:${ocupadaPct.toFixed(4)}%"></span>
       <span class="encaixe-lateral-vazia" style="width:${direitaPct.toFixed(4)}%"></span>
@@ -2107,8 +2096,53 @@ function renderLarguraDoEncaixe(medidas) {
       <span><i class="largura-legenda-vazia"></i>Direita: <strong>${formatarCm(medidas.sobraDireita)}</strong></span>
     </div>
     <p>Se centralizar o conjunto no tecido: <strong>${formatarCm(medidas.sobraCentralizada)} de cada lado</strong>.</p>
+    ${textoDaSobraLateral(medidas, rendimento)}
   `;
   encaixeLarguraResumo.classList.remove("hidden");
+}
+
+/**
+ * A frase que separa o que é culpa do encaixe do que é culpa da largura do
+ * tecido.
+ *
+ * São dois aproveitamentos, e os dois são verdade:
+ *
+ *   o de sempre     área das peças ÷ tecido comprado (largura cheia × metragem)
+ *   na faixa usada  área das peças ÷ (largura que as peças ocuparam × metragem)
+ *
+ * A diferença entre eles é exatamente a tira lateral que ninguém usou. Ela não
+ * sai do primeiro número, e não deve sair: é tecido que foi pago, e um encaixe
+ * que desperdiça MAIS na lateral não pode aparecer como melhor só porque a base
+ * da conta encolheu junto. Mas ela também não é falha do encaixe — peça de
+ * 56 cm em rolo de 160 deixa 48 cm mortos por mais perfeito que o encaixe
+ * seja —, e é isso que o segundo número mostra: quanto o encaixe rendeu dentro
+ * do espaço em que ele podia trabalhar.
+ *
+ * Lendo os dois lado a lado dá para saber onde mexer: se o de sempre está
+ * muito abaixo do da faixa, o que está caro é a largura do tecido, não a
+ * receita do encaixe.
+ *
+ * A largura ocupada sai da caixa da arte, e não da silhueta — arte com sobra
+ * transparente em volta faz a faixa parecer maior do que é. O erro, quando
+ * existe, é sempre para o lado seguro: a sobra lateral sai menor, e o número
+ * da faixa fica mais perto do número de sempre.
+ */
+function textoDaSobraLateral(medidas, rendimento) {
+  if (!rendimento || !(rendimento.consumo > 0)) return "";
+  // Meio milímetro de sobra é ruído de arredondamento da grade, não sobra.
+  if (!(medidas.sobraTotal > 0.05)) {
+    return `<p>As peças ocupam a largura inteira do tecido: não há sobra lateral,
+      e o aproveitamento de <strong>${formatarPorcento(rendimento.aproveitamento)}</strong>
+      já é o do encaixe puro.</p>`;
+  }
+
+  const areaSobra = (medidas.sobraTotal * rendimento.consumo) / 10000;
+  return `<p>A sobra lateral são ${formatarCm(medidas.sobraTotal)} ao longo do rolo inteiro —
+    <strong>${formatarM2(areaSobra)}</strong> de tecido. Ela entra no aproveitamento de
+    ${formatarPorcento(rendimento.aproveitamento)}, porque é tecido comprado. Dentro da faixa de
+    ${formatarCm(medidas.larguraOcupada)} que as peças ocuparam, o encaixe rendeu
+    <strong>${formatarPorcento(rendimento.naFaixa)}</strong>: a diferença entre os dois números é o
+    que a largura do tecido cobra, e não o encaixe.</p>`;
 }
 
 function renderResultado() {
@@ -2120,6 +2154,11 @@ function renderResultado() {
   const areaPecas = r.areaReal / 10000;
   const aproveitamento = areaTecido > 0 ? (areaPecas / areaTecido) * 100 : 0;
   const medidasLaterais = medidasLateraisDoEncaixe(r);
+  // O mesmo aproveitamento, medido só na faixa em que as peças couberam. Ver
+  // `textoDaSobraLateral` para o porquê de existirem os dois números, e por que
+  // este NÃO substitui o de cima.
+  const areaFaixaUsada = (medidasLaterais.larguraOcupada * r.consumo) / 10000;
+  const aproveitamentoNaFaixa = areaFaixaUsada > 0 ? (areaPecas / areaFaixaUsada) * 100 : 0;
 
   /*
    * A faixa de status leva os cinco números que a produção olha de relance —
@@ -2131,16 +2170,17 @@ function renderResultado() {
     <div class="stat"><span class="stat-valor">${pecasEncaixe.length}</span><span class="stat-label">Arquivos</span></div>
     <div class="stat"><span class="stat-valor">${r.posicoes.length}</span><span class="stat-label">Peças</span></div>
     <div class="stat"><span class="stat-valor">${r.larguraTecido} cm</span><span class="stat-label">Mídia</span></div>
-    <div class="stat"><span class="stat-valor">${(r.consumo / 100).toFixed(2)} m</span><span class="stat-label">Metragem</span></div>
-    <div class="stat"><span class="stat-valor">${aproveitamento.toFixed(1)}%</span><span class="stat-label">Aproveitamento</span></div>
+    <div class="stat"><span class="stat-valor">${formatarMetros(r.consumo)}</span><span class="stat-label">Metragem</span></div>
+    <div class="stat"><span class="stat-valor">${formatarPorcento(aproveitamento)}</span><span class="stat-label">Aproveitamento</span></div>
   `;
 
   if (encaixeNumeros) {
     encaixeNumeros.innerHTML = `
       <div class="stat stat-largura"><span class="stat-valor">${formatarCm(medidasLaterais.larguraOcupada)}</span><span class="stat-label">Largura ocupada</span></div>
       <div class="stat stat-sobra-lateral"><span class="stat-valor">${formatarCm(medidasLaterais.sobraTotal)}</span><span class="stat-label">Sobra lateral</span></div>
-      <div class="stat"><span class="stat-valor">${areaPecas.toFixed(2)} m²</span><span class="stat-label">Área das peças</span></div>
-      <div class="stat"><span class="stat-valor">${(areaTecido - areaPecas).toFixed(2)} m²</span><span class="stat-label">Sobra de tecido</span></div>
+      <div class="stat stat-faixa"><span class="stat-valor">${formatarPorcento(aproveitamentoNaFaixa)}</span><span class="stat-label">Na faixa usada</span></div>
+      <div class="stat"><span class="stat-valor">${formatarM2(areaPecas)}</span><span class="stat-label">Área das peças</span></div>
+      <div class="stat"><span class="stat-valor">${formatarM2(areaTecido - areaPecas)}</span><span class="stat-label">Sobra de tecido</span></div>
       <div class="stat"><span class="stat-valor">${r.naoEncaixadas.length}</span><span class="stat-label">Fora do tecido</span></div>
     `;
   }
@@ -2154,22 +2194,24 @@ function renderResultado() {
     encaixeResumoLateral.classList.remove("hidden");
     encaixeResumoLateral.innerHTML = `
       <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span class="font-mono text-2xl leading-none font-bold text-ambar">${(r.consumo / 100).toFixed(2)}</span>
+        <span class="font-mono text-2xl leading-none font-bold text-ambar">${formatarNumero(r.consumo / 100, 2)}</span>
         <span class="text-sm font-semibold text-ambar">m</span>
         <span class="text-[11px] text-tinta-apagada">em ${r.larguraTecido} cm</span>
       </div>
       <p class="mt-1.5 mb-0 text-[11px] text-tinta-fraca">
-        ${aproveitamento.toFixed(1)}% de aproveitamento · ${r.posicoes.length} peça(s) encaixada(s)
+        ${formatarPorcento(aproveitamento)} de aproveitamento · ${r.posicoes.length} peça(s) encaixada(s)
       </p>
     `;
   }
 
-  renderLarguraDoEncaixe(medidasLaterais);
+  renderLarguraDoEncaixe(medidasLaterais, {
+    consumo: r.consumo, aproveitamento, naFaixa: aproveitamentoNaFaixa,
+  });
 
   const folga = r.folgaReal > 0
-    ? `Folga entre peças: ${(r.folgaReal * 10).toFixed(1).replace(/[.,]0$/, "")} mm` +
+    ? `Folga entre peças: ${formatarNumero(r.folgaReal * 10, 1).replace(/,0$/, "")} mm` +
       (r.folgaReal > r.folgaPedida + 1e-6
-        ? ` (pedi ${(r.folgaPedida * 10).toFixed(0)} mm, mas nessa medida a grade do encaixe arredonda para cima — nunca para menos). `
+        ? ` (pedi ${formatarNumero(r.folgaPedida * 10, 0)} mm, mas nessa medida a grade do encaixe arredonda para cima — nunca para menos). `
         : ". ")
     : "";
 
@@ -2178,8 +2220,8 @@ function renderResultado() {
     `dos ${formatarCm(medidasLaterais.larguraTecido)} do tecido; sobram ` +
     `${formatarCm(medidasLaterais.sobraEsquerda)} à esquerda e ` +
     `${formatarCm(medidasLaterais.sobraDireita)} à direita. ` + folga +
-    `Aproveitamento = tecido que vira peça (${areaPecas.toFixed(2)} m²) dividido pelo tecido gasto ` +
-    `(${r.larguraTecido} cm × ${(r.consumo / 100).toFixed(2)} m = ${areaTecido.toFixed(2)} m²). ` +
+    `Aproveitamento = tecido que vira peça (${formatarM2(areaPecas)}) dividido pelo tecido gasto ` +
+    `(${formatarCm(r.larguraTecido)} × ${formatarMetros(r.consumo)} = ${formatarM2(areaTecido)}). ` +
     comoFoiEncaixado(r);
 
   if (r.naoEncaixadas.length > 0) {
@@ -2523,7 +2565,9 @@ btnBaixarEncaixe.addEventListener("click", () => {
   desenharEncaixe(temp, ultimoResultado, { escala: 4, comLegenda: true });
 
   const link = document.createElement("a");
-  link.download = `encaixe-${(ultimoResultado.consumo / 100).toFixed(2)}m.png`;
+  // Nome de arquivo, e não texto de tela: a vírgula aqui é só para o PNG sair
+  // batendo com o PDF, que já se chamava "encaixe-5,32m.pdf".
+  link.download = `encaixe-${(ultimoResultado.consumo / 100).toFixed(2).replace(".", ",")}m.png`;
   link.href = temp.toDataURL("image/png");
   link.click();
 });
