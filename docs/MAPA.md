@@ -72,6 +72,14 @@ isso é 281 KB indo e 895 KB voltando contra 13 KB indo e nada voltando.
 Acrescentar campo à máscara é acrescentar peso a oito clones: pense antes se a
 busca precisa dele mesmo.
 
+**Número tirado de tentativa inválida contamina quem decide.** O encaixe que
+deixou peça de fora gasta MENOS tecido, justamente por não ter encaixado tudo.
+Todo lugar que compara consumo tem que conferir `naoEncaixadas.length === 0`
+antes — e são vários: o placar dos motores, o `melhorConsumo` de cada receita
+(que manda na poda e no rótulo de treino da rede) e a ordem guardada
+(`guardarOrdem`). Esquecer o cuidado em um deles não dá erro: dá uma receita
+ruim que parece ótima e nunca sai da roda.
+
 **Vocabulário da rede é migração.** `REDE_MOTORES`, `REDE_AGRUPAMENTOS`,
 `REDE_ORDENS` e `REDE_HEURISTICAS` (em `encaixe-rede.js`) definem o tamanho da
 entrada da rede. Acrescentar um nome a qualquer um deles — um encaixador novo,
