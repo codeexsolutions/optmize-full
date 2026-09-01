@@ -65,6 +65,41 @@ const TRABALHOS = {
       { nome: "punho", qtd: 22 },
     ],
   },
+  /*
+   * O TRABALHO DE PRODUÇÃO. 25 uniformes completos, do jeito que saiu da loja:
+   * 179 cm de mídia, folga de 4 mm, margem de 1 cm.
+   *
+   * É o trabalho mais importante do conjunto, e o único que tem um número de
+   * fora para comparar: a produção fechou em **34,63 m**. Ele existe porque as
+   * peças de confecção do resto do catálogo não representam o que esta loja
+   * imprime, e mexida de motor medida só nelas estava respondendo à pergunta
+   * errada (ver "AS PEÇAS DA PRODUÇÃO", em pecas.js).
+   *
+   * É também o mais caro de rodar — 175 peças, cada tentativa custa caro. Fica
+   * fora do conjunto padrão de propósito; entra com `--todos` ou pelo nome.
+   */
+  "producao-uniforme": {
+    larguraTecido: 179, espaco: 0.4, margem: 1,
+    pecas: [
+      { nome: "uni-costa", qtd: 25 },
+      { nome: "uni-frente", qtd: 25 },
+      { nome: "uni-manga", qtd: 50 },
+      { nome: "uni-short", qtd: 50 },
+      { nome: "uni-gola", qtd: 25 },
+    ],
+  },
+  /*
+   * A peça cuja silhueta são dois blocos separados, repetida. Foi este formato
+   * que fez o encaixe por NFP pôr peça em cima de peça; o NFP saiu, o trabalho
+   * ficou (ver "arte-partida" em pecas.js para o porquê).
+   */
+  "arte-partida": {
+    larguraTecido: 160, espaco: 1, margem: 2,
+    pecas: [
+      { nome: "arte-partida", qtd: 10 },
+      { nome: "gola", qtd: 4 },
+    ],
+  },
   "quase-retangulo": {
     larguraTecido: 160, espaco: 1, margem: 2,
     pecas: [

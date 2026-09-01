@@ -11,11 +11,11 @@
  *   "livre"  também deita. São as quatro posições da volta inteira. Serve para
  *            malha lisa e arte sem sentido, e costuma render mais tecido.
  *
- * Isto morava dentro do `encaixe-motor.js`, e o `nfp.js` precisava dele — só
- * que o motor também precisa do nfp. Os dois se importavam em círculo, o que
- * funciona por acidente em <script> e vira armadilha em módulo. Como "de que
- * jeito a peça pode virar" não é assunto de nenhum dos dois encaixadores em
- * particular, ficou aqui embaixo, onde os dois alcançam sem se enroscar.
+ * Isto morava dentro do `encaixe-motor.js`, e o encaixe por NFP precisava dele
+ * — só que o motor também precisava do NFP. Os dois se importavam em círculo, o
+ * que funciona por acidente em <script> e vira armadilha em módulo. O NFP saiu
+ * do projeto depois, mas o arquivo ficou: "de que jeito a peça pode virar" não
+ * é assunto de encaixador nenhum em particular, e aqui embaixo todos alcançam.
  */
 
 const ROTACOES_POR_GIRO = { "180": [0, 180], fixa: [0], livre: [0, 90, 180, 270] };

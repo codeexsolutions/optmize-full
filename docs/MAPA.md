@@ -27,7 +27,6 @@ quebra os dois.
 ```
 geometria.js        conta pura sobre contorno: área, caixa, simplificar
     |
-    +-- nfp.js              encaixe por polígono de não-encaixe
     +-- encaixe-mascara.js  silhueta da arte na grade do encaixe
     +-- encaixe-rede.js     rede neural das receitas (roda no navegador E no servidor)
     +-- vetor.js            imagem -> contorno -> curva
@@ -53,6 +52,25 @@ polígonos escritos no código. `npm run bancada` mede, `npm run bancada:conferi
 confere que o WASM dá o mesmo resultado que o JavaScript. **Mexida no motor sem
 uma corrida de bancada antes e depois é chute**: o resultado depende do sorteio,
 do tempo e do formato da peça ao mesmo tempo.
+
+**O relevo por coluna esquece o que fica acima.** O encaixe por contorno guarda
+o tecido como uma altura por coluna, e no instante em que uma peça é assentada
+tudo o que ficou acima dela naquela coluna some do mapa — é por isso que a gola
+não entra no decote de uma camiseta já posta. Isso não é defeito a consertar: é
+o que deixa a peça descer e se aninhar barato. Quem cobre o buraco é a
+`repescarNosVaos`, que roda uma vez no fim com a lista de intervalos ocupados no
+lugar do relevo. Medir o tamanho do buraco: `npm run bancada:vaos`.
+
+**A máscara que vai para o worker não é a máscara inteira.** A máscara tem o
+`desenho` (a silhueta real, uma célula por posição da caixa da peça) e o
+`topo`/`base` (uma altura por coluna). A **busca só lê topo/base**; o `desenho`
+é da tela, para traçar o contorno no resultado. Só que o `postMessage` para os
+workers **clona**, não transfere — são oito cópias —, e o `desenho` é o vetor
+grande. Por isso `pecaParaWorker` manda a máscara enxuta, e o resultado volta
+sem máscara nenhuma (a página remonta pela rotação). No lote grande da bancada
+isso é 281 KB indo e 895 KB voltando contra 13 KB indo e nada voltando.
+Acrescentar campo à máscara é acrescentar peso a oito clones: pense antes se a
+busca precisa dele mesmo.
 
 **Vocabulário da rede é migração.** `REDE_MOTORES`, `REDE_AGRUPAMENTOS`,
 `REDE_ORDENS` e `REDE_HEURISTICAS` (em `encaixe-rede.js`) definem o tamanho da
@@ -86,7 +104,7 @@ arquivo quebra o tema. As exceções estão comentadas onde estão: impressão
 
 ### 2. Nada de `document` ou `window` no que roda em worker
 `geometria.js`, `encaixe-mascara.js`, `encaixe-motor.js`, `encaixe-wasm.js`,
-`nfp.js`, `encaixe-rede.js` e `vetor.js` são carregados **também dentro de Web
+`encaixe-rede.js` e `vetor.js` são carregados **também dentro de Web
 Workers** (`importScripts`), onde não existe página. Uma linha com `document`
 ali derruba o worker inteiro no carregamento. `encaixe-rede.js` tem uma
 terceira plateia: o servidor, via `require()` — nem `document`/`window` nem

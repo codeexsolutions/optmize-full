@@ -118,3 +118,42 @@ window.escapeHtml = (texto) => String(texto ?? "")
   .replace(/&/g, "&amp;")
   .replace(/</g, "&lt;")
   .replace(/>/g, "&gt;");
+
+/**
+ * ===========================================================================
+ * NÚMERO NA TELA — sempre em português
+ * ===========================================================================
+ *
+ * O sistema é em português e a produção lê estes números o dia inteiro, mas
+ * eles saíam de `toFixed()`, que é sempre americano: "5.32 m" ao lado de
+ * "18,0 cm" na mesma frase, porque só a medida em centímetros passava por
+ * `toLocaleString`. Uma vírgula lida como ponto num orçamento de tecido é o
+ * tipo de erro que ninguém percebe até a conta fechar errado.
+ *
+ * Daqui para frente todo número que uma pessoa lê passa por estas funções, e
+ * elas moram no ui.js porque não são do Encaixe: o Vetor mostra medida e tempo
+ * do mesmo jeito.
+ *
+ * **O que NÃO passa por aqui:** número que vira valor de CSS (`width: 42.5%`),
+ * atributo de SVG ou nome de arquivo lido por outro programa. Ali o ponto é a
+ * gramática do formato, não uma escolha de idioma — vírgula quebra.
+ */
+window.formatarNumero = (valor, casas = 1) => Number(valor || 0).toLocaleString("pt-BR", {
+  minimumFractionDigits: casas,
+  maximumFractionDigits: casas,
+});
+
+/** Comprimento em centímetros: "18,0 cm". */
+window.formatarCm = (valor) => `${formatarNumero(valor, 1)} cm`;
+
+/** Metragem de tecido, recebida em centímetros: "5,32 m". */
+window.formatarMetros = (cm) => `${formatarNumero((Number(cm) || 0) / 100, 2)} m`;
+
+/** Área: "8,00 m²". */
+window.formatarM2 = (m2) => `${formatarNumero(m2, 2)} m²`;
+
+/** Porcentagem: "70,0%". */
+window.formatarPorcento = (pct, casas = 1) => `${formatarNumero(pct, casas)}%`;
+
+/** Tempo em segundos, recebido em milissegundos: "3,4 s". */
+window.formatarSegundos = (ms, casas = 1) => `${formatarNumero((Number(ms) || 0) / 1000, casas)} s`;

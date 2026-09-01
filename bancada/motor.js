@@ -25,7 +25,6 @@ const ARQUIVOS = [
   "public/geometria.js",
   "public/encaixe-giro.js",
   "public/encaixe-mascara.js",
-  "public/nfp.js",
   "public/encaixe-rede.js",
   "public/encaixe-wasm.js",
   "public/encaixe-motor.js",
@@ -33,9 +32,9 @@ const ARQUIVOS = [
 
 // O que a bancada alcança de dentro do motor.
 const EXPOSTOS = [
-  "buscarMelhorEncaixe", "encaixarContorno", "encaixar", "encaixarPorNFP",
+  "buscarMelhorEncaixe", "encaixarContorno", "encaixarPorVaos", "encaixar",
   "montarUnidades", "montarUnidadesCruzadas", "formasDaPeca", "formaDePartes",
-  "mascarasDeSilhueta", "grade", "gradeDaPeca",
+  "mascarasDeSilhueta", "silhuetaDeDados", "grade", "gradeDaPeca",
   "assinaturaDoTrabalho", "vetorDoTrabalho",
   "carregarMotorWasm", "temMotorWasm",
 ];

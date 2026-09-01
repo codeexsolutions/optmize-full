@@ -75,7 +75,7 @@ function vetorDoTrabalho(pecas, larguraTecido) {
 // do encaixe por faixas) fica de fora do vocabulário — é um número contínuo
 // por trabalho, não uma categoria, e o de faixas já perde na maioria dos
 // trabalhos medidos, então não vale a complexidade de representar.
-const REDE_MOTORES = ["contorno", "retangulo", "faixas", "nfp"];
+const REDE_MOTORES = ["contorno", "retangulo", "faixas", "vaos"];
 const REDE_AGRUPAMENTOS = ["solta", "dupla", "trio", "quarteto", "cruzada", "deitada", "empe"];
 // "familia" é a ordem que entra com um formato de peça de cada vez, em bloco
 // (ver ORDENS_CONTORNO em encaixe-motor.js).
