@@ -1236,6 +1236,33 @@ Testado com um servidor de verdade (Express + SQLite descartável): trabalho
 sintético foi suficiente para a rede acertar de 93% a 98% de um lote novo,
 numa regra que ela nunca tinha visto exemplificada daquele jeito.
 
+**O rótulo de treino estava quase vazio de sinal.** A rede aprende de exemplos
+"esta receita foi boa neste trabalho", e o que decidia isso era `vitorias > 0`
+do placar. Só que `vitorias` conta quantas vezes a receita melhorou o melhor **da
+fatia dela** durante a busca — não quantas vezes ela venceu o trabalho. Uma
+receita que melhorou uma vez logo no começo e foi batida por todas as outras em
+seguida saía rotulada como vencedora.
+
+Medido no histórico de produção: **440 linhas de receita, 141 rotuladas como
+vencedoras (32%)** — quando só uma por trabalho venceu de verdade, ou seja, 11.
+A rede estava treinando para separar "participou de alguma melhora" de "não
+participou", que é quase ruído.
+
+Agora a campeã vale 1 e as outras valem **o quanto chegaram perto dela**: alvo
+contínuo, que cai linearmente até zerar 5% atrás. A segunda colocada por 0,3% é
+informação muito diferente da que ficou 8% atrás, e a saída da rede é uma
+sigmoide, que aceita alvo fracionário sem mudar nada no treino. O rótulo é
+calculado na hora de treinar, a partir do que já está gravado — então **o
+histórico que já existe passa a treinar certo no próximo retreino**, sem
+migração.
+
+Junto saiu um defeito que alimentava esse número: o `melhorConsumo` de cada
+receita era gravado mesmo em tentativa que deixou **peça de fora**. Encaixe
+incompleto gasta menos tecido por não ter encaixado tudo, então a receita
+aparecia como a melhor e ficava na roda para sempre — e agora apareceria também
+como campeã no rótulo. A linha logo abaixo, que monta o placar dos motores, já
+tinha esse cuidado; aqui faltava.
+
 **Testado também contra o `dados.db` real** (só leitura) — e foi isso que
 achou o problema que fez nascer o `REDE_LIMIAR_DIVERSIDADE`. O banco real
 tinha só **6 formatos de trabalho distintos** (1.450 usos somados, mas todos

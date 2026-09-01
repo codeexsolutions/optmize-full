@@ -2058,7 +2058,15 @@ async function buscarMelhorEncaixe(itens, config) {
     const linha = placar.get(chave);
     if (linha) {
       linha.tentativas++;
-      if (resultado.consumo < linha.melhorConsumo) linha.melhorConsumo = resultado.consumo;
+      // Só entra o encaixe que coube INTEIRO — o mesmo cuidado que o placar dos
+      // motores logo abaixo já tinha, e que aqui faltava. Tentativa que deixou
+      // peça de fora gasta menos tecido por não ter encaixado tudo, e o número
+      // dela é usado em dois lugares que decidem coisa: a poda (receita que
+      // parece boa fica na roda para sempre) e o rótulo de treino da rede
+      // (ver `alvoDaReceita`, em encaixe-memoria.js).
+      if (resultado.naoEncaixadas.length === 0 && resultado.consumo < linha.melhorConsumo) {
+        linha.melhorConsumo = resultado.consumo;
+      }
     }
     // Só conta para o placar dos motores o encaixe que coube inteiro: uma
     // tentativa que deixou peça de fora gasta menos tecido por não ter
@@ -2318,8 +2326,15 @@ async function buscarMelhorEncaixe(itens, config) {
   melhor.venceuFaixas = melhorChave ? melhorChave.startsWith("faixas") : false;
   melhor.melhorPorMotor = Object.fromEntries(melhorDeCadaMotor);
   melhor.ganhos = historicoDeGanhos;
+  // `melhorConsumo` vai junto porque é dele que sai o rótulo de treino da rede:
+  // "quanto esta receita chegou perto da campeã" diz muito mais do que "ela
+  // melhorou o incumbente em algum momento". Ver `montarExemplosDeTreino`, em
+  // encaixe-memoria.js.
   melhor.placar = [...placar.entries()]
     .filter(([, l]) => l.tentativas > 0)
-    .map(([chave, l]) => ({ receita: chave, tentativas: l.tentativas, vitorias: l.vitorias }));
+    .map(([chave, l]) => ({
+      receita: chave, tentativas: l.tentativas, vitorias: l.vitorias,
+      melhorConsumo: Number.isFinite(l.melhorConsumo) ? l.melhorConsumo : null,
+    }));
   return melhor;
 }
