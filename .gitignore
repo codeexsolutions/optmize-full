@@ -20,3 +20,12 @@ uploads/
 Thumbs.db
 .DS_Store
 dist/
+
+# Rust: o compilado do encaixe em WebAssembly. Gerado por `npm run build:wasm`;
+# o que vale é o `estatico/encaixe.wasm` que sai dele.
+wasm/target/
+
+# Bancada do encaixe: as corridas de medição. O que vale é o código que mede,
+# não o número de uma máquina num dia.
+bancada/*.json
+bancada/.saida-*.txt

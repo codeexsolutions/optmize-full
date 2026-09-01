@@ -1002,10 +1002,76 @@ const HEURISTICAS_CONTORNO = ["fundo", "vazio"];
 const AGRUPAMENTOS_PADRAO = ["dupla", "solta", "trio", "cruzada"];
 const HEURISTICAS_RETANGULO = ["bl", "bssf", "blsf", "baf"];
 
+/**
+ * A que FAMÍLIA a unidade pertence: quais formatos de peça estão dentro dela.
+ *
+ * Duas cópias da mesma camiseta são a mesma família; uma dupla de camisetas
+ * também; a unidade cruzada de manga com gola é uma família própria, porque
+ * ela ladrilha o tecido de um jeito só dela.
+ *
+ * Fica guardada na unidade na primeira vez que é pedida: a ordenação e a
+ * sacudida chamam isto a cada tentativa, e montar o texto toda vez apareceria
+ * no perfil.
+ */
+function familiaDaUnidade(unidade) {
+  if (unidade._familia == null) {
+    unidade._familia = unidade.itens.map((i) => i.indice).sort((a, b) => a - b).join("-");
+  }
+  return unidade._familia;
+}
+
 const ORDENS_CONTORNO = [
   { nome: "area", comparar: (a, b) => tamanhoDaUnidade(b) - tamanhoDaUnidade(a) },
   { nome: "altura", comparar: (a, b) => alturaDaUnidade(b) - alturaDaUnidade(a) },
   { nome: "lado", comparar: (a, b) => ladoDaUnidade(b) - ladoDaUnidade(a) },
+  /*
+   * Família: todas as peças de um formato entram GRUDADAS, e só depois começa
+   * o formato seguinte.
+   *
+   * Veio de uma observação de produção: separando o pedido por silhueta
+   * parecida e encaixando um arquivo de cada vez, o total deu menos do que
+   * encaixar tudo junto. Só que separar de verdade custa uma margem de borda
+   * por arquivo e joga fora a chance de a peça pequena cair no vão da grande.
+   * Esta ordem é o meio-termo: **um encaixe só**, com as famílias entrando em
+   * bloco em vez de misturadas.
+   *
+   * O tamanho manda na ordem das famílias (a que ocupa mais tecido primeiro,
+   * como em "area"); o desempate por nome da família é o que garante que duas
+   * famílias de tamanho igual não fiquem intercaladas — sem ele, a ordenação
+   * do JavaScript pode alternar as duas e a ordem deixa de ser por família.
+   *
+   * Quem mantém isso de pé ao longo da busca é `baguncarFamilias`: sacudir
+   * unidade por unidade desmancharia o bloco na primeira tentativa.
+   *
+   * **Medido na bancada: empate.** Somando os seis trabalhos, 25,892 m com ela
+   * contra 25,845 m sem — 0,18%, dentro dos 0,23% que duas corridas iguais já
+   * variam sozinhas. E ela não venceu nenhum dos seis: quem ganha ali continua
+   * sendo `area`, `altura` ou `lado`.
+   *
+   * Isso NÃO quer dizer que a ideia esteja errada, e é importante não ler
+   * assim. As peças da bancada são sintéticas e de tamanho parecido; forçadas
+   * a rodar só com esta ordem, elas gastam ~10% mais tecido (2,505 m contra
+   * 2,265 m em "misturado pequeno"), o mesmo que dá encaixar cada formato em
+   * arquivo separado. Ou seja: **a bancada não reproduz o caso em que a
+   * observação de produção nasceu** — um pedido com mistura de tamanhos bem
+   * mais desigual, em que agrupar rendeu menos metragem do que misturar.
+   *
+   * Ela fica na disputa porque é assim que este motor trata ideia de
+   * agrupamento desde a dupla: entra como candidata, custa duas receitas
+   * (só com a peça solta) e só leva o trabalho quando o resultado dela for
+   * mesmo menor. Para tirá-la de vez, `config.ordens` sem "familia".
+   */
+  {
+    nome: "familia",
+    porFamilia: true,
+    comparar: (a, b) => {
+      const porTamanho = tamanhoDaUnidade(b) - tamanhoDaUnidade(a);
+      if (porTamanho !== 0) return porTamanho;
+      const fa = familiaDaUnidade(a);
+      const fb = familiaDaUnidade(b);
+      return fa < fb ? -1 : fa > fb ? 1 : 0;
+    },
+  },
 ];
 
 const ORDENS_RETANGULO = [
@@ -1049,11 +1115,24 @@ function filtrarPorRede(base, pontos, limiar) {
 }
 
 /** Todas as receitas base, sem embaralhar nada ainda. */
-function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAMENTOS_PADRAO) {
+function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAMENTOS_PADRAO,
+  ordens = ORDENS_CONTORNO) {
   const receitas = [];
   if (motores.includes("contorno")) {
     agrupamentos.forEach((agrupamento) => {
-      ORDENS_CONTORNO.forEach((ordem) => {
+      ordens.forEach((ordem) => {
+        // A ordem por família só entra com a peça SOLTA, e não em todo
+        // agrupamento.
+        //
+        // Não é economia à toa: dupla, trio e cruzada já são blocos de peça
+        // igual, e ordenar blocos iguais por família dá quase a mesma fila que
+        // ordenar por área. O que sobraria de diferente não paga o preço —
+        // medido na bancada, com a família em todos os agrupamentos o
+        // portfólio ganhou 8 receitas e a busca perdeu 12% das tentativas
+        // (93 mil contra 107 mil em camiseta+manga+gola), sem que a família
+        // vencesse nenhum dos seis trabalhos. Presa à solta, ela custa duas
+        // receitas e continua disponível para o trabalho em que ganhar.
+        if (ordem.porFamilia && agrupamento !== "solta") return;
         HEURISTICAS_CONTORNO.forEach((heuristica) => {
           receitas.push({ motor: "contorno", agrupamento, ordem: ordem.nome, heuristica });
         });
@@ -1074,7 +1153,8 @@ function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAM
     // Uma receita por divisão candidata. O agrupamento em dupla é o que faz a
     // faixa render, então só ele entra aqui.
     cortes.forEach((corte) => {
-      ORDENS_CONTORNO.forEach((ordem) => {
+      ordens.forEach((ordem) => {
+        if (ordem.porFamilia) return; // a faixa parte sempre da dupla; ver acima
         HEURISTICAS_CONTORNO.forEach((heuristica) => {
           receitas.push({ motor: "faixas", agrupamento: "dupla", ordem: ordem.nome, heuristica, corte });
         });
@@ -1118,6 +1198,83 @@ function baguncar(lista, sortear, forca) {
     const guarda = saida[i];
     saida[i] = saida[j];
     saida[j] = guarda;
+  }
+  return saida;
+}
+
+/**
+ * Sacode a fila trocando FAMÍLIAS de lugar, e não peças.
+ *
+ * É o par da ordem "familia": o que se procura ali é a melhor **sequência de
+ * formatos** — primeiro as camisetas, depois as mangas, depois as golas, ou
+ * qualquer outra ordem —, mantendo cada formato inteiro no seu bloco.
+ *
+ * O espaço de busca fica pequeno de propósito: com cinco formatos são 120
+ * sequências, e a busca acaba visitando todas. Isso é a força desta receita,
+ * não a fraqueza — ela entrega o melhor encaixe POR FAMÍLIA que existe, e
+ * quem procura o encaixe misturado são as outras cinco receitas que correm ao
+ * lado. Sacudir dentro do bloco não teria sentido: as unidades de uma família
+ * são iguais entre si, e trocá-las de lugar dá exatamente o mesmo encaixe.
+ */
+function baguncarFamilias(lista, sortear, forca) {
+  const blocos = [];
+  lista.forEach((unidade) => {
+    const chave = familiaDaUnidade(unidade);
+    const ultimo = blocos[blocos.length - 1];
+    if (ultimo && ultimo.chave === chave) ultimo.unidades.push(unidade);
+    else blocos.push({ chave, unidades: [unidade] });
+  });
+  if (blocos.length < 2) return lista.slice();
+  // A força é a mesma do resto da busca, mas com um piso: com poucos blocos,
+  // `forca` pequena arredondaria para zero troca e a tentativa sairia idêntica
+  // à anterior.
+  const trocados = baguncar(blocos, sortear, Math.max(forca, 1 / blocos.length));
+  const saida = [];
+  trocados.forEach((bloco) => bloco.unidades.forEach((u) => saida.push(u)));
+  return saida;
+}
+
+/**
+ * Tira algumas unidades de onde estão e devolve cada uma num lugar sorteado.
+ *
+ * É o outro jeito de mexer na fila, e ele conserva o que a troca de pares
+ * estraga: a ORDEM RELATIVA de todo o resto. Numa fila que alimenta um encaixe
+ * guloso, a posição de uma peça vale menos do que quem vem antes dela — trocar
+ * duas peças distantes de lugar mexe na vizinhança das duas de uma vez, e uma
+ * fila que estava quase boa vira outra fila. Tirar uma peça e recolocá-la mexe
+ * numa vizinhança só.
+ *
+ * **Medido, e deu empate — por isso vem desligada.** Na bancada
+ * (`bancada/medir.js`, 6 trabalhos, 5 fatias × 3 s × 3 sementes), com a
+ * reinserção valendo em metade das sacudidas, a soma dos seis trabalhos ficou
+ * em **+0,10%** — e a bancada repete a mesma configuração dentro de 0,23%, ou
+ * seja, isso é ruído, não resultado. Os trabalhos separados não ajudam a
+ * decidir: −0,90% em camiseta+manga+gola e −1,71% em quase-retângulo contra
+ * +0,50% em lote grande e +0,22% em misturado pequeno, tudo na mesma ordem de
+ * grandeza do que duas corridas idênticas já variam sozinhas.
+ *
+ * Foi tentado também o caminho de sempre para esse tipo de empate: metade das
+ * fatias de um jeito, metade do outro, como já se faz com a varredura exata
+ * contra a que pula. Também deu em nada (+0,05%), e pelo motivo que a varredura
+ * não tem — o portfólio de receitas já está repartido entre as fatias, então
+ * dividir de novo por operador só tira tentativa de cada lado sem cobrir nada
+ * de novo.
+ *
+ * Fica no motor, atrás de `config.reinsercaoChance` (0 por padrão), para não
+ * ser reinventada sem medir: `node bancada/medir.js --extra reinsercaoChance=0.5`.
+ *
+ * Não substitui `baguncar` quando ligada: os dois são sorteados, porque a
+ * troca de pares alcança arranjos que a reinserção não alcança (ela nunca
+ * inverte duas peças vizinhas mantendo o resto parado).
+ */
+function reinserir(lista, sortear, forca) {
+  const saida = lista.slice();
+  const quantas = Math.max(1, Math.round(saida.length * forca));
+  for (let t = 0; t < quantas; t++) {
+    const de = Math.floor(sortear() * saida.length);
+    const peca = saida.splice(de, 1)[0];
+    const para = Math.floor(sortear() * (saida.length + 1));
+    saida.splice(para, 0, peca);
   }
   return saida;
 }
@@ -1241,8 +1398,13 @@ async function buscarMelhorEncaixe(itens, config) {
       return { chave: "retangulo/" + receita.agrupamento, crua: listasRetangulo[receita.agrupamento],
         ordem: ORDENS_RETANGULO.find((o) => o.nome === receita.ordem) };
     }
-    return { chave: "unidades/" + receita.agrupamento, crua: unidades[receita.agrupamento],
-      ordem: ORDENS_CONTORNO.find((o) => o.nome === receita.ordem) };
+    const ordem = ORDENS_CONTORNO.find((o) => o.nome === receita.ordem);
+    // A ordem por família tem balde próprio de "melhor ordem já vista". Sem
+    // isso ela retomaria de uma ordem misturada descoberta por outra receita, e
+    // a primeira sacudida a picaria em blocos de uma unidade — a receita
+    // deixaria de ser por família sem ninguém perceber.
+    const chave = "unidades/" + receita.agrupamento + (ordem && ordem.porFamilia ? "/familia" : "");
+    return { chave, crua: unidades[receita.agrupamento], ordem };
   };
 
   /**
@@ -1263,7 +1425,7 @@ async function buscarMelhorEncaixe(itens, config) {
     const base = listaDaReceita(receita);
     const guardada = partirDoMelhor ? melhoresOrdens.get(base.chave) : null;
     let lista = guardada ? guardada.lista.slice() : base.crua.slice().sort(base.ordem.comparar);
-    if (embaralhar) lista = embaralhar(lista, guardada);
+    if (embaralhar) lista = embaralhar(lista, guardada, base.ordem);
 
     let resultado;
     if (receita.motor === "faixas") {
@@ -1289,13 +1451,24 @@ async function buscarMelhorEncaixe(itens, config) {
 
   // Peso de cada receita: começa no que a memória já sabe e vai sendo corrigido
   // pelo que estiver acontecendo nesta execução.
-  let base = receitasBase(motores, temGiroLivre, cortes, agrupamentos);
+  // `config.ordens` deixa a bancada medir o motor com e sem uma ordem — hoje é
+  // como a "familia" foi posta à prova. Nome desconhecido é ignorado em vez de
+  // derrubar a busca.
+  // Aceita lista ou texto separado por "+" — a bancada passa pela linha de
+  // comando, onde lista não existe (`--extra ordens=area+familia`).
+  const ordensPedidas = typeof config.ordens === "string"
+    ? config.ordens.split("+") : config.ordens;
+  const ordens = Array.isArray(ordensPedidas) && ordensPedidas.length > 0
+    ? ORDENS_CONTORNO.filter((o) => ordensPedidas.includes(o.nome))
+    : ORDENS_CONTORNO;
+  let base = receitasBase(motores, temGiroLivre, cortes, agrupamentos,
+    ordens.length > 0 ? ordens : ORDENS_CONTORNO);
   // Um motor pode não ter receita nenhuma para este trabalho — o de faixas,
   // por exemplo, quando todas as peças têm a mesma largura e não há onde
   // dividir o rolo. Sem isto, a busca sorteava de uma lista vazia e quebrava.
   // Cai no contorno, que é o motor cujas unidades já foram preparadas aqui em
   // cima junto com as do de faixas.
-  if (base.length === 0) base = receitasBase(["contorno"], temGiroLivre, [], agrupamentos);
+  if (base.length === 0) base = receitasBase(["contorno"], temGiroLivre, [], agrupamentos, ordens);
 
   // A rede das receitas (opcional — ver encaixe-rede.js): pontua cada
   // candidata pela chance dela ganhar ESTE trabalho, generalizando a partir
@@ -1365,7 +1538,16 @@ async function buscarMelhorEncaixe(itens, config) {
   // Chance de, ao refinar, reparar a peça que mais atrapalhou em vez de
   // sacudir a ordem toda sem direção (ver `repararPior`). Só refinando: em
   // "explorar" ainda não existe uma ordem-base cujo pior valha a pena mirar.
-  const REPARO_CHANCE = 0.3;
+  //
+  // `config.reparoChance` existe para a bancada poder desligar o reparo e
+  // medir o motor com e sem ele na MESMA versão do código — sem isso, comparar
+  // exigiria voltar o repositório no tempo, e aí a medição pegaria junto tudo
+  // o mais que tivesse mudado.
+  const REPARO_CHANCE = config.reparoChance != null ? config.reparoChance : 0.3;
+  // Chance de sacudir a fila por reinserção em vez de troca de pares. Zero por
+  // padrão: foi medido e não compensou — o porquê está no cabeçalho de
+  // `reinserir`, junto com o comando para remedir.
+  const REINSERCAO_CHANCE = config.reinsercaoChance != null ? config.reinsercaoChance : 0;
 
   const receitasNaRoda = () => {
     const linhas = [...placar.values()];
@@ -1615,10 +1797,15 @@ async function buscarMelhorEncaixe(itens, config) {
       ? (teimosia < 0.5 ? 0.05 : 0.15)
       : (teimosia < 0.34 ? 0.08 : teimosia < 0.67 ? 0.2 : 0.4);
 
-    const mutar = (l, guardada) => {
+    const mutar = (l, guardada, ordem) => {
+      // Receita por família sacode blocos inteiros, e mais nada: o reparo
+      // guiado e a reinserção mexem em UMA unidade, que é justamente o que
+      // desmancharia o bloco.
+      if (ordem && ordem.porFamilia) return baguncarFamilias(l, sortear, forca);
       if (refinando && guardada && guardada.piorUnidade && sortear() < REPARO_CHANCE) {
         return repararPior(l, guardada.piorUnidade, sortear);
       }
+      if (sortear() < REINSERCAO_CHANCE) return reinserir(l, sortear, forca);
       return baguncar(l, sortear, forca);
     };
 

@@ -29,6 +29,16 @@
 const GEO_EPSILON = 1e-9;
 
 /**
+ * Uma casa decimal. É a precisão em que o sistema trabalha medida de peça e de
+ * tecido: milímetro. Mora aqui porque a tela e o preparo da grade do encaixe
+ * (`grade`, em encaixe-mascara.js) arredondam do mesmo jeito, e duas cópias de
+ * uma conta são dois lugares para consertar quando ela estiver errada.
+ */
+function arredondar(valor) {
+  return Math.round(valor * 10) / 10;
+}
+
+/**
  * A área do polígono, COM SINAL (fórmula do cadarço).
  *
  * O sinal é o que interessa na maior parte dos usos: positivo e negativo dizem

@@ -26,6 +26,35 @@ O sistema fica dividido em código do servidor, painel web e arquivos gerados em
 - `public/projetos.js`: tela de Projetos — a estante por cliente e o editor.
 - demais arquivos de `public/`: telas especializadas de moldes, encaixe e vetor.
 
+## A bancada do encaixe
+
+`bancada/` mede o motor de encaixe fora do navegador. Não é tela nem servidor: é
+a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
+
+- `bancada/motor.js`: carrega os mesmos sete arquivos que o `encaixe-worker.js`
+  carrega, com o mesmo `estatico/encaixe.wasm`. **A ordem é a mesma de lá** — se
+  um arquivo entrar no worker, entra aqui, senão a bancada mede um motor que
+  ninguém roda.
+- `bancada/pecas.js`: as silhuetas, nascidas de polígonos escritos no código.
+  Todas têm a concavidade que molde de verdade tem (decote, cava, cabeça de
+  manga, gancho): silhueta lisa esconde justamente o que o motor faz.
+- `bancada/trabalhos.js`: os seis lotes de referência, cada um cobrindo um
+  comportamento diferente do encaixe.
+- `bancada/medir.js`: `npm run bancada`. Guarda a corrida com `--json` e compara
+  com `--contra`.
+- `bancada/conferir.js`: `npm run bancada:conferir`. O motor em WebAssembly tem
+  que dar exatamente o mesmo resultado do motor em JavaScript, e é este arquivo
+  que prova.
+- `bancada/conferir-pdf.js`: `npm run bancada:pdf`. O PDF do encaixe tem que
+  sair num arquivo só, numa página só, no tamanho real certo — e, quando usa o
+  `/UserUnit`, declarando PDF 1.6. **Peça partida é peça perdida**: se alguém
+  reintroduzir a repartição do rolo, é este arquivo que grita.
+
+**Como medir uma mexida:** ela entra atrás de um ajuste do `config` com padrão,
+e as duas corridas saem do mesmo código — `--extra reparoChance=0` de um lado,
+nada do outro. Voltar o repositório no tempo mede junto tudo o mais que tiver
+mudado.
+
 ## O programa instalado
 
 O sistema também é empacotado como app de janela (Tauri). A casca não sabe nada

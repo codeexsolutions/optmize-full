@@ -90,13 +90,40 @@ function montarExemplosDeTreino() {
  * derruba o salvamento: um erro aqui fica só no console, do mesmo jeito que
  * o resto da memória trata falha (ver a nota no topo do arquivo).
  */
+/**
+ * Os pesos guardados ainda servem para a rede de hoje?
+ *
+ * A entrada da rede é o formato do trabalho mais a receita em "um quente" (ver
+ * encaixe-rede.js). Acrescentar um nome a qualquer um dos vocabulários —
+ * um encaixador novo, um agrupamento novo, uma ordem nova como a "familia" —
+ * alarga essa entrada, e os pesos treinados antes passam a esperar um vetor
+ * mais curto do que o que chega.
+ *
+ * Alimentar a rede antiga com o vetor novo não dá erro: dá **palpite sem
+ * sentido**, que é bem pior. Então rede de tamanho diferente é tratada como
+ * rede que não existe — sai do ar até o próximo treino, que já nasce no
+ * tamanho certo.
+ */
+function redeServeAinda(pesosEmTexto) {
+  try {
+    const guardada = JSON.parse(pesosEmTexto);
+    return Array.isArray(guardada.tamanhos) && guardada.tamanhos[0] === rede.REDE_DIM_ENTRADA;
+  } catch (erro) {
+    console.warn("[encaixe] pesos da rede ilegíveis, vão ser treinados de novo:", erro && erro.message);
+    return false;
+  }
+}
+
 function talvezRetreinar() {
   const exemplos = montarExemplosDeTreino();
   if (exemplos.length < REDE_MINIMO_PARA_TREINAR) return;
 
-  const linhaAtual = db.prepare("SELECT exemplos FROM encaixe_rede_pesos WHERE id = 1").get();
+  const linhaAtual = db.prepare("SELECT pesos, exemplos FROM encaixe_rede_pesos WHERE id = 1").get();
+  // Rede do tamanho errado tem que ser refeita agora, sem esperar o próximo
+  // lote de exemplos: enquanto ela não for, a busca fica sem palpite nenhum.
+  const precisaRefazer = linhaAtual != null && !redeServeAinda(linhaAtual.pesos);
   const exemplosAntes = linhaAtual ? linhaAtual.exemplos : 0;
-  if (exemplos.length - exemplosAntes < REDE_RETREINO_A_CADA) return;
+  if (!precisaRefazer && exemplos.length - exemplosAntes < REDE_RETREINO_A_CADA) return;
 
   const nova = rede.criarRede([rede.REDE_DIM_ENTRADA, 16, 8, 1]);
   rede.treinarRede(nova, exemplos, { epocas: 150, taxa: 0.05 });
@@ -145,6 +172,8 @@ router.get("/memoria", (req, res) => {
     "SELECT MIN(consumo) AS melhor FROM encaixe_historico WHERE assinatura = ?").get(assinatura).melhor;
 
   const pesosDaRede = db.prepare("SELECT pesos, exemplos FROM encaixe_rede_pesos WHERE id = 1").get();
+  // Pesos de um vocabulário antigo não vão para a tela: ver `redeServeAinda`.
+  const redeUtil = pesosDaRede && redeServeAinda(pesosDaRede.pesos) ? pesosDaRede : null;
   // Diversidade, não só volume — ver a nota em REDE_LIMIAR_DIVERSIDADE.
   const diversidadeDeFormatos = db.prepare(
     "SELECT COUNT(DISTINCT assinatura) AS n FROM encaixe_historico WHERE features IS NOT NULL AND placar IS NOT NULL"
@@ -154,11 +183,11 @@ router.get("/memoria", (req, res) => {
     memoria, encaixesDoTipo, encaixesNoTotal, melhorAntes,
     // `rede` já vem como o objeto pronto (não a string), para a tela só
     // repassar para o motor sem ter que saber o formato interno dela.
-    rede: pesosDaRede ? JSON.parse(pesosDaRede.pesos) : null,
-    redeExemplos: pesosDaRede ? pesosDaRede.exemplos : 0,
+    rede: redeUtil ? JSON.parse(redeUtil.pesos) : null,
+    redeExemplos: redeUtil ? redeUtil.exemplos : 0,
     redeFormatosDistintos: diversidadeDeFormatos,
-    redeMadura: pesosDaRede
-      ? (pesosDaRede.exemplos >= REDE_LIMIAR_MADUREZA && diversidadeDeFormatos >= REDE_LIMIAR_DIVERSIDADE)
+    redeMadura: redeUtil
+      ? (redeUtil.exemplos >= REDE_LIMIAR_MADUREZA && diversidadeDeFormatos >= REDE_LIMIAR_DIVERSIDADE)
       : false,
   });
 });

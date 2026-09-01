@@ -261,6 +261,11 @@ function encaixarContornoWasm(unidades, config) {
   // máscaras continuam aqui do lado do JavaScript.
   const posicoes = [];
   const naoEncaixadas = [];
+  // A unidade que deixou mais buraco morto acima dela. É o que o reparo
+  // guiado da busca mira (`repararPior`, em encaixe-motor.js) — e o caminho em
+  // JavaScript já devolvia isso. Enquanto aqui não devolvia, o reparo ficava
+  // desligado justamente na configuração que roda em produção.
+  let piorUnidade = null, piorVazio = -Infinity;
   for (let k = 0; k < unidades.length; k++) {
     const s = plano.saida + k * 4;
     const formaGlobal = i32[s];
@@ -271,6 +276,8 @@ function encaixarContornoWasm(unidades, config) {
     }
     const x = i32[s + 1];
     const y = i32[s + 2];
+    const vazio = i32[s + 3];
+    if (vazio > piorVazio) { piorVazio = vazio; piorUnidade = unidade; }
     // Qual forma da unidade venceu: o índice é global, e a primeira forma
     // desta unidade está anotada no plano.
     const forma = unidade.formas[formaGlobal - i32[plano.unidInicio + unidade._wasm.id]];
@@ -295,5 +302,6 @@ function encaixarContornoWasm(unidades, config) {
     posicoes, naoEncaixadas,
     consumo: fundoMax > 0 ? fundoMax * passo + margem * 2 : 0,
     areaReal: posicoes.reduce((soma, p) => soma + p.item.mascaras.areaReal, 0),
+    piorUnidade, piorVazio,
   };
 }

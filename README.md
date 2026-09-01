@@ -650,6 +650,26 @@ quantos metros vão ser gastos.
    já cabe no limite sai sem `/UserUnit` nenhum, que é o caso de maior
    compatibilidade.
 
+   **O `/UserUnit` é recurso do PDF 1.6, e o arquivo tem que dizer isso.** A
+   biblioteca que monta o PDF escreve `%PDF-1.3` por padrão; declarando 1.3, um
+   leitor tem todo o direito de ignorar o `/UserUnit` e imprimir o rolo na
+   escala errada — sem erro nenhum, que é o pior jeito de descobrir. Por isso o
+   documento nasce 1.6 quando o `/UserUnit` entra em ação, e 1.3 quando não
+   precisa dele. Quem confere isso, junto com "uma página só" e "o tamanho real
+   bate", é `npm run bancada:pdf`.
+
+   > **Já foi repartido, e não é mais.** Por um tempo o rolo saía em arquivos
+   > de até 10 m, para o RIP processar um trecho enquanto imprimia o anterior.
+   > Só que repartir precisa de um lugar para cortar, e encaixe bom é
+   > exatamente o que não deixa vão: num rolo denso o corte acabava passando
+   > por cima de uma peça, que saía pela metade num arquivo e pela outra metade
+   > no seguinte. Os dois pedaços só fecham se os arquivos entrarem na máquina
+   > colados, sem um milímetro de folga entre um trabalho e o outro, e na
+   > prática isso não acontece. **Peça partida é peça perdida.** Se um rolo
+   > muito longo engasgar o RIP, o caminho não é voltar a partir peça: é
+   > separar o trabalho em dois encaixes menores, na tela, onde dá para
+   > escolher onde cortar.
+
    Também dá para baixar o desenho em PNG (só para conferir na tela, não tem
    escala) ou imprimir a tela.
 
@@ -842,17 +862,84 @@ cabem no tempo.
 > de verdade rende 7,5%. Toda medição de agrupamento feita com as peças lisas
 > subestimava o ganho.
 
+#### A ordem por família (na disputa, sem ter vencido ainda)
+
+Veio de uma observação de produção, e não de uma ideia de bancada: separando um
+pedido por silhueta parecida e encaixando **um arquivo de cada vez**, o total de
+tecido deu menos do que encaixar tudo junto.
+
+A primeira coisa foi medir se isso reproduz. Na bancada, separar de verdade sai
+**pior** em todos os trabalhos — e o quanto pior encolhe conforme o trabalho
+cresce:
+
+| trabalho | junto | um formato por vez | |
+|---|---|---|---|
+| misturado pequeno (6 formatos) | 2,270 m | 3,380 m | +48,9% |
+| camiseta+manga+gola | 3,710 m | 4,260 m | +14,8% |
+| calça+bolso | 2,330 m | 2,510 m | +7,7% |
+| lote grande (130 peças) | 13,900 m | 14,105 m | +1,5% |
+
+Separar cobra duas coisas: uma margem de borda por arquivo, e a chance de a peça
+pequena cair no vão da grande. Mas repare na tendência — de +49% para +1,5%
+conforme o trabalho engorda. A vantagem de misturar encolhe justamente onde a
+observação nasceu.
+
+Daí a receita `contorno/solta/familia/…`: o meio-termo entre os dois. **Um
+encaixe só** — uma margem, um rolo —, mas com as famílias entrando em bloco:
+todas as camisetas, depois todas as mangas, depois todas as golas. Quem escolhe
+a sequência de formatos é a busca, sacudindo blocos inteiros
+(`baguncarFamilias`) em vez de peça por peça, que desmancharia o agrupamento na
+primeira tentativa.
+
+**Medido: empate.** 25,892 m com ela contra 25,845 m sem, nos seis trabalhos —
+0,18%, dentro dos 0,23% que duas corridas iguais já variam sozinhas. E ela não
+venceu nenhum dos seis.
+
+Isso não quer dizer que a ideia esteja errada, e não vale ler assim: a bancada
+já tinha falhado em reproduzir a observação original, então ela também não é
+o lugar onde essa receita seria aprovada. As peças sintéticas são de tamanho
+parecido demais; rodando **só** com esta ordem elas gastam ~10% mais tecido, o
+mesmo que dá separar em arquivos.
+
+Ela fica na disputa porque é assim que este motor trata ideia de agrupamento
+desde a dupla: entra como candidata e só leva o trabalho quando o resultado for
+mesmo menor. O preço foi cortado para o mínimo — ela vale **só para a peça
+solta**, e não para dupla, trio e cruzada, que já são blocos de peça igual.
+São duas receitas a mais no portfólio, em vez de oito: com as oito, a busca
+perdia 12% das tentativas sem nada em troca.
+
+> **O que falta para decidir de verdade:** o trabalho de produção em que a
+> observação apareceu, acrescentado a `bancada/trabalhos.js` como mais um lote
+> de referência. Enquanto a medição só existir sobre peça sintética, esta
+> receita é uma aposta bem-comportada — não uma conclusão.
+
 #### O que foi tentado e não passou
 
-- **Bloco de peças diferentes** (a gola na curva da manga, a manga no vão do
-  decote), que é o agrupamento automático dos programas profissionais. Todos os
-  pares mistos saíram **piores** que as duas peças soltas: manga+gola +13,6%,
-  camiseta+manga +4,8%, calça+bolso +2,3%. O motivo é geométrico — juntar peça
-  grande com peça pequena sempre deixa um canto vazio na caixa do bloco.
+- **Bloco de peças diferentes no lugar da dupla** (a gola na curva da manga, a
+  manga no vão do decote), que é o agrupamento automático dos programas
+  profissionais. Medindo a caixa do bloco, todos os pares mistos saíram
+  **piores** que as duas peças soltas: manga+gola +13,6%, camiseta+manga +4,8%,
+  calça+bolso +2,3%. O motivo é geométrico — juntar peça grande com peça
+  pequena sempre deixa um canto vazio na caixa do bloco.
+
+  O que voltou depois, e ficou, foi a versão que **não** substitui nada: a
+  receita `cruzada` (ver `montarUnidadesCruzadas` em `encaixe-motor.js`) monta
+  esses pares só quando eles apertam mais que 2%, e entra como **mais uma
+  candidata** ao lado da solta, da dupla e do trio. Perdendo, ela não custa
+  tecido nenhum — a poda a tira da roda depois da primeira chance.
 - **A dupla montada pelo NFP**, para ela enxergar a posição de lado que o
   "desliza e deixa cair" não alcança. Perdeu da dupla de hoje em todas as peças
   (+0,5% a +6,3%): a varredura horizontal exaustiva que já existe cobre mais
   posições que os vértices do NFP.
+- **Sacudir a fila por reinserção** em vez de por troca de pares — tirar uma
+  peça da fila e recolocá-la em outro ponto, conservando a ordem relativa do
+  resto. Na bancada, com seis trabalhos: ganha muito onde ganha
+  (camiseta+manga+gola −0,90%, quase-retângulo −1,71%) e perde onde perde
+  (lote grande +0,50%), e a soma dos seis fica em **+0,10%** — nada. Repartir
+  as fatias entre os dois jeitos, como já se faz com a varredura, também deu em
+  nada (+0,05%): o portfólio de receitas já está repartido entre as fatias, e
+  dividir de novo por operador só tira tentativa de cada lado. Continua no
+  motor, desligada, atrás de `config.reinsercaoChance`.
 
 #### O laço do encaixe em WebAssembly
 
@@ -879,12 +966,23 @@ cópia comeria o ganho. Assim o relevo nasce e morre do lado do WASM.
 
 Nada disso é obrigatório: se o módulo não carregar, `encaixarContornoWasm`
 devolve `null` e o encaixe segue pelo caminho de sempre em JavaScript — que
-continua sendo a referência de correção. Existe um teste que compara os dois
-posição por posição, e eles batem.
+continua sendo a referência de correção. Quem confere que os dois batem posição
+por posição é `npm run bancada:conferir` (ver "A bancada", adiante): 144 rodadas
+cobrindo os seis trabalhos, os dois critérios de posição, os dois saltos de
+varredura e os três tamanhos de bloco.
 
 Para reconstruir o módulo depois de mexer no Rust: `npm run build:wasm` (precisa
 do `cargo` com o alvo `wasm32-unknown-unknown`). O arquivo gerado vai para
-`public/encaixe.wasm` e tem 4,8 KB.
+`estatico/encaixe.wasm` e tem 4,8 KB.
+
+> **O script entra na pasta `wasm/` antes de chamar o cargo, e isso não é
+> enfeite.** O cargo procura o `.cargo/config.toml` a partir da pasta em que
+> foi chamado, e não a partir do manifesto — chamando com `--manifest-path` da
+> raiz, o `-C link-arg=--export=__heap_base` de `wasm/.cargo/config.toml` era
+> ignorado. O módulo compilava, era copiado por cima do bom, e a ponte não
+> achava o `__heap_base`: `carregarMotorWasm` engolia o erro e o encaixe seguia
+> em JavaScript, 3,9x mais devagar, **sem avisar ninguém**. Quem achou isso foi
+> a bancada, na primeira vez que rodou depois de um `npm run build:wasm`.
 
 #### O lote grande não usa mais atalho
 
@@ -985,6 +1083,86 @@ exemplo (`REDE_LIMIAR_MADUREZA`) **e** formato distinto
 exemplos na mesma assinatura, sozinhos, não ligam mais o corte. O número 20
 é um piso conservador, sem calibração ainda — precisa ser remedido quando
 houver histórico de produção variado de verdade para isso.
+
+#### A bancada: medir antes de mexer
+
+Quase toda decisão deste encaixe está escrita como "medido: X contra Y" — a
+segunda fatia exata, o bloco de três, o quarteto que ficou de fora, a poda das
+receitas. O que faltava era a **bancada** que produziu esses números: sem ela no
+repositório, nenhuma medição dava para repetir, e mexer no encaixe sem medir é
+chute, porque o resultado depende do sorteio, do tempo e do formato da peça ao
+mesmo tempo.
+
+```
+npm run bancada                          o conjunto padrão
+npm run bancada -- --todos --tempo 5     os seis trabalhos, 5 s por fatia
+npm run bancada -- --json depois.json    guarda a corrida
+npm run bancada -- --contra antes.json   compara com uma corrida anterior
+npm run bancada:conferir                 o WASM bate com o JavaScript?
+npm run bancada:pdf                      o PDF sai num arquivo e numa página?
+```
+
+O que ela roda é o **motor de verdade**: os mesmos sete arquivos que o
+`encaixe-worker.js` carrega, com o mesmo `estatico/encaixe.wasm`, na mesma
+repartição de fatias da produção (duas varrendo exato, três pulando de três em
+três). O que a bancada substitui é só o que precisa de tela — a arte da peça,
+que aqui nasce de um polígono escrito no código (`bancada/pecas.js`): camiseta
+com decote e cava, manga com cabeça, gola em meia-lua, calça com gancho, regata
+de cava funda, bolso e punho. **Silhueta lisa esconde justamente o que o motor
+faz** — foi o erro que já subestimou a medição do agrupamento inteiro (ver a
+"Nota sobre as peças de teste"), e por isso toda peça daqui tem o buraco que a
+peça real tem.
+
+São seis trabalhos, e cada um está lá por um comportamento diferente: o de todo
+dia (camiseta+manga+gola), um formato só com muitas cópias (onde o bloco manda),
+peça comprida com miudeza junto, seis formatos com poucas cópias (onde só a
+ordem decide), 130 peças (onde o tempo é o recurso escasso) e um trabalho sem
+concavidade nenhuma (a contraprova: aqui o contorno não pode perder feio da
+caixa).
+
+**A mexida entra atrás de um ajuste com padrão, e a bancada roda os dois lados
+com o mesmo código.** É o que `--extra` faz:
+`node bancada/medir.js --extra reparoChance=0`. Comparar voltando o repositório
+no tempo mede junto tudo o mais que tiver mudado.
+
+**E ela não é determinística — não tem como ser.** O que encerra a busca é o
+relógio, então duas corridas da mesma configuração fazem números de tentativas
+diferentes e param em lugares diferentes. Rodando a mesma configuração duas
+vezes, a soma dos seis trabalhos variou **0,23%**, e um trabalho pequeno sozinho
+variou até 1,7% (meio centímetro num encaixe de 87 cm já é 0,6%). Daí a regra de
+leitura, que vale para todo número desta seção: **diferença de soma abaixo de
+~0,25% é empate**, e trabalho pequeno sozinho não decide nada. Para separar mais
+fino, dê mais orçamento (`--tempo 5 --sementes 5`) e veja se o sinal se repete.
+
+##### O que ela achou na primeira vez que rodou
+
+Duas coisas, as duas invisíveis de dentro do navegador:
+
+- **`npm run build:wasm` produzia um módulo que não carregava.** O cargo procura
+  o `.cargo/config.toml` a partir da pasta em que foi chamado, e o script
+  chamava com `--manifest-path` da raiz: o `--export=__heap_base` era ignorado,
+  a ponte não achava o símbolo, `carregarMotorWasm` engolia o erro e o encaixe
+  voltava para o JavaScript — 3,9x mais devagar, sem uma linha de aviso. Quem
+  rebuildasse o Rust perdia o motor rápido e não ficava sabendo.
+- **O reparo guiado estava desligado em produção.** A busca sabe qual unidade
+  deixou mais buraco morto (`piorUnidade`) e mira nela na tentativa seguinte, em
+  vez de sacudir a fila inteira sem direção. Só que quem devolvia essa
+  informação era o caminho em JavaScript; o caminho em WASM não devolvia — e o
+  caminho em WASM é o que roda. Ou seja: o recurso existia, estava testado, e
+  nunca tinha valido nada na máquina de ninguém. O `wasm/src/lib.rs` agora
+  devolve o `vazio` de cada unidade junto com a posição dela.
+
+  Medido na bancada, seis trabalhos, 5 fatias × 3 s × 3 sementes:
+
+  | | soma dos seis |
+  |---|---|
+  | reparo desligado (o que rodava de verdade) | 25,928 m |
+  | reparo ligado | **25,790 m** |
+
+  São **0,53% menos tecido** — o dobro da repetibilidade da bancada, e com o
+  sinal no lugar certo: camiseta+manga+gola −0,67% e lote grande −0,86%, os
+  dois maiores trabalhos do conjunto, que são também os menos sujeitos a ruído.
+  Nos dois menores a diferença ficou em meio centímetro, ou seja, empate.
 
 ### Aba Vetor
 
@@ -1452,6 +1630,13 @@ optimize/
 ├── wasm/
 │   ├── Cargo.toml            # o módulo Rust do laço quente do encaixe
 │   └── src/lib.rs            # descer a peça pelo relevo do tecido, em WebAssembly
+├── bancada/                  # mede o motor de encaixe fora do navegador (`npm run bancada`)
+│   ├── motor.js              # carrega os sete arquivos do motor numa função só
+│   ├── pecas.js              # as silhuetas sintéticas: camiseta, manga, gola, calça...
+│   ├── trabalhos.js          # os seis lotes de referência
+│   ├── medir.js              # a corrida: consumo, aproveitamento e a comparação
+│   ├── conferir.js           # o WASM tem que dar o mesmo resultado do JavaScript
+│   └── conferir-pdf.js       # o PDF: um arquivo, uma página, no tamanho real certo
 ├── src/                      # a tela nova: React + TypeScript (ver docs/ARQUITETURA.md)
 │   ├── App.tsx               # a casca: menu + cabeçalho + a tela da vez
 │   ├── rotas.ts              # a tabela das telas — uma linha por aba
@@ -1480,7 +1665,6 @@ optimize/
 │   ├── encaixe-paralelo.js    # espalha a busca pelos núcleos e junta o melhor de cada fatia
 │   ├── encaixe-worker.js      # uma fatia da busca, rodando fora da tela
 │   ├── encaixe-wasm.js        # a ponte com wasm/src/lib.rs (cai no JavaScript se não carregar)
-│   ├── encaixe.wasm           # gerado por `npm run build:wasm`
 │   ├── nfp.js                 # encaixe por polígono de não-encaixe (uma fatia da busca é dele)
 │   ├── vetor.js               # imagem vira desenho: paleta, contorno e curva
 │   ├── vetor-worker.js        # a vetorização fora da thread da tela
