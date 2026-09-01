@@ -14,11 +14,14 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "check": "node --check server.js",
+    "bancada": "node bancada/medir.js",
+    "bancada:conferir": "node bancada/conferir.js",
+    "bancada:pdf": "node bancada/conferir-pdf.js",
     "tipos": "tsc --noEmit",
     "app": "npm run front && tauri dev",
     "build:app": "npm run front && tauri build",
     "tauri": "tauri",
-    "build:wasm": "cargo build --release --manifest-path wasm/Cargo.toml --target wasm32-unknown-unknown && node -e \"require('fs').copyFileSync('wasm/target/wasm32-unknown-unknown/release/encaixe.wasm','estatico/encaixe.wasm')\""
+    "build:wasm": "cd wasm && cargo build --release --target wasm32-unknown-unknown && cd .. && node -e \"require('fs').copyFileSync('wasm/target/wasm32-unknown-unknown/release/encaixe.wasm','estatico/encaixe.wasm')\""
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

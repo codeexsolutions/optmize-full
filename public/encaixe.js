@@ -384,10 +384,6 @@ async function montarPecaDaImagem(cru, semFundo, imagemPronta = null) {
   };
 }
 
-function arredondar(valor) {
-  return Math.round(valor * 10) / 10;
-}
-
 // Quem sabe abrir cada formato é o `moldes.js`; aqui só interessa saber se o
 // arquivo é vetorial (a leitura em si passa por `lerMoldeVetorial`).
 const ehMoldeVetorial = (file) => ehArquivoDeMolde(file);
@@ -1267,14 +1263,6 @@ function silhuetaDaImagem(peca, cols, rows) {
  * Monta (e guarda em cache) as máscaras de uma peça nas quatro rotações. O
  * cache evita refazer tudo a cada clique em "Fazer encaixe" quando nada mudou.
  */
-/** A grade de uma peça: quantas células de lado ela tem. */
-function gradeDaPeca(peca, passo) {
-  return {
-    cols: Math.max(1, Math.round(peca.largura / passo)),
-    rows: Math.max(1, Math.round(peca.altura / passo)),
-  };
-}
-
 /** A chave do cache de máscaras: muda quando qualquer entrada muda. */
 function chaveDasMascaras(peca, passo, raio) {
   return `${passo}|${raio}|${peca.largura}|${peca.altura}|${peca.contorno}`;
@@ -1639,43 +1627,6 @@ btnPararBusca.addEventListener("click", () => {
   btnPararBusca.disabled = true;
   btnPararBusca.textContent = "Encerrando…";
 });
-
-/**
- * Escolhe a grade do encaixe a partir da folga pedida.
- *
- * A folga entre peças é aplicada engordando cada peça pela metade dela, e esse
- * engorde só existe em células inteiras da grade — ou seja, **a grade é que
- * decide a precisão da folga**. Com uma grade fixa de meio centímetro, pedir
- * 3 mm dava zero (as peças encostavam!) e pedir 5 mm dava 10 mm.
- *
- * Por isso a grade passa a acompanhar a folga: uma célula vale metade do que
- * foi pedido, para o engorde de uma célula dar exatamente a folga. Grade mais
- * fina custa tempo (o encaixe olha mais células), então há um piso; abaixo
- * dele a folga sai um pouco maior que a pedida, nunca menor — errar para mais
- * gasta um tiquinho de tecido, errar para menos estraga o corte.
- */
-function grade(larguraTecido, espaco) {
-  const maisGrossa = Math.min(1, Math.max(0.2, arredondar(larguraTecido / 300)));
-  const maisFina = larguraTecido / 1000;
-  if (!(espaco > 0)) return { passo: maisGrossa, raio: 0, folgaReal: 0 };
-
-  // Metade da folga tem que caber num número inteiro de células. Divide-se
-  // essa metade em quantas partes forem necessárias para a célula não passar
-  // do tamanho máximo — assim a folga sai exata em vez de arredondada para
-  // cima (era o que fazia 15 mm virar 20 mm).
-  const metade = espaco / 2;
-  const partes = Math.max(1, Math.ceil(metade / maisGrossa - 1e-9));
-  let passo = metade / partes;
-  let raio = partes;
-
-  // Célula fina demais deixa o encaixe lento sem retorno. Abaixo do piso a
-  // folga sai um pouco maior que a pedida — nunca menor.
-  if (passo < maisFina) {
-    passo = maisFina;
-    raio = Math.ceil(metade / passo - 1e-9);
-  }
-  return { passo, raio, folgaReal: raio * passo * 2 };
-}
 
 /** Quanto tempo a busca pode ficar tentando, do campo da tela. */
 function tempoDeProcuraMs() {
@@ -2627,85 +2578,28 @@ async function prepararArtes(posicoes, dpi) {
 const somaDeBytes = (artes) => [...artes.values()].reduce((soma, b) => soma + (b ? b.size : 0), 0);
 
 /**
- * De quantos em quantos metros o rolo é repartido em arquivos.
+ * O PDF do encaixe é UM ARQUIVO SÓ, sempre — seja o rolo de 3 m ou de 40 m.
  *
- * Não é limite do PDF — o formato aguenta o rolo inteiro numa página só, e o
- * `/UserUnit` resolve o teto de 508 cm. É limite do RIP: rasterizar em tamanho
- * real custa memória proporcional ao tamanho da página, e um arquivo de onze
- * metros obriga a máquina a segurar tudo antes de a primeira gota cair. Em
- * trechos, o RIP processa um enquanto imprime o anterior.
+ * Já foi repartido em trechos de 10 m, por causa do RIP: rasterizar uma página
+ * em tamanho real custa memória proporcional ao tamanho da página, e um arquivo
+ * de onze metros obriga a máquina a segurar tudo antes de a primeira gota cair.
+ * Repartido, o RIP processa um trecho enquanto imprime o anterior.
+ *
+ * **Só que repartir não sai de graça, e o preço caiu na produção.** O corte
+ * procurava um vão entre peças, mas encaixe bom é exatamente o que não deixa
+ * vão: num rolo denso as peças se encavalam de ponta a ponta, e aí o corte
+ * passava por cima de uma peça — metade num arquivo, metade no outro. Os dois
+ * pedaços só se reencontram se os arquivos entrarem na máquina colados, sem um
+ * milímetro de folga entre um trabalho e o outro, e na prática isso não
+ * acontece. Peça partida é peça perdida.
+ *
+ * Então a decisão é essa: **arquivo único, sempre**. O formato aguenta — o
+ * teto de 508 cm por página é contornado pelo `/UserUnit` (ver encaixe-pdf.js),
+ * e é o mesmo `/UserUnit` que já valia para qualquer rolo acima de 5 m. Se um
+ * dia um RIP engasgar com um rolo muito longo, o caminho não é voltar a partir
+ * peça: é cortar o TRABALHO em dois encaixes menores, na tela, onde dá para
+ * escolher onde separar.
  */
-const METROS_POR_ARQUIVO = 10;
-
-/**
- * Onde o rolo pode ser cortado sem partir peça.
- *
- * A tesoura procura um VÃO: uma faixa de comprimento onde nenhuma peça
- * existe. Cortar ali é o caso bom — cada arquivo sai fechado em si, e a ordem
- * de impressão é a única coisa que importa.
- *
- * Só que vão nem sempre existe. Encaixe bom é exatamente o que não deixa
- * buraco: as peças se encavalam em Y de ponta a ponta, e num rolo denso a
- * corrida contínua pode ser o rolo inteiro. Insistir em vão ali devolveria um
- * arquivo único de 40 m — justo o que este recurso existe para evitar.
- *
- * Então, quando não há vão por perto, o corte passa na peça: ela sai recortada
- * no fim de um arquivo e continua no começo do seguinte. Impressos em
- * sequência no mesmo rolo, os dois pedaços se reencontram. É por isso que a
- * tela avisa quando isso acontece: aí os arquivos têm que ir para a máquina
- * colados, sem folga entre um trabalho e o outro.
- *
- * O passeio é o de sempre em encaixe: ordena por Y e guarda até onde a peça
- * mais longa já chegou. Quando a próxima peça começa depois disso, o que está
- * no meio é vão livre.
- *
- * Só vale o vão que cai na metade de cima do trecho — de 5 a 10 m, num alvo de
- * 10. Vão cedo demais faria arquivos curtos demais, e o ganho de memória do
- * RIP vira ida e volta de arquivo.
- *
- * Somando os trechos, o rolo é exatamente o mesmo: os cortes são uma partição
- * de [0, consumo], então nenhuma peça se perde nem se repete.
- */
-function planoDeCorte(posicoes, consumo, alvoCm) {
-  const FOLGA = 1e-6;
-  const ordenadas = [...posicoes].filter((p) => p && p.altura > 0).sort((a, b) => a.y - b.y);
-
-  const vaos = [];
-  let ateOndeVai = 0;
-  for (const p of ordenadas) {
-    if (p.y > ateOndeVai + FOLGA) vaos.push([ateOndeVai, p.y]);
-    ateOndeVai = Math.max(ateOndeVai, p.y + p.altura);
-  }
-  const rolo = Math.max(consumo, ateOndeVai);
-  vaos.push([ateOndeVai, rolo]); // o fim do rolo também é lugar de corte
-
-  const partes = [];
-  let inicio = 0;
-  while (rolo - inicio > alvoCm + FOLGA) {
-    const limite = inicio + alvoCm;
-    const cedoDemais = inicio + alvoCm / 2;
-
-    // O vão mais tardio que ainda cabe no trecho, desde que não seja curto
-    // demais.
-    let vao = null;
-    for (const candidato of vaos) {
-      if (candidato[0] <= cedoDemais + FOLGA) continue;
-      if (candidato[0] > limite) break;
-      vao = candidato;
-    }
-
-    const corte = vao
-      ? Math.min(Math.max(limite, vao[0]), vao[1])
-      : limite; // sem vão por perto: a tesoura passa na peça
-
-    if (corte <= inicio + FOLGA) break;
-    partes.push({ inicio, fim: corte, limpo: Boolean(vao) });
-    inicio = corte;
-  }
-
-  partes.push({ inicio, fim: rolo, limpo: true });
-  return partes;
-}
 
 /** Manda o arquivo para o disco de quem está usando. */
 function baixarArquivo(blob, nome) {
@@ -2761,72 +2655,38 @@ async function baixarEncaixeEmPdf() {
       x: p.x, y: p.y, largura: p.largura, altura: p.altura,
     }));
 
-    const partes = planoDeCorte(posicoes, r.consumo, METROS_POR_ARQUIVO * 100);
     const metros = (cm) => (cm / 100).toFixed(2).replace(".", ",");
+    const nome = `encaixe-${metros(r.consumo)}m`;
 
-    for (let i = 0; i < partes.length; i++) {
-      const parte = partes[i];
-      const ultima = i === partes.length - 1;
+    const resposta = await fetch("/api/encaixe/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessao,
+        larguraTecido: r.larguraTecido,
+        consumo: r.consumo,
+        nome,
+        imagens: [...artes.keys()].map((chave) => ({ chave })),
+        posicoes,
+      }),
+    });
 
-      const nome = partes.length === 1
-        ? `encaixe-${metros(r.consumo)}m`
-        : `encaixe-${i + 1}de${partes.length}-${metros(parte.inicio)}a${metros(parte.fim)}m`;
-
-      btnEncaixePdf.textContent = partes.length === 1
-        ? "Montando PDF…"
-        : `Montando PDF (${i + 1}/${partes.length})…`;
-
-      const resposta = await fetch("/api/encaixe/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessao,
-          larguraTecido: r.larguraTecido,
-          consumo: r.consumo,
-          nome,
-          imagens: [...artes.keys()].map((chave) => ({ chave })),
-          posicoes,
-          // Rolo curto sai inteiro, como sempre saiu.
-          recorte: partes.length === 1 ? null : parte,
-          // As artes só são jogadas fora depois da última parte; senão cada
-          // trecho obrigaria a subir tudo de novo.
-          manterSessao: !ultima,
-        }),
-      });
-
-      if (!resposta.ok) {
-        const erro = await resposta.json().catch(() => ({}));
-        throw new Error(erro.error || "O servidor não conseguiu gerar o PDF.");
-      }
-
-      baixarArquivo(await resposta.blob(), `${nome}.pdf`);
-
-      // Um respiro entre downloads: navegador que recebe vários seguidos do
-      // mesmo clique costuma engolir os últimos sem avisar.
-      if (!ultima) await new Promise((pronto) => setTimeout(pronto, 350));
+    if (!resposta.ok) {
+      const erro = await resposta.json().catch(() => ({}));
+      throw new Error(erro.error || "O servidor não conseguiu gerar o PDF.");
     }
 
-    if (partes.length > 1) {
-      // Um corte que passou na peça muda o que a produção precisa saber: os
-      // arquivos deixam de ser independentes e têm que ir colados na máquina.
-      const naPeca = partes.filter((p) => !p.limpo).length;
-      mostrarErroEncaixe(
-        `O rolo saiu em ${partes.length} arquivos de até ${METROS_POR_ARQUIVO} m, ` +
-        `para o RIP processar um trecho enquanto imprime o anterior. ` +
-        `Imprima na ordem dos nomes. ` +
-        (naPeca === 0
-          ? `Todos os cortes caíram em vão: nenhuma peça foi partida.`
-          : `${naPeca} corte(s) passaram por cima de peça — o encaixe é denso e não havia vão. ` +
-            `Esses arquivos precisam entrar na máquina colados, sem folga entre um trabalho e o outro, ` +
-            `senão a peça partida não fecha.`),
-      );
-    }
+    baixarArquivo(await resposta.blob(), `${nome}.pdf`);
 
     if (dpi < DPI_EXPORTACAO) {
       mostrarErroEncaixe(`As artes são grandes: o PDF saiu em ${dpi} dpi (em vez de ${DPI_EXPORTACAO}) `
         + `para não estourar o envio. O tamanho em centímetros continua exato.`);
     }
   } catch (err) {
+    // O recado amigável não pode ser o fim da linha: erro de programa aqui
+    // (função que não existe, resposta fora do formato) sairia disfarçado de
+    // "arte ruim" e ninguém acharia.
+    console.error("[encaixe] falhou ao gerar o PDF:", err);
     mostrarErroEncaixe(`Não consegui gerar o PDF: ${err.message}`);
   } finally {
     btnEncaixePdf.disabled = false;

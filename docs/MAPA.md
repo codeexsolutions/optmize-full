@@ -45,6 +45,25 @@ geometria.js        conta pura sobre contorno: área, caixa, simplificar
                                 +-- vetor-tela.js    a tela
 ```
 
+A **bancada** (`bancada/`) entra por baixo dessa pilha inteira: ela carrega os
+mesmos sete arquivos que o `encaixe-worker.js` carrega, com o mesmo
+`estatico/encaixe.wasm`, e mede quanto tecido o motor gasta em seis trabalhos de
+referência — sem navegador, sem arte de cliente, com as silhuetas nascendo de
+polígonos escritos no código. `npm run bancada` mede, `npm run bancada:conferir`
+confere que o WASM dá o mesmo resultado que o JavaScript. **Mexida no motor sem
+uma corrida de bancada antes e depois é chute**: o resultado depende do sorteio,
+do tempo e do formato da peça ao mesmo tempo.
+
+**Vocabulário da rede é migração.** `REDE_MOTORES`, `REDE_AGRUPAMENTOS`,
+`REDE_ORDENS` e `REDE_HEURISTICAS` (em `encaixe-rede.js`) definem o tamanho da
+entrada da rede. Acrescentar um nome a qualquer um deles — um encaixador novo,
+uma ordem nova como a "familia" — alarga essa entrada, e os pesos que já estão
+no banco passam a esperar um vetor mais curto. Alimentar a rede antiga com o
+vetor novo não dá erro: dá palpite sem sentido. Por isso rede de tamanho
+diferente é tratada como rede que não existe, dos dois lados
+(`pontuarReceitas` no motor, `redeServeAinda` no `encaixe-memoria.js`), e o
+servidor a treina de novo na primeira oportunidade.
+
 `encaixe-rede.js` é o único arquivo do domínio que também roda **fora** do
 navegador: `encaixe-memoria.js` (servidor) importa ele com `require()` para
 treinar a rede a partir do histórico. Por isso o arquivo termina com um guard
@@ -145,6 +164,24 @@ e ninguém percebia, porque as duas chamadas estavam dentro de um `try` cujo
 `catch` trocava o `ReferenceError` por "não consegui abrir essa imagem". **Todo
 `catch` que mostra recado amigável tem de mandar o erro real para o console**,
 senão bug de código passa por arquivo ruim.
+
+**Recurso que só funciona no caminho lento.** O encaixe por contorno tem dois
+caminhos com o mesmo resultado: o JavaScript (`encaixarContorno`, a referência
+de correção) e o WebAssembly, que é o que roda de verdade. O reparo guiado da
+busca depende de uma informação que a rodada devolve — qual unidade deixou mais
+buraco morto —, e por um tempo só o caminho em JavaScript devolvia. O recurso
+existia, estava escrito e nunca tinha valido nada na máquina de ninguém.
+**Tudo que a rodada devolve tem que sair igual dos dois caminhos**, não só as
+posições; quem confere isso é `npm run bancada:conferir`.
+
+**Ferramenta que compila e não presta.** `npm run build:wasm` chamava o cargo
+com `--manifest-path` a partir da raiz. O cargo procura o `.cargo/config.toml` a
+partir da **pasta em que foi chamado**, não a partir do manifesto: o rustflag que
+exporta o `__heap_base` era ignorado, o módulo saía sem o símbolo, a ponte não
+carregava e o encaixe voltava para o JavaScript 3,9x mais devagar — em silêncio,
+porque `carregarMotorWasm` engole o erro de propósito. Toda queda para o caminho
+lento é silenciosa por desenho; por isso ela precisa de alguém que confira, e
+esse alguém é a bancada.
 
 **`requestAnimationFrame` para esperar a tela.** Ele só dispara quando a página
 está sendo pintada. Numa aba em segundo plano a espera nunca termina e o

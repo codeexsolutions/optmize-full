@@ -77,7 +77,17 @@ function vetorDoTrabalho(pecas, larguraTecido) {
 // trabalhos medidos, então não vale a complexidade de representar.
 const REDE_MOTORES = ["contorno", "retangulo", "faixas", "nfp"];
 const REDE_AGRUPAMENTOS = ["solta", "dupla", "trio", "quarteto", "cruzada", "deitada", "empe"];
-const REDE_ORDENS = ["area", "altura", "lado", "largura"];
+// "familia" é a ordem que entra com um formato de peça de cada vez, em bloco
+// (ver ORDENS_CONTORNO em encaixe-motor.js).
+//
+// ACRESCENTAR NOME A QUALQUER UM DESTES QUATRO VOCABULÁRIOS MUDA
+// `REDE_DIM_ENTRADA`, e com isso os pesos já treinados que estão no banco
+// deixam de servir. Quem cuida disso é o `serve` de `pontuarReceitas` (aqui
+// embaixo) e o `redeServeAinda` do encaixe-memoria.js: rede de tamanho
+// diferente é ignorada e treinada de novo, em vez de ser alimentada com um
+// vetor maior do que ela conhece — o que sairia como palpite sem sentido, e
+// não como erro.
+const REDE_ORDENS = ["area", "altura", "lado", "largura", "familia"];
 const REDE_HEURISTICAS = ["fundo", "vazio", "bl", "bssf", "blsf", "baf", "encosta"];
 
 const REDE_DIM_RECEITA =
@@ -212,6 +222,12 @@ function treinarRede(rede, exemplos, opcoes = {}) {
 
 /** Pontua um lote de receitas (pelas chaves) de uma vez, para a busca usar. */
 function pontuarReceitas(rede, vetorTrabalho, chaves) {
+  // Rede treinada com um vocabulário de receita diferente do de agora. Ela não
+  // é atualizável — os pesos da primeira camada esperam outra largura de
+  // entrada —, então o certo é não ter opinião nenhuma até o servidor treinar
+  // de novo. `null` é o mesmo que a busca já recebe quando não há rede.
+  if (!rede || !Array.isArray(rede.tamanhos) || rede.tamanhos[0] !== REDE_DIM_ENTRADA) return null;
+
   const pontos = new Map();
   chaves.forEach((chave) => {
     if (pontos.has(chave)) return;
