@@ -23,7 +23,12 @@
  * trabalho, que é o preço de estar certo.
  */
 
-importScripts("encaixe-mascara.js");
+// O geometria.js vai junto porque o encaixe-mascara.js usa o `arredondar` dele
+// (em `grade`). Este worker não chama `grade`, mas carregar um arquivo com uma
+// referência que não existe é uma armadilha esperando a próxima função ser
+// usada aqui: quem carrega o encaixe-mascara.js carrega o geometria.js antes,
+// e é assim nos três lugares (página, encaixe-worker e aqui).
+importScripts("geometria.js", "encaixe-mascara.js");
 
 /**
  * Os buffers que devem atravessar de volta sem cópia.
