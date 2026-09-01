@@ -111,6 +111,57 @@ function marcarFundoDaBorda(px, largura, altura, cor, tolerancia = FUNDO_TOLERAN
 
 // ==================== A GRADE DA PEÇA ====================
 
+/**
+ * Escolhe a grade do encaixe a partir da folga pedida.
+ *
+ * A folga entre peças é aplicada engordando cada peça pela metade dela, e esse
+ * engorde só existe em células inteiras da grade — ou seja, **a grade é que
+ * decide a precisão da folga**. Com uma grade fixa de meio centímetro, pedir
+ * 3 mm dava zero (as peças encostavam!) e pedir 5 mm dava 10 mm.
+ *
+ * Por isso a grade passa a acompanhar a folga: uma célula vale metade do que
+ * foi pedido, para o engorde de uma célula dar exatamente a folga. Grade mais
+ * fina custa tempo (o encaixe olha mais células), então há um piso; abaixo
+ * dele a folga sai um pouco maior que a pedida, nunca menor — errar para mais
+ * gasta um tiquinho de tecido, errar para menos estraga o corte.
+ *
+ * Morava no encaixe.js, junto da tela. Veio para cá quando a bancada
+ * (`bancada/`) passou a medir o motor fora do navegador: sem isto aqui, ela
+ * teria que repetir a conta, e a grade da medição podia deixar de ser a mesma
+ * grade da produção sem ninguém notar.
+ */
+function grade(larguraTecido, espaco) {
+  const maisGrossa = Math.min(1, Math.max(0.2, arredondar(larguraTecido / 300)));
+  const maisFina = larguraTecido / 1000;
+  if (!(espaco > 0)) return { passo: maisGrossa, raio: 0, folgaReal: 0 };
+
+  // Metade da folga tem que caber num número inteiro de células. Divide-se
+  // essa metade em quantas partes forem necessárias para a célula não passar
+  // do tamanho máximo — assim a folga sai exata em vez de arredondada para
+  // cima (era o que fazia 15 mm virar 20 mm).
+  const metade = espaco / 2;
+  const partes = Math.max(1, Math.ceil(metade / maisGrossa - 1e-9));
+  let passo = metade / partes;
+  let raio = partes;
+
+  // Célula fina demais deixa o encaixe lento sem retorno. Abaixo do piso a
+  // folga sai um pouco maior que a pedida — nunca menor.
+  if (passo < maisFina) {
+    passo = maisFina;
+    raio = Math.ceil(metade / passo - 1e-9);
+  }
+  return { passo, raio, folgaReal: raio * passo * 2 };
+}
+
+/** A grade de uma peça: quantas células de lado ela tem. */
+function gradeDaPeca(peca, passo) {
+  return {
+    cols: Math.max(1, Math.round(peca.largura / passo)),
+    rows: Math.max(1, Math.round(peca.altura / passo)),
+  };
+}
+
+
 /** Silhueta quase vazia é erro de leitura (arte escura em fundo escuro, etc). */
 function validarSilhueta(bits, total, modo) {
   let cheias = 0;

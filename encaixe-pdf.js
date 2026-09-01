@@ -2,32 +2,41 @@
  * Gera o PDF do encaixe em tamanho real, para mandar direto para a impressora
  * ou para a mesa de corte.
  *
- * É uma página só, com exatamente a largura do tecido e o comprimento do
- * encaixe, em centímetros de verdade — imprimindo em escala 1:1, o que sai no
- * papel mede o que a peça mede. E vai só o desenho: nada de régua, nome de
- * peça ou rodapé, porque isso seria impresso junto no tecido.
+ * É **uma página só, num arquivo só**, com exatamente a largura do tecido e o
+ * comprimento do encaixe, em centímetros de verdade — imprimindo em escala
+ * 1:1, o que sai no papel mede o que a peça mede. E vai só o desenho: nada de
+ * régua, nome de peça ou rodapé, porque isso seria impresso junto no tecido.
  *
- * O rolo sai repartido em arquivos de alguns metros cada, e não num arquivo
- * único de onze metros. A razão é o RIP: rasterizar uma página de 11 m em
- * tamanho real ocupa memória proporcional ao tamanho da página, e um arquivo
- * só obriga a máquina a segurar tudo de uma vez antes de a primeira gota
- * cair. Repartido, o RIP processa um trecho enquanto imprime o anterior, e a
- * fila anda.
+ * Por que arquivo único
+ * ---------------------
+ * O rolo já saiu repartido em trechos de 10 m. A razão era o RIP: rasterizar
+ * uma página de 11 m em tamanho real ocupa memória proporcional ao tamanho da
+ * página, e um arquivo só obriga a máquina a segurar tudo de uma vez antes de a
+ * primeira gota cair.
  *
- * Quem decide onde cortar é o `recorte` que chega do pedido. O cliente tenta
- * sempre cair num vão entre peças; quando o encaixe é denso e não há vão, o
- * corte passa na peça e ela sai recortada aqui — fim de um arquivo, começo do
- * seguinte —, para se reencontrar no rolo na hora de imprimir.
+ * Só que repartir exige um lugar para cortar, e encaixe bom é exatamente o que
+ * não deixa vão: num rolo denso as peças se encavalam de ponta a ponta e o
+ * corte acabava passando por cima de uma peça — metade num arquivo, metade no
+ * outro. Os dois pedaços só se reencontram se os arquivos entrarem na máquina
+ * colados, sem um milímetro de folga entre um trabalho e o outro, e na prática
+ * isso não acontece. **Peça partida é peça perdida**, e por isso a repartição
+ * saiu inteira: cliente e servidor.
  *
- * Somando os trechos, o rolo é exatamente o mesmo: mesma metragem, mesmas
- * posições, nenhuma peça perdida nem repetida.
- *
- * Só que o PDF não aceita página com mais de 14400 pontos de lado (508 cm), e
- * um encaixe de 11 metros passa longe disso. A saída é o `/UserUnit`: ele diz
+ * O teto de página
+ * ----------------
+ * O PDF não aceita página com mais de 14400 pontos de lado (508 cm), e um
+ * encaixe de 11 metros passa longe disso. A saída é o `/UserUnit`: ele diz
  * quanto vale uma unidade da página. Com `/UserUnit 2,58`, uma página de 5 m
  * "de arquivo" é lida como 12,9 m de verdade. Os números dentro do PDF ficam
- * dentro do limite, o tamanho real continua o mesmo, e o arquivo segue
- * conforme o formato — que é o que faz o RIP aceitar sem reclamar.
+ * dentro do limite, o tamanho real continua o mesmo, e o arquivo segue conforme
+ * o formato — que é o que faz o RIP aceitar sem reclamar.
+ *
+ * **`/UserUnit` é recurso do PDF 1.6**, e o pdfkit escreve `%PDF-1.3` por
+ * padrão. Um leitor que respeite a versão declarada tem todo o direito de
+ * ignorar o `/UserUnit` — e aí o rolo sai impresso na escala errada, sem erro
+ * nenhum, que é o pior jeito de descobrir. Por isso o documento nasce 1.6
+ * quando o `/UserUnit` entra em ação, e continua 1.3 (o de maior
+ * compatibilidade) quando não precisa dele.
  */
 
 const express = require("express");
@@ -81,60 +90,41 @@ function bufferDaImagem(dataUrl) {
   return Buffer.from(dataUrl.slice(virgula + 1), "base64");
 }
 
-router.post("/pdf", (req, res) => {
-  const { larguraTecido, consumo, imagens, posicoes, nome, recorte } = req.body || {};
-
-  if (!(larguraTecido > 0) || !(consumo > 0) || !Array.isArray(posicoes) || posicoes.length === 0) {
-    return res.status(400).json({ error: "Encaixe inválido para gerar o PDF." });
-  }
-
-  const guardadas = artesGuardadas.get(String(req.body.sessao || ""));
-  const buffers = new Map();
-  (imagens || []).forEach((img) => {
-    // A arte pode ter vindo antes em binário (o caminho normal) ou junto no
-    // próprio pedido, que é o jeito curto usado pelos testes.
-    const buffer = img.src ? bufferDaImagem(img.src) : (guardadas && guardadas.artes.get(img.chave));
-    if (buffer) buffers.set(img.chave, buffer);
-  });
-  if (buffers.size === 0) {
-    return res.status(400).json({ error: "Nenhuma imagem de peça chegou para o PDF." });
-  }
-
-  /*
-   * O trecho do rolo que este arquivo cobre, em cm. Sem `recorte`, é o rolo
-   * inteiro — que é como os testes e qualquer chamada antiga continuam
-   * funcionando.
-   *
-   * O corte cai sempre num vão entre peças (quem escolhe é o cliente, que tem
-   * o encaixe na mão), então aqui basta pegar as peças que começam e terminam
-   * dentro do trecho e descontar o `inicio` do Y de cada uma: a peça que no
-   * rolo está a 12,40 m sai a 2,40 m no arquivo que começa em 10 m.
-   */
-  const inicio = Number(recorte && recorte.inicio) > 0 ? Number(recorte.inicio) : 0;
-  const fim = Number(recorte && recorte.fim) > 0 ? Math.min(Number(recorte.fim), consumo) : consumo;
-  const alturaCm = fim - inicio;
-
-  if (!(alturaCm > 0)) {
-    return res.status(400).json({ error: "Trecho de rolo inválido para gerar o PDF." });
-  }
-
-  const larguraPt = larguraTecido * PT_POR_CM;
-  const alturaPt = alturaCm * PT_POR_CM;
-
-  // Só entra em ação quando precisa: encaixe que já cabe no limite sai com
-  // UserUnit 1, que é o caso de maior compatibilidade.
+/**
+ * Quanto vale uma unidade da página.
+ *
+ * 1 enquanto o rolo couber no teto do formato — é o caso de maior
+ * compatibilidade, e a maioria dos encaixes cai nele. Passando do teto, o
+ * `/UserUnit` cresce só o necessário, arredondado para cima em duas casas para
+ * a página sobrar um tiquinho em vez de faltar.
+ */
+function unidadeDaPagina(larguraPt, alturaPt) {
   const maiorLado = Math.max(larguraPt, alturaPt);
-  const unidade = maiorLado <= LIMITE_PT
-    ? 1
-    : Math.ceil((maiorLado / LIMITE_PT) * 100) / 100;
+  if (maiorLado <= LIMITE_PT) return 1;
+  return Math.ceil((maiorLado / LIMITE_PT) * 100) / 100;
+}
 
-  const tamanho = [larguraPt / unidade, alturaPt / unidade];
+/**
+ * Monta o documento e devolve ele já escrevendo em `destino`.
+ *
+ * Está separado da rota para a bancada conseguir gerar um PDF sem subir o
+ * Express (ver `bancada/conferir-pdf.js`): o que precisa ser conferido é o
+ * documento — uma página, o tamanho real certo, a versão do formato certa e
+ * toda peça desenhada —, e nada disso é assunto de HTTP.
+ */
+function montarPdf({ larguraTecido, consumo, posicoes, buffers }, destino) {
+  const larguraPt = larguraTecido * PT_POR_CM;
+  const alturaPt = consumo * PT_POR_CM;
+  const unidade = unidadeDaPagina(larguraPt, alturaPt);
 
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${nome || "encaixe"}.pdf"`);
-
-  const doc = new PDFDocument({ size: tamanho, margin: 0 });
-  doc.pipe(res);
+  const doc = new PDFDocument({
+    size: [larguraPt / unidade, alturaPt / unidade],
+    margin: 0,
+    // Ver o cabeçalho do arquivo: o `/UserUnit` é do PDF 1.6, e declarar 1.3
+    // dá ao leitor o direito de ignorá-lo e imprimir fora de escala.
+    pdfVersion: unidade === 1 ? "1.3" : "1.6",
+  });
+  doc.pipe(destino);
 
   if (unidade !== 1) doc.page.dictionary.data.UserUnit = unidade;
 
@@ -147,47 +137,64 @@ router.post("/pdf", (req, res) => {
       desenhos.set(chave, doc.openImage(buffer));
     } catch (err) {
       // arte ilegível: as outras continuam
+      console.warn(`[encaixe-pdf] arte ilegível (${chave}):`, err && err.message);
     }
   });
 
-  const FOLGA = 1e-6;
+  let desenhadas = 0;
   posicoes.forEach((pos) => {
     const desenho = desenhos.get(pos.chave);
     if (!desenho) return;
-
-    // Fora do trecho: nem encosta.
-    if (pos.y + pos.altura <= inicio + FOLGA || pos.y >= fim - FOLGA) return;
-
-    // Em cima da linha do corte: entra recortada. O desenho continua na
-    // posição real (Y negativo, ou passando do fim da página) e o recorte no
-    // tamanho da página é que decide o que aparece — assim o pedaço daqui e o
-    // pedaço do arquivo seguinte se completam no rolo, sem sobra nem falta.
-    const atravessa = pos.y < inicio - FOLGA || pos.y + pos.altura > fim + FOLGA;
-    if (atravessa) {
-      doc.save();
-      doc.rect(0, 0, larguraPt / unidade, alturaPt / unidade).clip();
-    }
-
     try {
-      doc.image(desenho, (pos.x * PT_POR_CM) / unidade, ((pos.y - inicio) * PT_POR_CM) / unidade, {
+      doc.image(desenho, (pos.x * PT_POR_CM) / unidade, (pos.y * PT_POR_CM) / unidade, {
         width: (pos.largura * PT_POR_CM) / unidade,
         height: (pos.altura * PT_POR_CM) / unidade,
       });
+      desenhadas++;
     } catch (err) {
       // uma imagem ruim não pode derrubar o PDF inteiro
+      console.warn(`[encaixe-pdf] não deu para desenhar a peça ${pos.chave}:`, err && err.message);
     }
-
-    if (atravessa) doc.restore();
   });
 
   doc.end();
+  return { unidade, desenhadas, paginaPt: [larguraPt / unidade, alturaPt / unidade] };
+}
 
-  // As artes ficam guardadas enquanto vierem mais partes do mesmo rolo —
-  // apagá-las na primeira obrigaria o navegador a subir tudo de novo a cada
-  // trecho. Quem avisa que acabou é o cliente, na última parte.
-  if (!req.body.manterSessao) {
-    artesGuardadas.delete(String(req.body.sessao || ""));
+router.post("/pdf", (req, res) => {
+  const { larguraTecido, consumo, imagens, posicoes, nome } = req.body || {};
+
+  if (!(larguraTecido > 0) || !(consumo > 0) || !Array.isArray(posicoes) || posicoes.length === 0) {
+    return res.status(400).json({ error: "Encaixe inválido para gerar o PDF." });
   }
+
+  const sessao = String(req.body.sessao || "");
+  const guardadas = artesGuardadas.get(sessao);
+  const buffers = new Map();
+  (imagens || []).forEach((img) => {
+    // A arte pode ter vindo antes em binário (o caminho normal) ou junto no
+    // próprio pedido, que é o jeito curto usado pelos testes.
+    const buffer = img.src ? bufferDaImagem(img.src) : (guardadas && guardadas.artes.get(img.chave));
+    if (buffer) buffers.set(img.chave, buffer);
+  });
+  if (buffers.size === 0) {
+    return res.status(400).json({ error: "Nenhuma imagem de peça chegou para o PDF." });
+  }
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${nome || "encaixe"}.pdf"`);
+
+  montarPdf({ larguraTecido, consumo, posicoes, buffers }, res);
+
+  // O rolo sai num arquivo só, então este pedido é o último: as artes desta
+  // sessão já cumpriram o que tinham para cumprir.
+  artesGuardadas.delete(sessao);
 });
 
 module.exports = router;
+// A montagem do documento sai junto com o roteador para a bancada conseguir
+// conferir o PDF sem subir o Express (ver `bancada/conferir-pdf.js`).
+module.exports.montarPdf = montarPdf;
+module.exports.unidadeDaPagina = unidadeDaPagina;
+module.exports.PT_POR_CM = PT_POR_CM;
+module.exports.LIMITE_PT = LIMITE_PT;

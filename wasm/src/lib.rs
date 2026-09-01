@@ -70,7 +70,13 @@ unsafe fn ler(base: *const i32, indice: i32) -> i32 {
 ///
 /// A saída traz, para cada unidade da ordem, quatro números:
 ///   0: qual forma venceu (índice global), ou -1 se a unidade não coube
-///   1: x       2: y       3: o fundo dessa colocação
+///   1: x       2: y       3: o buraco morto que a colocação deixou acima
+///
+/// O quarto número é o `vazio` da posição escolhida — a mesma medida que a
+/// heurística "vazio" usa. Ele volta porque é dele que a busca tira a
+/// **pior unidade** da tentativa, e é essa unidade que o reparo guiado
+/// (`repararPior`, em encaixe-motor.js) mira na tentativa seguinte. Sem ele o
+/// reparo ficava desligado sempre que o WASM estava ligado — ou seja, sempre.
 ///
 /// Devolve o fundo máximo — o comprimento de tecido usado, em células.
 #[no_mangle]
@@ -291,10 +297,14 @@ pub unsafe extern "C" fn encaixar(cabecalho: *const i32) -> i32 {
             fundo_max = fundo;
         }
 
+        // As duas notas guardadas são (vazio, fundo) ou (fundo, vazio),
+        // conforme a heurística — o vazio é sempre uma das duas.
+        let vazio = if usa_vazio { melhor_p1 } else { melhor_p2 };
+
         *s.offset(0) = melhor_forma;
         *s.offset(1) = melhor_x;
         *s.offset(2) = melhor_y;
-        *s.offset(3) = fundo;
+        *s.offset(3) = vazio as i32;
     }
 
     fundo_max
