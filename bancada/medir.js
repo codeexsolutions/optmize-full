@@ -314,10 +314,18 @@ async function principal() {
     // mede tanto a mexida quanto a sorte do sorteio daquela vez.
     const corridas = [];
     for (let s = 0; s < opcoes.sementes; s++) {
-      // Cada rodada é um clique em "Fazer encaixe": sorteio novo, busca nova.
+      /*
+       * Cada rodada é um clique em "Fazer encaixe": sorteio novo, busca nova.
+       *
+       * O que fica é o MELHOR das rodadas, não a última — é o que a produção vê,
+       * porque a tela guarda o melhor encaixe do trabalho e volta para ele
+       * quando a procura seguinte sai pior. Reportar a última rodada media a
+       * sorte do último sorteio, e não o que a pessoa leva para o corte.
+       */
       let corrida = null;
+      let melhorDasRodadas = null;
       for (let rodada = 0; rodada < opcoes.rodadas; rodada++) {
-        corrida = await buscarComoAProducao(motor, trabalho, {
+        const desta = await buscarComoAProducao(motor, trabalho, {
           tempoMs: opcoes.tempo * 1000,
           // Semente diferente por rodada: dois cliques seguidos no mesmo
           // trabalho não repetem o mesmo sorteio na produção.
@@ -327,7 +335,12 @@ async function principal() {
           extra: opcoes.extra,
           espalharSemente: opcoes.espalharSemente,
         });
+        if (!melhorDasRodadas
+          || desta.sobraram < melhorDasRodadas.sobraram
+          || (desta.sobraram === melhorDasRodadas.sobraram
+            && desta.consumo < melhorDasRodadas.consumo)) melhorDasRodadas = desta;
       }
+      corrida = melhorDasRodadas;
       corridas.push(corrida);
     }
     const media = (pegar) => corridas.reduce((s, c) => s + pegar(c), 0) / corridas.length;
