@@ -26,6 +26,7 @@ const encaixePdfRouter = require("./encaixe-pdf");
 const encaixeMemoriaRouter = require("./encaixe-memoria");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
+const corRouter = require("./cor-api");
 
 const app = express();
 
@@ -36,6 +37,10 @@ const app = express();
 // limite); aqui sobra só o desenho do encaixe, que é pequeno.
 app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixePdfRouter);
 app.use("/api/encaixe", express.json({ limit: "2mb" }), encaixeMemoriaRouter);
+
+// A conversão de cor recebe a arte crua, e arte de produção passa de 15 MB com
+// frequência. Como o PDF acima, precisa vir antes do express.json geral.
+app.use("/api/cor", corRouter);
 
 app.use(express.json({ limit: "15mb" })); // dá folga para o contorno de um molde com muitas peças
 

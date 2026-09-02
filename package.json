@@ -28,6 +28,7 @@
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "express": "^4.19.2",
+    "jpeg-js": "^0.4.4",
     "pdfkit": "^0.15.0"
   },
   "engines": {

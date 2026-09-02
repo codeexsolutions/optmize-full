@@ -1650,3 +1650,92 @@ tbody tr:hover td {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ==================== TELA DE COR ==================== */
+/*
+ * Cada arte é um cartão com o antes e o depois lado a lado. Lado a lado, e não
+ * um sobre o outro: a diferença que interessa aqui é de TOM, e tom só se julga
+ * com os dois na mesma linha de visão — em cima e embaixo o olho já esqueceu o
+ * primeiro quando chega no segundo.
+ */
+
+.cor-lista {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.cor-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg-soft);
+}
+
+.cor-item > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cor-item > header strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cor-item .hint {
+  margin: 4px 0 0;
+}
+
+.cor-estado {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.cor-estado-espera { background: var(--card-bg); color: var(--text-dim); }
+.cor-estado-pronto { background: var(--accent-soft, var(--card-bg)); color: var(--accent); }
+.cor-estado-intacto { background: var(--card-bg); color: var(--text-dim); }
+.cor-estado-parado { background: var(--card-bg); color: var(--danger, var(--text-dim)); }
+
+.cor-par {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.cor-par figure {
+  margin: 0;
+}
+
+/* O xadrez por baixo: arte de sublimação é quase sempre fundo branco ou preto
+   chapado, e sem um fundo neutro atrás não dá para saber onde a arte acaba. */
+.cor-par img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--card-bg);
+  background-image:
+    linear-gradient(45deg, rgba(128, 128, 128, .12) 25%, transparent 25%, transparent 75%, rgba(128, 128, 128, .12) 75%),
+    linear-gradient(45deg, rgba(128, 128, 128, .12) 25%, transparent 25%, transparent 75%, rgba(128, 128, 128, .12) 75%);
+  background-position: 0 0, 8px 8px;
+  background-size: 16px 16px;
+}
+
+.cor-par figcaption {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-align: center;
+}
