@@ -70,7 +70,11 @@ const ESTADOS = {
   convertendo: { rotulo: "convertendo…", classe: "cor-estado-espera" },
   pronto: { rotulo: "cor corrigida", classe: "cor-estado-pronto" },
   intacto: { rotulo: "já estava certa", classe: "cor-estado-intacto" },
-  parado: { rotulo: "não dá para converter", classe: "cor-estado-parado" },
+  parado: { rotulo: "nada a converter", classe: "cor-estado-intacto" },
+  // Separado do "parado" de propósito: "nada a converter" é uma resposta sobre
+  // a ARTE, e "deu erro" é uma resposta sobre o PROGRAMA. Confundir os dois faz
+  // a pessoa ir mexer num arquivo que está bom.
+  erro: { rotulo: "deu erro", classe: "cor-estado-parado" },
 };
 
 function renderCor() {
@@ -103,11 +107,13 @@ function renderCor() {
   const corrigidas = itens.filter((i) => i.estado === "pronto").length;
   const faltando = itens.filter((i) => i.estado === "esperando" || i.estado === "convertendo").length;
   const paradas = itens.filter((i) => i.estado === "parado").length;
+  const comErro = itens.filter((i) => i.estado === "erro").length;
 
   const partes = [`${itens.length} ${itens.length === 1 ? "arte" : "artes"}`];
   if (faltando) partes.push(`${faltando} na fila`);
   if (corrigidas) partes.push(`${corrigidas} com a cor corrigida`);
   if (paradas) partes.push(`${paradas} sem perfil para aplicar`);
+  if (comErro) partes.push(`${comErro} que deram erro`);
   corResumo.textContent = partes.join(" · ");
 
   btnCorEncaixe.disabled = faltando > 0;
@@ -139,7 +145,31 @@ async function converterUm(item) {
     body: item.arquivo,
   });
 
-  const dados = await resposta.json();
+  /*
+   * Um 404 aqui não é uma arte difícil: é o servidor sem a rota.
+   *
+   * A tela e o motor viajam juntos, mas chegam por caminhos diferentes — o
+   * HTML e o JS são estáticos, então recarregar a página já traz esta tela,
+   * enquanto `/api/cor` só passa a existir quando o processo do Node reinicia.
+   * Entre uma coisa e outra, a tela aparece e a rota não responde.
+   *
+   * A primeira versão fazia `.json()` antes de olhar o status, e a página de
+   * erro em HTML estourava um "Unexpected token '<'" que virava, na lista, um
+   * "não dá para converter" ao lado da arte — como se o problema fosse ela.
+   * Diagnóstico errado no lugar mais caro: o que a pessoa faria em seguida é
+   * mexer no arquivo, e o arquivo está bom.
+   */
+  if (resposta.status === 404) {
+    throw new Error("o servidor deste programa ainda não tem a conversão de cor."
+      + " Feche e abra o programa (ou reinicie o servidor) para ela entrar");
+  }
+
+  let dados;
+  try {
+    dados = await resposta.json();
+  } catch (erro) {
+    throw new Error(`o servidor respondeu ${resposta.status} sem explicar o motivo`);
+  }
   if (!resposta.ok) throw new Error(dados.erro || "o servidor não conseguiu ler o arquivo");
 
   if (!dados.convertido) {
@@ -226,8 +256,9 @@ async function receberArquivos(arquivos) {
       await converterUm(item);
     } catch (erro) {
       console.error("[cor] falhou ao converter", item.arquivo.name, erro);
-      item.estado = "parado";
-      item.detalhe = `Não deu para converter: ${erro.message}. A arte segue como está.`;
+      item.estado = "erro";
+      item.detalhe = `A conversão não rodou: ${erro.message}. `
+        + "A arte não foi mexida e segue para o encaixe como está.";
     }
     renderCor();
   }
