@@ -1,0 +1,285 @@
+/**
+ * ===========================================================================
+ * TELA DE COR — arrumar a cor das artes antes de encaixar
+ * ===========================================================================
+ *
+ * O problema, em uma frase: o encaixe desenha tudo em canvas, canvas só existe
+ * em RGB, e a conversão que o navegador faz de uma arte CMYK não é a que o
+ * Photoshop faz. O desenho sai certo e a cor não — foi o que apareceu na
+ * produção como "em alguns projetos ele muda a cor".
+ *
+ * Por que uma tela separada
+ * -------------------------
+ * A conversão certa custa segundos por arte, porque é preciso decodificar o
+ * arquivo inteiro e atravessar o perfil de cor pixel a pixel. Pendurar isso na
+ * hora de largar os arquivos no Encaixe faria todo mundo pagar o preço — até
+ * quem mandou 30 artes que já estavam certas. Aqui o custo é escolhido: a
+ * pessoa vem, converte o que precisa, confere, e leva tudo pronto.
+ *
+ * O caminho da tela
+ * -----------------
+ *   1. lê o cabeçalho de cada arquivo      (cor-do-arquivo.js, instantâneo)
+ *   2. manda para o servidor só o que precisa  (cor-api.js -> cor-icc.js)
+ *   3. mostra o antes e o depois lado a lado
+ *   4. entrega tudo ao Encaixe — o convertido no lugar do original
+ *
+ * As duas miniaturas do passo 3 são desenhadas AQUI, pelo navegador, e não no
+ * servidor. A razão é que o "antes" só vale alguma coisa se for de verdade o que
+ * o Encaixe mostraria — e a única forma de garantir isso é deixar quem desenha o
+ * Encaixe desenhá-lo: o mesmo `createImageBitmap`, o mesmo canvas.
+ *
+ * A primeira versão simulava o "antes" no servidor, com a fórmula ingênua de
+ * CMYK para RGB, na suposição de que fosse ela que o navegador usava. Medido
+ * contra o Chrome, não é: ele aplica o perfil embutido. O painel mostrava então
+ * uma cor que ninguém veria em lugar nenhum — mais viva que a real, o que fazia
+ * o "antes" parecer certo e a conversão, desnecessária.
+ *
+ * O que a conversão realmente acrescenta ao que o navegador já faz é a
+ * COMPENSAÇÃO DE PONTO PRETO. Sem ela o preto de tinta não fecha: no Chrome, o
+ * preto rico desta loja sai `rgb(0,35,34)` — escuro, esverdeado e lavado. Com
+ * ela, sai preto. É a queixa do "fica mais cinza", e é ela que a comparação
+ * precisa deixar ver.
+ *
+ * O passo 4 é o ponto da tela. Não adianta converter e deixar a pessoa
+ * procurando onde o arquivo foi parar: a arte convertida entra no Encaixe no
+ * lugar da original, e as que não precisavam de nada seguem junto, intactas.
+ */
+
+const corSolta = document.getElementById("cor-solta");
+const corArquivosInput = document.getElementById("cor-arquivos");
+const corPainel = document.getElementById("cor-painel");
+const corLista = document.getElementById("cor-lista");
+const corResumo = document.getElementById("cor-resumo");
+const corErro = document.getElementById("cor-erro");
+const btnCorEncaixe = document.getElementById("btn-cor-encaixe");
+const btnCorLimpar = document.getElementById("btn-cor-limpar");
+
+/**
+ * Uma linha da tela.
+ *
+ * `arquivo` é sempre o que deve ir para o Encaixe: o original enquanto nada foi
+ * convertido, e o convertido depois. É esse campo que o botão do rodapé lê, e
+ * por isso ele nunca guarda um estado intermediário.
+ */
+let itens = [];
+
+// ==================== A LISTA ====================
+
+const ESTADOS = {
+  esperando: { rotulo: "na fila", classe: "cor-estado-espera" },
+  convertendo: { rotulo: "convertendo…", classe: "cor-estado-espera" },
+  pronto: { rotulo: "cor corrigida", classe: "cor-estado-pronto" },
+  intacto: { rotulo: "já estava certa", classe: "cor-estado-intacto" },
+  parado: { rotulo: "não dá para converter", classe: "cor-estado-parado" },
+};
+
+function renderCor() {
+  if (itens.length === 0) {
+    corPainel.classList.add("hidden");
+    corLista.innerHTML = "";
+    return;
+  }
+  corPainel.classList.remove("hidden");
+
+  corLista.innerHTML = itens.map((item, i) => {
+    const estado = ESTADOS[item.estado] || ESTADOS.esperando;
+    const comparacao = item.antes && item.depois ? `
+      <div class="cor-par">
+        <figure><img src="${item.antes}" alt="" /><figcaption>como estava indo</figcaption></figure>
+        <figure><img src="${item.depois}" alt="" /><figcaption>com o perfil aplicado</figcaption></figure>
+      </div>` : "";
+
+    return `
+      <article class="cor-item" data-i="${i}">
+        <header>
+          <strong>${escapeHtml(item.arquivo.name)}</strong>
+          <span class="cor-estado ${estado.classe}">${estado.rotulo}</span>
+        </header>
+        <p class="hint">${escapeHtml(item.detalhe || "")}</p>
+        ${comparacao}
+      </article>`;
+  }).join("");
+
+  const corrigidas = itens.filter((i) => i.estado === "pronto").length;
+  const faltando = itens.filter((i) => i.estado === "esperando" || i.estado === "convertendo").length;
+  const paradas = itens.filter((i) => i.estado === "parado").length;
+
+  const partes = [`${itens.length} ${itens.length === 1 ? "arte" : "artes"}`];
+  if (faltando) partes.push(`${faltando} na fila`);
+  if (corrigidas) partes.push(`${corrigidas} com a cor corrigida`);
+  if (paradas) partes.push(`${paradas} sem perfil para aplicar`);
+  corResumo.textContent = partes.join(" · ");
+
+  btnCorEncaixe.disabled = faltando > 0;
+  btnCorEncaixe.textContent = faltando > 0
+    ? "Convertendo…"
+    : `Mandar ${itens.length === 1 ? "a arte" : `as ${itens.length} artes`} para o Encaixe`;
+}
+
+// ==================== A CONVERSÃO ====================
+
+/**
+ * Converte uma arte no servidor.
+ *
+ * O arquivo convertido é buscado na hora e fica aqui, no navegador, como um
+ * Blob. Assim o servidor não precisa segurar 25 artes de 4 MB esperando alguém
+ * clicar num botão, e o "Mandar para o Encaixe" não espera rede nenhuma.
+ */
+async function converterUm(item) {
+  item.estado = "convertendo";
+  item.detalhe = "lendo o perfil e atravessando a tabela de cor…";
+  renderCor();
+
+  const resposta = await fetch("/api/cor/converter", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-Nome-Do-Arquivo": encodeURIComponent(item.arquivo.name),
+    },
+    body: item.arquivo,
+  });
+
+  const dados = await resposta.json();
+  if (!resposta.ok) throw new Error(dados.erro || "o servidor não conseguiu ler o arquivo");
+
+  if (!dados.convertido) {
+    item.estado = "parado";
+    item.detalhe = dados.motivo;
+    return;
+  }
+
+  const bytes = await fetch(`/api/cor/arquivo/${dados.id}`);
+  if (!bytes.ok) throw new Error("a conversão terminou mas o arquivo não voltou");
+  const blob = await bytes.blob();
+
+  // O "antes" sai do arquivo ORIGINAL, desenhado pelo navegador. É por isso que
+  // ele é tirado antes de `item.arquivo` ser trocado.
+  item.antes = await miniatura(item.arquivo, dados.largura, dados.altura);
+  item.depois = await miniatura(blob, dados.largura, dados.altura);
+  item.arquivo = new File([blob], dados.nomeNovo, { type: "image/jpeg" });
+  item.estado = "pronto";
+  item.detalhe = `${dados.espaco} · perfil "${dados.perfil}" · `
+    + `${dados.largura} × ${dados.altura} px · ${formatarNumero(dados.cores, 0)} cores`;
+}
+
+/** Quanto a miniatura da comparação tem de largura. */
+const MINIATURA_LARGURA = 420;
+
+/**
+ * Uma miniatura da arte, desenhada pelo navegador.
+ *
+ * `createImageBitmap` com `resizeWidth` decodifica JÁ REDUZIDO: uma arte de 50
+ * megapixels nunca chega inteira à memória da aba. É o mesmo recurso que o
+ * Encaixe usa para as miniaturas da tabela, e usar o mesmo caminho é o ponto —
+ * o que aparece aqui é o que apareceria lá.
+ */
+async function miniatura(blob, larguraReal, alturaReal) {
+  const largura = Math.min(MINIATURA_LARGURA, larguraReal);
+  const altura = Math.max(1, Math.round(alturaReal * largura / larguraReal));
+  const bitmap = await createImageBitmap(blob, {
+    resizeWidth: largura, resizeHeight: altura, resizeQuality: "high",
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = largura;
+  canvas.height = altura;
+  canvas.getContext("2d").drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+/**
+ * Recebe os arquivos, separa quem precisa de conversão e converte um de cada
+ * vez.
+ *
+ * Um de cada vez de propósito: uma arte de 50 megapixels ocupa mais de 1 GB no
+ * servidor enquanto está sendo convertida, e três ao mesmo tempo derrubariam o
+ * processo. Em fila, o pico é sempre o de uma arte só.
+ */
+async function receberArquivos(arquivos) {
+  const imagens = arquivos.filter((f) => /^image\//.test(f.type) || /\.(jpe?g|png)$/i.test(f.name));
+  if (imagens.length === 0) {
+    corErro.textContent = "Esta tela trabalha com imagem (JPG ou PNG).";
+    corErro.classList.remove("hidden");
+    return;
+  }
+  corErro.classList.add("hidden");
+
+  const novos = [];
+  for (const arquivo of imagens) {
+    const cor = await diagnosticoDeCorDoArquivo(arquivo);
+    const precisa = cor.risco !== COR_SEGURA;
+    const item = {
+      arquivo,
+      estado: precisa ? "esperando" : "intacto",
+      detalhe: precisa ? cor.detalhe : `${cor.perfil || "sRGB"} — não precisa de conversão.`,
+      antes: null,
+      depois: null,
+    };
+    novos.push(item);
+    itens.push(item);
+  }
+  renderCor();
+
+  for (const item of novos) {
+    if (item.estado !== "esperando") continue;
+    try {
+      await converterUm(item);
+    } catch (erro) {
+      console.error("[cor] falhou ao converter", item.arquivo.name, erro);
+      item.estado = "parado";
+      item.detalhe = `Não deu para converter: ${erro.message}. A arte segue como está.`;
+    }
+    renderCor();
+  }
+}
+
+// ==================== A ENTREGA AO ENCAIXE ====================
+
+/**
+ * Leva tudo para o Encaixe e troca de tela.
+ *
+ * Vai a lista inteira, não só o que foi convertido: quem chegou aqui trouxe o
+ * trabalho todo, e obrigar a pessoa a arrastar de novo as artes que já estavam
+ * certas seria devolver a ela o trabalho que esta tela existe para poupar.
+ */
+async function mandarParaOEncaixe() {
+  const arquivos = itens.map((i) => i.arquivo);
+  if (arquivos.length === 0) return;
+
+  const botao = document.querySelector('.nav-btn[data-page="encaixe"]');
+  if (botao) botao.click();
+
+  if (typeof adicionarArquivos === "function") await adicionarArquivos(arquivos);
+  itens = [];
+  renderCor();
+}
+
+// ==================== LIGAÇÕES ====================
+
+corArquivosInput?.addEventListener("change", async () => {
+  const arquivos = Array.from(corArquivosInput.files || []);
+  corArquivosInput.value = "";
+  if (arquivos.length) await receberArquivos(arquivos);
+});
+
+["dragenter", "dragover"].forEach((evt) => {
+  corSolta?.addEventListener(evt, (e) => {
+    e.preventDefault();
+    corSolta.classList.add("arrastando");
+  });
+});
+["dragleave", "drop"].forEach((evt) => {
+  corSolta?.addEventListener(evt, () => corSolta.classList.remove("arrastando"));
+});
+corSolta?.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  const arquivos = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+  if (arquivos.length) await receberArquivos(arquivos);
+});
+
+btnCorEncaixe?.addEventListener("click", mandarParaOEncaixe);
+btnCorLimpar?.addEventListener("click", () => {
+  itens = [];
+  corErro.classList.add("hidden");
+  renderCor();
+});

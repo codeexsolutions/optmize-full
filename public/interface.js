@@ -33,6 +33,7 @@
     moldes: ["Moldes", "Modelagem da produção", "Centralize moldes, tamanhos e estampas da produção.", "icones.svg#shapes"],
     projetos: ["Projetos", "Trabalho que se repete", "Guarde por cliente o trabalho pronto para repetir e mandar ao encaixe.", "icones.svg#folder-open"],
     encaixe: ["Encaixe", "Aproveitamento do tecido", "Otimize o uso do tecido e prepare arquivos para impressão.", "icones.svg#blocks"],
+    cor: ["Cor", "Arte na cor certa", "Converta arte em CMYK para a cor certa antes de mandar ao encaixe.", "icones.svg#palette"],
     vetor: ["Vetor", "Traço a partir da imagem", "Transforme uma imagem em desenho vetorial para corte e impressão.", "icones.svg#spline"]
   };
 

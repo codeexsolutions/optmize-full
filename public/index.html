@@ -33,6 +33,10 @@
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#blocks" /></svg>
           <span>Encaixe</span>
         </button>
+        <button class="nav-btn" data-page="cor" data-title="Cor">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#palette" /></svg>
+          <span></span>
+        </button>
         <button class="nav-btn" data-page="vetor" data-title="Vetor">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#spline" /></svg>
           <span>Vetor</span>
@@ -723,6 +727,62 @@
 
 
 <!-- ================= VETOR ================= -->
+        <!--
+          ============ COR ============
+          Fica ANTES do encaixe no fluxo, mesmo aparecendo depois no menu: é a
+          etapa de arrumar a cor das artes que vieram em CMYK ou em outro
+          espaço, para o encaixe receber arquivo que o navegador lê certo.
+        -->
+        <div class="page" data-page="cor">
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-copy">
+                <h2>Cor das artes</h2>
+                <p class="hint">Converte arte em CMYK (ou em outro perfil) para a cor certa, antes de encaixar.</p>
+              </div>
+            </div>
+
+            <details class="ajuda">
+              <summary>Por que a cor muda, e o que esta tela faz</summary>
+              <div class="ajuda-corpo">
+                <p>
+                  O encaixe desenha as peças numa tela do navegador, e tela só existe em RGB.
+                  Quando a arte vem em <strong>CMYK</strong> — as quatro tintas da impressão —, o
+                  navegador faz uma conversão própria, rápida e sem gerenciamento de cor: o desenho
+                  sai certo e a cor não. O preto fecha demais, e as cores fortes mudam de tom.
+                </p>
+                <p>
+                  Aqui a conversão é feita <strong>pelo perfil embutido no próprio arquivo</strong>,
+                  do jeito que o Photoshop faz. Você confere o antes e o depois, e manda tudo para o
+                  Encaixe já resolvido — as artes que já estavam certas passam direto, sem mexer.
+                </p>
+                <p>
+                  Converter uma arte grande leva alguns segundos. É justamente por isso que fica
+                  numa tela separada: esse tempo não pode cair em cima de quem só quer encaixar.
+                </p>
+              </div>
+            </details>
+
+            <div id="cor-solta" class="vetor-solta">
+              <label class="btn primary">
+                Escolher as artes
+                <input type="file" id="cor-arquivos" accept="image/*" multiple class="hidden" />
+              </label>
+              <span class="hint">ou arraste os arquivos para cá</span>
+            </div>
+            <p id="cor-erro" class="hint error hidden"></p>
+
+            <div id="cor-painel" class="hidden">
+              <p id="cor-resumo" class="hint"></p>
+              <div id="cor-lista" class="cor-lista"></div>
+              <div class="vetor-acoes">
+                <button type="button" id="btn-cor-encaixe" class="btn primary">Mandar para o Encaixe</button>
+                <button type="button" id="btn-cor-limpar" class="btn secondary">Limpar a lista</button>
+              </div>
+            </div>
+          </section>
+        </div>
+
         <div class="page" data-page="vetor">
           <section class="card">
             <div class="card-head">
@@ -868,6 +928,7 @@
   <script src="arte-molde.js"></script>
   <script src="moldes-tela.js"></script>
   <script src="projetos.js"></script>
+  <script src="cor.js"></script>
   <script src="vetor.js"></script>
   <script src="vetor-tela.js"></script>
 </body>
