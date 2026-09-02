@@ -745,20 +745,33 @@ nenhuma:
 E na disputa ele **vence 5 dos 8 trabalhos** da bancada: camiseta+manga+gola
 −1,35%, misturado pequeno −2,21%, lote grande −2,28%, calça+bolso −0,64%.
 
-**E mesmo assim ele não entra no automático.** Uma descida por intervalos custa
-uma varredura por coluna contra uma leitura só no relevo — cerca de cem vezes
-mais por tentativa. No trabalho de produção (175 peças) ele faz 46 tentativas
-enquanto o contorno faz 2.933, e ali o contorno ganha por 1,34%. Somando os oito
-trabalhos dá **+0,06%: empate**, com o ganho dos pequenos comido pela perda do
-grande. Dar a ele uma fatia só sua (como já se fez com o NFP) não resolveu.
+**E mesmo assim ele não entra no automático** — mas chegou perto. O que separa é
+velocidade, e o perfilador disse exatamente onde: **84% do tempo estava numa
+função só**, a descida pelos intervalos. Três cortes saíram daí:
 
-O que falta é velocidade, e o gargalo está identificado: o encaixe por relevo
-descarta a maioria das posições com um piso barato antes de medir
-(`melhorPosicaoDaUnidade`), e aqui esse piso não funciona — vão preso existe em
-quase toda coluna, então o piso fica no chão e quase nada é podado. Para ele
-virar padrão, o próximo passo é a estrutura por coluna responder "primeira linha
-a partir de Y onde cabe uma corrida de altura H" em tempo logarítmico, em vez da
-varredura linear de hoje.
+- **busca binária** no lugar da varredura linear da lista de intervalos de cada
+  coluna. Fundo do rolo, a coluna já tem dezenas de intervalos e todos eram
+  pulados um a um. Sozinho, 2,5x.
+- **pular a descida quando ela não pode ganhar nada.** O `y` fica preso entre
+  dois números que já estão calculados (`piso <= y <= relevo`), então piso igual
+  ao relevo quer dizer que o `y` é o relevo — e a descida só devolveria o mesmo,
+  depois de varrer trezentas colunas.
+- **não andar coluna em que a peça não cabe no buraco.** Ali a única posição
+  possível é abaixo do relevo, e o piso já garante isso.
+
+De 1.352 ms para 492 ms por passada: **2,75x**. E isso mudou o placar — ele
+passou de 5 para **6 dos 8 trabalhos**, com ganhos maiores: misturado pequeno
+−3,09%, quase-retângulo −2,64%, lote grande −2,88%.
+
+Só que o trabalho de produção resiste: 78 tentativas contra as milhares do
+contorno, e ali o contorno ganha por **1,28%**. Como ele sozinho é 33 dos 58,8 m
+da soma, o total fica em **−0,11%: empate**. É por isso que ele continua fora do
+padrão — ligar hoje seria trocar ganho em cinco trabalhos por perda no maior.
+
+O caminho para fechar essa conta continua sendo velocidade, e o próximo degrau é
+estrutural: a coluna precisa responder "primeira linha a partir de Y onde cabe
+uma corrida de altura H" sem visitar as trezentas colunas da peça — hoje o
+gargalo já não é o que se lê por coluna, é o número de colunas lidas.
 
 Fica no motor, fora do padrão, com o caminho todo conferido:
 `npm run bancada:sobreposicao` roda os trabalhos por ele também — é o único
