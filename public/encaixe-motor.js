@@ -848,8 +848,24 @@ function ocuparIntervalos(colunas, col, sinal) {
  * ganhar dali para baixo, e parar cedo é o que deixa esta varredura caber no
  * orçamento.
  */
-function descerNosVaos(colunas, x, forma, tetoFundo) {
-  let y = 0;
+function descerNosVaos(colunas, x, forma, tetoFundo, deOnde, quais, quantas) {
+  /*
+   * `deOnde` e `quais` são o atalho do encaixe por vãos, e não mudam o
+   * resultado — só evitam trabalho que já se sabe inútil:
+   *
+   *   deOnde  onde começar a descer. Um piso já provado (nenhuma coluna deixa a
+   *           peça subir acima dele) economiza as primeiras voltas.
+   *   quais   as únicas colunas que precisam ser andadas: aquelas cujo maior
+   *           vão comporta a peça. Numa coluna em que ela não cabe no buraco, a
+   *           única posição possível é abaixo do relevo — e o piso já garante
+   *           isso. Andar essas colunas é varrer para confirmar o que já se
+   *           sabe, e era o grosso do custo do motor.
+   *
+   * Sem eles (a repescagem chama assim), desce do zero olhando tudo.
+   */
+  let y = deOnde || 0;
+  const olhaTodas = quais === undefined;
+  const nColunas = olhaTodas ? forma.cols : quantas;
   for (let voltas = 0; voltas < 4096; voltas++) {
     // Uma passada por TODAS as colunas, ficando com o maior empurrão de todos.
     //
@@ -860,7 +876,8 @@ function descerNosVaos(colunas, x, forma, tetoFundo) {
     // é a mesma conta do relevo, só que perguntando à lista de intervalos em
     // vez de a uma altura só.
     let proximo = y;
-    for (let c = 0; c < forma.cols; c++) {
+    for (let i = 0; i < nColunas; i++) {
+      const c = olhaTodas ? i : quais[i];
       const t = forma.topo[c];
       if (t < 0) continue;
       const lista = colunas[x + c];
@@ -874,12 +891,30 @@ function descerNosVaos(colunas, x, forma, tetoFundo) {
         mudou = false;
         const ini = proximo + t;
         const fim = proximo + base;
-        for (let i = 0; i < lista.length; i++) {
-          const iv = lista[i];
-          if (iv.fim < ini) continue;
-          if (iv.ini > fim) break;
-          if (iv.fim + 1 - t > proximo) { proximo = iv.fim + 1 - t; mudou = true; }
-          break;
+        /*
+         * O primeiro intervalo que ainda alcança a janela, por busca binária.
+         *
+         * Isto era uma varredura desde o começo da lista. Funciona, e no fundo
+         * do rolo custa caro: a coluna já tem dezenas de intervalos, todos
+         * acima da janela, e cada um era pulado um a um. Medido no trabalho de
+         * produção, eram 34.842 descidas por passada e 84% do tempo do motor
+         * inteiro aqui dentro.
+         *
+         * A lista está ordenada por `ini` e os intervalos não se sobrepõem, o
+         * que também deixa `fim` crescente — então dá para saltar direto.
+         */
+        let baixo = 0;
+        let alto = lista.length;
+        while (baixo < alto) {
+          const meio = (baixo + alto) >> 1;
+          if (lista[meio].fim < ini) baixo = meio + 1; else alto = meio;
+        }
+        if (baixo < lista.length) {
+          const iv = lista[baixo];
+          if (iv.ini <= fim && iv.fim + 1 - t > proximo) {
+            proximo = iv.fim + 1 - t;
+            mudou = true;
+          }
         }
       }
     }
@@ -1045,7 +1080,7 @@ function encaixarContorno(unidades, config) {
  * onde o vão preso é grande, aqui é que está o tecido.
  */
 function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
-  const { colunas, perfil, temVao, topoLivre, maiorVao } = tecido;
+  const { colunas, perfil, topoLivre, maiorVao } = tecido;
   let melhor = null;
   const pulo = Math.max(1, Math.round(salto || 1));
 
@@ -1055,6 +1090,9 @@ function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
     const { cols, topo, maxBase } = forma;
     const sondas = forma.sondas || (forma.sondas = sondasDaForma(forma));
     const nSondas = sondas.length;
+    // Rascunho reaproveitado entre as posições: alocar um vetor por posição
+    // testada seria mais lixo para o coletor do que conta de encaixe.
+    const colunasComVao = new Int32Array(forma.cols);
     // Quanto de vão seguido a peça precisa em cada coluna. Fica guardado na
     // forma: ele não muda, e é consultado uma vez por coluna por posição.
     const altura = forma.alturaPorColuna || (forma.alturaPorColuna = (() => {
@@ -1111,7 +1149,7 @@ function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
        * vão de verdade, e é só ali que este motor difere do contorno. Sem isto
        * ele fazia 5 tentativas por busca; com isto, faz milhares.
        */
-      let temVaoAqui = false;
+      let comVao = 0;
       let ySky = 0;
       let piso = 0;
       let cortada = false;
@@ -1119,12 +1157,15 @@ function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
         const t = topo[c];
         if (t < 0) continue;
         const coluna = x + c;
-        if (temVao[coluna]) temVaoAqui = true;
         const encosta = perfil[coluna] - t;
         if (encosta > ySky) ySky = encosta;
-        // O piso de verdade, agora com todas as colunas — e o corte no meio do
-        // laço, assim que ele passa do melhor conhecido.
-        const livre = (altura[c] > maiorVao[coluna] ? perfil[coluna] : topoLivre[coluna]) - t;
+        // A peça cabe no maior buraco desta coluna? Se não, a única posição
+        // possível aqui é abaixo do relevo — e essa coluna não precisa ser
+        // andada na descida.
+        const cabeNoVao = altura[c] <= maiorVao[coluna];
+        if (cabeNoVao) colunasComVao[comVao++] = c;
+        // O piso: o mais alto que a peça pode chegar nesta coluna.
+        const livre = (cabeNoVao ? topoLivre[coluna] : perfil[coluna]) - t;
         if (livre > piso) {
           piso = livre;
           if (melhor !== null && piso + maxBase + 1 >= melhor.fundo) { cortada = true; break; }
@@ -1133,12 +1174,27 @@ function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
       if (cortada) return;
 
       let y = ySky;
-      if (temVaoAqui) {
+      /*
+       * QUANDO A DESCIDA CARA NÃO PODE GANHAR NADA.
+       *
+       * O `y` de verdade fica preso entre dois números que já estão calculados:
+       *
+       *     piso <= y <= ySky
+       *
+       * O piso porque nenhuma coluna deixa a peça subir mais que isso; o relevo
+       * porque pousar em cima de tudo sempre cabe. Logo, **piso igual ao relevo
+       * quer dizer que o y é o relevo** — e a descida pelos intervalos só pode
+       * devolver o mesmo número, depois de varrer trezentas colunas para isso.
+       *
+       * Era 84% do tempo do motor. A conta que evita isso já estava pronta no
+       * mesmo laço; faltava a comparação.
+       */
+      if (comVao > 0 && piso < ySky) {
         // Aqui pode haver buraco fechado por cima: vale a descida de verdade.
         // Ela nunca devolve `y` maior que o do relevo, então o relevo já serve
         // de teto e a busca desiste cedo.
         const teto = Math.min(melhor ? melhor.fundo : Infinity, ySky + maxBase + 1);
-        const yVao = descerNosVaos(colunas, x, forma, teto + 1);
+        const yVao = descerNosVaos(colunas, x, forma, teto + 1, piso, colunasComVao, comVao);
         if (yVao !== null && yVao < y) y = yVao;
       }
 

@@ -176,14 +176,29 @@ async function buscarComoAProducao(motor, trabalho,
 
   let campeao = null;
   let tentativas = 0;
+  const motoresPedidos = extra.motores
+    ? String(extra.motores).split("+") : ["contorno", "retangulo"];
+  /*
+   * Quais fatias dividem o portfólio COMUM.
+   *
+   * O corte é `i % n === k`, e o `n` tem que ser o número de fatias que estão
+   * dividindo — não o número total. Com 5 fatias, uma delas dedicada a um
+   * encaixador próprio e o `n` continuando 5, um quinto das receitas comuns não
+   * roda em fatia nenhuma: fica órfão.
+   */
+  const comuns = [];
+  for (let i = 0; i < fatias; i++) {
+    if (motoresDaFatia(i, fatias, motoresPedidos).length === motoresPedidos.length) comuns.push(i);
+  }
   for (let k = 0; k < fatias; k++) {
+    const motoresDaK = motoresDaFatia(k, fatias, motoresPedidos);
+    const soDele = motoresDaK.length !== motoresPedidos.length;
     const resultado = await motor.buscarMelhorEncaixe(itens, {
       larguraTecido: receita.larguraTecido,
       espaco: receita.espaco,
       margem: receita.margem,
       passo, alturaMax,
-      motores: motoresDaFatia(k, fatias, extra.motores
-        ? String(extra.motores).split("+") : ["contorno", "retangulo"]),
+      motores: motoresDaK,
       // Sem memória e sem rede: a bancada mede o motor, não o histórico da
       // loja. Com recorde antigo em jogo, duas corridas da mesma configuração
       // já dariam resultados diferentes.
@@ -193,7 +208,14 @@ async function buscarComoAProducao(motor, trabalho,
       tempoMaximoMs: tempoMs,
       msSemGanho: Math.max(800, tempoMs * 0.25),
       tentativasPorLote: itens.length >= 120 ? 1 : 8,
-      fatia: { k, n: fatias },
+      /*
+       * O corte do portfólio por fatia serve para N fatias dividirem A MESMA
+       * lista de receitas. Uma fatia que roda um encaixador só já tem portfólio
+       * próprio, disjunto do das outras — cortá-lo de novo deixaria ela com um
+       * quinto das receitas dela e quatro quintos de nada.
+       */
+      fatia: soDele ? { k: 0, n: 1 }
+        : { k: comuns.indexOf(k), n: comuns.length },
       saltoX: puloDaFatia(k),
       semente: sementeDaFatia(semente, k, espalharSemente),
       ...extra,
