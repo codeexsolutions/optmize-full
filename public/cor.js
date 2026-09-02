@@ -182,14 +182,43 @@ async function converterUm(item) {
   if (!bytes.ok) throw new Error("a conversão terminou mas o arquivo não voltou");
   const blob = await bytes.blob();
 
-  // O "antes" sai do arquivo ORIGINAL, desenhado pelo navegador. É por isso que
-  // ele é tirado antes de `item.arquivo` ser trocado.
-  item.antes = await miniatura(item.arquivo, dados.largura, dados.altura);
-  item.depois = await miniatura(blob, dados.largura, dados.altura);
+  /*
+   * SÓ O "ANTES" É DESENHADO AQUI.
+   *
+   * O "depois" vem pronto do servidor: são os pixels que ele acabou de
+   * converter, subamostrados, e não custam decodificação nenhuma. O "antes" não
+   * pode vir de lá, porque ele é uma afirmação sobre o que o NAVEGADOR faz com o
+   * arquivo — e quem responde isso sem errar é o próprio navegador.
+   *
+   * Isso custa uma decodificação de imagem cheia. Medido no Chrome com uma arte
+   * de 65 megapixels: 3,8 s, e `resizeWidth` não ajuda em nada — ele decodifica
+   * tudo e só depois reduz. Desenhar os dois lados aqui custava o dobro disso, e
+   * era o que fazia quatro artes levarem quase três minutos.
+   *
+   * É também o ponto mais frágil da tela, porque depende da memória que a aba
+   * tem sobrando com as outras abas da pessoa disputando. Se falhar, o que se
+   * perde é a conferência visual: a conversão já terminou e o arquivo já está
+   * aqui. Derrubar o item por causa da miniatura seria jogar fora quinze
+   * segundos de trabalho e mandar a pessoa investigar uma arte sem defeito.
+   *
+   * O "antes" sai do arquivo ORIGINAL, então é tirado antes de `item.arquivo`
+   * ser trocado.
+   */
+  try {
+    item.antes = await miniatura(item.arquivo, dados.largura, dados.altura);
+  } catch (erro) {
+    console.warn("[cor] não deu para desenhar o antes de", item.arquivo.name, erro);
+    item.antes = null;
+    item.semComparacao = "a arte é grande demais para o navegador montar a comparação aqui,"
+      + " mas a conversão terminou e o arquivo já está pronto";
+  }
+  item.depois = dados.depois;
+
   item.arquivo = new File([blob], dados.nomeNovo, { type: "image/jpeg" });
   item.estado = "pronto";
   item.detalhe = `${dados.espaco} · perfil "${dados.perfil}" · `
-    + `${dados.largura} × ${dados.altura} px · ${formatarNumero(dados.cores, 0)} cores`;
+    + `${dados.largura} × ${dados.altura} px · ${formatarNumero(dados.cores, 0)} cores`
+    + (item.semComparacao ? ` — ${item.semComparacao}` : "");
 }
 
 /** Quanto a miniatura da comparação tem de largura. */
@@ -198,10 +227,12 @@ const MINIATURA_LARGURA = 420;
 /**
  * Uma miniatura da arte, desenhada pelo navegador.
  *
- * `createImageBitmap` com `resizeWidth` decodifica JÁ REDUZIDO: uma arte de 50
- * megapixels nunca chega inteira à memória da aba. É o mesmo recurso que o
- * Encaixe usa para as miniaturas da tabela, e usar o mesmo caminho é o ponto —
- * o que aparece aqui é o que apareceria lá.
+ * É o mesmo `createImageBitmap` que o Encaixe usa, e usar o mesmo caminho é o
+ * ponto: o que aparece aqui é o que apareceria lá.
+ *
+ * O `resizeWidth` NÃO evita a decodificação da imagem cheia — medido, uma arte
+ * de 65 megapixels leva os mesmos 3,8 s com e sem ele. Ele serve para o
+ * resultado já sair no tamanho certo, sem um segundo canvas gigante no meio.
  */
 async function miniatura(blob, larguraReal, alturaReal) {
   const largura = Math.min(MINIATURA_LARGURA, larguraReal);
@@ -256,6 +287,12 @@ async function receberArquivos(arquivos) {
       await converterUm(item);
     } catch (erro) {
       console.error("[cor] falhou ao converter", item.arquivo.name, erro);
+      // "Failed to fetch" é o que o navegador diz quando a conexão caiu no meio
+      // — servidor reiniciado, ou a arte grande demais para o envio terminar.
+      // Sozinho não diz nada a quem lê.
+      if (/failed to fetch|networkerror|load failed/i.test(erro.message)) {
+        erro.message = "a conexão com o servidor do programa caiu no meio do envio";
+      }
       item.estado = "erro";
       item.detalhe = `A conversão não rodou: ${erro.message}. `
         + "A arte não foi mexida e segue para o encaixe como está.";
