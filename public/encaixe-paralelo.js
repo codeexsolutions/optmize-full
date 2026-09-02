@@ -71,6 +71,42 @@ const ENCAIXE_PULO_PADRAO = 3;
 const FATIAS_EXATAS = 2;
 const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : ENCAIXE_PULO_PADRAO);
 
+/**
+ * A semente do sorteio de cada fatia.
+ *
+ * Todas as fatias rodavam com a MESMA semente — a busca nunca recebia
+ * `config.semente`, então todas caíam no mesmo valor padrão lá dentro. Elas
+ * divergiam só porque cada uma recebe um pedaço diferente do portfólio de
+ * receitas; dentro da fatia, a sequência de sorteios era idêntica em todas.
+ *
+ * Isso desperdiça exatamente o recurso que o paralelo existe para comprar. Duas
+ * fatias que peguem receitas parecidas sacodem a fila do mesmo jeito, na mesma
+ * ordem, e visitam as mesmas arrumações. O que compra tecido aqui é DIVERSIDADE
+ * de tentativas, e sorteio repetido não é tentativa nova.
+ *
+ * O número somado é primo e grande só para as sequências não se alcançarem: o
+ * gerador é linear congruente (ver `geradorDeSorteio`), e sementes vizinhas nele
+ * produzem começos vizinhos.
+ *
+ * **Medido, e deu empate**: −0,05% na soma dos oito trabalhos da bancada (dois
+ * melhoraram, dois pioraram, quatro empataram), bem dentro dos 0,23% que duas
+ * corridas iguais já variam. O motivo é que as fatias já divergiam por outro
+ * caminho — cada uma recebe um pedaço diferente do portfólio de receitas, e isso
+ * sozinho já fazia o sorteio ser consumido em ordens diferentes.
+ *
+ * Fica assim mesmo, por dois motivos. Primeiro, não custa nada: nenhuma
+ * tentativa, nenhuma receita, nenhum tempo. Segundo, e é o que decide, existe um
+ * caso em que a semente repetida faz estrago de verdade — quando o portfólio é
+ * MENOR que o número de fatias. Aí o corte por fatia sai vazio, cada worker cai
+ * de volta no portfólio inteiro (ver `config.fatia`, em encaixe-motor.js), e com
+ * a mesma semente os cinco passam a fazer exatamente o mesmo trabalho, cinco
+ * vezes. Isso acontece com um encaixador de portfólio curto, ou com
+ * `maxReceitasBase` apertado em lote grande.
+ */
+const SEMENTE_PADRAO = 20260824;
+const PASSO_DA_SEMENTE = 104729;
+const sementeDaFatia = (semente, k) => (semente || SEMENTE_PADRAO) + k * PASSO_DA_SEMENTE;
+
 /*
  * Cada fatia usa os mesmos encaixadores: quem escolhe o encaixador é a tela, e
  * a fatia só reparte o portfólio de receitas dele.
@@ -342,7 +378,8 @@ async function buscarMelhorEncaixeEmParalelo(itens, config) {
         pronto();
       }, { once: true });
       w.postMessage({ tipo: "buscar", config: configLimpo, fatia: { k, n },
-        saltoX: puloDaFatia(k), motores: configLimpo.motores || [] });
+        saltoX: puloDaFatia(k), semente: sementeDaFatia(configLimpo.semente, k),
+        motores: configLimpo.motores || [] });
     }));
 
     // 3) O botão de parar mora na tela; daqui ele vira um aviso para as fatias.

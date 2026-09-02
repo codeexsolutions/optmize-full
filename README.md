@@ -938,6 +938,14 @@ Duas coisas são decididas por fatia, e as duas saíram de medição:
   melhor de todas nunca fica atrás: 1,16% de média, melhorou em 8 dos 12,
   empatou em 4 e piorou em nenhum. A fatia exata funciona como piso.
 
+- **a semente do sorteio**. Todas as fatias rodavam com a mesma, e divergiam só
+  porque cada uma pega um pedaço diferente do portfólio. Dar uma semente própria
+  a cada uma foi medido e **deu empate** (−0,05% na soma dos oito trabalhos,
+  dentro do ruído), mas ficou: não custa tentativa nenhuma, e cobre um caso em
+  que a semente repetida faz estrago de verdade — quando o portfólio é menor que
+  o número de fatias, cada worker cai de volta no portfólio inteiro e, com a
+  mesma semente, os cinco fazem exatamente o mesmo trabalho.
+
   **Quantas fatias varrem exato** foi remedido depois do WASM, que barateou a
   tentativa e mudou a conta: hoje são **duas**, não uma. Somando os quatro
   trabalhos, 1 exata deu 51,438 m, 2 exatas deram 51,333 m, todas exatas

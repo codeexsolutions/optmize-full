@@ -66,6 +66,9 @@ const FATIAS = 5;              // o que sobra num i5 de 6 núcleos
 const FATIAS_EXATAS = 2;
 const PULO_PADRAO = 3;
 const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : PULO_PADRAO);
+// Espelha `sementeDaFatia` do encaixe-paralelo.js: cada fatia sorteia diferente.
+const PASSO_DA_SEMENTE = 104729;
+const sementeDaFatia = (semente, k, espalhar) => semente + (espalhar ? k * PASSO_DA_SEMENTE : 0);
 
 /**
  * Quais encaixadores cada fatia usa — espelha `motoresDaFatia` do
@@ -104,6 +107,7 @@ function lerArgumentos(argv) {
      * novo, e o sistema fica com o melhor de todos (ver `encaixe_guardados`).
      */
     rodadas: 1,
+    espalharSemente: true,
     // Qualquer ajuste do motor, passado direto para o `config` da busca:
     //   --extra reparoChance=0,podar=false
     // É o que permite medir uma mexida contra o motor de agora sem voltar o
@@ -122,6 +126,8 @@ function lerArgumentos(argv) {
     else if (chave === "--contra") { opcoes.contra = valor; i++; }
     else if (chave === "--sem-wasm") { opcoes.wasm = false; }
     else if (chave === "--rodadas") { opcoes.rodadas = Number(valor); i++; }
+    // Para medir a semente por fatia contra o que havia antes dela.
+    else if (chave === "--mesma-semente") { opcoes.espalharSemente = false; }
     else if (chave === "--trabalhos") { opcoes.trabalhos = valor.split(","); i++; }
     else if (chave === "--todos") { opcoes.trabalhos = Object.keys(TRABALHOS); }
     else if (chave === "--extra") {
@@ -164,7 +170,7 @@ function prepararTrabalho(motor, nome) {
  * É o `buscarMelhorEncaixeEmParalelo` da produção, desenrolado.
  */
 async function buscarComoAProducao(motor, trabalho,
-  { tempoMs, semente, meta, fatias, extra }) {
+  { tempoMs, semente, meta, fatias, extra, espalharSemente }) {
   const { receita, itens, passo, alturaMax } = trabalho;
   const vetorTrabalho = motor.vetorDoTrabalho(trabalho.pecas, receita.larguraTecido);
 
@@ -189,7 +195,7 @@ async function buscarComoAProducao(motor, trabalho,
       tentativasPorLote: itens.length >= 120 ? 1 : 8,
       fatia: { k, n: fatias },
       saltoX: puloDaFatia(k),
-      semente,
+      semente: sementeDaFatia(semente, k, espalharSemente),
       ...extra,
     });
     tentativas += resultado.tentativas || 0;
@@ -270,6 +276,7 @@ async function principal() {
     + ` · ${opcoes.fatias} fatias × ${opcoes.tempo}s × ${opcoes.sementes} semente(s)`
     + ` · wasm ${motor.comWasm ? "ligado" : "DESLIGADO"}`
     + (opcoes.rodadas > 1 ? ` · ${opcoes.rodadas} rodadas` : "")
+    + (opcoes.espalharSemente ? "" : " · mesma semente em todas as fatias")
     + (opcoes.meta ? ` · meta ${porcento(opcoes.meta)}` : "")
     + (Object.keys(opcoes.extra).length
       ? ` · ${Object.entries(opcoes.extra).map(([k, v]) => `${k}=${v}`).join(" ")}` : ""));
@@ -296,6 +303,7 @@ async function principal() {
           meta: opcoes.meta,
           fatias: opcoes.fatias,
           extra: opcoes.extra,
+          espalharSemente: opcoes.espalharSemente,
         });
       }
       corridas.push(corrida);
