@@ -1555,3 +1555,98 @@ tbody tr:hover td {
     color: #111;
   }
 }
+
+/* ===================================================================
+   AVISO DE COR — a arte que o canvas não sabe converter
+   =================================================================== */
+
+/* O selo na linha da peça: só o suficiente para o olho parar ali. O detalhe
+   fica no `title` e no painel de cima, com a imagem junto. */
+.selo-cor {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.selo-cor-cmyk {
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+
+.selo-cor-perfil {
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  color: var(--warn);
+}
+
+#encaixe-aviso-cor {
+  margin: 0 0 8px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 8%, var(--card-bg-soft));
+}
+
+.aviso-cor-titulo {
+  margin: 0 0 8px;
+  color: var(--warn);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* A tira rola de lado: com vinte artes problemáticas ela não pode empurrar a
+   lista de peças para fora da tela. */
+.aviso-cor-tira {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.aviso-cor-item {
+  flex: 0 0 auto;
+  width: 92px;
+  margin: 0;
+}
+
+.aviso-cor-item img {
+  display: block;
+  width: 92px;
+  height: 72px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  object-fit: contain;
+}
+
+.aviso-cor-item figcaption {
+  display: block;
+  margin-top: 3px;
+  line-height: 1.25;
+}
+
+.aviso-cor-item strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aviso-cor-item span {
+  display: block;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
