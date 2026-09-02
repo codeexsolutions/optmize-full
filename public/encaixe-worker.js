@@ -109,6 +109,9 @@ self.onmessage = async (evento) => {
       // pedido explicitamente no config vence — é o que deixa medir uma
       // configuração inteira de fora.
       saltoX: msg.config.saltoX != null ? msg.config.saltoX : msg.saltoX,
+      // A semente do sorteio desta fatia. Uma semente pedida explicitamente no
+      // config vence — é o que deixa medir uma configuração inteira de fora.
+      semente: msg.config.semente != null ? msg.config.semente : msg.semente,
       motores: msg.motores || msg.config.motores,
       deveParar: () => pararAgora,
       aoProgredir: (estado) => self.postMessage({ tipo: "andamento", k: fatia.k, estado }),
