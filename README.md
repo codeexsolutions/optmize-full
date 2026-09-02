@@ -597,6 +597,15 @@ quantos metros vão ser gastos.
    insistir nas receitas que ganharam antes sufoca a variação que acharia algo
    melhor desta vez. O sorteio é parelho de propósito.
 
+   **A tela fica com o melhor, sozinha.** A busca é sorteada: ela acha um
+   encaixe muito bom numa rodada e pode não chegar lá na seguinte. Antes, a
+   rodada pior tomava a tela e o bom só voltava se a pessoa reparasse num aviso
+   e clicasse num botão — na prática, o melhor se perdia. Hoje, quando a procura
+   sai pior do que o melhor já conseguido com aquelas mesmas peças, a tela volta
+   sozinha para o melhor e diz o que esta procura deu. Nada é escondido; o que
+   muda é que nada de bom se perde por distração. A bancada mede do mesmo jeito:
+   com `--rodadas`, o número relatado é o melhor das rodadas, não o da última.
+
    **O melhor encaixe já conseguido fica guardado inteiro.** Guardar só a
    metragem do recorde não bastava: a busca é sorteada, então ela acha um
    encaixe muito bom numa rodada e pode não chegar lá de novo na seguinte — e o

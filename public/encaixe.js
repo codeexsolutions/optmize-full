@@ -1904,8 +1904,8 @@ btnEncaixar.addEventListener("click", async () => {
       ? (ultimoResultado.areaReal / 10000 / areaTecido) * 100 : 0;
 
     // O encaixe inteiro fica guardado quando é o melhor já conseguido com
-    // estas peças. Quando não é, a tela oferece o de antes em vez de deixar o
-    // bom desaparecer.
+    // estas peças. Quando não é, a tela volta sozinha para o melhor — ver
+    // logo abaixo, depois do resumo da busca.
     atualizarCarregamento({
       etapa: "Salvando",
       titulo: "Guardando o melhor resultado",
@@ -1920,9 +1920,6 @@ btnEncaixar.addEventListener("click", async () => {
       posicoes: posicoesParaGuardar(ultimoResultado),
       receita: ultimoResultado.receita,
     });
-    if (guardadoAntes && guardadoAntes.consumo < ultimoResultado.consumo - 0.05) {
-      mostrarOfertaDoGuardado(guardadoAntes, ultimoResultado.consumo);
-    }
 
     const anotado = await guardarNaMemoria({
       assinatura,
@@ -1939,6 +1936,42 @@ btnEncaixar.addEventListener("click", async () => {
     });
 
     mostrarResumoDaBusca(ultimoResultado, aprendido, anotado);
+
+    /*
+     * A TELA FICA COM O MELHOR.
+     *
+     * A busca é sorteada: ela acha um encaixe muito bom numa rodada e pode não
+     * chegar lá na seguinte. Antes, a rodada pior tomava a tela, e o bom só
+     * voltava se a pessoa reparasse no aviso e clicasse num botão — na prática,
+     * o melhor se perdia.
+     *
+     * Agora a troca é automática e no sentido certo: se este trabalho já tinha
+     * um encaixe melhor guardado, é ele que fica na tela, e o que a procura de
+     * agora deu aparece no texto. Nada é escondido, e nada de bom se perde por
+     * distração.
+     *
+     * Isto vem DEPOIS de `guardarNaMemoria` e de `mostrarResumoDaBusca` de
+     * propósito: as duas contam o que ESTA busca fez, e trocar o
+     * `ultimoResultado` antes faria a memória aprender com o encaixe de ontem
+     * e o resumo mentir sobre as tentativas de agora.
+     */
+    if (guardadoAntes && guardadoAntes.consumo < ultimoResultado.consumo - 0.05) {
+      const consumoDaBusca = ultimoResultado.consumo;
+      const resumoDaBusca = encaixeAndamento.textContent;
+      const voltou = await usarEncaixeGuardado(guardadoAntes);
+      if (voltou) {
+        encaixeAndamento.textContent =
+          `Esta procura deu ${formatarMetros(consumoDaBusca)}, e o melhor já conseguido com `
+          + `estas peças é ${formatarMetros(guardadoAntes.consumo)} — a tela ficou com o melhor. · `
+          + resumoDaBusca;
+        encaixeAndamento.classList.remove("hidden");
+      } else {
+        // A tabela de peças mudou desde aquele encaixe: não dá para trazê-lo de
+        // volta sozinho. Aí a oferta manual continua valendo.
+        mostrarOfertaDoGuardado(guardadoAntes, consumoDaBusca);
+      }
+    }
+
     finalizarCarregamento(pararBusca ? "interrompido" : "concluido");
   } catch (err) {
     console.error("Falha ao fazer o encaixe:", err);
