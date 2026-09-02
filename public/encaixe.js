@@ -1248,7 +1248,37 @@ encaixePecasBody.addEventListener("click", (e) => {
 
   const id = e.target.dataset.delPeca;
   if (!id) return;
+
+  /*
+   * TIRAR UMA PEÇA DERRUBA O RISCO QUE ESTAVA NA TELA.
+   *
+   * Uma posição do risco não guarda a arte: guarda o `indice`, que é a LINHA
+   * desta tabela. Tirando uma linha do meio, todas as de baixo sobem um lugar —
+   * e cada posição passa a apontar para a peça da linha seguinte. O risco
+   * continua desenhado, com a mesma metragem de antes, e cada peça vestindo a
+   * arte da vizinha.
+   *
+   * Foi assim que uma peça verde saiu rosa: a arte rosa era a linha de baixo. E
+   * como o PDF é montado das mesmas posições, o erro não fica na tela — vai
+   * impresso no tecido.
+   *
+   * Renumerar as linhas e emendar o risco daria, mas a metragem não: cada motor
+   * fecha a conta da margem de um jeito (ver `encaixe-motor.js`), e um consumo
+   * remendado seria um número quase certo estampado na barra como se fosse
+   * exato. Esta loja decide corte por essa metragem. Então o risco cai, do mesmo
+   * jeito que cai em "Limpar a lista", e a procura é refeita com a lista nova —
+   * que é o que a pessoa quer mesmo, já que a produção mudou.
+   */
+  const tinhaRisco = !!ultimoResultado;
   pecasEncaixe = pecasEncaixe.filter((p) => p.id !== Number(id));
+  if (tinhaRisco) {
+    ultimoResultado = null;
+    encaixeResultado.classList.add("hidden");
+    encaixeAndamento.textContent = pecasEncaixe.length
+      ? "A peça saiu da lista, então o risco anterior não vale mais. Faça o encaixe de novo."
+      : "";
+    encaixeAndamento.classList.toggle("hidden", !pecasEncaixe.length);
+  }
   renderPecasEncaixe();
 });
 
