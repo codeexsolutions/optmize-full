@@ -1310,7 +1310,7 @@ function atualizarResumoDoEnvio() {
   }
   const dpiReal = Math.round(ppcmMenor * 2.54);
   moldeEnvioQualidade.textContent =
-    `${comArte} peça(s) com arte a ${dpiReal} dpi (${(pontos / 1e6).toFixed(0)} milhões de pontos)`
+    `${comArte} peça(s) com arte a ${dpiReal} dpi (${formatarNumero(pontos / 1e6, 0)} milhões de pontos)`
     + (dpiReal < dpi - 1 ? " — abaixei o dpi para caber na memória." : "");
 }
 

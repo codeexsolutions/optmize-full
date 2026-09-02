@@ -420,6 +420,15 @@ tbody tr:hover td {
   color: var(--warn);
 }
 
+/* O aproveitamento medido só dentro da faixa que as peças ocuparam. Fica
+   apagado de propósito: quem manda é o "Aproveitamento" da faixa de cima,
+   contra o tecido que foi comprado. Este aqui explica a diferença, não
+   substitui o outro — e número secundário com cor de destaque vira número
+   principal na leitura de quem passa o olho. */
+.encaixe-stats .stat-faixa .stat-valor {
+  color: var(--text-dim);
+}
+
 .encaixe-largura-resumo {
   margin: 12px 0 14px;
   padding: 15px;

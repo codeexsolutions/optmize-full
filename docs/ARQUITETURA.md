@@ -19,7 +19,7 @@ Este é o levantamento real, contando quantas vezes cada arquivo toca o DOM:
 
 | Camada | Linhas | O que é |
 |---|---:|---|
-| **Domínio puro** (zero DOM) | 4.407 | `encaixe-motor`, `vetor`, `nfp`, `encaixe-mascara`, `encaixe-wasm`, `geometria`, `encaixe-giro` e os 3 workers |
+| **Domínio puro** (zero DOM) | 4.407 | `encaixe-motor`, `vetor`, `encaixe-mascara`, `encaixe-wasm`, `geometria`, `encaixe-giro` e os 3 workers (o `nfp` estava nesta conta e saiu do projeto) |
 | **Domínio com uma ponta no navegador** | 2.905 | `moldes` (o DXF e o PLT são puros; o leitor de SVG mede no DOM de verdade), `encaixe-paralelo`, `encaixe-prepara`, `arte-molde` |
 | **Tela** | 5.135 | `encaixe`, `moldes-tela`, `projetos`, `vetor-tela`, `ui`, `interface` |
 
@@ -92,8 +92,8 @@ comportamento.
 3. **Vetor** (508 de tela) — canvas e worker. O `vetor.js` (1.196) é puro e vai
    inteiro para o núcleo sem uma linha alterada.
 4. **Encaixe** (2.429) — por último, porque é a maior e a que mais tem estado:
-   pool de workers, wasm, desenho em canvas e o PDF. O motor (1.357 + 812 do
-   NFP) é puro e não se toca.
+   pool de workers, wasm, desenho em canvas e o PDF. O motor é puro e não se
+   toca.
 
 **Uma tela está migrada quando:** faz tudo que a antiga fazia, o arquivo dela
 saiu do `public/` e do `index.html` antigo, e o domínio que ela usava virou

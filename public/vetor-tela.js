@@ -199,8 +199,8 @@ async function gerarVetor() {
     const partes = [
       `${r.camadas.length} cor${r.camadas.length === 1 ? "" : "es"}`,
       `${r.totalCaminhos} contorno${r.totalCaminhos === 1 ? "" : "s"}`,
-      `${(r.svg.length / 1024).toFixed(0)} KB`,
-      `${(ms / 1000).toFixed(1)}s`,
+      `${formatarNumero(r.svg.length / 1024, 0)} KB`,
+      formatarSegundos(ms),
     ];
     // Quantos trechos saíram como arco de verdade, e não como curva que passa
     // perto. Vale dizer: é a diferença entre um arquivo que o CorelDRAW abre
@@ -217,7 +217,7 @@ async function gerarVetor() {
     if (arcos > 0) feito.push(`${arcos} arco${arcos === 1 ? "" : "s"}`);
     if (curvas > 0) feito.push(`${curvas} curva${curvas === 1 ? "" : "s"}`);
     if (feito.length) partes.push(feito.join(" + "));
-    if (r.larguraCm) partes.push(`${r.larguraCm.toFixed(1)} × ${r.alturaCm.toFixed(1)} cm`);
+    if (r.larguraCm) partes.push(`${formatarNumero(r.larguraCm, 1)} × ${formatarCm(r.alturaCm)}`);
     if (fator < 1) partes.push(`trabalhado em ${largura} px de largura`);
     if (fundo) partes.push("fundo removido");
     // Pedir para tirar o fundo e não sair nada precisa aparecer. Sem isso o
@@ -282,7 +282,7 @@ function aplicarLupa() {
     if (c.parentElement) c.parentElement.classList.toggle("perto", lupa.escala >= 3);
   });
   if (vetorZoomValor) {
-    vetorZoomValor.textContent = lupa.escala.toFixed(2).replace(/\.?0+$/, "") + "×";
+    vetorZoomValor.textContent = formatarNumero(lupa.escala, 2).replace(/,?0+$/, "") + "×";
   }
   if (vetorZoom && Number(vetorZoom.value) !== lupa.escala) vetorZoom.value = String(lupa.escala);
 }

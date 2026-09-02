@@ -58,7 +58,8 @@ const REDE_LIMIAR_DIVERSIDADE = 20;
  */
 function montarExemplosDeTreino() {
   const linhas = db.prepare(
-    "SELECT features, placar FROM encaixe_historico WHERE features IS NOT NULL AND placar IS NOT NULL"
+    `SELECT features, placar, receita, consumo FROM encaixe_historico
+     WHERE features IS NOT NULL AND placar IS NOT NULL`
   ).all();
 
   const exemplos = [];
@@ -76,11 +77,54 @@ function montarExemplosDeTreino() {
       if (!p || !p.receita || !(p.tentativas > 0)) return;
       exemplos.push({
         entrada: [...features, ...rede.vetorDaReceita(p.receita)],
-        alvo: p.vitorias > 0 ? 1 : 0,
+        alvo: alvoDaReceita(p, linha.receita, linha.consumo),
       });
     });
   });
   return exemplos;
+}
+
+/*
+ * ===========================================================================
+ * O QUE CONTA COMO "ESTA RECEITA FOI BOA NESTE TRABALHO"
+ * ===========================================================================
+ *
+ * Isto já foi `vitorias > 0`, e estava errado de um jeito que não aparecia: o
+ * `vitorias` do placar conta quantas vezes a receita melhorou o melhor da
+ * FATIA dela durante a busca — não quantas vezes ela venceu o trabalho. Uma
+ * receita que melhorou uma vez logo no começo e foi batida por todas as outras
+ * em seguida saía rotulada como vencedora.
+ *
+ * Medido no histórico de produção: 440 linhas de receita, **141 rotuladas como
+ * vencedoras (32%)** — quando só uma por trabalho venceu de verdade, ou seja,
+ * 11. A rede estava aprendendo a separar "participou de alguma melhora" de
+ * "não participou", que é quase ruído.
+ *
+ * Agora o rótulo é o que a pergunta pede: a campeã vale 1, e as outras valem o
+ * quanto chegaram perto dela. Alvo contínuo, e não sim/não, porque a segunda
+ * colocada por 0,3% é informação muito diferente da que ficou 8% atrás — e a
+ * saída da rede é uma sigmoide, que aceita alvo fracionário sem mudar nada no
+ * treino.
+ *
+ * Vale para trás: o rótulo é calculado na hora de treinar, a partir do que já
+ * está gravado (`receita` é a campeã, `consumo` é o dela). O histórico que já
+ * existe passa a treinar certo no próximo retreino, sem migração nenhuma.
+ */
+
+// A partir de quanto atrás da campeã a receita vale zero. 5% é bem mais que a
+// diferença entre as boas receitas de um mesmo trabalho, então quem passa disso
+// realmente não serve para ele.
+const ALVO_TOLERANCIA = 0.05;
+
+function alvoDaReceita(linhaDoPlacar, receitaCampea, consumoCampeao) {
+  if (linhaDoPlacar.receita === receitaCampea) return 1;
+  const meu = Number(linhaDoPlacar.melhorConsumo);
+  // Linha gravada antes desta versão não tem `melhorConsumo`. Aí sobra o que dá
+  // para saber com certeza: não foi a campeã.
+  if (!(meu > 0) || !(Number(consumoCampeao) > 0)) return 0;
+  const atras = (meu - consumoCampeao) / consumoCampeao;
+  if (atras <= 0) return 1; // empatou com a campeã
+  return Math.max(0, 1 - atras / ALVO_TOLERANCIA);
 }
 
 /**

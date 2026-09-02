@@ -260,6 +260,7 @@ function encaixarContornoWasm(unidades, config) {
   // A volta: o WASM diz qual forma venceu e onde; as peças de verdade e as
   // máscaras continuam aqui do lado do JavaScript.
   const posicoes = [];
+  const colocacoes = [];
   const naoEncaixadas = [];
   // A unidade que deixou mais buraco morto acima dela. É o que o reparo
   // guiado da busca mira (`repararPior`, em encaixe-motor.js) — e o caminho em
@@ -281,6 +282,10 @@ function encaixarContornoWasm(unidades, config) {
     // Qual forma da unidade venceu: o índice é global, e a primeira forma
     // desta unidade está anotada no plano.
     const forma = unidade.formas[formaGlobal - i32[plano.unidInicio + unidade._wasm.id]];
+    // A colocação em células, do jeito que o encaixe decidiu. É dela que a
+    // repescagem (`repescarNosVaos`, em encaixe-motor.js) precisa para mexer
+    // numa peça já assentada.
+    colocacoes.push({ unidade, forma, x, y });
     forma.partes.forEach((parte) => {
       const m = parte.mascara;
       const deitada = parte.rot === 90 || parte.rot === 270;
@@ -299,7 +304,7 @@ function encaixarContornoWasm(unidades, config) {
   }
 
   return {
-    posicoes, naoEncaixadas,
+    posicoes, colocacoes, naoEncaixadas,
     consumo: fundoMax > 0 ? fundoMax * passo + margem * 2 : 0,
     areaReal: posicoes.reduce((soma, p) => soma + p.item.mascaras.areaReal, 0),
     piorUnidade, piorVazio,

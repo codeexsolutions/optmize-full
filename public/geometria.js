@@ -10,10 +10,11 @@
  * e é por isso que moram aqui.
  *
  * Antes deste arquivo elas estavam escritas duas vezes, com nomes diferentes:
- * `areaComSinal` no nfp.js e `areaComSinalDoContorno` no vetor.js eram a MESMA
- * função, letra por letra; `caixaDoLaco` (moldes.js) e `ladoMenorDoContorno`
- * (vetor.js) percorriam o mesmo laço para chegar à mesma caixa. Duas cópias de
- * uma conta querem dizer dois lugares para consertar quando ela estiver errada.
+ * `areaComSinal` (no encaixe por NFP, que saiu do projeto) e
+ * `areaComSinalDoContorno` no vetor.js eram a MESMA função, letra por letra;
+ * `caixaDoLaco` (moldes.js) e `ladoMenorDoContorno` (vetor.js) percorriam o
+ * mesmo laço para chegar à mesma caixa. Duas cópias de uma conta querem dizer
+ * dois lugares para consertar quando ela estiver errada.
  *
  * ---------------------------------------------------------------------------
  * REGRA DESTE ARQUIVO
@@ -22,7 +23,7 @@
  * Nada de `document`, `window`, canvas ou fetch — este arquivo é carregado
  * também dentro dos Web Workers (`importScripts`), onde nada disso existe.
  *
- * Carrega ANTES de nfp.js, moldes.js e vetor.js, que dependem dele.
+ * Carrega ANTES de moldes.js e vetor.js, que dependem dele.
  */
 
 /** Abaixo disso, dois pontos são o mesmo ponto. */
