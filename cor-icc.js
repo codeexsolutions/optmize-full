@@ -549,13 +549,19 @@ function converterJpegRgb(buffer) {
  * O QUE A TELA CHAMA
  * ===========================================================================
  *
- * Recebe o arquivo como veio e devolve a arte já em sRGB, num JPEG novo.
+ * Recebe o arquivo como veio e devolve a arte já em sRGB, num JPEG novo, mais
+ * uma miniatura do resultado.
  *
- * As miniaturas de comparação não saem daqui. Elas são desenhadas na tela, pelo
- * navegador — ver o cabeçalho de public/cor.js. A primeira versão simulava aqui
- * o "antes", com a fórmula ingênua `R = 255 - (C·(1-K) + K)`, supondo que fosse
- * ela que o navegador usava. Medido, não é: o Chrome aplica o perfil, e o
- * "antes" simulado mostrava uma cor que ninguém veria.
+ * Sai daqui a miniatura do DEPOIS, e só ela. Não é simulação de nada: são os
+ * mesmos pixels que acabaram de ser convertidos, subamostrados — e sai de graça,
+ * porque eles já estão na memória. A do ANTES é desenhada na tela, pelo
+ * navegador, porque o "antes" é uma afirmação sobre o que o navegador FAZ, e
+ * quem responde isso sem errar é ele mesmo.
+ *
+ * A primeira versão simulava o "antes" aqui, com a fórmula ingênua
+ * `R = 255 - (C·(1-K) + K)`, supondo que fosse ela que o navegador usava.
+ * Medido, não é: o Chrome aplica o perfil embutido, e o "antes" simulado
+ * mostrava uma cor que ninguém veria em lugar nenhum.
  *
  * Quando não há o que converter, diz isso e não inventa arquivo nenhum. Um
  * JPEG sem perfil é o caso mais comum dessa lista: não existe informação de
@@ -595,6 +601,7 @@ function converterParaSrgb(buffer, opcoes = {}) {
 
   const qualidade = opcoes.qualidade || 92;
   const saida = jpeg.encode({ data: img.dados, width: img.largura, height: img.altura }, qualidade);
+  const depois = retrato(img.dados, img.largura, img.altura);
 
   return {
     convertido: true,
@@ -604,7 +611,34 @@ function converterParaSrgb(buffer, opcoes = {}) {
     altura: img.altura,
     cores: img.cores,
     arquivo: saida.data,
+    depois,
   };
+}
+
+/** Quanto a miniatura tem de largura. */
+const RETRATO_LARGURA = 420;
+
+/**
+ * Uma miniatura da arte convertida, para a tela mostrar sem carregar 65
+ * megapixels. Os pixels já estão prontos: isto só pula de tantos em tantos.
+ */
+function retrato(dados, largura, altura) {
+  const l = Math.min(RETRATO_LARGURA, largura);
+  const a = Math.max(1, Math.round(altura * l / largura));
+  const fora = new Uint8Array(l * a * 4);
+  for (let y = 0; y < a; y++) {
+    const sy = Math.floor(y * altura / a);
+    for (let x = 0; x < l; x++) {
+      const s = (sy * largura + Math.floor(x * largura / l)) * 4;
+      const d = (y * l + x) * 4;
+      fora[d] = dados[s];
+      fora[d + 1] = dados[s + 1];
+      fora[d + 2] = dados[s + 2];
+      fora[d + 3] = 255;
+    }
+  }
+  return "data:image/jpeg;base64,"
+    + jpeg.encode({ data: fora, width: l, height: a }, 82).data.toString("base64");
 }
 
 module.exports = {

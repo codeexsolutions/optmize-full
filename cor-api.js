@@ -7,8 +7,8 @@
  * endereço para buscar o convertido. O arquivo não volta dentro do JSON porque
  * em base64 custaria um terço a mais.
  *
- * As duas miniaturas de comparação são desenhadas NA TELA, não aqui — ver o
- * cabeçalho de public/cor.js para o porquê.
+ * Vai junto a miniatura do DEPOIS, que sai de graça de pixels que já estão na
+ * memória. A do ANTES é desenhada na tela — ver o cabeçalho de public/cor.js.
  *
  * Por que no servidor, e não no navegador
  * ---------------------------------------
@@ -94,6 +94,7 @@ router.post(
       altura: resultado.altura,
       cores: resultado.cores,
       tamanho: resultado.arquivo.length,
+      depois: resultado.depois,
       id: guardar(resultado.arquivo, nomeNovo),
     });
   },
