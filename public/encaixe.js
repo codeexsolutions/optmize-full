@@ -28,6 +28,7 @@ const encaixePecasBody = document.getElementById("encaixe-pecas-body");
 const encaixeContagem = document.getElementById("encaixe-contagem");
 const encaixeNumeros = document.getElementById("encaixe-numeros");
 const encaixeResumoLateral = document.getElementById("encaixe-resumo-lateral");
+const encaixeAvisoCor = document.getElementById("encaixe-aviso-cor");
 const encaixeError = document.getElementById("encaixe-error");
 const btnEncaixar = document.getElementById("btn-encaixar");
 const btnPararBusca = document.getElementById("btn-parar-busca");
@@ -812,6 +813,10 @@ async function adicionarArquivos(files) {
           // `cru.img` é o bitmap que a leitura acabou de decodificar e ainda
           // está vivo: a miniatura sai dele, sem decodificar nada de novo.
           const peca = await montarPecaDaImagem(cru, null, cru.img);
+          // O que o navegador vai fazer com a cor desta arte. Só lê o cabeçalho
+          // do arquivo (ver public/cor-do-arquivo.js) — não decodifica nada, e
+          // por isso não pesa na leitura.
+          peca.cor = await diagnosticoDeCorDoArquivo(file);
           prontas[indice] = [peca];
           pecasComFundo.set(indice, peca);
         }
@@ -932,6 +937,63 @@ const CAMPO_MINI =
   "[&>input]:mt-1 [&>input]:px-2 [&>input]:py-1 [&>input]:text-[0.8rem] " +
   "[&>select]:mt-1 [&>select]:px-2 [&>select]:py-1 [&>select]:text-[0.8rem]";
 
+/*
+ * ===========================================================================
+ * O AVISO DE COR
+ * ===========================================================================
+ *
+ * O programa carrega toda arte por canvas, e canvas só existe em RGB. Arte em
+ * CMYK, ou em RGB sem dizer em que espaço está, é convertida pelo navegador de
+ * um jeito que não é o do Photoshop — o desenho sai certo e a COR não. Metade
+ * das artes desta loja está num desses dois casos (ver public/cor-do-arquivo.js).
+ *
+ * O aviso mostra a MINIATURA junto: dizer "uma arte está em CMYK" no meio de 25
+ * arquivos não ajuda ninguém a achar qual é. Com a imagem, quem conhece o
+ * trabalho reconhece a peça de relance.
+ */
+const COR_SELO = {
+  cmyk: { rotulo: "CMYK", classe: "selo-cor-cmyk" },
+  "sem-perfil": { rotulo: "sem perfil", classe: "selo-cor-perfil" },
+};
+
+function seloDeCor(peca) {
+  const aviso = peca.cor && COR_SELO[peca.cor.risco];
+  if (!aviso) return "";
+  return `<span class="selo-cor ${aviso.classe}" title="${escapeHtml(peca.cor.titulo || "")}">`
+    + `${aviso.rotulo}</span>`;
+}
+
+/**
+ * O painel de avisos de cor: uma tira com a miniatura de cada arte problemática.
+ */
+function renderAvisosDeCor() {
+  if (!encaixeAvisoCor) return;
+  const comRisco = pecasEncaixe.filter((p) => p.cor && COR_SELO[p.cor.risco]);
+  if (comRisco.length === 0) {
+    encaixeAvisoCor.classList.add("hidden");
+    encaixeAvisoCor.innerHTML = "";
+    return;
+  }
+
+  const cartoes = comRisco.map((p) => `
+    <figure class="aviso-cor-item" title="${escapeHtml(p.cor.detalhe || "")}">
+      <img src="${p.miniatura || p.src}" alt="" />
+      <figcaption>
+        <strong>${escapeHtml(p.nome)}</strong>
+        <span>${escapeHtml(p.cor.perfil || p.cor.titulo || "")}</span>
+      </figcaption>
+    </figure>`).join("");
+
+  const quantos = comRisco.length;
+  encaixeAvisoCor.innerHTML = `
+    <p class="aviso-cor-titulo">
+      ${quantos === 1 ? "1 arte pode sair com a cor diferente" : `${quantos} artes podem sair com a cor diferente`}
+      — o desenho e a medida estão certos.
+    </p>
+    <div class="aviso-cor-tira">${cartoes}</div>`;
+  encaixeAvisoCor.classList.remove("hidden");
+}
+
 function renderPecasEncaixe() {
   encaixePecasBody.innerHTML = "";
 
@@ -944,6 +1006,7 @@ function renderPecasEncaixe() {
          <p class="m-0 text-center text-[11px] text-tinta-apagada">Arraste os moldes ou as artes para cá.</p>
        </div>`;
     atualizarPainelDoTrabalho();
+    renderAvisosDeCor();
     return;
   }
 
@@ -954,6 +1017,7 @@ function renderPecasEncaixe() {
     linha.innerHTML = `
       <div class="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-painel-suave">
         <span class="peca-thumb size-8! shrink-0" style="border-color: ${cor};"><img src="${peca.miniatura || peca.src}" alt="" /></span>
+        ${seloDeCor(peca)}
 
         <span class="min-w-0 flex-1">
           <button type="button" data-abrir-peca="${peca.id}" class="flex w-full items-center gap-1 text-left" title="Medida, giro e contorno desta peça">
@@ -1003,6 +1067,7 @@ function renderPecasEncaixe() {
   });
 
   atualizarPainelDoTrabalho();
+  renderAvisosDeCor();
 }
 
 /**
