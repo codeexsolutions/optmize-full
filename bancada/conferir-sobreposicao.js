@@ -109,6 +109,78 @@ function acharSobreposicao(posicoes, qual) {
   return { repetidas, exemplo, celulas: ocupadas.size };
 }
 
+/**
+ * A folga DE VERDADE entre as peças de um encaixe: a menor distância, em linha
+ * reta, entre a silhueta de uma peça e a de outra.
+ *
+ * A conferência por `topo`/`base` logo acima olha a peça já engordada, e a peça
+ * engordada é o que o motor usa para decidir — então ela responde "o motor
+ * seguiu a própria regra", que é quase uma tautologia. Esta aqui pergunta outra
+ * coisa: **a distância que sobrou no tecido é a que a produção pediu?**
+ *
+ * Foi essa pergunta que pegou o defeito da borda quadrada. Engordar a silhueta
+ * com uma passada horizontal e outra vertical desenha um quadrado, e quadrado
+ * alcança 41% a mais na diagonal — então a folga saía certa onde duas peças se
+ * tocavam por uma reta e até 41% maior em qualquer encosto em curva. Pedir
+ * 4 mm e receber de 4 a 5,7 mm conforme o ângulo.
+ *
+ * Só as células de BORDA de cada peça entram na conta: a distância mínima entre
+ * duas silhuetas é sempre entre bordas, e olhar o miolo multiplicaria o custo
+ * por nada.
+ */
+function medirFolga(posicoes, larguraTecido, consumo, passo, folgaPedida) {
+  const cols = Math.ceil(larguraTecido / passo) + 2;
+  const rows = Math.ceil(consumo / passo) + 2;
+  const dono = new Int32Array(cols * rows).fill(-1);
+
+  posicoes.forEach((pos, i) => {
+    const m = pos.mascara;
+    if (!m) return;
+    const c0 = Math.round((pos.x + m.offX) / passo);
+    const r0 = Math.round((pos.y + m.offY) / passo);
+    for (let y = 0; y < m.rows; y++) {
+      const ly = r0 + y;
+      if (ly < 0 || ly >= rows) continue;
+      for (let x = 0; x < m.cols; x++) {
+        const lx = c0 + x;
+        if (lx < 0 || lx >= cols) continue;
+        if (m.desenho[y * m.cols + x]) dono[ly * cols + lx] = i;
+      }
+    }
+  });
+
+  const alcance = Math.ceil(folgaPedida / passo) + 2;
+  let menor = Infinity;
+  let abaixoDoPedido = 0;
+  let exemplo = null;
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const a = dono[y * cols + x];
+      if (a < 0) continue;
+      // só borda
+      if (dono[y * cols + x - 1] === a && dono[y * cols + x + 1] === a
+        && y > 0 && dono[(y - 1) * cols + x] === a
+        && y + 1 < rows && dono[(y + 1) * cols + x] === a) continue;
+
+      for (let dy = -alcance; dy <= alcance; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= rows) continue;
+        for (let dx = -alcance; dx <= alcance; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= cols) continue;
+          const b = dono[ny * cols + nx];
+          if (b < 0 || b === a) continue;
+          const d = Math.hypot(dx, dy) * passo;
+          if (d < menor) { menor = d; exemplo = { a: posicoes[a], b: posicoes[b] }; }
+          if (d < folgaPedida - 1e-9) abaixoDoPedido++;
+        }
+      }
+    }
+  }
+  return { menor, abaixoDoPedido, exemplo };
+}
+
 const descrever = (pos) =>
   `${pos.item.nome}#${pos.item.copia} (${pos.rot}°, x=${pos.x.toFixed(2)} y=${pos.y.toFixed(2)})`;
 
@@ -169,14 +241,26 @@ async function principal() {
 
       const real = acharSobreposicao(r.posicoes, "desenho");
       const comFolga = acharSobreposicao(r.posicoes, "folga");
+      const distancia = medirFolga(r.posicoes, receita.larguraTecido, r.consumo, passo, receita.espaco);
       const situacao = real.repetidas > 0
         ? `SOBREPÕE ${real.repetidas} células`
         : comFolga.repetidas > 0
           ? `folga comida em ${comFolga.repetidas} células`
-          : "limpo";
+          : distancia.abaixoDoPedido > 0
+            ? `FOLGA CURTA: ${(distancia.menor * 10).toFixed(1)} mm`
+            : "limpo";
 
       process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)}`
-        + ` ${r.posicoes.length} peças · ${(r.consumo / 100).toFixed(2)} m · ${situacao}\n`);
+        + ` ${r.posicoes.length} peças · ${(r.consumo / 100).toFixed(2)} m`
+        + ` · folga ${(distancia.menor * 10).toFixed(1)}/${(receita.espaco * 10).toFixed(0)} mm`
+        + ` · ${situacao}\n`);
+
+      if (distancia.abaixoDoPedido > 0) {
+        falhas.push(`${nome} · ${motorNome}: a folga entre peças ficou em`
+          + ` ${(distancia.menor * 10).toFixed(1)} mm, abaixo dos`
+          + ` ${(receita.espaco * 10).toFixed(0)} mm pedidos`
+          + `\n      ${descrever(distancia.exemplo.a)}\n      ${descrever(distancia.exemplo.b)}`);
+      }
 
       if (real.repetidas > 0) {
         falhas.push(`${nome} · ${motorNome}: ${real.repetidas} células com duas peças`

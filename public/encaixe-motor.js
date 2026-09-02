@@ -2030,6 +2030,38 @@ async function buscarMelhorEncaixe(itens, config) {
   const PODA_TOLERANCIA = 1.06;  // até 6% acima do melhor continua na roda
   const PODA_MINIMO = 4;         // nunca deixa a roda com menos que isso
   const PODA_FRESTA = 0.15;      // parte do sorteio que ignora a poda
+
+  /*
+   * A PODA POR MOTOR.
+   *
+   * A poda de cima larga a RECEITA que ficou para trás. Ela não resolve o caso
+   * que mais desperdiça: um encaixador inteiro que fica perto o bastante para
+   * sobreviver e longe o bastante para nunca vencer.
+   *
+   * Medido na produção, num trabalho de 57 peças, 60 s, mesma configuração:
+   *
+   *   automático            5,87 m · 95.332 tentativas · melhorou 6x
+   *   sempre pelo contorno  5,83 m · 58.436 tentativas · melhorou 18x
+   *
+   * A campeã foi de contorno nos dois. No automático, quase 40% das tentativas
+   * foram para o motor de caixa, que ficou 1 a 2% atrás — perto demais para a
+   * poda de 6% pegar. O contorno sozinho, com METADE das tentativas, achou um
+   * encaixe melhor: o que faltava a ele não era engenho, era orçamento.
+   *
+   * Aqui o corte é por motor e mais apertado, mas com três travas para nunca
+   * cortar quem ainda podia ganhar:
+   *
+   *   - só depois da passada base, quando todo motor já mostrou o que sabe;
+   *   - o motor que está na frente nunca é cortado;
+   *   - a fresta do sorteio continua valendo, então motor cortado ainda recebe
+   *     uma parte das tentativas e pode voltar (a poda é recalculada a cada
+   *     rodada, com o placar de agora).
+   *
+   * O 4% saiu de medição, e o 2% que parecia mais óbvio saiu junto: cortando a
+   * 2% a soma dos oito trabalhos da bancada deu -0,19%, e a 4% deu -0,37%.
+   * Cortar mais cedo tira motor que ainda tinha o que dar.
+   */
+  const PODA_MOTOR = config.podaMotor != null ? config.podaMotor : 1.04;
   // Chance de, ao refinar, reparar a peça que mais atrapalhou em vez de
   // sacudir a ordem toda sem direção (ver `repararPior`). Só refinando: em
   // "explorar" ainda não existe uma ordem-base cujo pior valha a pena mirar.
@@ -2048,7 +2080,32 @@ async function buscarMelhorEncaixe(itens, config) {
     const linhas = [...placar.values()];
     if (config.podar === false || !melhor || linhas.length <= PODA_MINIMO) return linhas;
     const limite = melhor.consumo * PODA_TOLERANCIA;
-    const vivas = linhas.filter((l) => l.tentativas === 0 || l.melhorConsumo <= limite);
+    let vivas = linhas.filter((l) => l.tentativas === 0 || l.melhorConsumo <= limite);
+
+    // A poda por motor, em cima do que sobrou. Ver `PODA_MOTOR` acima.
+    if (PODA_MOTOR > 1 && passadaBaseTerminou) {
+      const melhorDoMotor = new Map();
+      linhas.forEach((l) => {
+        if (l.tentativas === 0) return;
+        const motor = l.receita.motor;
+        const antes = melhorDoMotor.get(motor);
+        if (antes == null || l.melhorConsumo < antes) melhorDoMotor.set(motor, l.melhorConsumo);
+      });
+      if (melhorDoMotor.size > 1) {
+        const oMelhorDeTodos = Math.min(...melhorDoMotor.values());
+        const tetoDoMotor = oMelhorDeTodos * PODA_MOTOR;
+        const semChance = new Set();
+        melhorDoMotor.forEach((consumo, motor) => {
+          if (consumo > tetoDoMotor) semChance.add(motor);
+        });
+        // Nunca todos: se o corte levaria tudo, ele não vale.
+        if (semChance.size > 0 && semChance.size < melhorDoMotor.size) {
+          const sobrou = vivas.filter((l) => l.tentativas === 0 || !semChance.has(l.receita.motor));
+          if (sobrou.length > 0) vivas = sobrou;
+        }
+      }
+    }
+
     if (vivas.length >= PODA_MINIMO) return vivas;
     return linhas.slice().sort((a, b) => a.melhorConsumo - b.melhorConsumo).slice(0, PODA_MINIMO);
   };
@@ -2056,6 +2113,8 @@ async function buscarMelhorEncaixe(itens, config) {
   let melhor = null;
   let melhorChave = null;
   let receitaVencedora = null;
+  // A poda por motor só vale depois que toda receita teve a chance dela.
+  let passadaBaseTerminou = false;
   let tentativas = 0;
   let semGanho = 0;
   let perseguindo = false;
@@ -2209,6 +2268,7 @@ async function buscarMelhorEncaixe(itens, config) {
     }
   }
   avisar("base");
+  passadaBaseTerminou = true;
 
   // 2) Melhoria: sorteia receitas com peso e embaralha a ordem das peças.
   // Continua enquanto estiver rendendo.

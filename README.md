@@ -641,6 +641,25 @@ quantos metros vão ser gastos.
    demais, o sistema **reduz a resolução na medida certa para caber** e avisa
    qual foi usada; o tamanho em centímetros continua exato.
 
+   **A folga sai do tamanho pedido, e isso já foi diferente.** Cada peça carrega
+   metade da folga como uma borda em volta da silhueta, então duas peças
+   encostadas ficam com a folga inteira entre elas. Essa borda era desenhada com
+   uma passada horizontal e outra vertical — o que produz um **quadrado**, não um
+   contorno. Quadrado alcança o raio pedido de lado e `raio × √2` na diagonal,
+   então a folga só saía exata onde duas peças se tocavam por uma reta; em
+   qualquer encosto em curva, que é quase toda a silhueta de um molde, ela saía
+   maior. Medido na bancada: pedindo 10 mm, a menor folga real do encaixe era
+   **15,0 mm**. A folga se comportava como um mínimo, não como uma medida.
+
+   Hoje a borda é um **disco**, e a mesma medição dá **11,2 mm** — o que sobra é
+   a grade, que só tem células inteiras. O arredondamento do disco é para cima
+   de propósito: errar para mais gasta um tiquinho de tecido, errar para menos
+   encosta a peça e estraga o corte. Quem confere isso a cada mexida é o
+   `npm run bancada:sobreposicao`, que agora mede a **distância real entre as
+   silhuetas** do encaixe pronto, e não só se as peças engordadas se tocam — essa
+   última pergunta é quase uma tautologia, porque a peça engordada é o que o
+   motor usa para decidir.
+
    O PDF não aceita página com mais de 5,08 m de lado, e encaixe de vários
    metros passa longe disso. Em vez de cortar em trechos, o arquivo usa o
    campo **`/UserUnit`**, que diz quanto vale uma unidade da página: com
