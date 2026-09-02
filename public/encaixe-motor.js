@@ -14,8 +14,7 @@
  * tudo aqui é função de topo mesmo — sem módulo, sem export.
  */
 
-// `rotacoesDe` e `podeDeitar` moram em encaixe-giro.js, que este arquivo e o
-// nfp.js dividem. Ver o cabeçalho de lá para o porquê de não estarem aqui.
+// `rotacoesDe` e `podeDeitar` moram em encaixe-giro.js. Ver o cabeçalho de lá.
 
 // ==================== MOTOR DE ENCAIXE ====================
 
@@ -738,29 +737,203 @@ function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto =
 }
 
 /** Marca o tecido usado e registra onde cada peça da unidade ficou. */
-function assentarUnidade(perfil, posicoes, escolha, passo, margem) {
+function assentarUnidade(perfil, escolha) {
   const forma = escolha.forma;
   for (let c = 0; c < forma.cols; c++) {
     if (forma.topo[c] < 0) continue;
     perfil[escolha.x + c] = escolha.y + forma.base[c] + 1;
   }
+}
 
-  forma.partes.forEach((parte) => {
-    const m = parte.mascara;
-    const deitada = parte.rot === 90 || parte.rot === 270;
-    posicoes.push({
-      item: parte.item,
-      // canto da arte: desfaz o recorte da máscara para achar a imagem inteira
-      x: (escolha.x + parte.dcol) * passo + margem - m.offX,
-      y: (escolha.y + parte.drow) * passo + margem - m.offY,
-      largura: deitada ? parte.item.altura : parte.item.largura,
-      altura: deitada ? parte.item.largura : parte.item.altura,
-      rot: parte.rot,
-      girado: deitada,
-      mascara: m,
-      passo,
+/**
+ * As colocações viram as posições que a tela desenha.
+ *
+ * Uma COLOCAÇÃO é `{ forma, x, y }` em células da grade — o que o encaixe
+ * decide. Uma POSIÇÃO é a peça em centímetros no rolo, com a máscara junto — o
+ * que a tela e o PDF usam. Separar as duas é o que deixa a repescagem
+ * (`repescarNosVaos`) mexer numa peça já assentada sem refazer conta de
+ * centímetro: ela mexe na colocação, e as posições saem no fim, uma vez só.
+ */
+function posicoesDasColocacoes(colocacoes, passo, margem) {
+  const posicoes = [];
+  colocacoes.forEach((col) => {
+    col.forma.partes.forEach((parte) => {
+      const m = parte.mascara;
+      const deitada = parte.rot === 90 || parte.rot === 270;
+      posicoes.push({
+        item: parte.item,
+        // canto da arte: desfaz o recorte da máscara para achar a imagem inteira
+        x: (col.x + parte.dcol) * passo + margem - m.offX,
+        y: (col.y + parte.drow) * passo + margem - m.offY,
+        largura: deitada ? parte.item.altura : parte.item.largura,
+        altura: deitada ? parte.item.largura : parte.item.altura,
+        rot: parte.rot,
+        girado: deitada,
+        mascara: m,
+        passo,
+      });
     });
   });
+  return posicoes;
+}
+
+/** Onde a colocação termina, em células. É ele que manda no consumo. */
+const fundoDaColocacao = (col) => col.y + col.forma.maxBase + 1;
+
+// ==================== A REPESCAGEM NOS VÃOS ====================
+
+/**
+ * Devolve ao encaixe o tecido que o relevo por coluna deixou para trás.
+ *
+ * O encaixe por contorno guarda o tecido como UMA altura por coluna. É isso que
+ * o faz render — a peça desce e se aninha na curva da anterior — e é também o
+ * seu buraco: assim que uma peça é assentada, tudo o que ficou **acima** dela
+ * naquela coluna some do mapa. O vão do decote de uma camiseta, com a camiseta
+ * já posta, deixa de existir; a gola que caberia exatamente ali vai para o fim
+ * do rolo.
+ *
+ * Medido com `npm run bancada:vaos`, numa passada gulosa: **32% do rolo** é vão
+ * preso em camiseta+manga+gola, e o maior deles mede 46x70 cm — cabe uma manga
+ * inteira parada ali dentro. Em lote grande são 25,6%.
+ *
+ * A busca já contornava isso pela ordem: entrando a gola ANTES, a camiseta desce
+ * por cima dela e fecha. Só que achar essa ordem é sorte de embaralhamento, e
+ * quanto mais peças menos provável — foi exatamente a queixa que veio da
+ * produção ("encaixa tudo do mesmo modelo e esquece o espaço que sobrou").
+ *
+ * Aqui o mapa é outro: em vez de uma altura por coluna, a lista dos INTERVALOS
+ * ocupados de cada coluna. Com ela a peça desce até o primeiro lugar em que
+ * nada bate — inclusive um vão fechado por cima. É caro (uma descida custa uma
+ * varredura de intervalos por coluna, contra uma leitura só no relevo), e por
+ * isso não substitui o encaixe: roda **uma vez, no fim**, e só nas peças do
+ * rabo do rolo, que são as que encurtam a metragem se subirem.
+ *
+ * Só aceita o que melhora: a peça só sai do lugar se achar posição que termine
+ * mais acima. Nunca piora um encaixe.
+ */
+function intervalosDoRolo(colocacoes, colsTecido) {
+  const colunas = [];
+  for (let c = 0; c < colsTecido; c++) colunas.push([]);
+  colocacoes.forEach((col) => ocuparIntervalos(colunas, col, 1));
+  colunas.forEach((lista) => lista.sort((a, b) => a.ini - b.ini));
+  return colunas;
+}
+
+/** Marca (`sinal` 1) ou desmarca (`sinal` -1) a colocação nos intervalos. */
+function ocuparIntervalos(colunas, col, sinal) {
+  const { forma, x, y } = col;
+  for (let c = 0; c < forma.cols; c++) {
+    if (forma.topo[c] < 0) continue;
+    const coluna = colunas[x + c];
+    if (!coluna) continue;
+    if (sinal > 0) {
+      coluna.push({ ini: y + forma.topo[c], fim: y + forma.base[c], dono: col });
+      coluna.sort((a, b) => a.ini - b.ini);
+    } else {
+      const onde = coluna.findIndex((iv) => iv.dono === col);
+      if (onde >= 0) coluna.splice(onde, 1);
+    }
+  }
+}
+
+/**
+ * Desce a forma na posição `x` até o primeiro lugar em que nada bate.
+ *
+ * A cada esbarrão o `y` pula para logo abaixo do intervalo que bateu e a
+ * conferência recomeça — o `y` só cresce, então isso termina. Diferente do
+ * relevo, aqui ela pode PARAR NO MEIO: se couber num vão fechado por cima, é
+ * ali que ela fica.
+ *
+ * Devolve `null` quando a descida já passou do `tetoFundo` — não há o que
+ * ganhar dali para baixo, e parar cedo é o que deixa esta varredura caber no
+ * orçamento.
+ */
+function descerNosVaos(colunas, x, forma, tetoFundo) {
+  let y = 0;
+  for (let voltas = 0; voltas < 4096; voltas++) {
+    // Uma passada por TODAS as colunas, ficando com o maior empurrão de todos.
+    //
+    // A primeira versão parava na primeira coluna que batia e recomeçava a
+    // volta inteira dali. Correto, e lento: numa peça de trezentas colunas com
+    // meia dúzia de intervalos em cada, eram dezenas de voltas completas. Aqui
+    // cada volta já colhe o pior caso de uma vez, e duas ou três bastam —
+    // é a mesma conta do relevo, só que perguntando à lista de intervalos em
+    // vez de a uma altura só.
+    let proximo = y;
+    for (let c = 0; c < forma.cols; c++) {
+      const t = forma.topo[c];
+      if (t < 0) continue;
+      const lista = colunas[x + c];
+      if (lista.length === 0) continue;
+      const base = forma.base[c];
+      // Empurra até ESTA coluna caber. Cada empurrão move a janela, então ela
+      // é recalculada a cada volta — e `proximo` só cresce, o que faz isto
+      // terminar sempre.
+      let mudou = true;
+      while (mudou) {
+        mudou = false;
+        const ini = proximo + t;
+        const fim = proximo + base;
+        for (let i = 0; i < lista.length; i++) {
+          const iv = lista[i];
+          if (iv.fim < ini) continue;
+          if (iv.ini > fim) break;
+          if (iv.fim + 1 - t > proximo) { proximo = iv.fim + 1 - t; mudou = true; }
+          break;
+        }
+      }
+    }
+    if (proximo === y) return y;
+    y = proximo;
+    if (y + forma.maxBase + 1 >= tetoFundo) return null;
+  }
+  return null;
+}
+
+/** A melhor colocação nova para esta unidade, se houver alguma acima da atual. */
+function melhorVagaNosVaos(colunas, colsTecido, unidade, tetoFundo) {
+  let melhor = null;
+  unidade.formas.forEach((forma) => {
+    if (forma.cols > colsTecido) return;
+    const ultimoX = colsTecido - forma.cols;
+    for (let x = 0; x <= ultimoX; x++) {
+      const teto = melhor ? melhor.fundo : tetoFundo;
+      const y = descerNosVaos(colunas, x, forma, teto);
+      if (y === null) continue;
+      const fundo = y + forma.maxBase + 1;
+      if (fundo < teto) melhor = { forma, x, y, fundo };
+    }
+  });
+  return melhor;
+}
+
+// Quantas peças do rabo do rolo entram na repescagem. Mexer em peça do meio não
+// encurta metragem nenhuma: o consumo é o ponto mais baixo alcançado.
+const REPESCA_MAX_PECAS = 16;
+// Só entra na roda a peça que termina no último terço do rolo.
+const REPESCA_FATIA_DO_RABO = 0.66;
+
+function repescarNosVaos(colocacoes, colsTecido) {
+  const fundoDeTodas = () => colocacoes.reduce((m, c) => Math.max(m, fundoDaColocacao(c)), 0);
+  if (colocacoes.length < 2) return fundoDeTodas();
+
+  const colunas = intervalosDoRolo(colocacoes, colsTecido);
+  const fundoMax = fundoDeTodas();
+
+  const doRabo = colocacoes
+    .filter((c) => fundoDaColocacao(c) >= fundoMax * REPESCA_FATIA_DO_RABO)
+    .sort((a, b) => fundoDaColocacao(b) - fundoDaColocacao(a))
+    .slice(0, REPESCA_MAX_PECAS);
+
+  doRabo.forEach((col) => {
+    const antes = fundoDaColocacao(col);
+    ocuparIntervalos(colunas, col, -1);
+    const vaga = melhorVagaNosVaos(colunas, colsTecido, col.unidade, antes);
+    if (vaga) { col.forma = vaga.forma; col.x = vaga.x; col.y = vaga.y; }
+    ocuparIntervalos(colunas, col, 1);
+  });
+
+  return fundoDeTodas();
 }
 
 function resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo, margem) {
@@ -780,7 +953,22 @@ function encaixarContorno(unidades, config) {
   // correção. Existe um teste que compara os dois posição por posição.
   if (typeof encaixarContornoWasm === "function") {
     const pelaViaRapida = encaixarContornoWasm(unidades, config);
-    if (pelaViaRapida) return pelaViaRapida;
+    if (pelaViaRapida) {
+      // A repescagem trabalha nas colocações, que o WASM também devolve.
+      if (config.repescar && pelaViaRapida.colocacoes) {
+        const { passo, margem } = config;
+        const colsDoTecido = config.colsForcado
+          || Math.max(1, Math.floor((config.larguraTecido - margem * 2) / passo));
+        const fundo = repescarNosVaos(pelaViaRapida.colocacoes, colsDoTecido);
+        const refeito = resultadoDoEncaixe(
+          posicoesDasColocacoes(pelaViaRapida.colocacoes, passo, margem),
+          pelaViaRapida.naoEncaixadas, fundo, passo, margem);
+        refeito.piorUnidade = pelaViaRapida.piorUnidade;
+        refeito.piorVazio = pelaViaRapida.piorVazio;
+        return refeito;
+      }
+      return pelaViaRapida;
+    }
   }
 
   const { larguraTecido, margem, passo, heuristica } = config;
@@ -790,7 +978,7 @@ function encaixarContorno(unidades, config) {
     || Math.max(1, Math.floor((larguraTecido - margem * 2) / passo));
 
   const perfil = new Int32Array(colsTecido);
-  const posicoes = [];
+  const colocacoes = [];
   const naoEncaixadas = [];
   let fundoMax = 0;
   // A unidade cuja posição escolhida deixou mais buraco morto acima dela —
@@ -806,12 +994,262 @@ function encaixarContorno(unidades, config) {
       unidade.itens.forEach((item) => naoEncaixadas.push(item));
       return;
     }
-    assentarUnidade(perfil, posicoes, escolha, passo, margem);
+    assentarUnidade(perfil, escolha);
+    colocacoes.push({ unidade, forma: escolha.forma, x: escolha.x, y: escolha.y });
     if (escolha.fundo > fundoMax) fundoMax = escolha.fundo;
     if (escolha.vazio > piorVazio) { piorVazio = escolha.vazio; piorUnidade = unidade; }
   });
 
-  const resultado = resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo, margem);
+  if (config.repescar) fundoMax = repescarNosVaos(colocacoes, colsTecido);
+
+  const resultado = resultadoDoEncaixe(
+    posicoesDasColocacoes(colocacoes, passo, margem), naoEncaixadas, fundoMax, passo, margem);
+  resultado.piorUnidade = piorUnidade;
+  resultado.piorVazio = piorVazio;
+  return resultado;
+}
+
+// ==================== O ENCAIXE POR VÃOS (O HÍBRIDO) ====================
+
+/**
+ * O encaixe que junta os dois motores: a silhueta do contorno com a
+ * contabilidade de espaço livre da caixa.
+ *
+ * Por que ele existe
+ * ------------------
+ * O encaixe por contorno guarda o tecido como uma altura por coluna. A peça
+ * desce e se aninha na curva da anterior — é o que o faz render — mas o vão que
+ * fica **acima** de uma peça já assentada some do mapa para sempre. O encaixe
+ * por caixa não tem esse problema (ele mantém a lista de retângulos livres, e
+ * enxerga buraco em qualquer lugar), só que joga fora a silhueta e trata toda
+ * peça como o retângulo em volta dela.
+ *
+ * Cada um tem metade da resposta. Medindo o trabalho de produção
+ * (`producao-uniforme`, 175 peças, 179 cm), o que sobra depois do contorno é
+ * **20,3% do rolo em vão preso** contra 1,9% de vão aberto: quase todo o
+ * desperdício restante é exatamente do tipo que a contabilidade da caixa
+ * saberia achar.
+ *
+ * Este encaixador usa a silhueta do contorno E a contabilidade da caixa: o
+ * tecido é a lista dos **intervalos ocupados de cada coluna**, e a peça desce
+ * até o primeiro lugar em que nada bate — inclusive um vão fechado por cima.
+ * É a mesma máquina da repescagem (`repescarNosVaos`), aplicada a toda peça
+ * desde a primeira em vez de só ao rabo do rolo.
+ *
+ * O preço
+ * -------
+ * Uma descida por intervalos custa uma varredura por coluna, contra uma leitura
+ * só no relevo. Ele faz menos tentativas no mesmo tempo, e é por isso que entra
+ * como **mais uma receita na disputa** e não no lugar do contorno: em trabalho
+ * onde o vão preso é pequeno, o contorno faz dez vezes mais tentativas e ganha;
+ * onde o vão preso é grande, aqui é que está o tecido.
+ */
+function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
+  const { colunas, perfil, temVao, topoLivre, maiorVao } = tecido;
+  let melhor = null;
+  const pulo = Math.max(1, Math.round(salto || 1));
+
+  unidade.formas.forEach((forma) => {
+    if (forma.cols > colsTecido) return;
+    const ultimoX = colsTecido - forma.cols;
+    const { cols, topo, maxBase } = forma;
+    const sondas = forma.sondas || (forma.sondas = sondasDaForma(forma));
+    const nSondas = sondas.length;
+    // Quanto de vão seguido a peça precisa em cada coluna. Fica guardado na
+    // forma: ele não muda, e é consultado uma vez por coluna por posição.
+    const altura = forma.alturaPorColuna || (forma.alturaPorColuna = (() => {
+      const a = new Int32Array(forma.cols);
+      for (let c = 0; c < forma.cols; c++) {
+        a[c] = forma.topo[c] < 0 ? 0 : forma.base[c] - forma.topo[c] + 1;
+      }
+      return a;
+    })());
+
+    const olhar = (x) => {
+      /*
+       * A PODA — é ela que faz este motor caber no tempo.
+       *
+       * `topoLivre[c]` é a primeira linha livre da coluna: nem a descida pelos
+       * vãos consegue pôr a peça acima dela. Então
+       *
+       *     y >= topoLivre[x + c] - topo[c]   em toda coluna
+       *
+       * e o maior desses é um PISO do `y` — logo, um piso do fundo. Posição
+       * cujo piso já perdeu para a melhor conhecida não tem como alcançar, e
+       * pode ser pulada sem tocar em intervalo nenhum.
+       *
+       * É a mesma jogada do encaixe por relevo (ver `melhorPosicaoDaUnidade`),
+       * e pelo mesmo motivo: as colunas-sonda primeiro, que custam oito contas
+       * em vez de trezentas, e só quem passa delas é medido de verdade. Sem
+       * isto o motor fazia 14 tentativas por busca.
+       */
+      if (melhor !== null) {
+        let piso = 0;
+        for (let i = 0; i < nSondas; i++) {
+          const c = sondas[i];
+          const coluna = x + c;
+          // Nesta coluna a peça precisa de `altura[c]` de vão seguido. Se o
+          // maior buraco da coluna não comporta isso, ela não tem como parar no
+          // meio: só abaixo do relevo. Esse é o piso forte.
+          const v = altura[c] > maiorVao[coluna]
+            ? perfil[coluna] - topo[c]
+            : topoLivre[coluna] - topo[c];
+          if (v > piso) piso = v;
+        }
+        if (piso + maxBase + 1 >= melhor.fundo) return;
+      }
+
+      /*
+       * O ATALHO QUE FAZ ESTE MOTOR CABER NO ORÇAMENTO.
+       *
+       * Descer pelos intervalos é caro; descer pelo relevo é uma leitura por
+       * coluna. E os dois dão exatamente o mesmo `y` quando não há vão nenhum
+       * nas colunas que a peça cobre — que é a esmagadora maioria das posições,
+       * porque vão preso é buraco, e buraco é exceção.
+       *
+       * Então: o relevo primeiro, sempre. A descida cara só roda onde existe
+       * vão de verdade, e é só ali que este motor difere do contorno. Sem isto
+       * ele fazia 5 tentativas por busca; com isto, faz milhares.
+       */
+      let temVaoAqui = false;
+      let ySky = 0;
+      let piso = 0;
+      let cortada = false;
+      for (let c = 0; c < cols; c++) {
+        const t = topo[c];
+        if (t < 0) continue;
+        const coluna = x + c;
+        if (temVao[coluna]) temVaoAqui = true;
+        const encosta = perfil[coluna] - t;
+        if (encosta > ySky) ySky = encosta;
+        // O piso de verdade, agora com todas as colunas — e o corte no meio do
+        // laço, assim que ele passa do melhor conhecido.
+        const livre = (altura[c] > maiorVao[coluna] ? perfil[coluna] : topoLivre[coluna]) - t;
+        if (livre > piso) {
+          piso = livre;
+          if (melhor !== null && piso + maxBase + 1 >= melhor.fundo) { cortada = true; break; }
+        }
+      }
+      if (cortada) return;
+
+      let y = ySky;
+      if (temVaoAqui) {
+        // Aqui pode haver buraco fechado por cima: vale a descida de verdade.
+        // Ela nunca devolve `y` maior que o do relevo, então o relevo já serve
+        // de teto e a busca desiste cedo.
+        const teto = Math.min(melhor ? melhor.fundo : Infinity, ySky + maxBase + 1);
+        const yVao = descerNosVaos(colunas, x, forma, teto + 1);
+        if (yVao !== null && yVao < y) y = yVao;
+      }
+
+      const fundo = y + maxBase + 1;
+      // Empate no fundo fica com o mais à esquerda, que é o que deixa o rolo
+      // fechar por fileiras em vez de espalhar.
+      if (!melhor || fundo < melhor.fundo) melhor = { forma, x, y, fundo };
+    };
+
+    for (let x = 0; x <= ultimoX; x += pulo) olhar(x);
+    if (pulo > 1 && ultimoX % pulo !== 0) olhar(ultimoX);
+    // A passada fina em volta da melhor região, igual à do encaixe por relevo.
+    if (pulo > 1 && melhor) {
+      const de = Math.max(0, melhor.x - pulo + 1);
+      const ate = Math.min(ultimoX, melhor.x + pulo - 1);
+      for (let x = de; x <= ate; x++) if (x !== melhor.x) olhar(x);
+    }
+  });
+
+  return melhor;
+}
+
+function encaixarPorVaos(unidades, config) {
+  const { larguraTecido, margem, passo } = config;
+  const colsTecido = config.colsForcado
+    || Math.max(1, Math.floor((larguraTecido - margem * 2) / passo));
+
+  /*
+   * O tecido, guardado de dois jeitos ao mesmo tempo:
+   *
+   *   colunas  os intervalos ocupados — o mapa exato, que enxerga buraco
+   *   perfil   uma altura por coluna — o mapa barato, do encaixe por contorno
+   *   temVao   a coluna tem algum buraco fechado por cima?
+   *
+   * Os dois primeiros dizem a mesma coisa onde `temVao` é falso, e é o terceiro
+   * que decide qual consultar. Ver `melhorVagaPorVaos`.
+   */
+  const tecido = {
+    colunas: [],
+    perfil: new Int32Array(colsTecido),
+    temVao: new Uint8Array(colsTecido),
+    // A primeira linha livre de cada coluna. Nenhuma peça consegue subir acima
+    // dela, e é disso que sai a poda (ver `melhorVagaPorVaos`).
+    topoLivre: new Int32Array(colsTecido),
+    // O maior buraco FECHADO da coluna — o maior vão entre dois pedaços de
+    // peça. Peça que precisa de mais que isso não tem como parar no meio desta
+    // coluna, e é essa pergunta que transforma a poda fraca em poda forte.
+    maiorVao: new Int32Array(colsTecido),
+  };
+  for (let c = 0; c < colsTecido; c++) tecido.colunas.push([]);
+
+  const colocacoes = [];
+  const naoEncaixadas = [];
+  let fundoMax = 0;
+  let piorUnidade = null, piorVazio = -Infinity;
+
+  unidades.forEach((unidade) => {
+    const escolha = melhorVagaPorVaos(tecido, colsTecido, unidade, config.saltoX);
+    if (!escolha) {
+      unidade.itens.forEach((item) => naoEncaixadas.push(item));
+      return;
+    }
+    const colocacao = { unidade, forma: escolha.forma, x: escolha.x, y: escolha.y };
+    ocuparIntervalos(tecido.colunas, colocacao, 1);
+    // O relevo e a marca de buraco acompanham. A peça abriu um vão nesta coluna
+    // se o topo dela ficou ABAIXO de onde o relevo estava — o que sobrou entre
+    // os dois é buraco fechado por cima.
+    const forma = escolha.forma;
+    for (let c = 0; c < forma.cols; c++) {
+      if (forma.topo[c] < 0) continue;
+      const coluna = escolha.x + c;
+      if (escolha.y + forma.topo[c] > tecido.perfil[coluna]) tecido.temVao[coluna] = 1;
+      const ate = escolha.y + forma.base[c] + 1;
+      if (ate > tecido.perfil[coluna]) tecido.perfil[coluna] = ate;
+      // A primeira linha livre anda para baixo enquanto os intervalos se
+      // emendarem a partir dela.
+      const lista = tecido.colunas[coluna];
+      // A primeira linha livre: anda enquanto os intervalos se emendarem a
+      // partir do zero.
+      let livre = 0;
+      for (let i = 0; i < lista.length; i++) {
+        if (lista[i].ini > livre) break;
+        if (lista[i].fim + 1 > livre) livre = lista[i].fim + 1;
+      }
+      tecido.topoLivre[coluna] = livre;
+
+      // O maior vão da coluna acima do relevo: os buracos entre um pedaço de
+      // peça e o seguinte, mais o que sobrou entre o começo do rolo e a
+      // primeira peça. Todos servem de vaga, e por isso todos contam — contar
+      // a menos aqui deixaria a poda forte demais e esconderia posição boa.
+      let maior = 0;
+      let fimAtual = -1;
+      for (let i = 0; i < lista.length; i++) {
+        const iv = lista[i];
+        const vao = iv.ini - (fimAtual + 1);
+        if (vao > maior) maior = vao;
+        if (iv.fim > fimAtual) fimAtual = iv.fim;
+      }
+      tecido.maiorVao[coluna] = maior;
+    }
+    colocacoes.push(colocacao);
+    if (escolha.fundo > fundoMax) fundoMax = escolha.fundo;
+    // O buraco morto que esta escolha deixou acima dela, para o reparo guiado
+    // da busca ter em quem mirar — a mesma medida do encaixe por relevo.
+    const vazio = escolha.y * escolha.forma.nCols + escolha.forma.somaTopo;
+    if (vazio > piorVazio) { piorVazio = vazio; piorUnidade = unidade; }
+  });
+
+  const resultado = resultadoDoEncaixe(
+    posicoesDasColocacoes(colocacoes, passo, margem), naoEncaixadas, fundoMax, passo, margem);
+  resultado.colocacoes = colocacoes;
   resultado.piorUnidade = piorUnidade;
   resultado.piorVazio = piorVazio;
   return resultado;
@@ -1149,6 +1587,16 @@ function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAM
       });
     });
   }
+  if (motores.includes("vaos")) {
+    // Mesmas ordens do contorno, e uma heurística só: o "vazio" precisaria da
+    // conta de espaço livre por posição, que aqui sairia caro demais.
+    agrupamentos.forEach((agrupamento) => {
+      ordens.forEach((ordem) => {
+        if (ordem.porFamilia && agrupamento !== "solta") return;
+        receitas.push({ motor: "vaos", agrupamento, ordem: ordem.nome, heuristica: "fundo" });
+      });
+    });
+  }
   if (motores.includes("faixas")) {
     // Uma receita por divisão candidata. O agrupamento em dupla é o que faz a
     // faixa render, então só ele entra aqui.
@@ -1159,13 +1607,6 @@ function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAM
           receitas.push({ motor: "faixas", agrupamento: "dupla", ordem: ordem.nome, heuristica, corte });
         });
       });
-    });
-  }
-  if (motores.includes("nfp")) {
-    // O NFP não tem heurística de posição: ele já acha a posição mais alta
-    // possível. O que sobra para variar é a ordem de entrada das peças.
-    ORDENS_RETANGULO.forEach((ordem) => {
-      receitas.push({ motor: "nfp", agrupamento: "solta", ordem: ordem.nome, heuristica: "encosta" });
     });
   }
   return receitas;
@@ -1358,7 +1799,7 @@ async function buscarMelhorEncaixe(itens, config) {
   // decide é o resultado, e por isso os dois correm.
   let agrupamentos = config.agrupamentos || AGRUPAMENTOS_PADRAO;
   const unidades = {};
-  if (motores.includes("contorno") || motores.includes("faixas")) {
+  if (motores.includes("contorno") || motores.includes("faixas") || motores.includes("vaos")) {
     agrupamentos.forEach((nome) => {
       unidades[nome] = nome === "cruzada"
         ? montarUnidadesCruzadas(itens)
@@ -1390,10 +1831,6 @@ async function buscarMelhorEncaixe(itens, config) {
    * ordem boa achada por um serve para o outro.
    */
   const listaDaReceita = (receita) => {
-    if (receita.motor === "nfp") {
-      return { chave: "itens", crua: itens,
-        ordem: ORDENS_RETANGULO.find((o) => o.nome === receita.ordem) };
-    }
     if (receita.motor === "retangulo") {
       return { chave: "retangulo/" + receita.agrupamento, crua: listasRetangulo[receita.agrupamento],
         ordem: ORDENS_RETANGULO.find((o) => o.nome === receita.ordem) };
@@ -1421,27 +1858,29 @@ async function buscarMelhorEncaixe(itens, config) {
    */
   const melhoresOrdens = new Map(); // chave -> { lista, consumo }
 
+  /** O encaixador da receita, na lista que vier. */
+  const rodarNaLista = (receita, lista) => {
+    if (receita.motor === "faixas") {
+      return encaixarPorFaixas(lista, {
+        ...config, heuristica: receita.heuristica, corteCols: receita.corte,
+      });
+    }
+    if (receita.motor === "vaos") {
+      return encaixarPorVaos(lista, { ...config, heuristica: receita.heuristica });
+    }
+    if (receita.motor === "contorno") {
+      return encaixarContorno(lista, { ...config, heuristica: receita.heuristica });
+    }
+    return encaixar(lista, { ...config, heuristica: receita.heuristica });
+  };
+
   const rodar = (receita, embaralhar, partirDoMelhor) => {
     const base = listaDaReceita(receita);
     const guardada = partirDoMelhor ? melhoresOrdens.get(base.chave) : null;
     let lista = guardada ? guardada.lista.slice() : base.crua.slice().sort(base.ordem.comparar);
     if (embaralhar) lista = embaralhar(lista, guardada, base.ordem);
 
-    let resultado;
-    if (receita.motor === "faixas") {
-      resultado = encaixarPorFaixas(lista, {
-        ...config, heuristica: receita.heuristica, corteCols: receita.corte,
-      });
-    } else if (receita.motor === "nfp") {
-      // Uma passada do NFP custa segundos, não milissegundos. Sem o prazo ela
-      // ignoraria o tempo pedido na tela.
-      resultado = encaixarPorNFP(lista, { ...config, prazoMs: inicio + tetoMs });
-    } else if (receita.motor === "contorno") {
-      resultado = encaixarContorno(lista, { ...config, heuristica: receita.heuristica });
-    } else {
-      resultado = encaixar(lista, { ...config, heuristica: receita.heuristica });
-    }
-
+    const resultado = rodarNaLista(receita, lista);
     // Fica anotado de onde este resultado saiu, para a ordem ser guardada se
     // ele for bom.
     resultado.ordemUsada = lista;
@@ -1522,8 +1961,8 @@ async function buscarMelhorEncaixe(itens, config) {
    * Insistir na receita que ganhou *antes* atrapalha (está explicado acima),
    * mas largar a que está perdendo *agora* é outra coisa: se uma receita já
    * mostrou o que sabe fazer e ficou 6% atrás, o tempo dela rende mais na mão
-   * das outras. É isso que deixa acrescentar mais um encaixador — faixas, NFP,
-   * o que for — sem que o orçamento de tempo se dilua entre receitas que este
+   * das outras. É isso que deixa acrescentar mais um encaixador — faixas, ou o
+   * que vier — sem que o orçamento de tempo se dilua entre receitas que este
    * trabalho já mostrou que não servem.
    *
    * Receita que ainda não rodou nenhuma vez nunca é largada: ela não teve a
@@ -1560,6 +1999,7 @@ async function buscarMelhorEncaixe(itens, config) {
 
   let melhor = null;
   let melhorChave = null;
+  let receitaVencedora = null;
   let tentativas = 0;
   let semGanho = 0;
   let perseguindo = false;
@@ -1618,7 +2058,15 @@ async function buscarMelhorEncaixe(itens, config) {
     const linha = placar.get(chave);
     if (linha) {
       linha.tentativas++;
-      if (resultado.consumo < linha.melhorConsumo) linha.melhorConsumo = resultado.consumo;
+      // Só entra o encaixe que coube INTEIRO — o mesmo cuidado que o placar dos
+      // motores logo abaixo já tinha, e que aqui faltava. Tentativa que deixou
+      // peça de fora gasta menos tecido por não ter encaixado tudo, e o número
+      // dela é usado em dois lugares que decidem coisa: a poda (receita que
+      // parece boa fica na roda para sempre) e o rótulo de treino da rede
+      // (ver `alvoDaReceita`, em encaixe-memoria.js).
+      if (resultado.naoEncaixadas.length === 0 && resultado.consumo < linha.melhorConsumo) {
+        linha.melhorConsumo = resultado.consumo;
+      }
     }
     // Só conta para o placar dos motores o encaixe que coube inteiro: uma
     // tentativa que deixou peça de fora gasta menos tecido por não ter
@@ -1632,6 +2080,7 @@ async function buscarMelhorEncaixe(itens, config) {
       const anterior = melhor ? melhor.consumo : null;
       melhor = resultado;
       melhorChave = chave;
+      receitaVencedora = linha ? linha.receita : null;
       if (linha) linha.vitorias++;
       semGanho = 0;
       ultimoGanhoEm = Date.now();
@@ -1822,6 +2271,39 @@ async function buscarMelhorEncaixe(itens, config) {
     await respirar();
   }
 
+  /*
+   * O POLIMENTO: uma última passada do vencedor, agora com a repescagem nos
+   * vãos ligada (ver `repescarNosVaos`).
+   *
+   * Por que só no fim, e não em toda tentativa: a repescagem troca o relevo por
+   * coluna pela lista de intervalos ocupados, e isso custa de 2 a 40 ms por
+   * passada, contra o menos de um milissegundo de uma tentativa normal. Ligada
+   * sempre, ela trocaria mil tentativas por vinte — e o que compra tecido neste
+   * motor é caber mais tentativas no tempo. Rodando uma vez, no encaixe que já
+   * venceu, ela custa o que custa uma tentativa e meia.
+   *
+   * Só entra se melhorar: `melhorQue` é o mesmo critério da busca inteira.
+   * Medida numa passada gulosa, sem busca, ela tirou 6,88% do misturado pequeno
+   * e 2,58% do lote grande — os dois trabalhos com mais formatos diferentes,
+   * que é onde o vão preso se acumula.
+   */
+  if (melhor && receitaVencedora && melhor.ordemUsada
+      && (receitaVencedora.motor === "contorno" || receitaVencedora.motor === "faixas"
+        || receitaVencedora.motor === "vaos")) {
+    const comRepesca = { ...config, heuristica: receitaVencedora.heuristica, repescar: true };
+    const polido = receitaVencedora.motor === "faixas"
+      ? encaixarPorFaixas(melhor.ordemUsada, { ...comRepesca, corteCols: receitaVencedora.corte })
+      : receitaVencedora.motor === "vaos"
+        ? encaixarPorVaos(melhor.ordemUsada, comRepesca)
+        : encaixarContorno(melhor.ordemUsada, comRepesca);
+    if (melhorQue(polido, melhor)) {
+      polido.ordemUsada = melhor.ordemUsada;
+      polido.chaveDaLista = melhor.chaveDaLista;
+      polido.repescou = true;
+      melhor = polido;
+    }
+  }
+
   avisar("pronto");
   fecharCanal();
 
@@ -1839,12 +2321,20 @@ async function buscarMelhorEncaixe(itens, config) {
   // era sobrescrito lá na tela pelo que a pessoa tinha *pedido*, então o
   // resultado dizia "usei o retângulo" mesmo quando o contorno tinha vencido.
   melhor.venceuContorno = melhorChave
-    ? (melhorChave.startsWith("contorno") || melhorChave.startsWith("faixas")) : false;
+    ? (melhorChave.startsWith("contorno") || melhorChave.startsWith("faixas")
+      || melhorChave.startsWith("vaos")) : false;
   melhor.venceuFaixas = melhorChave ? melhorChave.startsWith("faixas") : false;
   melhor.melhorPorMotor = Object.fromEntries(melhorDeCadaMotor);
   melhor.ganhos = historicoDeGanhos;
+  // `melhorConsumo` vai junto porque é dele que sai o rótulo de treino da rede:
+  // "quanto esta receita chegou perto da campeã" diz muito mais do que "ela
+  // melhorou o incumbente em algum momento". Ver `montarExemplosDeTreino`, em
+  // encaixe-memoria.js.
   melhor.placar = [...placar.entries()]
     .filter(([, l]) => l.tentativas > 0)
-    .map(([chave, l]) => ({ receita: chave, tentativas: l.tentativas, vitorias: l.vitorias }));
+    .map(([chave, l]) => ({
+      receita: chave, tentativas: l.tentativas, vitorias: l.vitorias,
+      melhorConsumo: Number.isFinite(l.melhorConsumo) ? l.melhorConsumo : null,
+    }));
   return melhor;
 }

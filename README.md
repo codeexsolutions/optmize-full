@@ -678,6 +678,30 @@ quantos metros vão ser gastos.
    inflaria o número, porque o vazio ao redor do desenho apareceria como
    aproveitado; com a silhueta, o número dos dois modos dá para comparar.
 
+   Ao lado dele vem um segundo, **"na faixa usada"**: o mesmo cálculo, só que
+   contra a largura que as peças de fato ocuparam, e não contra o rolo inteiro.
+   A diferença entre os dois é a tira lateral que ninguém usou.
+
+   Os dois existem porque medem coisas diferentes, e trocar um pelo outro
+   esconderia uma delas. A tira lateral **não sai** do aproveitamento de sempre,
+   e não deve sair: é tecido que foi comprado, e um encaixe que desperdiça mais
+   na lateral não pode aparecer como melhor só porque a base da conta encolheu
+   junto. Mas ela também não é falha do encaixe — peça de 56 cm em rolo de
+   160 cm deixa 48 cm mortos por mais perfeito que o risco seja —, e é isso que
+   o segundo número mostra: quanto o encaixe rendeu dentro do espaço em que ele
+   podia trabalhar.
+
+   Lendo os dois lado a lado dá para saber onde mexer. Se o de sempre está bem
+   abaixo do da faixa, o que está caro é a **largura do tecido**, não a receita
+   do encaixe — e a resposta é comprar outra mídia, não procurar mais tempo. O
+   painel de largura fecha a conta em metros quadrados: quanto aquela tira
+   custou.
+
+   Só a conta de sempre vai para o histórico, para o encaixe guardado e para a
+   meta de 95% que faz a busca parar sozinha. O segundo número é de leitura, e
+   misturar os dois no que fica gravado tornaria o histórico incomparável com
+   ele mesmo.
+
 Se alguma peça for maior que a largura do tecido, ela fica de fora e o
 sistema avisa quais foram — é só reduzir a medida, liberar o giro ou usar
 um tecido mais largo.
@@ -688,6 +712,125 @@ salvas, então o encaixe se perde ao recarregar a página.
 > O encaixe encosta as peças pelo contorno, mas não enfia uma peça pequena
 > **dentro** de um vazado fechado de outra (o buraco do meio de uma gola
 > redonda, por exemplo).
+
+#### O encaixe por vãos: os dois motores juntos (existe, e não está ligado)
+
+A ideia veio da produção: *"e se juntar, em algumas áreas a parte retangular e
+em outras a área com contorno? às vezes junto sai melhor do que só um ou o
+outro"*. Ela está certa no diagnóstico, e a medição mostra exatamente onde.
+
+Cada motor tem metade da resposta:
+
+- o **contorno** aninha a silhueta, mas guarda o tecido como uma altura por
+  coluna — e o vão que fica *acima* de uma peça já assentada some do mapa;
+- a **caixa** mantém a lista de retângulos livres e enxerga buraco em qualquer
+  lugar, mas joga fora a silhueta e trata toda peça como o retângulo em volta.
+
+Medindo o trabalho de produção depois do contorno: **20,3% do rolo em vão
+preso** contra 1,9% de vão aberto. Quase todo o desperdício que resta é do tipo
+que a contabilidade da caixa acharia.
+
+`encaixarPorVaos` junta os dois: silhueta do contorno, tecido guardado como a
+**lista de intervalos ocupados de cada coluna**. A peça desce até o primeiro
+lugar em que nada bate, inclusive um vão fechado por cima.
+
+**A qualidade por tentativa é muito melhor.** Numa passada gulosa, sem busca
+nenhuma:
+
+| trabalho | contorno | por vãos |
+|---|---|---|
+| camiseta+manga+gola | 4,16 m | **3,77 m** |
+| misturado pequeno | 2,62 m | **2,44 m** |
+
+E na disputa ele **vence 5 dos 8 trabalhos** da bancada: camiseta+manga+gola
+−1,35%, misturado pequeno −2,21%, lote grande −2,28%, calça+bolso −0,64%.
+
+**E mesmo assim ele não entra no automático.** Uma descida por intervalos custa
+uma varredura por coluna contra uma leitura só no relevo — cerca de cem vezes
+mais por tentativa. No trabalho de produção (175 peças) ele faz 46 tentativas
+enquanto o contorno faz 2.933, e ali o contorno ganha por 1,34%. Somando os oito
+trabalhos dá **+0,06%: empate**, com o ganho dos pequenos comido pela perda do
+grande. Dar a ele uma fatia só sua (como já se fez com o NFP) não resolveu.
+
+O que falta é velocidade, e o gargalo está identificado: o encaixe por relevo
+descarta a maioria das posições com um piso barato antes de medir
+(`melhorPosicaoDaUnidade`), e aqui esse piso não funciona — vão preso existe em
+quase toda coluna, então o piso fica no chão e quase nada é podado. Para ele
+virar padrão, o próximo passo é a estrutura por coluna responder "primeira linha
+a partir de Y onde cabe uma corrida de altura H" em tempo logarítmico, em vez da
+varredura linear de hoje.
+
+Fica no motor, fora do padrão, com o caminho todo conferido:
+`npm run bancada:sobreposicao` roda os trabalhos por ele também — é o único
+encaixador que posiciona por intervalos, e caminho novo de posicionamento é onde
+sobreposição nasce. Para pôr na disputa: acrescente `"vaos"` à lista de motores
+em `encaixe.js`, e **remeça**.
+
+#### A repescagem nos vãos
+
+Veio de uma queixa da produção, e é a que mais rendeu tecido: *"ele encaixa
+todas as peças do mesmo modelo e esquece que dá pra colocar outra no espaço que
+sobrou"*.
+
+A queixa está certa, e a causa é a mesma coisa que faz o motor render. O encaixe
+por contorno guarda o tecido como **uma altura por coluna** — o `perfil[c]` diz
+até onde a coluna já foi usada, e a peça desce até encostar nesse relevo. É
+assim que ela se aninha na curva da anterior. Só que, no instante em que uma
+peça é assentada, **tudo o que ficou acima dela naquela coluna some do mapa**. O
+vão do decote de uma camiseta, com a camiseta já posta, deixa de existir; a gola
+que caberia exatamente ali vai para o fim do rolo.
+
+Dá para medir, e o número é grande. `npm run bancada:vaos` separa o vazio em
+**preso** (tem peça por baixo na mesma coluna — o motor não alcança mais) e
+**aberto** (a frente de trabalho, que ele ainda usaria):
+
+| trabalho | vão preso | maior vão preso | o que caberia lá |
+|---|---:|---|---|
+| camiseta+manga+gola | **32,0%** | 46x70 cm | manga, gola |
+| misturado pequeno | **28,5%** | 36x72 cm | manga, gola, bolso, punho |
+| lote grande | **25,6%** | 46x70 cm | manga, gola, punho |
+
+Um terço do rolo, e um buraco com uma manga inteira de tecido parada dentro.
+
+A busca já contornava isso pela ordem — entrando a gola **antes**, a camiseta
+desce por cima dela e fecha. Só que achar essa ordem é sorte de embaralhamento,
+e quanto mais peças menos provável. Daí a queixa aparecer justamente nos
+trabalhos grandes.
+
+**A repescagem usa outro mapa.** Em vez de uma altura por coluna, a lista dos
+**intervalos ocupados** de cada coluna. Com ela a peça desce até o primeiro
+lugar em que nada bate — inclusive um vão fechado por cima. É o que a nota antiga
+no topo do `encaixe-motor.js` já descrevia como ideal, e que nunca tinha sido
+implementado.
+
+Ela **não substitui** o encaixe: uma descida por intervalos custa uma varredura
+por coluna, contra uma leitura só no relevo — de 2 a 40 ms por passada, contra
+menos de um milissegundo de uma tentativa normal. Ligada sempre, trocaria mil
+tentativas por vinte, e o que compra tecido neste motor é caber mais tentativas
+no tempo. Então ela roda **uma vez, no fim, no encaixe que já venceu**, e só nas
+peças do último terço do rolo — que são as únicas que encurtam a metragem se
+subirem. Só entra se melhorar, pelo mesmo critério da busca inteira.
+
+Medida de ponta a ponta, com a busca completa (5 fatias × 3 s × 3 sementes):
+
+| | soma dos sete trabalhos |
+|---|---|
+| sem a repescagem | 26,437 m |
+| com a repescagem | **26,118 m** |
+
+**1,20% menos tecido**, e o ganho está onde a queixa nasceu: o lote grande caiu
+**2,55%** (13,863 m para 13,510 m) e o aproveitamento dele subiu de 68,8% para
+70,6%.
+
+**Ela mexe em peça já assentada, e é o único caminho do motor que faz isso** —
+os outros só empilham. Por isso entrou na conferência permanente:
+`npm run bancada:sobreposicao` roda todo trabalho com e sem repescagem, e a
+varredura larga (7 trabalhos x 3 giros x 3 larguras x 3 agrupamentos x 2
+heurísticas x 3 ordens = 1.134 encaixes) fechou com **zero sobreposição, zero
+peça fora do rolo e zero caso em que o resultado piorou**. Numa passada gulosa
+ela melhorou 534 dos 1.134, tirando 18,6% de tecido em média quando melhora — o
+número de ponta a ponta é bem menor porque a busca já recupera boa parte disso
+sozinha, embaralhando a ordem.
 
 #### O encaixe por faixas (na disputa, mesmo perdendo quase sempre)
 
@@ -729,49 +872,47 @@ paga esse custo é a poda das receitas, explicada logo acima. Medido: com a poda
 acrescentar o terceiro encaixador mudou a soma de quatro trabalhos de 26,518 m
 para 26,515 m, ou seja, nada.
 
-#### O encaixe por NFP (na disputa, com uma fatia só)
+#### O encaixe por NFP (saiu do projeto)
 
-`public/nfp.js` traz um encaixe por **polígono de não-encaixe** — a técnica que
-os programas profissionais usam. O NFP de duas peças é o desenho de todas as
-posições em que a segunda encosta na primeira sem invadir; sabendo esse
-contorno, dá para parar a peça exatamente colada, sem depender de grade.
+O terceiro encaixador era o **polígono de não-encaixe**: dadas duas peças, o NFP
+é o desenho de todas as posições em que a segunda encosta na primeira sem
+invadir. É o que os programas profissionais fazem, e a diferença para o encaixe
+por perfil é que o perfil só deixa a peça **descer** até encostar, enquanto o
+NFP também enxerga posição de lado, num vão que só dá para alcançar na diagonal.
 
-A diferença que importa: o encaixe por perfil só deixa a peça **descer** até
-encostar. O NFP também enxerga a posição de lado, encaixada num vão que só se
-alcança andando na diagonal. Numa fila de 24 camisetas ele fecha em **5,70 m**
-contra 6,37 m do perfil — 10% menos tecido. Conferido peça por peça: nenhuma
-sobrepondo outra, nenhuma fora do rolo.
+Ele **saiu**, e a história vale ficar registrada porque ela tem duas partes.
 
-Em compensação uma passada dele custa **segundos**, enquanto as outras custam
-milissegundos. Botando ele para disputar em todas as fatias, ele rouba o tempo
-das receitas que estavam ganhando: medido, ganhava 10,45% em dois trabalhos e
-perdia até 1,90% em quatro outros.
+**A primeira é um defeito, e foi consertado antes de qualquer decisão.** A
+produção relatou peça saindo sobreposta a outra. A causa estava no traçador de
+contorno: ele achava a primeira célula cheia da máscara, dava a volta nela e
+parava. Peça cuja silhueta são **dois blocos separados** — arte com um elemento
+solto, silhueta tirada do alfa com uma ilha destacada, fundo removido que partiu
+o desenho em dois — tinha o segundo bloco **invisível** para o motor, e outra
+peça ia parar em cima dele.
 
-Por isso ele fica com **uma fatia só** das cinco (ver "A busca espalhada pelos
-núcleos", logo abaixo). Ali ele tem o tempo inteiro dela para as poucas
-passadas que consegue; as outras quatro seguem como antes. Quando ele ganha,
-ganha muito; quando não ganha, custou um quinto da capacidade. Somando os
-quatro trabalhos de teste, a fatia dedicada valeu **2,66% menos tecido**
-(melhorou 4, empatou 3, piorou 1). Vale só no automático: quem pediu contorno
-na tela quer ver o contorno.
+O pior não era o erro, era o disfarce: o encaixe com sobreposição parecia 43%
+melhor (0,26 m contra 0,46 m honestos), porque motor que sobrepõe sempre ganha
+de motor que não sobrepõe. Reproduzido na bancada, eram 2.720 células ocupadas
+duas vezes; consertado, zero.
 
-**Acelerar o NFP não compra tecido**, e isso foi medido. Dando 2x e 4x mais
-tempo à fatia dele:
+**A segunda é medição.** Já consertado, ele voltou para a disputa numa fatia só
+para ele — e não pagou o próprio custo:
 
-| Trabalho | 6 s | 12 s | 24 s |
-|---|---|---|---|
-| camiseta+manga+gola | 7,455 m | 7,226 m | **7,140 m** |
-| só camiseta | 5,700 m | 5,700 m | 5,700 m |
-| calça+bolso | 7,090 m | 7,090 m | 7,090 m |
-| misturado pequeno | 6,000 m | 6,000 m | 6,000 m |
+| | soma dos sete trabalhos |
+|---|---|
+| sem o NFP | 26,437 m |
+| com o NFP numa fatia | 26,458 m |
 
-Em três dos quatro ele bate no chão dele já nas primeiras passadas, e
-quadruplicar o tempo não move um centímetro. Só num deles melhora — e mesmo lá
-ele chega em 7,140 m, que é *empatar* com o que o contorno já entrega. Ou seja:
-o gargalo do NFP não é velocidade, é o teto do encaixador guloso. Portá-lo para
-WebAssembly, como foi feito com o de contorno, daria quatro vezes mais passadas
-para não mudar nada em três de quatro trabalhos. Fica de fora por medição, não
-por opinião.
+Empate dentro do ruído da bancada, e **ele não venceu nenhum dos sete**. O que
+ele cobra é caro: uma passada custa segundos, não milissegundos, então a fatia
+dele rende poucas tentativas e as outras receitas perdem o quinto de orçamento
+que foi para lá — 105 mil tentativas caíram para 62 mil no maior trabalho.
+
+Somando as duas partes, ele saiu: 886 linhas a menos, um encaixador a menos para
+manter correto, e — o que mais pesou — a máscara `cheio` pôde sair junto. Ela
+existia só para ele e era **metade do peso de todas as máscaras** (213 KB de
+446 KB, nas peças da bancada). O código consertado está no histórico do
+repositório, se um dia valer a pena revisitar.
 
 #### A busca espalhada pelos núcleos
 
@@ -797,6 +938,14 @@ Duas coisas são decididas por fatia, e as duas saíram de medição:
   melhor de todas nunca fica atrás: 1,16% de média, melhorou em 8 dos 12,
   empatou em 4 e piorou em nenhum. A fatia exata funciona como piso.
 
+- **a semente do sorteio**. Todas as fatias rodavam com a mesma, e divergiam só
+  porque cada uma pega um pedaço diferente do portfólio. Dar uma semente própria
+  a cada uma foi medido e **deu empate** (−0,05% na soma dos oito trabalhos,
+  dentro do ruído), mas ficou: não custa tentativa nenhuma, e cobre um caso em
+  que a semente repetida faz estrago de verdade — quando o portfólio é menor que
+  o número de fatias, cada worker cai de volta no portfólio inteiro e, com a
+  mesma semente, os cinco fazem exatamente o mesmo trabalho.
+
   **Quantas fatias varrem exato** foi remedido depois do WASM, que barateou a
   tentativa e mudou a conta: hoje são **duas**, não uma. Somando os quatro
   trabalhos, 1 exata deu 51,438 m, 2 exatas deram 51,333 m, todas exatas
@@ -804,7 +953,6 @@ Duas coisas são decididas por fatia, e as duas saíram de medição:
   repartição nova empatou ou ganhou nas 8 medições e não perdeu em nenhuma.
   Varrer tudo exato já é demais: cai para metade das tentativas e a conta se
   inverte.
-- **o encaixador**. A última fatia é a do NFP, explicada acima.
 
 #### O bloco de três
 
@@ -930,7 +1078,36 @@ perdia 12% das tentativas sem nada em troca.
 - **A dupla montada pelo NFP**, para ela enxergar a posição de lado que o
   "desliza e deixa cair" não alcança. Perdeu da dupla de hoje em todas as peças
   (+0,5% a +6,3%): a varredura horizontal exaustiva que já existe cobre mais
-  posições que os vértices do NFP.
+  posições que os vértices do NFP. (O NFP saiu do projeto depois; ver a seção
+  dele acima.)
+- **Retomar a ordem do encaixe anterior.** O sistema guarda o desenho pronto e o
+  recorde de cada trabalho, mas jogava fora a *ordem das peças* que chegou
+  naquele resultado — então apertar "Fazer encaixe" de novo redescobria a
+  arrumação por sorteio. Parecia desperdício óbvio. A ordem foi persistida (com
+  a unidade apelidada por `indice#copia`, o único apelido que sobrevive a montar
+  as unidades de novo) e devolvida à busca seguinte.
+
+  Medido em cinco cliques seguidos no mesmo trabalho, três sementes, guardando
+  sempre o melhor de todos — que é o que a produção vê:
+
+  | | 1º clique | 2º | 3º | 4º | 5º |
+  |---|---|---|---|---|---|
+  | do zero (como é hoje) | 13,527 | 13,437 | **13,402** | 13,402 | 13,402 |
+  | a ordem só como mais uma tentativa | 13,410 | 13,410 | 13,410 | 13,410 | 13,410 |
+  | a ordem como ponto de partida | 13,533 | 13,533 | 13,517 | 13,517 | 13,517 |
+
+  **Recomeçar do zero ganha**, e o motivo aparece na tabela: o que faz o
+  resultado melhorar a cada clique é cada clique ser um sorteio **independente**
+  — mais amostras, melhor mínimo. Retomando, as buscas ficam correlacionadas,
+  convergem todas para o mesmo lugar e a curva trava na segunda rodada. É a
+  mesma armadilha já registrada no `encaixe-motor.js` ("já tentei começar
+  refinando... sai 0,34% pior: sem uma boa volta de exploração antes, a busca
+  cola cedo demais num encaixe mediano").
+
+  O "sempre melhora e nunca retrocede" que se queria daí **já existe**, e vem de
+  outro lugar: o melhor encaixe fica guardado inteiro (`encaixe_guardados`) e o
+  recorde do tipo vira alvo da busca seguinte. O que faltava não era memória de
+  caminho — era só deixar o sorteio trabalhar.
 - **Sacudir a fila por reinserção** em vez de por troca de pares — tirar uma
   peça da fila e recolocá-la em outro ponto, conservando a ordem relativa do
   resto. Na bancada, com seis trabalhos: ganha muito onde ganha
@@ -1066,6 +1243,33 @@ puro JS — para a busca pontuar cada receita candidata. O uso é híbrido:
 Testado com um servidor de verdade (Express + SQLite descartável): trabalho
 sintético foi suficiente para a rede acertar de 93% a 98% de um lote novo,
 numa regra que ela nunca tinha visto exemplificada daquele jeito.
+
+**O rótulo de treino estava quase vazio de sinal.** A rede aprende de exemplos
+"esta receita foi boa neste trabalho", e o que decidia isso era `vitorias > 0`
+do placar. Só que `vitorias` conta quantas vezes a receita melhorou o melhor **da
+fatia dela** durante a busca — não quantas vezes ela venceu o trabalho. Uma
+receita que melhorou uma vez logo no começo e foi batida por todas as outras em
+seguida saía rotulada como vencedora.
+
+Medido no histórico de produção: **440 linhas de receita, 141 rotuladas como
+vencedoras (32%)** — quando só uma por trabalho venceu de verdade, ou seja, 11.
+A rede estava treinando para separar "participou de alguma melhora" de "não
+participou", que é quase ruído.
+
+Agora a campeã vale 1 e as outras valem **o quanto chegaram perto dela**: alvo
+contínuo, que cai linearmente até zerar 5% atrás. A segunda colocada por 0,3% é
+informação muito diferente da que ficou 8% atrás, e a saída da rede é uma
+sigmoide, que aceita alvo fracionário sem mudar nada no treino. O rótulo é
+calculado na hora de treinar, a partir do que já está gravado — então **o
+histórico que já existe passa a treinar certo no próximo retreino**, sem
+migração.
+
+Junto saiu um defeito que alimentava esse número: o `melhorConsumo` de cada
+receita era gravado mesmo em tentativa que deixou **peça de fora**. Encaixe
+incompleto gasta menos tecido por não ter encaixado tudo, então a receita
+aparecia como a melhor e ficava na roda para sempre — e agora apareceria também
+como campeã no rótulo. A linha logo abaixo, que monta o placar dos motores, já
+tinha esse cuidado; aqui faltava.
 
 **Testado também contra o `dados.db` real** (só leitura) — e foi isso que
 achou o problema que fez nascer o `REDE_LIMIAR_DIVERSIDADE`. O banco real
@@ -1636,7 +1840,9 @@ optimize/
 │   ├── trabalhos.js          # os seis lotes de referência
 │   ├── medir.js              # a corrida: consumo, aproveitamento e a comparação
 │   ├── conferir.js           # o WASM tem que dar o mesmo resultado do JavaScript
-│   └── conferir-pdf.js       # o PDF: um arquivo, uma página, no tamanho real certo
+│   ├── conferir-pdf.js       # o PDF: um arquivo, uma página, no tamanho real certo
+│   ├── conferir-sobreposicao.js  # nenhuma peça pisa em cima de outra
+│   └── vaos.js               # quanto do rolo virou vão que o motor não alcança
 ├── src/                      # a tela nova: React + TypeScript (ver docs/ARQUITETURA.md)
 │   ├── App.tsx               # a casca: menu + cabeçalho + a tela da vez
 │   ├── rotas.ts              # a tabela das telas — uma linha por aba
@@ -1665,7 +1871,6 @@ optimize/
 │   ├── encaixe-paralelo.js    # espalha a busca pelos núcleos e junta o melhor de cada fatia
 │   ├── encaixe-worker.js      # uma fatia da busca, rodando fora da tela
 │   ├── encaixe-wasm.js        # a ponte com wasm/src/lib.rs (cai no JavaScript se não carregar)
-│   ├── nfp.js                 # encaixe por polígono de não-encaixe (uma fatia da busca é dele)
 │   ├── vetor.js               # imagem vira desenho: paleta, contorno e curva
 │   ├── vetor-worker.js        # a vetorização fora da thread da tela
 │   ├── vetor-tela.js          # tela de Vetor: os controles, a lupa e as duas prévias

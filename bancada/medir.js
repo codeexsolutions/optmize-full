@@ -66,6 +66,27 @@ const FATIAS = 5;              // o que sobra num i5 de 6 núcleos
 const FATIAS_EXATAS = 2;
 const PULO_PADRAO = 3;
 const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : PULO_PADRAO);
+// Espelha `sementeDaFatia` do encaixe-paralelo.js: cada fatia sorteia diferente.
+const PASSO_DA_SEMENTE = 104729;
+const sementeDaFatia = (semente, k, espalhar) => semente + (espalhar ? k * PASSO_DA_SEMENTE : 0);
+
+/**
+ * Quais encaixadores cada fatia usa — espelha `motoresDaFatia` do
+ * encaixe-paralelo.js.
+ *
+ * O encaixe por vãos custa ~100x mais por tentativa que o por relevo. Solto no
+ * portfólio de todas as fatias, ele rouba orçamento do contorno justamente nos
+ * trabalhos grandes, onde o contorno precisa de milhares de tentativas. Numa
+ * fatia só dele, ele gasta o que é dele: onde ele ganha, ganha; onde perde, as
+ * outras quatro fatias seguram o resultado.
+ */
+const motoresDaFatia = (k, n, motores) => {
+  if (!motores.includes("vaos")) return motores;
+  const outros = motores.filter((m) => m !== "vaos");
+  if (n < 3 || outros.length === 0) return motores;
+  return k === n - 1 ? ["vaos"] : outros;
+};
+
 
 // ==================== ARGUMENTOS ====================
 
@@ -79,6 +100,14 @@ function lerArgumentos(argv) {
     // comparação deixaria de ser entre iguais. Fica desligada por padrão.
     meta: 0,
     wasm: true,
+    /*
+     * Quantas vezes seguidas o mesmo trabalho é encaixado, como quem aperta
+     * "Fazer encaixe" mais de uma vez. O número relatado é o da ÚLTIMA rodada.
+     * Serve para medir o que a produção realmente vê: cada clique é um sorteio
+     * novo, e o sistema fica com o melhor de todos (ver `encaixe_guardados`).
+     */
+    rodadas: 1,
+    espalharSemente: true,
     // Qualquer ajuste do motor, passado direto para o `config` da busca:
     //   --extra reparoChance=0,podar=false
     // É o que permite medir uma mexida contra o motor de agora sem voltar o
@@ -96,6 +125,9 @@ function lerArgumentos(argv) {
     else if (chave === "--json") { opcoes.json = valor; i++; }
     else if (chave === "--contra") { opcoes.contra = valor; i++; }
     else if (chave === "--sem-wasm") { opcoes.wasm = false; }
+    else if (chave === "--rodadas") { opcoes.rodadas = Number(valor); i++; }
+    // Para medir a semente por fatia contra o que havia antes dela.
+    else if (chave === "--mesma-semente") { opcoes.espalharSemente = false; }
     else if (chave === "--trabalhos") { opcoes.trabalhos = valor.split(","); i++; }
     else if (chave === "--todos") { opcoes.trabalhos = Object.keys(TRABALHOS); }
     else if (chave === "--extra") {
@@ -137,7 +169,8 @@ function prepararTrabalho(motor, nome) {
  *
  * É o `buscarMelhorEncaixeEmParalelo` da produção, desenrolado.
  */
-async function buscarComoAProducao(motor, trabalho, { tempoMs, semente, meta, fatias, extra }) {
+async function buscarComoAProducao(motor, trabalho,
+  { tempoMs, semente, meta, fatias, extra, espalharSemente }) {
   const { receita, itens, passo, alturaMax } = trabalho;
   const vetorTrabalho = motor.vetorDoTrabalho(trabalho.pecas, receita.larguraTecido);
 
@@ -149,7 +182,8 @@ async function buscarComoAProducao(motor, trabalho, { tempoMs, semente, meta, fa
       espaco: receita.espaco,
       margem: receita.margem,
       passo, alturaMax,
-      motores: ["contorno", "retangulo"],
+      motores: motoresDaFatia(k, fatias, extra.motores
+        ? String(extra.motores).split("+") : ["contorno", "retangulo"]),
       // Sem memória e sem rede: a bancada mede o motor, não o histórico da
       // loja. Com recorde antigo em jogo, duas corridas da mesma configuração
       // já dariam resultados diferentes.
@@ -161,7 +195,7 @@ async function buscarComoAProducao(motor, trabalho, { tempoMs, semente, meta, fa
       tentativasPorLote: itens.length >= 120 ? 1 : 8,
       fatia: { k, n: fatias },
       saltoX: puloDaFatia(k),
-      semente,
+      semente: sementeDaFatia(semente, k, espalharSemente),
       ...extra,
     });
     tentativas += resultado.tentativas || 0;
@@ -173,9 +207,14 @@ async function buscarComoAProducao(motor, trabalho, { tempoMs, semente, meta, fa
   }
 
   const areaTecido = receita.larguraTecido * campeao.consumo;
+  // O encaixe por caixa não devolve `areaReal` — ele nem olha a silhueta. A
+  // área real das peças é a mesma seja qual for o encaixador, então ela sai
+  // daqui, das próprias peças, e o aproveitamento dos dois vira comparável.
+  const areaReal = campeao.posicoes.reduce(
+    (soma, p) => soma + (p.item.mascaras ? p.item.mascaras.areaReal : 0), 0);
   return {
     consumo: campeao.consumo,
-    aproveitamento: areaTecido > 0 ? campeao.areaReal / areaTecido : 0,
+    aproveitamento: areaTecido > 0 ? areaReal / areaTecido : 0,
     sobraram: campeao.naoEncaixadas.length,
     receita: campeao.receita,
     tentativas,
@@ -236,6 +275,8 @@ async function principal() {
   console.log(`bancada do encaixe · ${opcoes.trabalhos.length} trabalho(s)`
     + ` · ${opcoes.fatias} fatias × ${opcoes.tempo}s × ${opcoes.sementes} semente(s)`
     + ` · wasm ${motor.comWasm ? "ligado" : "DESLIGADO"}`
+    + (opcoes.rodadas > 1 ? ` · ${opcoes.rodadas} rodadas` : "")
+    + (opcoes.espalharSemente ? "" : " · mesma semente em todas as fatias")
     + (opcoes.meta ? ` · meta ${porcento(opcoes.meta)}` : "")
     + (Object.keys(opcoes.extra).length
       ? ` · ${Object.entries(opcoes.extra).map(([k, v]) => `${k}=${v}`).join(" ")}` : ""));
@@ -251,13 +292,21 @@ async function principal() {
     // mede tanto a mexida quanto a sorte do sorteio daquela vez.
     const corridas = [];
     for (let s = 0; s < opcoes.sementes; s++) {
-      corridas.push(await buscarComoAProducao(motor, trabalho, {
-        tempoMs: opcoes.tempo * 1000,
-        semente: 20260824 + s * 7919,
-        meta: opcoes.meta,
-        fatias: opcoes.fatias,
-        extra: opcoes.extra,
-      }));
+      // Cada rodada é um clique em "Fazer encaixe": sorteio novo, busca nova.
+      let corrida = null;
+      for (let rodada = 0; rodada < opcoes.rodadas; rodada++) {
+        corrida = await buscarComoAProducao(motor, trabalho, {
+          tempoMs: opcoes.tempo * 1000,
+          // Semente diferente por rodada: dois cliques seguidos no mesmo
+          // trabalho não repetem o mesmo sorteio na produção.
+          semente: 20260824 + s * 7919 + rodada * 104729,
+          meta: opcoes.meta,
+          fatias: opcoes.fatias,
+          extra: opcoes.extra,
+          espalharSemente: opcoes.espalharSemente,
+        });
+      }
+      corridas.push(corrida);
     }
     const media = (pegar) => corridas.reduce((s, c) => s + pegar(c), 0) / corridas.length;
     const linha = {

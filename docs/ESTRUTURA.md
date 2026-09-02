@@ -45,6 +45,20 @@ a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
 - `bancada/conferir.js`: `npm run bancada:conferir`. O motor em WebAssembly tem
   que dar exatamente o mesmo resultado do motor em JavaScript, e é este arquivo
   que prova.
+- `bancada/conferir-sobreposicao.js`: `npm run bancada:sobreposicao`. Repinta
+  cada peça posicionada na grade do rolo e acusa célula ocupada duas vezes.
+  Nasceu para achar a causa de "peça saindo sobreposta" no encaixe por NFP —
+  achou, o NFP foi consertado e depois saiu do projeto, e a conferência ficou:
+  "não sobrepõe por construção" é argumento, e argumento não pega erro de
+  arredondamento no caminho da posição até a tela.
+- `bancada/trabalhos.js` traz `producao-uniforme`, copiado de um trabalho real
+  (175 peças, 179 cm, 34,63 m na produção). É o único com um número de fora para
+  comparar, e o único cujas peças têm a ocupação que esta loja imprime (76% a
+  100%) em vez da de molde de confecção (48% a 74%). Mexida medida só nas peças
+  de molde responde à pergunta errada para metade dos trabalhos.
+- `bancada/vaos.js`: `npm run bancada:vaos`. Mede quanto do rolo virou vão
+  **preso** — vazio com peça por baixo, que o relevo por coluna não alcança mais
+  — e o que caberia no maior deles. É a medida que justificou a repescagem.
 - `bancada/conferir-pdf.js`: `npm run bancada:pdf`. O PDF do encaixe tem que
   sair num arquivo só, numa página só, no tamanho real certo — e, quando usa o
   `/UserUnit`, declarando PDF 1.6. **Peça partida é peça perdida**: se alguém

@@ -11,10 +11,10 @@
  * prontas da página, porque montar máscara precisa de canvas.
  */
 
-// O encaixe-mascara.js entra por causa do nfp.js, que usa `engordar` para
-// dar a folga ao contorno antes de virar polígono. Sem ele o motor NFP quebra
-// aqui dentro — e só aqui, porque na página esse arquivo já está carregado.
-importScripts("geometria.js", "encaixe-giro.js", "encaixe-mascara.js", "nfp.js", "encaixe-rede.js",
+// Só o que a BUSCA precisa. O encaixe-mascara.js não está aqui de propósito:
+// máscara é feita na página (e no prepara-worker.js), e aqui dentro ela chega
+// pronta. Ele já esteve nesta lista por causa do nfp.js, que saiu.
+importScripts("geometria.js", "encaixe-giro.js", "encaixe-rede.js",
   "encaixe-wasm.js", "encaixe-motor.js");
 
 // O motor em WebAssembly é carregado uma vez, quando o worker nasce. Se não
@@ -56,12 +56,18 @@ function resultadoParaEnviar(r) {
     // A máscara vai junto porque é ela que a tela usa para traçar a silhueta.
     // O mesmo objeto de máscara é compartilhado por todas as cópias da peça, e
     // o postMessage preserva isso — atravessa uma vez só, não uma por cópia.
+    // A máscara NÃO volta: a página já tem a dela, e remonta a posição a partir
+    // da rotação (ver `devolverAsPecas`, em encaixe-paralelo.js). Ela já
+    // atravessou de volta aqui, e era o pedaço mais pesado do resultado — dado
+    // que a página tinha na mão, clonado de novo por worker. `comMascara`
+    // distingue quem encaixou por contorno (tem silhueta) de quem encaixou pela
+    // caixa (não tem), que é o que a tela usa para escolher o traço.
     posicoes: r.posicoes.map((p) => ({
       item: enderecoDaPeca(p.item),
       x: p.x, y: p.y,
       largura: p.largura, altura: p.altura,
       rot: p.rot, girado: p.girado,
-      mascara: p.mascara, passo: p.passo,
+      comMascara: !!p.mascara, passo: p.passo,
     })),
   };
 }
@@ -103,8 +109,9 @@ self.onmessage = async (evento) => {
       // pedido explicitamente no config vence — é o que deixa medir uma
       // configuração inteira de fora.
       saltoX: msg.config.saltoX != null ? msg.config.saltoX : msg.saltoX,
-      // Quais encaixadores esta fatia usa. Uma delas fica só com o NFP; ver o
-      // porquê em encaixe-paralelo.js.
+      // A semente do sorteio desta fatia. Uma semente pedida explicitamente no
+      // config vence — é o que deixa medir uma configuração inteira de fora.
+      semente: msg.config.semente != null ? msg.config.semente : msg.semente,
       motores: msg.motores || msg.config.motores,
       deveParar: () => pararAgora,
       aoProgredir: (estado) => self.postMessage({ tipo: "andamento", k: fatia.k, estado }),

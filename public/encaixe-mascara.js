@@ -284,26 +284,26 @@ function prepararMascara(engordados, reais, cols, rows, passo) {
   const altura = maxRow - minRow + 1;
   const topo = new Int32Array(largura).fill(-1);
   const base = new Int32Array(largura).fill(-1);
+  // `desenho` é a silhueta real, sem a folga. Quem usa é a TELA, para traçar o
+  // contorno da peça no resultado; o encaixe em si trabalha só com topo/base.
+  //
+  // Já existiu aqui um terceiro vetor, `cheio` — a silhueta engordada inteira,
+  // célula por célula. Ele era do encaixe por NFP, que saiu, e sozinho pesava
+  // metade de todas as máscaras (213 KB de 446 KB nas peças da bancada).
   const desenho = new Uint8Array(largura * altura);
-  // `cheio` é a silhueta já com a folga entre peças. O encaixe por perfil usa
-  // topo/base, mas o encaixe por NFP precisa da forma inteira para tirar o
-  // contorno dela.
-  const cheio = new Uint8Array(largura * altura);
 
   for (let y = 0; y < altura; y++) {
     for (let x = 0; x < largura; x++) {
-      const dentro = engordados[(y + minRow) * cols + (x + minCol)];
-      if (dentro) {
+      if (engordados[(y + minRow) * cols + (x + minCol)]) {
         if (topo[x] < 0) topo[x] = y;
         base[x] = y;
-        cheio[y * largura + x] = 1;
       }
       desenho[y * largura + x] = reais[(y + minRow) * cols + (x + minCol)];
     }
   }
 
   return {
-    cols: largura, rows: altura, topo, base, desenho, cheio,
+    cols: largura, rows: altura, topo, base, desenho,
     alturaUtil: altura,
     offX: minCol * passo, offY: minRow * passo,
   };
