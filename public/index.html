@@ -310,8 +310,9 @@
                   Aqui a estampa já está aplicada: a peça vai direto para o encaixe.
                 </p>
                 <p>
-                  O projeto guarda também a largura do tecido, a folga, a margem e o giro que deram
-                  certo. Repetir o pedido é abrir, dizer quantas unidades e mandar calcular.
+                  O projeto guarda também a largura do tecido, a folga, o comprimento da bancada e
+                  o giro que deram certo. Repetir o pedido é abrir, dizer quantas unidades e mandar
+                  calcular.
                 </p>
               </div>
             </details>
@@ -366,8 +367,8 @@
                 <label>Folga entre peças (mm)
                   <input type="number" id="projeto-espaco" min="0" max="100" step="1" placeholder="5" />
                 </label>
-                <label>Margem nas bordas (cm)
-                  <input type="number" id="projeto-margem" min="0" step="0.1" placeholder="1" />
+                <label>Comprimento da bancada (cm)
+                  <input type="number" id="projeto-comprimento" min="0" step="1" placeholder="sem limite" />
                 </label>
                 <label>Giro das peças
                   <select id="projeto-giro">
@@ -453,7 +454,7 @@
               <details class="shrink-0 border-b border-linha [&[open]>summary]:text-tinta">
                 <summary class="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2.5 text-[0.8rem] font-semibold text-tinta select-none hover:bg-painel-suave">
                   <svg class="size-3.5 shrink-0 text-ambar" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#blocks" /></svg>
-                  Tecido, espaço e leitura dos arquivos
+                  Tecido, bancada e leitura dos arquivos
                 </summary>
                 <div class="px-3 pb-3">
                   <div class="grid grid-cols-3 gap-2">
@@ -463,8 +464,11 @@
                     <label class="mt-0! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>input]:mt-1 [&>input]:px-2 [&>input]:py-1.5 [&>input]:text-[0.82rem]">Espaço (mm)
                       <input type="number" id="encaixe-espaco" min="0" max="100" step="1" value="5" />
                     </label>
-                    <label class="mt-0! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>input]:mt-1 [&>input]:px-2 [&>input]:py-1.5 [&>input]:text-[0.82rem]">Margem (cm)
-                      <input type="number" id="encaixe-margem" min="0" step="0.1" value="1" />
+                    <!-- O comprimento da bancada: passando dele, o encaixe começa outra. Vazio
+                         é o rolo sem fim, que é como o programa sempre funcionou. Ver o cabeçalho
+                         da BANCADA em public/encaixe-motor.js. -->
+                    <label class="mt-0! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>input]:mt-1 [&>input]:px-2 [&>input]:py-1.5 [&>input]:text-[0.82rem]">Bancada (cm)
+                      <input type="number" id="encaixe-comprimento" min="0" step="1" placeholder="sem limite" />
                     </label>
                   </div>
 

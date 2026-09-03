@@ -160,7 +160,7 @@ function prepararTrabalho(motor, nome) {
   }));
   const itens = expandir(pecas);
   const alturaMax = itens.reduce(
-    (soma, it) => soma + Math.max(it.largura, it.altura) + receita.espaco, receita.margem * 2);
+    (soma, it) => soma + Math.max(it.largura, it.altura) + receita.espaco, 0);
   return { nome, receita, pecas, itens, passo, raio, folgaReal, alturaMax };
 }
 
@@ -196,7 +196,7 @@ async function buscarComoAProducao(motor, trabalho,
     const resultado = await motor.buscarMelhorEncaixe(itens, {
       larguraTecido: receita.larguraTecido,
       espaco: receita.espaco,
-      margem: receita.margem,
+      comprimentoBancada: receita.comprimentoBancada || 0,
       passo, alturaMax,
       motores: motoresDaK,
       // Sem memória e sem rede: a bancada mede o motor, não o histórico da

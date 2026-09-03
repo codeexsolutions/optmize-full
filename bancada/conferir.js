@@ -26,6 +26,11 @@ const { TRABALHOS } = require("./trabalhos");
 const HEURISTICAS = ["fundo", "vazio"];
 const SALTOS = [1, 3];
 const AGRUPAMENTOS = [1, 2, 3];
+// Com e sem bancada. A trava da bancada é a única conta do motor escrita duas
+// vezes à mão — `empurrarParaBancada` no JavaScript e `empurrar_para_bancada`
+// no Rust —, então é a que mais precisa desta conferência: um `<=` virado de um
+// lado só sai como peça em bancada diferente, sem erro nenhum.
+const BANCADAS = [0, 200];
 
 /** Prepara o trabalho dentro de UMA instância do motor. */
 function montar(motor, nome) {
@@ -99,23 +104,26 @@ async function principal() {
 
         for (const heuristica of HEURISTICAS) {
           for (const saltoX of SALTOS) {
-            const config = {
-              larguraTecido: a.receita.larguraTecido,
-              margem: a.receita.margem,
-              passo: a.passo,
-              heuristica, saltoX,
-            };
-            const rA = comWasm.encaixarContorno(listaA, config);
-            const rB = semWasm.encaixarContorno(listaB, config);
-            casos++;
-            const assinaturaA = assinar(rA);
-            const assinaturaB = assinar(rB);
-            if (assinaturaA !== assinaturaB) {
-              const linhasA = assinaturaA.split("\n");
-              const linhasB = assinaturaB.split("\n");
-              const primeira = linhasA.findIndex((l, i) => l !== linhasB[i]);
-              falhas.push(`${nome} · grupo ${tamanho} · semente ${semente} · ${heuristica}`
-                + ` · salto ${saltoX}\n    wasm: ${linhasA[primeira]}\n    js:   ${linhasB[primeira]}`);
+            for (const comprimentoBancada of BANCADAS) {
+              const config = {
+                larguraTecido: a.receita.larguraTecido,
+                comprimentoBancada,
+                passo: a.passo,
+                heuristica, saltoX,
+              };
+              const rA = comWasm.encaixarContorno(listaA, config);
+              const rB = semWasm.encaixarContorno(listaB, config);
+              casos++;
+              const assinaturaA = assinar(rA);
+              const assinaturaB = assinar(rB);
+              if (assinaturaA !== assinaturaB) {
+                const linhasA = assinaturaA.split("\n");
+                const linhasB = assinaturaB.split("\n");
+                const primeira = linhasA.findIndex((l, i) => l !== linhasB[i]);
+                falhas.push(`${nome} · grupo ${tamanho} · semente ${semente} · ${heuristica}`
+                  + ` · salto ${saltoX} · bancada ${comprimentoBancada}`
+                  + `\n    wasm: ${linhasA[primeira]}\n    js:   ${linhasB[primeira]}`);
+              }
             }
           }
         }

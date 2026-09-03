@@ -59,10 +59,29 @@ const CAB_USA_VAZIO: usize = 14; // 1 = heurística "vazio", 0 = "fundo"
 const CAB_PULO: usize = 15; // de quanto em quanto a varredura anda
 const CAB_ACUMULADO: usize = 16; // rascunho: soma acumulada do relevo (i64)
 const CAB_SAIDA: usize = 17; // saída: 4 números por unidade da ordem
+const CAB_LINHAS_BANCADA: usize = 18; // comprimento da bancada em células; 0 = rolo sem fim
 
 #[inline(always)]
 unsafe fn ler(base: *const i32, indice: i32) -> i32 {
     *base.offset(indice as isize)
+}
+
+/// Onde a peça pousa de verdade, respeitando a linha da bancada.
+///
+/// Cópia exata de `empurrarParaBancada`, em encaixe-motor.js — ver o cabeçalho
+/// de lá para o porquê. Aqui vale a mesma regra do arquivo inteiro: qualquer
+/// diferença entre os dois é erro, e o teste de paridade a pega.
+#[inline(always)]
+fn empurrar_para_bancada(y: i32, altura: i32, linhas: i32) -> i32 {
+    if linhas <= 0 {
+        return y;
+    }
+    let dentro = y % linhas;
+    if dentro + altura <= linhas {
+        y
+    } else {
+        y - dentro + linhas
+    }
 }
 
 /// Uma rodada de posicionamento: percorre as unidades na ordem dada, encaixa
@@ -102,6 +121,7 @@ pub unsafe extern "C" fn encaixar(cabecalho: *const i32) -> i32 {
     let cols_tecido = ler(cab, CAB_COLS_TECIDO as i32);
     let usa_vazio = ler(cab, CAB_USA_VAZIO as i32) != 0;
     let pulo = if ler(cab, CAB_PULO as i32) < 1 { 1 } else { ler(cab, CAB_PULO as i32) };
+    let linhas_bancada = ler(cab, CAB_LINHAS_BANCADA as i32);
     let acumulado = (zero.offset(ler(cab, CAB_ACUMULADO as i32) as isize)) as *mut i64;
     let saida = zero.offset(ler(cab, CAB_SAIDA as i32) as isize);
 
@@ -143,6 +163,10 @@ pub unsafe extern "C" fn encaixar(cabecalho: *const i32) -> i32 {
             let n_cols = *p_forma_ncols.offset(forma as isize) as i64;
             let soma_topo = *p_forma_somatopo.offset(forma as isize) as i64;
             let max_base = *p_forma_maxbase.offset(forma as isize);
+            // Forma mais comprida que a bancada não cabe em bancada nenhuma.
+            if linhas_bancada > 0 && max_base + 1 > linhas_bancada {
+                continue;
+            }
             let n_sondas = *p_forma_nsondas.offset(forma as isize);
             let topo = zero.offset(*p_forma_topo.offset(forma as isize) as isize);
             let sondas = zero.offset(*p_forma_sondas.offset(forma as isize) as isize);
@@ -218,6 +242,11 @@ pub unsafe extern "C" fn encaixar(cabecalho: *const i32) -> i32 {
                         }
 
                         if !cortada {
+                            // A gravidade disse onde ela encosta; a bancada diz
+                            // se ela pode ficar ali. Antes das notas, para o
+                            // buraco que o empurrão deixa contar como o
+                            // desperdício que é.
+                            let y = empurrar_para_bancada(y, max_base + 1, linhas_bancada);
                             let vazio = (y as i64) * n_cols + soma_topo - soma_perfil;
                             let fundo = (y + max_base + 1) as i64;
                             let (p1, p2) = if usa_vazio { (vazio, fundo) } else { (fundo, vazio) };

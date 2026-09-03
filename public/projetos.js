@@ -25,7 +25,7 @@
   const campoObs = document.getElementById("projeto-observacoes");
   const campoLargura = document.getElementById("projeto-largura-tecido");
   const campoEspaco = document.getElementById("projeto-espaco");
-  const campoMargem = document.getElementById("projeto-margem");
+  const campoComprimento = document.getElementById("projeto-comprimento");
   const campoGiro = document.getElementById("projeto-giro");
   const campoUnidades = document.getElementById("projeto-unidades");
   const conta = document.getElementById("projeto-conta");
@@ -144,7 +144,7 @@ ${p.capa ? `<img src="${p.capa}" alt="" />` : `<span class="pasta-sem-capa">sem 
     campoObs.value = p.observacoes || "";
     campoLargura.value = p.largura_tecido == null ? "" : p.largura_tecido;
     campoEspaco.value = p.espaco == null ? "" : p.espaco;
-    campoMargem.value = p.margem == null ? "" : p.margem;
+    campoComprimento.value = p.comprimento_bancada == null ? "" : p.comprimento_bancada;
     campoGiro.value = p.giro || "180";
     campoUnidades.value = 1;
     esconderErro();
@@ -358,7 +358,7 @@ ${p.capa ? `<img src="${p.capa}" alt="" />` : `<span class="pasta-sem-capa">sem 
       observacoes: campoObs.value.trim(),
       larguraTecido: campoLargura.value === "" ? null : Number(campoLargura.value),
       espaco: campoEspaco.value === "" ? null : Number(campoEspaco.value),
-      margem: campoMargem.value === "" ? null : Number(campoMargem.value),
+      comprimentoBancada: campoComprimento.value === "" ? null : Number(campoComprimento.value),
       giro: campoGiro.value,
       pecas: pecas.map((p) => ({
         nome: p.nome, arquivo: p.arquivo, miniatura: p.miniatura,
@@ -406,7 +406,7 @@ ${p.capa ? `<img src="${p.capa}" alt="" />` : `<span class="pasta-sem-capa">sem 
     };
     ajuste("encaixe-largura", campoLargura.value);
     ajuste("encaixe-espaco", campoEspaco.value);
-    ajuste("encaixe-margem", campoMargem.value);
+    ajuste("encaixe-comprimento", campoComprimento.value);
     const seletorGiro = document.getElementById("encaixe-giro-todas");
     if (seletorGiro) seletorGiro.value = campoGiro.value;
 
