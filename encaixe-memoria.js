@@ -57,10 +57,13 @@ const REDE_LIMIAR_DIVERSIDADE = 20;
  * rede nunca aprenderia a diferença.
  */
 function montarExemplosDeTreino() {
+  // Só a versão de features de agora. O filtro é o que faz a virada de versão
+  // acontecer sozinha: as linhas velhas continuam no banco, contando a história
+  // da metragem, mas param de treinar uma rede que não fala a língua delas.
   const linhas = db.prepare(
     `SELECT features, placar, receita, consumo FROM encaixe_historico
-     WHERE features IS NOT NULL AND placar IS NOT NULL`
-  ).all();
+     WHERE features IS NOT NULL AND placar IS NOT NULL AND features_versao = ?`
+  ).all(rede.REDE_VERSAO_FEATURES);
 
   const exemplos = [];
   linhas.forEach((linha) => {
@@ -151,7 +154,14 @@ function alvoDaReceita(linhaDoPlacar, receitaCampea, consumoCampeao) {
 function redeServeAinda(pesosEmTexto) {
   try {
     const guardada = JSON.parse(pesosEmTexto);
-    return Array.isArray(guardada.tamanhos) && guardada.tamanhos[0] === rede.REDE_DIM_ENTRADA;
+    if (!Array.isArray(guardada.tamanhos) || guardada.tamanhos[0] !== rede.REDE_DIM_ENTRADA) {
+      return false;
+    }
+    // Mesmo tamanho e outro significado é o caso que o tamanho não pega — os
+    // pesos casariam com a entrada nova sem reclamar. Pesos sem versão são da
+    // 1, de antes de isto existir.
+    const versao = guardada.versaoFeatures == null ? 1 : guardada.versaoFeatures;
+    return versao === rede.REDE_VERSAO_FEATURES;
   } catch (erro) {
     console.warn("[encaixe] pesos da rede ilegíveis, vão ser treinados de novo:", erro && erro.message);
     return false;
@@ -219,9 +229,12 @@ router.get("/memoria", (req, res) => {
   // Pesos de um vocabulário antigo não vão para a tela: ver `redeServeAinda`.
   const redeUtil = pesosDaRede && redeServeAinda(pesosDaRede.pesos) ? pesosDaRede : null;
   // Diversidade, não só volume — ver a nota em REDE_LIMIAR_DIVERSIDADE.
+  // Só conta o que a rede de hoje consegue aprender: linha de versão antiga não
+  // treina nada, então ela também não pode contar como formato já visto.
   const diversidadeDeFormatos = db.prepare(
-    "SELECT COUNT(DISTINCT assinatura) AS n FROM encaixe_historico WHERE features IS NOT NULL AND placar IS NOT NULL"
-  ).get().n;
+    `SELECT COUNT(DISTINCT assinatura) AS n FROM encaixe_historico
+     WHERE features IS NOT NULL AND placar IS NOT NULL AND features_versao = ?`
+  ).get(rede.REDE_VERSAO_FEATURES).n;
 
   res.json({
     memoria, encaixesDoTipo, encaixesNoTotal, melhorAntes,
@@ -238,8 +251,8 @@ router.get("/memoria", (req, res) => {
 
 /** Registra como foi um encaixe: quem ganhou, quem tentou e o resultado. */
 router.post("/memoria", (req, res) => {
-  const { assinatura, receita, placar, larguraTecido, pecas, consumo, aproveitamento, tentativas, features } =
-    req.body || {};
+  const { assinatura, receita, placar, larguraTecido, pecas, consumo, aproveitamento, tentativas,
+    features, featuresVersao } = req.body || {};
   if (!assinatura || !receita) {
     return res.status(400).json({ error: "Faltou a assinatura ou a receita vencedora." });
   }
@@ -264,16 +277,22 @@ router.post("/memoria", (req, res) => {
       guardar.run(assinatura, String(receita), 1, 1, agora());
     }
 
+    // A versão vem de quem CALCULOU o vetor (a tela), e não do que o servidor
+    // acha que é a versão de agora: os dois sobem juntos, mas a página fica em
+    // cache no navegador, e uma aba aberta desde antes da atualização mandaria
+    // vetor velho com carimbo novo. Sem o campo, é a 1.
+    const versao = Number(featuresVersao) > 0 ? Number(featuresVersao) : 1;
     db.prepare(`
       INSERT INTO encaixe_historico
         (assinatura, largura_tecido, pecas, consumo, aproveitamento, receita, tentativas, criado_em,
-         features, placar)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         features, placar, features_versao)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(assinatura, Number(larguraTecido) || null, Number(pecas) || null,
       Number(consumo) || null, Number(aproveitamento) || null, String(receita),
       Number(tentativas) || null, agora(),
       Array.isArray(features) ? JSON.stringify(features) : null,
-      Array.isArray(placar) && placar.length > 0 ? JSON.stringify(placar) : null);
+      Array.isArray(placar) && placar.length > 0 ? JSON.stringify(placar) : null,
+      Array.isArray(features) ? versao : null);
   });
 
   anotar();
@@ -318,7 +337,7 @@ router.get("/guardado", (req, res) => {
 
 /** Guarda o encaixe — mas só se ele for melhor que o que já estava lá. */
 router.post("/guardado", (req, res) => {
-  const { chave, assinatura, larguraTecido, espaco, margem, consumo,
+  const { chave, assinatura, larguraTecido, espaco, comprimentoBancada, consumo,
     aproveitamento, pecas, posicoes, receita } = req.body || {};
 
   if (!chave || !Array.isArray(posicoes) || posicoes.length === 0 || !(Number(consumo) > 0)) {
@@ -334,9 +353,9 @@ router.post("/guardado", (req, res) => {
 
   db.prepare(`
     INSERT INTO encaixe_guardados
-      (chave, assinatura, largura_tecido, espaco, margem, consumo, aproveitamento,
+      (chave, assinatura, largura_tecido, espaco, comprimento_bancada, consumo, aproveitamento,
        pecas, posicoes, receita, criado_em, atualizado_em)
-    VALUES (@chave, @assinatura, @largura_tecido, @espaco, @margem, @consumo, @aproveitamento,
+    VALUES (@chave, @assinatura, @largura_tecido, @espaco, @comprimento_bancada, @consumo, @aproveitamento,
             @pecas, @posicoes, @receita, @agora, @agora)
     ON CONFLICT(chave) DO UPDATE SET
       consumo = excluded.consumo,
@@ -346,14 +365,14 @@ router.post("/guardado", (req, res) => {
       receita = excluded.receita,
       largura_tecido = excluded.largura_tecido,
       espaco = excluded.espaco,
-      margem = excluded.margem,
+      comprimento_bancada = excluded.comprimento_bancada,
       atualizado_em = excluded.atualizado_em
   `).run({
     chave: String(chave),
     assinatura: String(assinatura || ""),
     largura_tecido: Number(larguraTecido) || null,
     espaco: Number(espaco) || 0,
-    margem: Number(margem) || 0,
+    comprimento_bancada: Number(comprimentoBancada) || 0,
     consumo: Number(consumo),
     aproveitamento: Number(aproveitamento) || null,
     pecas: pecas ? JSON.stringify(pecas) : null,

@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 /**
- * Confere o PDF do encaixe: um arquivo, uma página, no tamanho real certo.
+ * Confere o PDF do encaixe: um arquivo, uma página por bancada, no tamanho real
+ * certo.
  *
  * O que está sendo protegido aqui é uma regra de produção, não uma
- * preferência: **o rolo sai num arquivo só**. Já saiu repartido, e o corte
- * chegava a passar por cima de uma peça — metade num arquivo, metade no outro.
- * Peça partida é peça perdida. Se um dia alguém reintroduzir a repartição, é
- * este arquivo que grita.
+ * preferência: **o rolo sai num arquivo só**. Já saiu em vários arquivos, e o
+ * corte chegava a passar por cima de uma peça — metade num arquivo, metade no
+ * outro. Peça partida é peça perdida. Se um dia alguém reintroduzir a
+ * repartição em ARQUIVOS, é este arquivo que grita.
+ *
+ * Repartir em PÁGINAS é outra história, e agora é o certo: sem bancada continua
+ * saindo uma página só, e com bancada sai uma por bancada — onde o encaixe já
+ * garantiu que peça nenhuma pode estar (ver `bancada/conferir-bancada.js`, que
+ * é quem confere essa parte). Aqui se confere que a repartição do documento
+ * respeita o que o encaixe decidiu: página por bancada, toda peça desenhada uma
+ * vez, e cada página do tamanho real da sua bancada.
  *
  * A segunda coisa conferida é a mais silenciosa das duas. Rolo acima de 508 cm
  * não cabe numa página de PDF, e quem resolve isso é o `/UserUnit` — que é
@@ -51,9 +59,15 @@ function gerar(encaixe) {
   });
 }
 
-/** Um encaixe de mentira: peças lado a lado descendo o rolo. */
-function encaixeDe(larguraTecido, consumoCm, quantas) {
+/**
+ * Um encaixe de mentira: peças lado a lado descendo o rolo.
+ *
+ * `bancadas` reparte as peças em bancadas iguais, do jeito que o motor faria —
+ * o número da bancada vem carimbado na posição, e é só isso que o PDF olha.
+ */
+function encaixeDe(larguraTecido, consumoCm, quantas, bancadas = 1) {
   const posicoes = [];
+  const porBancada = Math.ceil(quantas / bancadas);
   for (let i = 0; i < quantas; i++) {
     posicoes.push({
       chave: "peca",
@@ -61,6 +75,7 @@ function encaixeDe(larguraTecido, consumoCm, quantas) {
       y: (consumoCm / quantas) * i,
       largura: larguraTecido / 2 - 1,
       altura: consumoCm / quantas - 1,
+      bancada: Math.floor(i / porBancada),
     });
   }
   return {
@@ -75,34 +90,57 @@ const CASOS = [
   { nome: "rolo longo (12 m)", largura: 160, consumo: 1200, pecas: 24, esperaUserUnit: true },
   { nome: "rolo enorme (40 m)", largura: 180, consumo: 4000, pecas: 80, esperaUserUnit: true },
   { nome: "tecido largo (5,2 m)", largura: 520, consumo: 300, pecas: 6, esperaUserUnit: true },
+  // Com bancada. O rolo de 40 m é o que interessa: repartido em bancadas de
+  // 2 m, cada página volta a caber no formato sem precisar de `/UserUnit` —
+  // que é o ganho de verdade da paginação, além da mesa de corte.
+  { nome: "3 bancadas (6 m)", largura: 160, consumo: 600, pecas: 12, bancadas: 3, esperaUserUnit: false },
+  { nome: "20 bancadas (40 m)", largura: 180, consumo: 4000, pecas: 80, bancadas: 20, esperaUserUnit: false },
+  { nome: "bancada única", largura: 160, consumo: 300, pecas: 6, bancadas: 1, esperaUserUnit: false },
 ];
 
 async function principal() {
   const falhas = [];
 
   for (const caso of CASOS) {
-    const encaixe = encaixeDe(caso.largura, caso.consumo, caso.pecas);
+    const bancadas = caso.bancadas || 1;
+    const encaixe = encaixeDe(caso.largura, caso.consumo, caso.pecas, bancadas);
     const { bytes, relatorio } = await gerar(encaixe);
     const texto = bytes.toString("latin1");
     const erro = (queixa) => falhas.push(`${caso.nome}: ${queixa}`);
 
-    // 1) UMA página. É a regra que este arquivo existe para proteger.
+    // 1) UM arquivo, com uma página por bancada. Sem bancada, uma página só.
     const paginas = (texto.match(/\/Type\s*\/Page[^s]/g) || []).length;
-    if (paginas !== 1) erro(`saíram ${paginas} páginas — o rolo tem que caber numa só`);
+    if (paginas !== bancadas) {
+      erro(`saíram ${paginas} páginas para ${bancadas} bancada(s)`);
+    }
 
-    // 2) Toda peça desenhada, nenhuma perdida.
+    // 2) Toda peça desenhada, nenhuma perdida — e nenhuma desenhada duas vezes,
+    // que é como uma peça apareceria em duas bancadas.
     if (relatorio.desenhadas !== caso.pecas) {
       erro(`${relatorio.desenhadas} de ${caso.pecas} peças desenhadas`);
+    }
+    const somaDasPaginas = relatorio.paginas.reduce((soma, p) => soma + p.pecas, 0);
+    if (somaDasPaginas !== caso.pecas) {
+      erro(`as páginas somam ${somaDasPaginas} peças, e o encaixe tem ${caso.pecas}`);
     }
 
     // 3) O tamanho REAL do papel: página × UserUnit, de volta em centímetros.
     const larguraCm = (relatorio.paginaPt[0] * relatorio.unidade) / PT_POR_CM;
-    const alturaCm = (relatorio.paginaPt[1] * relatorio.unidade) / PT_POR_CM;
     if (Math.abs(larguraCm - caso.largura) > 0.01) {
       erro(`largura real ${larguraCm.toFixed(2)} cm, esperada ${caso.largura} cm`);
     }
-    if (Math.abs(alturaCm - caso.consumo) > 0.01) {
-      erro(`comprimento real ${alturaCm.toFixed(2)} cm, esperado ${caso.consumo} cm`);
+    // Cada página tem o comprimento da bancada dela; sem bancada, o consumo
+    // inteiro do rolo.
+    relatorio.paginas.forEach((pagina) => {
+      const alturaCm = (pagina.paginaPt[1] * relatorio.unidade) / PT_POR_CM;
+      if (Math.abs(alturaCm - pagina.comprimento) > 0.01) {
+        erro(`a página ${pagina.numero} tem ${alturaCm.toFixed(2)} cm de papel para`
+          + ` ${pagina.comprimento.toFixed(2)} cm de bancada`);
+      }
+    });
+    const somaCm = relatorio.paginas.reduce((soma, p) => soma + p.comprimento, 0);
+    if (somaCm > caso.consumo + 0.01) {
+      erro(`as páginas somam ${somaCm.toFixed(2)} cm, mais que os ${caso.consumo} cm do rolo`);
     }
 
     // 4) A página em si tem que caber no teto do formato.
@@ -123,12 +161,14 @@ async function principal() {
 
     const como = temUserUnit ? `UserUnit ${relatorio.unidade}` : "UserUnit 1";
     process.stdout.write(`  ${caso.nome.padEnd(24)} PDF ${versao} · ${como}`
-      + ` · página ${relatorio.paginaPt.map((v) => v.toFixed(0)).join("x")} pt\n`);
+      + ` · ${relatorio.paginas.length} página(s) de`
+      + ` ${relatorio.paginaPt.map((v) => v.toFixed(0)).join("x")} pt\n`);
   }
 
   console.log("");
   if (falhas.length === 0) {
-    console.log(`OK — ${CASOS.length} encaixes, todos num arquivo e numa página só.`);
+    console.log(`OK — ${CASOS.length} encaixes, todos num arquivo só,`
+      + ` com uma página por bancada.`);
     return;
   }
   console.log(`FALHOU — ${falhas.length} problema(s):`);

@@ -26,7 +26,7 @@
 
 const TRABALHOS = {
   "camiseta+manga+gola": {
-    larguraTecido: 160, espaco: 1, margem: 2,
+    larguraTecido: 160, espaco: 1, comprimentoBancada: 0,
     pecas: [
       { nome: "camiseta", qtd: 8 },
       { nome: "manga", qtd: 16 },
@@ -34,18 +34,18 @@ const TRABALHOS = {
     ],
   },
   "so-camiseta": {
-    larguraTecido: 180, espaco: 1, margem: 2,
+    larguraTecido: 180, espaco: 1, comprimentoBancada: 0,
     pecas: [{ nome: "camiseta", qtd: 12 }],
   },
   "calca-bolso": {
-    larguraTecido: 160, espaco: 1, margem: 2,
+    larguraTecido: 160, espaco: 1, comprimentoBancada: 0,
     pecas: [
       { nome: "calca", qtd: 8 },
       { nome: "bolso", qtd: 16 },
     ],
   },
   "misturado-pequeno": {
-    larguraTecido: 150, espaco: 1, margem: 2,
+    larguraTecido: 150, espaco: 1, comprimentoBancada: 0,
     pecas: [
       { nome: "camiseta", qtd: 3 },
       { nome: "manga", qtd: 6 },
@@ -56,7 +56,7 @@ const TRABALHOS = {
     ],
   },
   "lote-grande": {
-    larguraTecido: 160, espaco: 1, margem: 2,
+    larguraTecido: 160, espaco: 1, comprimentoBancada: 0,
     pecas: [
       { nome: "camiseta", qtd: 24 },
       { nome: "manga", qtd: 48 },
@@ -67,7 +67,7 @@ const TRABALHOS = {
   },
   /*
    * O TRABALHO DE PRODUÇÃO. 25 uniformes completos, do jeito que saiu da loja:
-   * 179 cm de mídia, folga de 4 mm, margem de 1 cm.
+   * 179 cm de mídia, folga de 4 mm.
    *
    * É o trabalho mais importante do conjunto, e o único que tem um número de
    * fora para comparar: a produção fechou em **34,63 m**. Ele existe porque as
@@ -79,7 +79,7 @@ const TRABALHOS = {
    * fora do conjunto padrão de propósito; entra com `--todos` ou pelo nome.
    */
   "producao-uniforme": {
-    larguraTecido: 179, espaco: 0.4, margem: 1,
+    larguraTecido: 179, espaco: 0.4, comprimentoBancada: 0,
     pecas: [
       { nome: "uni-costa", qtd: 25 },
       { nome: "uni-frente", qtd: 25 },
@@ -94,14 +94,14 @@ const TRABALHOS = {
    * ficou (ver "arte-partida" em pecas.js para o porquê).
    */
   "arte-partida": {
-    larguraTecido: 160, espaco: 1, margem: 2,
+    larguraTecido: 160, espaco: 1, comprimentoBancada: 0,
     pecas: [
       { nome: "arte-partida", qtd: 10 },
       { nome: "gola", qtd: 4 },
     ],
   },
   "quase-retangulo": {
-    larguraTecido: 160, espaco: 1, margem: 2,
+    larguraTecido: 160, espaco: 1, comprimentoBancada: 0,
     pecas: [
       { nome: "punho", qtd: 30 },
       { nome: "bolso", qtd: 20 },

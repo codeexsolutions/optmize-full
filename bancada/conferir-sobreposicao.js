@@ -15,8 +15,8 @@
  * O encaixe por perfil e o por caixa não sobrepõem **por construção** — o perfil
  * só desce até onde o relevo deixa, e a caixa recorta a área livre a cada peça.
  * Só que "por construção" é um argumento, não uma medida, e argumento não pega
- * erro de arredondamento: a posição que a tela recebe passa por `offX`, pelo
- * passo da grade e pela margem, e é ela que está sendo conferida aqui.
+ * erro de arredondamento: a posição que a tela recebe passa por `offX` e pelo
+ * passo da grade, e é ela que está sendo conferida aqui.
  *
  * Como a conferência é feita
  * --------------------------
@@ -60,8 +60,8 @@ function celulasDaPeca(pos, qual) {
   if (qual === "folga") {
     // A peça já com a folga: em cada coluna ela vai de `topo` a `base`. É a
     // mesma leitura que o encaixe faz para descer a peça, mas aqui aplicada à
-    // posição FINAL que a tela recebeu — que passou por offX, pelo passo e pela
-    // margem no caminho, e é justamente esse caminho que se quer conferir.
+    // posição FINAL que a tela recebeu — que passou por offX e pelo passo no
+    // caminho, e é justamente esse caminho que se quer conferir.
     for (let c = 0; c < m.cols; c++) {
       if (m.topo[c] < 0) continue;
       for (let r = m.topo[c]; r <= m.base[c]; r++) celulas.push([col0 + c, row0 + r]);
@@ -187,10 +187,10 @@ const descrever = (pos) =>
 /** Roda um encaixador só, sem busca: o que se confere é o posicionamento. */
 function encaixarCom(motor, motorNome, itens, receita, passo) {
   const config = {
-    larguraTecido: receita.larguraTecido, espaco: receita.espaco, margem: receita.margem,
+    larguraTecido: receita.larguraTecido, espaco: receita.espaco,
+    comprimentoBancada: receita.comprimentoBancada || 0,
     passo, heuristica: "fundo",
-    alturaMax: itens.reduce((s, i) => s + Math.max(i.largura, i.altura) + receita.espaco,
-      receita.margem * 2),
+    alturaMax: itens.reduce((s, i) => s + Math.max(i.largura, i.altura) + receita.espaco, 0),
   };
   if (motorNome === "retangulo") return motor.encaixar(itens, { ...config, heuristica: "bl" });
   // "contorno+repesca" é o caminho da repescagem nos vãos, e ele merece
@@ -230,12 +230,19 @@ async function principal() {
     }));
     const itens = expandir(pecas);
 
+    // Com e sem bancada. A trava empurra a peça para BAIXO do ponto em que a
+    // gravidade a deixou, e empurrar para baixo é justamente o movimento que
+    // enfiaria uma peça dentro de outra se em algum motor "abaixo" não quisesse
+    // dizer "livre".
+    for (const bancada of [0, 200]) {
     for (const motorNome of opcoes.motores) {
-      const r = encaixarCom(motor, motorNome, itens, receita, passo);
+      const r = encaixarCom(motor, motorNome, itens,
+        { ...receita, comprimentoBancada: bancada }, passo);
       // O encaixe por caixa não devolve máscara (ele trabalha só com o
       // retângulo), então não há silhueta para conferir.
       if (!r.posicoes.some((p) => p.mascara)) {
-        process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)} sem máscara, nada a conferir\n`);
+        process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)}`
+          + ` bancada ${bancada ? `${bancada} cm` : "sem   "} · sem máscara, nada a conferir\n`);
         continue;
       }
 
@@ -251,6 +258,7 @@ async function principal() {
             : "limpo";
 
       process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)}`
+        + ` bancada ${bancada ? `${bancada} cm` : "sem   "} ·`
         + ` ${r.posicoes.length} peças · ${(r.consumo / 100).toFixed(2)} m`
         + ` · folga ${(distancia.menor * 10).toFixed(1)}/${(receita.espaco * 10).toFixed(0)} mm`
         + ` · ${situacao}\n`);
@@ -271,6 +279,7 @@ async function principal() {
           + ` ${comFolga.repetidas} células (as peças não se sobrepõem, mas encostam)`
           + `\n      ${comFolga.exemplo.a}\n      ${comFolga.exemplo.b}`);
       }
+    }
     }
   }
 

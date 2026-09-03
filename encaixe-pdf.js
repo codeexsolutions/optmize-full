@@ -2,25 +2,31 @@
  * Gera o PDF do encaixe em tamanho real, para mandar direto para a impressora
  * ou para a mesa de corte.
  *
- * É **uma página só, num arquivo só**, com exatamente a largura do tecido e o
- * comprimento do encaixe, em centímetros de verdade — imprimindo em escala
- * 1:1, o que sai no papel mede o que a peça mede. E vai só o desenho: nada de
- * régua, nome de peça ou rodapé, porque isso seria impresso junto no tecido.
+ * É **um arquivo só**, com exatamente a largura do tecido e o comprimento do
+ * encaixe, em centímetros de verdade — imprimindo em escala 1:1, o que sai no
+ * papel mede o que a peça mede. E vai só o desenho: nada de régua, nome de peça
+ * ou rodapé, porque isso seria impresso junto no tecido.
  *
- * Por que arquivo único
- * ---------------------
- * O rolo já saiu repartido em trechos de 10 m. A razão era o RIP: rasterizar
- * uma página de 11 m em tamanho real ocupa memória proporcional ao tamanho da
- * página, e um arquivo só obriga a máquina a segurar tudo de uma vez antes de a
- * primeira gota cair.
+ * Uma página por bancada
+ * ----------------------
+ * O rolo já saiu repartido em trechos de 10 m, e a repartição foi tirada
+ * inteira em a1b7c6d. O defeito não era repartir: era **onde** o corte caía.
+ * Ele procurava um vão entre as peças, e encaixe bom é exatamente o que não
+ * deixa vão — num rolo denso as peças se encavalam de ponta a ponta, e o corte
+ * acabava passando por cima de uma peça, metade num pedaço e metade no outro.
+ * Peça partida é peça perdida.
  *
- * Só que repartir exige um lugar para cortar, e encaixe bom é exatamente o que
- * não deixa vão: num rolo denso as peças se encavalam de ponta a ponta e o
- * corte acabava passando por cima de uma peça — metade num arquivo, metade no
- * outro. Os dois pedaços só se reencontram se os arquivos entrarem na máquina
- * colados, sem um milímetro de folga entre um trabalho e o outro, e na prática
- * isso não acontece. **Peça partida é peça perdida**, e por isso a repartição
- * saiu inteira: cliente e servidor.
+ * Agora o corte não procura nada. Quando o trabalho tem bancada, o próprio
+ * encaixe é feito com a trava de que **nenhuma peça cruza a linha** (ver o
+ * cabeçalho da BANCADA em public/encaixe-motor.js): a página nasce de um lugar
+ * onde peça nenhuma pode estar. Sem bancada, continua tudo como antes — uma
+ * página só, do começo ao fim do rolo.
+ *
+ * O arquivo continua único nos dois casos. Repartir em vários arquivos exigia
+ * que eles entrassem na máquina colados, sem um milímetro de folga entre um e
+ * outro, e na prática isso não acontece; páginas do mesmo arquivo não têm esse
+ * problema, e ainda dão ao RIP o que ele queria — rasterizar um pedaço de cada
+ * vez em vez de segurar 11 metros antes da primeira gota cair.
  *
  * O teto de página
  * ----------------
@@ -105,28 +111,68 @@ function unidadeDaPagina(larguraPt, alturaPt) {
 }
 
 /**
+ * Reparte as posições em páginas: uma por bancada.
+ *
+ * Quem diz a que bancada uma peça pertence é o motor, que carimba o número em
+ * cada posição (ver o cabeçalho da BANCADA em public/encaixe-motor.js). Aqui
+ * não se decide nada — só se agrupa. É essa divisão de responsabilidade que
+ * torna impossível o defeito que tirou a repartição daqui em a1b7c6d: o corte
+ * não procura mais um lugar bom entre as peças, ele já vem escolhido de onde as
+ * peças foram postas, e peça nenhuma pode estar em cima dele.
+ *
+ * Cada página é cortada no que a bancada realmente ocupa, do topo da primeira
+ * arte ao pé da última. Sem bancada nenhuma é o caso de sempre: uma página só,
+ * com o consumo inteiro do rolo, inclusive o tecido que sobra depois da última
+ * peça.
+ */
+function paginasDoEncaixe(posicoes, consumo) {
+  const porBancada = new Map();
+  posicoes.forEach((pos) => {
+    const numero = Number(pos.bancada) || 0;
+    let pagina = porBancada.get(numero);
+    if (!pagina) {
+      pagina = { numero, topo: Infinity, fundo: -Infinity, posicoes: [] };
+      porBancada.set(numero, pagina);
+    }
+    pagina.topo = Math.min(pagina.topo, pos.y);
+    pagina.fundo = Math.max(pagina.fundo, pos.y + pos.altura);
+    pagina.posicoes.push(pos);
+  });
+
+  const paginas = [...porBancada.values()].sort((a, b) => a.numero - b.numero);
+  if (paginas.length <= 1) return [{ numero: 0, topo: 0, fundo: consumo, posicoes }];
+  return paginas;
+}
+
+/**
  * Monta o documento e devolve ele já escrevendo em `destino`.
  *
  * Está separado da rota para a bancada conseguir gerar um PDF sem subir o
  * Express (ver `bancada/conferir-pdf.js`): o que precisa ser conferido é o
- * documento — uma página, o tamanho real certo, a versão do formato certa e
- * toda peça desenhada —, e nada disso é assunto de HTTP.
+ * documento — uma página por bancada, o tamanho real certo, a versão do
+ * formato certa e toda peça desenhada —, e nada disso é assunto de HTTP.
+ *
+ * O `/UserUnit` é UM para o documento inteiro, calculado pela maior página.
+ * Podia ser um por página (o campo é do dicionário da página), e não é de
+ * propósito: uma escala por página é uma chance a mais de duas páginas do mesmo
+ * rolo saírem em tamanhos diferentes por causa de um arredondamento, e esse
+ * erro só aparece com o tecido já impresso.
  */
 function montarPdf({ larguraTecido, consumo, posicoes, buffers }, destino) {
+  const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
-  const alturaPt = consumo * PT_POR_CM;
-  const unidade = unidadeDaPagina(larguraPt, alturaPt);
+  const maiorAlturaPt = Math.max(...paginas.map((p) => (p.fundo - p.topo) * PT_POR_CM));
+  const unidade = unidadeDaPagina(larguraPt, maiorAlturaPt);
+  const tamanhoDa = (pagina) => [larguraPt / unidade, ((pagina.fundo - pagina.topo) * PT_POR_CM) / unidade];
 
   const doc = new PDFDocument({
-    size: [larguraPt / unidade, alturaPt / unidade],
+    size: tamanhoDa(paginas[0]),
     margin: 0,
     // Ver o cabeçalho do arquivo: o `/UserUnit` é do PDF 1.6, e declarar 1.3
     // dá ao leitor o direito de ignorá-lo e imprimir fora de escala.
     pdfVersion: unidade === 1 ? "1.3" : "1.6",
   });
   doc.pipe(destino);
-
-  if (unidade !== 1) doc.page.dictionary.data.UserUnit = unidade;
 
   // Cada arte entra no arquivo UMA vez e depois é só reaproveitada em cada
   // posição. Passando o buffer direto, o pdfkit embutiria a mesma imagem cem
@@ -142,23 +188,41 @@ function montarPdf({ larguraTecido, consumo, posicoes, buffers }, destino) {
   });
 
   let desenhadas = 0;
-  posicoes.forEach((pos) => {
-    const desenho = desenhos.get(pos.chave);
-    if (!desenho) return;
-    try {
-      doc.image(desenho, (pos.x * PT_POR_CM) / unidade, (pos.y * PT_POR_CM) / unidade, {
-        width: (pos.largura * PT_POR_CM) / unidade,
-        height: (pos.altura * PT_POR_CM) / unidade,
-      });
-      desenhadas++;
-    } catch (err) {
-      // uma imagem ruim não pode derrubar o PDF inteiro
-      console.warn(`[encaixe-pdf] não deu para desenhar a peça ${pos.chave}:`, err && err.message);
-    }
+  paginas.forEach((pagina, i) => {
+    if (i > 0) doc.addPage({ size: tamanhoDa(pagina), margin: 0 });
+    if (unidade !== 1) doc.page.dictionary.data.UserUnit = unidade;
+
+    pagina.posicoes.forEach((pos) => {
+      const desenho = desenhos.get(pos.chave);
+      if (!desenho) return;
+      try {
+        // O `y` da peça é medido no rolo inteiro; na página ele conta a partir
+        // do começo da bancada.
+        doc.image(desenho, (pos.x * PT_POR_CM) / unidade,
+          ((pos.y - pagina.topo) * PT_POR_CM) / unidade, {
+            width: (pos.largura * PT_POR_CM) / unidade,
+            height: (pos.altura * PT_POR_CM) / unidade,
+          });
+        desenhadas++;
+      } catch (err) {
+        // uma imagem ruim não pode derrubar o PDF inteiro
+        console.warn(`[encaixe-pdf] não deu para desenhar a peça ${pos.chave}:`, err && err.message);
+      }
+    });
   });
 
   doc.end();
-  return { unidade, desenhadas, paginaPt: [larguraPt / unidade, alturaPt / unidade] };
+  return {
+    unidade,
+    desenhadas,
+    paginaPt: tamanhoDa(paginas[0]),
+    paginas: paginas.map((p) => ({
+      numero: p.numero,
+      comprimento: p.fundo - p.topo,
+      pecas: p.posicoes.length,
+      paginaPt: tamanhoDa(p),
+    })),
+  };
 }
 
 router.post("/pdf", (req, res) => {
@@ -186,8 +250,8 @@ router.post("/pdf", (req, res) => {
 
   montarPdf({ larguraTecido, consumo, posicoes, buffers }, res);
 
-  // O rolo sai num arquivo só, então este pedido é o último: as artes desta
-  // sessão já cumpriram o que tinham para cumprir.
+  // O rolo sai num arquivo só (com uma página por bancada), então este pedido é
+  // o último: as artes desta sessão já cumpriram o que tinham para cumprir.
   artesGuardadas.delete(sessao);
 });
 
@@ -195,6 +259,7 @@ module.exports = router;
 // A montagem do documento sai junto com o roteador para a bancada conseguir
 // conferir o PDF sem subir o Express (ver `bancada/conferir-pdf.js`).
 module.exports.montarPdf = montarPdf;
+module.exports.paginasDoEncaixe = paginasDoEncaixe;
 module.exports.unidadeDaPagina = unidadeDaPagina;
 module.exports.PT_POR_CM = PT_POR_CM;
 module.exports.LIMITE_PT = LIMITE_PT;

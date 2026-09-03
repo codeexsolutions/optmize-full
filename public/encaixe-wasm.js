@@ -27,9 +27,9 @@ const WASM_CAB = {
   unidInicio: 8, unidQtd: 9,
   ordem: 10, nOrdem: 11,
   perfil: 12, colsTecido: 13, usaVazio: 14, pulo: 15,
-  acumulado: 16, saida: 17,
+  acumulado: 16, saida: 17, linhasBancada: 18,
 };
-const WASM_CAB_TAMANHO = 18;
+const WASM_CAB_TAMANHO = 19;
 
 let motorWasm = null;      // { instancia, i32, memoria }
 let motorWasmFalhou = false;
@@ -239,9 +239,9 @@ function prepararUnidadesNoWasm(unidades) {
 function encaixarContornoWasm(unidades, config) {
   if (!temMotorWasm() || unidades.length === 0) return null;
 
-  const { larguraTecido, margem, passo, heuristica } = config;
-  const colsTecido = config.colsForcado
-    || Math.max(1, Math.floor((larguraTecido - margem * 2) / passo));
+  const { larguraTecido, passo, heuristica } = config;
+  const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
+  const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
 
   const plano = prepararUnidadesNoWasm(unidades);
   if (!plano || colsTecido > plano.colsTecidoMax) return null;
@@ -254,12 +254,14 @@ function encaixarContornoWasm(unidades, config) {
   i32[cab + WASM_CAB.colsTecido] = colsTecido;
   i32[cab + WASM_CAB.usaVazio] = heuristica === "vazio" ? 1 : 0;
   i32[cab + WASM_CAB.pulo] = Math.max(1, Math.round(config.saltoX || 1));
+  // 0 = rolo sem fim. A trava da bancada é a mesma dos dois lados, e é o
+  // `empurrarParaBancada` de encaixe-motor.js que o Rust copia.
+  i32[cab + WASM_CAB.linhasBancada] = linhasBancada || 0;
 
   const fundoMax = motorWasm.instancia.exports.encaixar(cab * 4);
 
   // A volta: o WASM diz qual forma venceu e onde; as peças de verdade e as
   // máscaras continuam aqui do lado do JavaScript.
-  const posicoes = [];
   const colocacoes = [];
   const naoEncaixadas = [];
   // A unidade que deixou mais buraco morto acima dela. É o que o reparo
@@ -286,26 +288,16 @@ function encaixarContornoWasm(unidades, config) {
     // repescagem (`repescarNosVaos`, em encaixe-motor.js) precisa para mexer
     // numa peça já assentada.
     colocacoes.push({ unidade, forma, x, y });
-    forma.partes.forEach((parte) => {
-      const m = parte.mascara;
-      const deitada = parte.rot === 90 || parte.rot === 270;
-      posicoes.push({
-        item: parte.item,
-        x: (x + parte.dcol) * passo + margem - m.offX,
-        y: (y + parte.drow) * passo + margem - m.offY,
-        largura: deitada ? parte.item.altura : parte.item.largura,
-        altura: deitada ? parte.item.largura : parte.item.altura,
-        rot: parte.rot,
-        girado: deitada,
-        mascara: m,
-        passo,
-      });
-    });
   }
+
+  // As posições saem do mesmo lugar que as do caminho em JavaScript. Já foram
+  // montadas aqui, numa cópia da conta — e cópia de conta é onde os dois
+  // caminhos se separam sem ninguém ver.
+  const posicoes = posicoesDasColocacoes(colocacoes, passo, linhasBancada);
 
   return {
     posicoes, colocacoes, naoEncaixadas,
-    consumo: fundoMax > 0 ? fundoMax * passo + margem * 2 : 0,
+    consumo: fundoMax > 0 ? fundoMax * passo : 0,
     areaReal: posicoes.reduce((soma, p) => soma + p.item.mascaras.areaReal, 0),
     piorUnidade, piorVazio,
   };
