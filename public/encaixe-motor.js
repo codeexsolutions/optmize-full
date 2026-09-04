@@ -1870,6 +1870,77 @@ function familiaDaUnidade(unidade) {
   return unidade._familia;
 }
 
+/*
+ * ===========================================================================
+ * OS ESPECIALISTAS DE FAMÍLIA
+ * ===========================================================================
+ *
+ * A ordem "familia" que já existia entra com os formatos em bloco, mas quem
+ * decide a SEQUÊNCIA dos blocos nela é o tamanho da unidade — na prática,
+ * "maior peça primeiro". É uma sequência entre muitas, e não há razão para ela
+ * ser sempre a melhor.
+ *
+ * Estas duas ordenam os blocos por propriedades da FAMÍLIA inteira, que é coisa
+ * diferente do tamanho de uma peça dela:
+ *
+ *   familia-rara  entra primeiro o formato com MENOS cópias. A peça rara é a
+ *                 que tem menos chance de achar lugar depois, quando o tecido
+ *                 já está ocupado — e sobrar peça difícil para o fim é o que
+ *                 estica o rabo do rolo. Peça abundante acha vão em qualquer
+ *                 lugar; é ela que deve ficar para preencher.
+ *
+ *   familia-area  entra primeiro o formato que ocupa MAIS ÁREA no total
+ *                 (tamanho × cópias). Ele é o que manda no desenho do encaixe,
+ *                 e fixá-lo cedo dá às outras famílias um relevo estável para
+ *                 se encaixarem. Não é o mesmo que "maior peça primeiro": vinte
+ *                 golas pequenas podem somar mais que duas camisetas.
+ *
+ * Custam pouco: `porFamilia` só roda com o agrupamento "solta" (ver
+ * `receitasBase`), então cada uma acrescenta duas receitas a um portfólio de
+ * trinta e seis.
+ *
+ * Elas precisam de uma conta que o comparador de par em par não alcança — a
+ * família só tem "quantas cópias" e "quanta área" depois de olhar a lista
+ * inteira. Daí o `ordenar`, que recebe a lista e devolve ordenada; quem não o
+ * tem continua com o `comparar` de sempre.
+ */
+function agregadosPorFamilia(lista) {
+  const mapa = new Map();
+  lista.forEach((unidade) => {
+    const familia = familiaDaUnidade(unidade);
+    let dados = mapa.get(familia);
+    if (!dados) { dados = { unidades: 0, area: 0 }; mapa.set(familia, dados); }
+    dados.unidades++;
+    dados.area += tamanhoDaUnidade(unidade);
+  });
+  return mapa;
+}
+
+/**
+ * Ordena a lista por FAMÍLIA, com o critério que vier, mantendo cada família
+ * inteira num bloco só.
+ *
+ * O desempate entre famílias é o nome delas, e dentro da família é o tamanho
+ * da unidade — os dois existem para a ordem ser sempre a mesma dada a mesma
+ * lista. Sem isso, duas famílias empatadas sairiam na ordem em que o
+ * `Array.sort` resolvesse, e o encaixe deixaria de ser reprodutível.
+ */
+function ordenarPorFamilia(criterio) {
+  return (lista) => {
+    const agregados = agregadosPorFamilia(lista);
+    return lista.slice().sort((a, b) => {
+      const fa = familiaDaUnidade(a);
+      const fb = familiaDaUnidade(b);
+      if (fa !== fb) {
+        const entreFamilias = criterio(agregados.get(fa), agregados.get(fb));
+        if (entreFamilias !== 0) return entreFamilias;
+        return fa < fb ? -1 : 1;
+      }
+      return tamanhoDaUnidade(b) - tamanhoDaUnidade(a);
+    });
+  };
+}
+
 const ORDENS_CONTORNO = [
   { nome: "area", comparar: (a, b) => tamanhoDaUnidade(b) - tamanhoDaUnidade(a) },
   { nome: "altura", comparar: (a, b) => alturaDaUnidade(b) - alturaDaUnidade(a) },
@@ -1922,6 +1993,18 @@ const ORDENS_CONTORNO = [
       const fb = familiaDaUnidade(b);
       return fa < fb ? -1 : fa > fb ? 1 : 0;
     },
+  },
+  {
+    // A família com menos cópias primeiro. Ver "OS ESPECIALISTAS DE FAMÍLIA".
+    nome: "familia-rara",
+    porFamilia: true,
+    ordenar: ordenarPorFamilia((a, b) => a.unidades - b.unidades),
+  },
+  {
+    // A família que ocupa mais área no total primeiro.
+    nome: "familia-area",
+    porFamilia: true,
+    ordenar: ordenarPorFamilia((a, b) => b.area - a.area),
   },
 ];
 
@@ -2314,7 +2397,11 @@ async function buscarMelhorEncaixe(itens, config) {
   const rodar = (receita, embaralhar, partirDoMelhor) => {
     const base = listaDaReceita(receita);
     const guardada = partirDoMelhor ? melhoresOrdens.get(base.chave) : null;
-    let lista = guardada ? guardada.lista.slice() : base.crua.slice().sort(base.ordem.comparar);
+    // `ordenar` vence o `comparar` quando existe: há ordens cujo critério só
+    // sai de olhar a lista inteira (ver `ordenarPorFamilia`).
+    let lista = guardada ? guardada.lista.slice()
+      : base.ordem.ordenar ? base.ordem.ordenar(base.crua)
+        : base.crua.slice().sort(base.ordem.comparar);
     if (embaralhar) lista = embaralhar(lista, guardada, base.ordem);
     // Por último, e depois da sacudida de propósito: ver `juntarGrupos`. Vale
     // para TODA receita, não só para a de família — do contrário o grupo
