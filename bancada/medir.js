@@ -254,12 +254,69 @@ async function buscarComoAProducao(motor, trabalho,
 const metros = (cm) => `${(cm / 100).toFixed(3)} m`;
 const porcento = (f) => `${(f * 100).toFixed(1)}%`;
 
+/*
+ * ===========================================================================
+ * O RITMO DA MÁQUINA, E POR QUE ELE ENTRA NO RELATÓRIO
+ * ===========================================================================
+ *
+ * A bancada compara duas corridas pelo consumo. Isso só vale se as duas
+ * tiveram o MESMO poder de fogo — e não têm, quando a máquina está ocupada.
+ * O orçamento aqui é de tempo, não de tentativas: uma corrida com o
+ * computador carregado faz menos tentativas no mesmo segundo, acha um encaixe
+ * pior, e a diferença aparece na tabela como se fosse efeito da mudança que
+ * se estava medindo.
+ *
+ * Aconteceu, e passou despercebido até alguém somar as colunas. O mesmo
+ * trabalho, mesmo orçamento, três corridas de uma tarde:
+ *
+ *   261.460  ->  246.501  ->  190.620 tentativas
+ *
+ * Uma queda de 27% que não tinha nada a ver com o motor. Duas conclusões
+ * foram tiradas em cima disso antes de o padrão ser notado.
+ *
+ * Agora a corrida diz quantas tentativas por segundo ela conseguiu, e quando
+ * há `--contra` o relatório compara esse ritmo com o da corrida guardada. Se
+ * eles não baterem, o aviso vem antes da tabela — porque a essa altura a
+ * tabela não está medindo o que diz medir.
+ */
+
+// Acima disto a diferença de ritmo já explica sozinha uma diferença de consumo
+// da ordem que este projeto costuma perseguir (décimos de por cento).
+const RITMO_TOLERANCIA = 0.10;
+
+function avisarSobreRitmo(linhas, antes) {
+  if (!antes) return;
+  const pares = linhas
+    .map((l) => ({ nome: l.nome, agora: l.tentPorSegundo,
+      antes: antes.trabalhos[l.nome] ? antes.trabalhos[l.nome].tentPorSegundo : 0 }))
+    .filter((x) => x.agora > 0 && x.antes > 0);
+  if (pares.length === 0) {
+    // Corrida guardada antes de o ritmo existir: dá para comparar o consumo,
+    // mas não dá para saber se as duas tiveram o mesmo poder de fogo.
+    console.log("  aviso: a corrida guardada não registrou o ritmo da máquina —"
+      + " não dá para saber se as duas tiveram o mesmo poder de fogo.\n");
+    return;
+  }
+  const fora = pares.filter((x) => Math.abs(x.agora - x.antes) / x.antes > RITMO_TOLERANCIA);
+  if (fora.length === 0) return;
+  console.log(`  AVISO: o ritmo da máquina mudou em ${fora.length} de ${pares.length}`
+    + " trabalho(s). A comparação abaixo NÃO é confiável — refaça as duas");
+  console.log("  corridas seguidas, com a máquina livre.");
+  fora.forEach((x) => {
+    const dif = ((x.agora - x.antes) / x.antes) * 100;
+    console.log(`    ${x.nome.padEnd(24)} ${String(x.antes).padStart(7)} → `
+      + `${String(x.agora).padStart(7)} tent./s   ${dif > 0 ? "+" : ""}${dif.toFixed(0)}%`);
+  });
+  console.log("");
+}
+
 function imprimirTabela(linhas, antes) {
   const col = (t, n) => String(t).padEnd(n);
   const dir = (t, n) => String(t).padStart(n);
   const cabecalho = [col("trabalho", 22), dir("consumo", 11)];
   if (antes) cabecalho.push(dir("antes", 11), dir("dif.", 9));
-  cabecalho.push(dir("aprov.", 8), dir("tent.", 8), col("  receita vencedora", 30));
+  cabecalho.push(dir("aprov.", 8), dir("tent.", 8), dir("tent./s", 9),
+    col("  receita vencedora", 30));
   console.log(cabecalho.join(""));
   console.log("-".repeat(cabecalho.join("").length));
 
@@ -276,6 +333,7 @@ function imprimirTabela(linhas, antes) {
       }
     }
     partes.push(dir(porcento(l.aproveitamento), 8), dir(l.tentativas, 8),
+      dir(l.tentPorSegundo, 9),
       col(`  ${l.receita}${l.sobraram ? ` (${l.sobraram} de fora!)` : ""}`, 30));
     console.log(partes.join(""));
   });
@@ -319,6 +377,10 @@ async function principal() {
     // A média entre sementes é o que dá para comparar: uma semente sozinha
     // mede tanto a mexida quanto a sorte do sorteio daquela vez.
     const corridas = [];
+    // Quanto trabalho a MÁQUINA entregou neste trabalho — ver `tentPorSegundo`
+    // no relatório.
+    let msDeBusca = 0;
+    let tentativasFeitas = 0;
     for (let s = 0; s < opcoes.sementes; s++) {
       /*
        * Cada rodada é um clique em "Fazer encaixe": sorteio novo, busca nova.
@@ -331,6 +393,7 @@ async function principal() {
       let corrida = null;
       let melhorDasRodadas = null;
       for (let rodada = 0; rodada < opcoes.rodadas; rodada++) {
+        const relogio = Date.now();
         const desta = await buscarComoAProducao(motor, trabalho, {
           tempoMs: opcoes.tempo * 1000,
           // Semente diferente por rodada: dois cliques seguidos no mesmo
@@ -341,6 +404,11 @@ async function principal() {
           extra: opcoes.extra,
           espalharSemente: opcoes.espalharSemente,
         });
+        // O relógio de parede da rodada. Ele é somado SEMPRE, inclusive das
+        // rodadas que perderam: o que se quer medir aqui é quanto trabalho a
+        // máquina entregou, e não quanto o vencedor custou.
+        msDeBusca += Date.now() - relogio;
+        tentativasFeitas += desta.tentativas || 0;
         if (!melhorDasRodadas
           || desta.sobraram < melhorDasRodadas.sobraram
           || (desta.sobraram === melhorDasRodadas.sobraram
@@ -381,6 +449,9 @@ async function principal() {
       desvio,
       aproveitamento: media((c) => c.aproveitamento),
       tentativas: Math.round(media((c) => c.tentativas)),
+      // Tentativas por segundo de relógio. Não é uma medida do motor: é uma
+      // medida da MÁQUINA enquanto esta corrida rodou. Ver `avisarSobreRitmo`.
+      tentPorSegundo: msDeBusca > 0 ? Math.round(tentativasFeitas / (msDeBusca / 1000)) : 0,
       sobraram: Math.max(...corridas.map((c) => c.sobraram)),
       // A receita que venceu mais vezes, para saber de onde veio o resultado.
       receita: corridas.map((c) => c.receita).sort()[Math.floor(corridas.length / 2)],
@@ -397,6 +468,7 @@ async function principal() {
   }
 
   console.log("");
+  avisarSobreRitmo(linhas, antes);
   imprimirTabela(linhas, antes);
   console.log(`\n${((Date.now() - comeco) / 1000).toFixed(0)}s de bancada.`);
 
