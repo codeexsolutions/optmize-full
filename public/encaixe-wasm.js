@@ -238,19 +238,6 @@ function prepararUnidadesNoWasm(unidades) {
  */
 function encaixarContornoWasm(unidades, config) {
   if (!temMotorWasm() || unidades.length === 0) return null;
-  /*
-   * O Rust conhece duas notas: "fundo" e "vazio" (o `usaVazio` do cabeçalho).
-   * Heurística que ele não conhece — hoje a "contato", do top-K — tem que
-   * cair no caminho em JavaScript, e não ser tratada como "fundo": tratada
-   * assim, a receita nova rodaria disfarçada de uma que já existe, daria o
-   * mesmo resultado, e a medição diria que ela não serve para nada sem que
-   * ela jamais tivesse rodado.
-   *
-   * O preço é que ela roda ~3,9x mais devagar por tentativa enquanto não for
-   * portada para o Rust. Isso pesa CONTRA ela na medição, então um ganho
-   * medido assim é um ganho com desconto.
-   */
-  if (config.heuristica !== "fundo" && config.heuristica !== "vazio") return null;
 
   const { larguraTecido, passo, heuristica } = config;
   const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
