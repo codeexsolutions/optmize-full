@@ -385,9 +385,15 @@ async function buscarMelhorEncaixeEmParalelo(itens, config) {
       // POR CIMA do config da tela: é ele que desliga a poda na fatia de
       // controle, e a tela não tem por que saber disso.
       const papel = papelDaFatia(k, n);
-      w.postMessage({ tipo: "buscar", config: { ...configLimpo, ...papel.config }, fatia: { k, n },
+      // Os encaixadores desta fatia e o pedaço do portfólio que cabe a ela —
+      // ver `motoresDaFatia` e `fatiaDoPortfolio`, em encaixe-motor.js. A fatia
+      // dedicada a um encaixador próprio recebe o portfólio inteiro DELE; as
+      // outras redividem o comum entre si, senão sobra receita órfã.
+      const pedidos = configLimpo.motores || [];
+      w.postMessage({ tipo: "buscar", config: { ...configLimpo, ...papel.config },
+        fatia: fatiaDoPortfolio(k, n, pedidos),
         saltoX: puloDaFatia(k), semente: sementeDaFatia(configLimpo.semente, k),
-        motores: configLimpo.motores || [] });
+        motores: motoresDaFatia(k, n, pedidos) });
     }));
 
     // 3) O botão de parar mora na tela; daqui ele vira um aviso para as fatias.

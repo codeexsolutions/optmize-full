@@ -241,6 +241,80 @@ function empurrarParaBancada(y, alturaEmCelulas, linhasDaBancada) {
  * Para remedir o que foi descartado:
  *   node bancada/medir.js --tempo 3 --sementes 5 --extra podar=false
  */
+/*
+ * ===========================================================================
+ * A FATIA DO ENCAIXE POR VÃOS
+ * ===========================================================================
+ *
+ * O encaixe por vãos (`encaixarPorVaos`) guarda o tecido como a lista dos
+ * intervalos ocupados de cada coluna, e não como uma altura por coluna. Com
+ * isso ele enxerga o vão que fica ACIMA de uma peça já assentada — que é
+ * exatamente o que o encaixe por relevo perde para sempre. Medido pelo
+ * `bancada:vaos`, é de 18% a 31% do rolo que fica preso assim, em blocos de até
+ * 49x62 cm.
+ *
+ * Ele existia, era testado, e NÃO RODAVA. A tela mandava `["contorno",
+ * "retangulo"]` e mais nada, então o motor de vãos e o de faixas estavam
+ * parados no repositório.
+ *
+ * Não dava para simplesmente ligá-lo junto com os outros. Uma tentativa dele
+ * custa cerca de cem vezes o que custa uma do contorno, e solto no portfólio de
+ * todas as fatias ele roubaria orçamento justamente nos trabalhos grandes, onde
+ * o contorno precisa de milhares de tentativas para render.
+ *
+ * Numa FATIA SÓ DELE ele gasta só o que é dele: um oitavo do orçamento, sem
+ * diluir ninguém. Onde ele ganha, ganha; onde perde, as outras fatias seguram o
+ * resultado, porque o vencedor continua sendo escolhido por consumo.
+ *
+ * Medido na bancada, 4 trabalhos, 5 fatias, 3 s, 5 sementes, com o A/B feito
+ * nos DOIS sentidos de execução:
+ *
+ *   com a fatia de vãos primeiro   10,587 m  contra  10,740 m   -1,45%
+ *   sem a fatia de vãos primeiro   10,598 m  contra  10,761 m   -1,51%
+ *
+ * É uma ordem de grandeza acima de qualquer outra mexida medida neste motor. E
+ * não é sorte de sorteio: as receitas vencedoras passaram a ser `vaos/...` em
+ * três dos quatro trabalhos, com o quarto (so-camiseta, de uma família só)
+ * ficando com o contorno e sem piorar.
+ *
+ * O aviso de ritmo da bancada dispara forte aqui (as tentativas por segundo
+ * caem até 79%), e nesse caso é esperado e não é contaminação: a queda vem do
+ * preço por tentativa do próprio motor de vãos, ela acompanha a configuração e
+ * não a ordem de execução, e o consumo se repete nos dois sentidos.
+ */
+
+/** Os encaixadores da fatia `k` de `n`. A última fica só com o de vãos. */
+function motoresDaFatia(k, n, motores) {
+  if (!motores.includes("vaos")) return motores;
+  const outros = motores.filter((m) => m !== "vaos");
+  // Com uma ou duas fatias, dedicar uma inteira ao de vãos tira metade do
+  // orçamento de quem faz o grosso do trabalho.
+  if (n < 3 || outros.length === 0) return motores;
+  return k === n - 1 ? ["vaos"] : outros;
+}
+
+/**
+ * O pedaço do portfólio COMUM que cabe a esta fatia.
+ *
+ * O corte é `i % n === k`, e o `n` tem que ser o número de fatias que estão
+ * dividindo — não o número total. Com 5 fatias, uma delas dedicada a um
+ * encaixador próprio e o `n` continuando 5, um quinto das receitas comuns não
+ * roda em fatia nenhuma: fica órfão. Este projeto já sangrou por isso uma vez.
+ */
+function fatiaDoPortfolio(k, n, motores) {
+  // Agrupa as fatias por CONJUNTO DE ENCAIXADORES e reparte o portfólio dentro
+  // de cada grupo. Comparar o tamanho da lista da fatia com o da lista pedida
+  // não serve: quando o de vãos sai para a fatia dele, as outras também ficam
+  // com uma lista menor que a pedida, e todas passariam por "especialista" —
+  // cada uma rodando o portfólio inteiro, quatro vezes o mesmo trabalho.
+  const meus = motoresDaFatia(k, n, motores).join("+");
+  const irmas = [];
+  for (let i = 0; i < n; i++) {
+    if (motoresDaFatia(i, n, motores).join("+") === meus) irmas.push(i);
+  }
+  return { k: irmas.indexOf(k), n: irmas.length };
+}
+
 const PAPEL_CONTROLE = "controle";
 const PAPEL_GERAL = "geral";
 

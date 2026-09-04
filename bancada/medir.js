@@ -70,22 +70,9 @@ const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : PULO_PADRAO);
 const PASSO_DA_SEMENTE = 104729;
 const sementeDaFatia = (semente, k, espalhar) => semente + (espalhar ? k * PASSO_DA_SEMENTE : 0);
 
-/**
- * Quais encaixadores cada fatia usa — espelha `motoresDaFatia` do
- * encaixe-paralelo.js.
- *
- * O encaixe por vãos custa ~100x mais por tentativa que o por relevo. Solto no
- * portfólio de todas as fatias, ele rouba orçamento do contorno justamente nos
- * trabalhos grandes, onde o contorno precisa de milhares de tentativas. Numa
- * fatia só dele, ele gasta o que é dele: onde ele ganha, ganha; onde perde, as
- * outras quatro fatias seguram o resultado.
- */
-const motoresDaFatia = (k, n, motores) => {
-  if (!motores.includes("vaos")) return motores;
-  const outros = motores.filter((m) => m !== "vaos");
-  if (n < 3 || outros.length === 0) return motores;
-  return k === n - 1 ? ["vaos"] : outros;
-};
+// `motoresDaFatia` e `fatiaDoPortfolio` vêm do motor (ver "A FATIA DO ENCAIXE
+// POR VÃOS", em encaixe-motor.js): a bancada tem que medir a MESMA repartição
+// que a produção roda, e duas cópias da regra são duas chances de divergirem.
 
 
 // ==================== ARGUMENTOS ====================
@@ -186,13 +173,8 @@ async function buscarComoAProducao(motor, trabalho,
    * encaixador próprio e o `n` continuando 5, um quinto das receitas comuns não
    * roda em fatia nenhuma: fica órfão.
    */
-  const comuns = [];
-  for (let i = 0; i < fatias; i++) {
-    if (motoresDaFatia(i, fatias, motoresPedidos).length === motoresPedidos.length) comuns.push(i);
-  }
   for (let k = 0; k < fatias; k++) {
-    const motoresDaK = motoresDaFatia(k, fatias, motoresPedidos);
-    const soDele = motoresDaK.length !== motoresPedidos.length;
+    const motoresDaK = motor.motoresDaFatia(k, fatias, motoresPedidos);
     const resultado = await motor.buscarMelhorEncaixe(itens, {
       larguraTecido: receita.larguraTecido,
       espaco: receita.espaco,
@@ -214,8 +196,7 @@ async function buscarComoAProducao(motor, trabalho,
        * próprio, disjunto do das outras — cortá-lo de novo deixaria ela com um
        * quinto das receitas dela e quatro quintos de nada.
        */
-      fatia: soDele ? { k: 0, n: 1 }
-        : { k: comuns.indexOf(k), n: comuns.length },
+      fatia: motor.fatiaDoPortfolio(k, fatias, motoresPedidos),
       saltoX: puloDaFatia(k),
       semente: sementeDaFatia(semente, k, espalharSemente),
       // O papel da fatia, do mesmo lugar que a produção usa
