@@ -2088,7 +2088,21 @@ btnEncaixar.addEventListener("click", async () => {
     //
     // De 10% a 20% menos tecido, com o mesmo tempo de tela (25,2 s contra
     // 25,0 s) — a busca roda nos workers, então a tela não sente. O atalho saiu.
-    const motores = modoDeEncaixe === "auto" ? ["contorno", "retangulo"]
+    // O AUTOMÁTICO PASSOU A INCLUIR O ENCAIXE POR VÃOS.
+    //
+    // Ele estava implementado e testado (`bancada:vaos`) e nunca tinha rodado,
+    // porque esta linha nunca o mandava. Ele entra numa fatia só dele (ver "A
+    // FATIA DO ENCAIXE POR VÃOS", em encaixe-motor.js): custa ~100x por
+    // tentativa o que o contorno custa, então solto no portfólio ele roubaria
+    // orçamento de quem faz o grosso.
+    //
+    // Medido nos dois sentidos do A/B: -1,45% e -1,51% de tecido, com as
+    // receitas `vaos/...` vencendo três dos quatro trabalhos da bancada.
+    //
+    // "sempre pelo contorno" e "sempre pela caixa" continuam sendo o que dizem
+    // ser: quem escolhe um encaixador na mão está pedindo aquele, e não uma
+    // disputa.
+    const motores = modoDeEncaixe === "auto" ? ["contorno", "retangulo", "vaos"]
       : modoDeEncaixe === "contorno" ? ["contorno"] : ["retangulo"];
 
     btnPararBusca.textContent = "Parar e usar este";
@@ -2318,6 +2332,11 @@ function comoFoiEncaixado(r) {
     contorno: "pelo contorno",
     retangulo: "pela caixa em volta",
     faixas: "dividindo o rolo em faixas",
+    // Sem esta linha, um encaixe vencido pelo motor de vãos cairia no `||
+    // NOMES.retangulo` do fim e a tela diria "pela caixa em volta" — o nome de
+    // outro encaixador. Agora que o de vãos ganha de verdade (ele vence três
+    // dos quatro trabalhos da bancada), isso seria uma mentira frequente.
+    vaos: "aproveitando os vãos entre as peças",
   };
   const disputaram = Object.entries(porMotor)
     .filter(([, consumo]) => consumo > 0)
