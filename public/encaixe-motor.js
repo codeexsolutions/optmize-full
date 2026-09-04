@@ -176,6 +176,83 @@ function empurrarParaBancada(y, alturaEmCelulas, linhasDaBancada) {
   return y - dentro + linhasDaBancada;
 }
 
+/*
+ * ===========================================================================
+ * O PAPEL DE CADA FATIA
+ * ===========================================================================
+ *
+ * A busca paralela reparte o portfólio de receitas entre os workers e cada um
+ * roda a busca inteira da fatia dele (ver encaixe-paralelo.js). Todos rodavam
+ * com a MESMA configuração — mesma poda, mesma confiança na rede —, e
+ * divergiam só pelo pedaço do portfólio e pela semente.
+ *
+ * Isso deixa um buraco: a poda é uma aposta, e quando ela erra, erra em TODAS
+ * as fatias ao mesmo tempo. A poda por receita larga quem está 6% atrás; a
+ * poda por motor larga o encaixador que ficou 4% atrás; e a rede, quando
+ * madura, corta receita antes mesmo de ela rodar uma vez. Cada um desses
+ * cortes é bom na média e nenhum é infalível — e sem ninguém correndo sem
+ * eles, o trabalho em que a aposta erra não tem quem o salve.
+ *
+ * A FATIA DE CONTROLE é essa saída de emergência. Ela roda o mesmo pedaço do
+ * portfólio que rodaria de qualquer jeito, só que sem o corte da rede.
+ *
+ * POR QUE SÓ O DA REDE, E NÃO TODAS AS PODAS
+ * ------------------------------------------
+ * A primeira versão desligava tudo (`podar: false`, que derruba a poda por
+ * receita e a por motor de uma vez). Medido na bancada, 4 trabalhos, 5 fatias,
+ * 3 s:
+ *
+ *   3 sementes   com controle 10,757 m   sem 10,780 m   -0,22%
+ *   5 sementes   com controle 10,749 m   sem 10,757 m   -0,07%
+ *
+ * O ganho encolheu junto com o ruído, e a MEDIANA mostrou por quê: no trabalho
+ * que sustentava o resultado (camiseta+manga+gola), as medianas empatam em
+ * 3,555 m nas duas configurações. A média diferia porque UMA das cinco
+ * corridas teve sorte — 3,495 m contra 3,510 m. Com desvio de 24 mm naquele
+ * trabalho, os 10 mm de diferença cabem dentro de um desvio. Desligar as podas
+ * de receita e de motor não paga: elas foram medidas e ganham, e as duas já
+ * têm fresta de exploração (`PODA_FRESTA`).
+ *
+ * O corte da REDE é outra história, e por isso ele ficou. Ele acontece antes
+ * da divisão em fatias e **não tem fresta nenhuma**: a receita que a rede
+ * reprova sai de `base` e não roda em worker nenhum. É a única poda deste
+ * motor que é probabilística e definitiva ao mesmo tempo — e é justamente a
+ * que a bancada não consegue medir, porque ela roda sem rede (`rede: null`,
+ * ver bancada/medir.js). Ficar sem controle aqui seria confiar num palpite
+ * estatístico sem ninguém conferindo, num trabalho fora da distribuição que a
+ * rede conhece.
+ *
+ * O custo desta fatia é, portanto, zero medível: ela só faz alguma coisa
+ * quando a rede está madura, e aí ela roda as MESMAS receitas que as outras
+ * mais as que a rede reprovou.
+ *
+ * Ela mantém o pedaço normal do portfólio de propósito. Dar a ela um portfólio
+ * próprio deixaria as receitas do pedaço dela órfãs nas outras fatias — o
+ * mesmo buraco que já mordeu este projeto quando uma fatia rodava um
+ * encaixador só (ver `config.fatia`, adiante).
+ *
+ * Só existe papel com três fatias ou mais. Com uma ou duas, gastar uma inteira
+ * em controle tira metade do orçamento de quem está procurando de verdade.
+ *
+ * Mora aqui, e não no encaixe-paralelo.js, porque a bancada precisa da mesma
+ * repartição para medir o que a produção roda — e duas cópias da mesma regra
+ * são duas chances de elas divergirem.
+ *
+ * Para remedir o que foi descartado:
+ *   node bancada/medir.js --tempo 3 --sementes 5 --extra podar=false
+ */
+const PAPEL_CONTROLE = "controle";
+const PAPEL_GERAL = "geral";
+
+/** O papel da fatia `k` de `n`, e o que ele muda no config da busca. */
+function papelDaFatia(k, n) {
+  if (n >= 3 && k === 0) {
+    // Só a rede: ver acima por que a poda de receita e a de motor ficaram.
+    return { nome: PAPEL_CONTROLE, config: { redeMadura: false } };
+  }
+  return { nome: PAPEL_GERAL, config: {} };
+}
+
 /**
  * MaxRects: mantém a lista dos retângulos livres do tecido e, para cada peça,
  * escolhe o melhor lugar segundo a heurística pedida. É o mesmo algoritmo que
@@ -751,10 +828,54 @@ function sondasDaForma(forma) {
  * (`fundo`), que são as duas medidas usadas para comparar posições.
  */
 function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto = 1,
-  linhasBancada = 0) {
+  linhasBancada = 0, topK = 0) {
   let melhor = null;
   const usaVazio = heuristica === "vazio";
+  const usaContato = heuristica === "contato";
   const pulo = Math.max(1, Math.round(salto));
+
+  /*
+   * ===========================================================================
+   * TOP-K: guardar várias posições boas, e não só a melhor
+   * ===========================================================================
+   *
+   * As heurísticas "fundo" e "vazio" são gulosas de verdade: cada unidade fica
+   * na melhor posição que existir para ELA, e pronto. O problema disso não
+   * aparece na peça que está sendo posta — aparece na seguinte. A posição que
+   * desce um milímetro a mais pode ser a que fecha o vão de que a próxima peça
+   * precisava, e a busca não tem como descobrir isso, porque ela só sacode a
+   * ORDEM da fila: dada uma ordem, a escolha de posição é sempre a mesma.
+   *
+   * Isto é uma dimensão inteira do espaço de soluções que a busca nunca visita.
+   *
+   * A heurística "contato" abre essa dimensão. Ela guarda as K melhores
+   * posições pelo fundo (a mesma nota do "fundo") e, entre elas, fica com a que
+   * ENCOSTA em mais colunas do relevo. Encostar é o que não deixa vão: duas
+   * posições com o mesmo fundo podem deixar o tecido com relevos bem
+   * diferentes, e a que encaixa na curva da peça anterior deixa o rolo mais
+   * plano para quem vem depois.
+   *
+   * `contato` é o número de colunas em que a peça toca o relevo sem folga
+   * nenhuma. Não é a soma das folgas — essa já é o `vazio`, e ela mede outra
+   * coisa: mil colunas com uma folguinha somam o mesmo que uma coluna com um
+   * buraco fundo, e para o encaixe seguinte as duas situações não se parecem
+   * em nada.
+   *
+   * O PREÇO. A poda deste laço compara com a melhor nota conhecida; guardando
+   * K, ela passa a comparar com a K-ésima, que é pior — então poda menos e
+   * cada tentativa custa mais. É por isso que o top-K entra como heurística
+   * SEPARADA em vez de trocar as duas que existem: ela disputa no portfólio, e
+   * só entra no resultado se o que ela ganha em tecido pagar o que ela custa em
+   * tentativas. `config.heuristicas` desliga para medir.
+   *
+   * K=1 reproduz exatamente o comportamento antigo, e é o que "fundo" e
+   * "vazio" usam — nenhuma linha do caminho delas mudou de valor.
+   */
+  const K = usaContato ? Math.max(1, Math.round(topK || TOP_K_PADRAO)) : 1;
+  // As K melhores, em ordem de nota. Enquanto não enche, a poda fica solta:
+  // cortar contra uma lista incompleta jogaria fora candidato que ainda cabia.
+  const melhores = [];
+  let limiteP1 = Infinity;
 
   // Soma acumulada do relevo: com ela, o total debaixo de qualquer trecho sai
   // numa subtração. Serve só à poda da heurística "vazio" (ver adiante), então
@@ -814,14 +935,14 @@ function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto =
 
       // 1) O palpite barato: só as colunas-sonda. Custa oito contas em vez de
       // duzentas, e é o que faz a maior parte das posições nem ser medida.
-      if (melhor !== null && podeCortar) {
+      if (limiteP1 < Infinity && podeCortar) {
         let piso = 0;
         for (let i = 0; i < nSondas; i++) {
           const c = sondas[i];
           const encosta = perfil[x + c] - topo[c];
           if (encosta > piso) piso = encosta;
         }
-        if (notaCom(piso) > melhor.p1) return;
+        if (notaCom(piso) > limiteP1) return;
       }
 
       // 2) A medida de verdade. As colunas são lidas em ordem, do começo ao
@@ -843,7 +964,7 @@ function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto =
         y = encosta;
         // Mesmo argumento do palpite, agora com o `y` parcial: ele só cresce
         // daqui para a frente, porque é o máximo do que já passou.
-        if (melhor !== null && podeCortar && notaCom(y) > melhor.p1) { cortada = true; break; }
+        if (limiteP1 < Infinity && podeCortar && notaCom(y) > limiteP1) { cortada = true; break; }
       }
 
       if (cortada) return;
@@ -869,9 +990,43 @@ function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto =
       if (p1 < localP1 || (p1 === localP1 && p2 < localP2)) {
         localP1 = p1; localP2 = p2; localX = x;
       }
-      if (!melhor || p1 < melhor.p1 || (p1 === melhor.p1 && p2 < melhor.p2)) {
-        melhor = { x, y, forma, p1, p2, fundo, vazio };
+
+      if (K === 1) {
+        // O caminho de sempre, sem uma linha a mais no laço quente.
+        if (!melhor || p1 < melhor.p1 || (p1 === melhor.p1 && p2 < melhor.p2)) {
+          melhor = { x, y, forma, p1, p2, fundo, vazio };
+          limiteP1 = melhor.p1;
+        }
+        return;
       }
+
+      // Top-K: entra quem bate o pior da lista, ou qualquer um enquanto ela não
+      // encheu. A lista é curta (K é 4 a 16), então a inserção linear custa
+      // menos que manter uma estrutura esperta.
+      const cheia = melhores.length >= K;
+      if (cheia) {
+        const pior = melhores[melhores.length - 1];
+        if (p1 > pior.p1 || (p1 === pior.p1 && p2 >= pior.p2)) return;
+      }
+      // O contato só é contado para quem vai entrar na lista: é uma segunda
+      // passada pelas colunas, e não vale pagá-la por posição descartada.
+      let contatos = 0;
+      for (let c = 0; c < cols; c++) {
+        const t = topo[c];
+        if (t < 0) continue;
+        if (perfil[x + c] - t === y) contatos++;
+      }
+      const candidato = { x, y, forma, p1, p2, fundo, vazio, contatos };
+      let onde = melhores.length;
+      while (onde > 0) {
+        const antes = melhores[onde - 1];
+        if (antes.p1 < p1 || (antes.p1 === p1 && antes.p2 <= p2)) break;
+        onde--;
+      }
+      melhores.splice(onde, 0, candidato);
+      if (melhores.length > K) melhores.length = K;
+      limiteP1 = melhores.length >= K ? melhores[melhores.length - 1].p1 : Infinity;
+      melhor = melhores[0];
     };
 
     // ---------- A VARREDURA ----------
@@ -916,6 +1071,26 @@ function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto =
       }
     }
   });
+
+  /*
+   * A ESCOLHA ENTRE OS K.
+   *
+   * A lista já vem ordenada pela nota gulosa, então `melhores[0]` é o que o
+   * "fundo" teria escolhido. Aqui o desempate é outro: entre posições que
+   * chegaram ao topo da lista, fica a que ENCOSTA em mais colunas.
+   *
+   * O empate volta para a nota: `>` e não `>=`, então com contato igual vence
+   * quem tem o melhor fundo. Sem isso a escolha ficaria à mercê da ordem em
+   * que as posições foram visitadas, e o encaixe deixaria de ser reprodutível
+   * quando o `pulo` mudasse.
+   */
+  if (usaContato && melhores.length > 1) {
+    let escolhido = melhores[0];
+    for (let i = 1; i < melhores.length; i++) {
+      if (melhores[i].contatos > escolhido.contatos) escolhido = melhores[i];
+    }
+    return escolhido;
+  }
 
   return melhor;
 }
@@ -1221,7 +1396,7 @@ function encaixarContorno(unidades, config) {
 
   unidades.forEach((unidade) => {
     const escolha = melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, config.saltoX,
-      linhasBancada);
+      linhasBancada, config.topK);
     if (!escolha) {
       unidade.itens.forEach((item) => naoEncaixadas.push(item));
       return;
@@ -1679,7 +1854,51 @@ function encaixarPorFaixas(unidades, config) {
  * desta vez. O sorteio é parelho de propósito.
  */
 
+/*
+ * Quantas posições o top-K guarda. Ver o bloco "TOP-K" em
+ * `melhorPosicaoDaUnidade`: guardar mais abre mais escolha e enfraquece a poda
+ * do laço quente, então o número é uma troca, não um "quanto maior melhor".
+ * Começa em 8 e é medível pela bancada (`--extra topK=4`).
+ */
+const TOP_K_PADRAO = 8;
+
+/*
+ * A "contato" — a heurística de top-K — FICA DE FORA da lista padrão.
+ *
+ * Ela foi implementada, medida e não pagou. Bancada, 4 trabalhos, 5 fatias,
+ * 3 s, 5 sementes:
+ *
+ *                        com contato   sem contato    dif.    tentativas
+ *   camiseta+manga+gola     3,566 m       3,546 m    +0,56%   24k vs 92k
+ *   so-camiseta             2,780 m       2,780 m     0,00%   66k vs 221k
+ *   calca-bolso             2,274 m       2,273 m    +0,04%   27k vs 94k
+ *   misturado-pequeno       2,152 m       2,153 m    -0,05%   31k vs 94k
+ *   SOMA                   10,772 m      10,752 m    +0,19%
+ *
+ * O NÚMERO NÃO CONDENA A IDEIA, e é importante não ler como se condenasse. As
+ * tentativas caíram para um terço, por dois motivos que não têm a ver com a
+ * qualidade da heurística: ela aumenta o portfólio do contorno em 50%, e ela
+ * roda em JavaScript porque o Rust ainda não a conhece (ver
+ * `encaixarContornoWasm`), a ~1/3,9 da velocidade. Com um terço das
+ * tentativas, uma heurística igualmente boa perderia do mesmo jeito.
+ *
+ * O que mostra que ela tem algo: no camiseta+manga+gola, a receita VENCEDORA
+ * da rodada foi `contorno/solta/area/contato/`. Ela ganhou a disputa interna e
+ * o consumo total piorou assim mesmo, porque as outras receitas ficaram sem
+ * orçamento.
+ *
+ * O que resolveria de verdade: portar a nota para o Rust (o laço em
+ * wasm/src/lib.rs já tem toda a estrutura; falta um campo no cabeçalho, o
+ * array de K e a contagem de contato) e medir de novo com as tentativas
+ * equiparadas. Enquanto isso não acontecer, ligá-la é trocar tecido por nada.
+ *
+ * Para ligar e medir:
+ *   node bancada/medir.js --tempo 3 --sementes 5 --extra heuristicas=fundo+vazio+contato
+ */
 const HEURISTICAS_CONTORNO = ["fundo", "vazio"];
+// Todas as que `melhorPosicaoDaUnidade` sabe calcular — é desta lista que o
+// `config.heuristicas` pode escolher, e não da de cima.
+const HEURISTICAS_CONHECIDAS = ["fundo", "vazio", "contato"];
 // Os blocos que disputam por padrão. `config.agrupamentos` troca a lista.
 //
 // O trio entrou por medição: somando quatro trabalhos, com 5 fatias de 5 s e
@@ -1889,7 +2108,7 @@ function filtrarPorRede(base, pontos, limiar) {
 
 /** Todas as receitas base, sem embaralhar nada ainda. */
 function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAMENTOS_PADRAO,
-  ordens = ORDENS_CONTORNO) {
+  ordens = ORDENS_CONTORNO, heuristicas = HEURISTICAS_CONTORNO) {
   const receitas = [];
   if (motores.includes("contorno")) {
     agrupamentos.forEach((agrupamento) => {
@@ -1906,7 +2125,7 @@ function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAM
         // vencesse nenhum dos seis trabalhos. Presa à solta, ela custa duas
         // receitas e continua disponível para o trabalho em que ganhar.
         if (ordem.porFamilia && agrupamento !== "solta") return;
-        HEURISTICAS_CONTORNO.forEach((heuristica) => {
+        heuristicas.forEach((heuristica) => {
           receitas.push({ motor: "contorno", agrupamento, ordem: ordem.nome, heuristica });
         });
       });
@@ -1938,7 +2157,7 @@ function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAM
     cortes.forEach((corte) => {
       ordens.forEach((ordem) => {
         if (ordem.porFamilia) return; // a faixa parte sempre da dupla; ver acima
-        HEURISTICAS_CONTORNO.forEach((heuristica) => {
+        heuristicas.forEach((heuristica) => {
           receitas.push({ motor: "faixas", agrupamento: "dupla", ordem: ordem.nome, heuristica, corte });
         });
       });
@@ -2264,14 +2483,26 @@ async function buscarMelhorEncaixe(itens, config) {
   const ordens = Array.isArray(ordensPedidas) && ordensPedidas.length > 0
     ? ORDENS_CONTORNO.filter((o) => ordensPedidas.includes(o.nome))
     : ORDENS_CONTORNO;
+  // O mesmo tratamento de `config.ordens`: lista ou texto com "+", nome
+  // desconhecido ignorado. É o que deixa a bancada medir o motor com e sem a
+  // heurística de top-K (`--extra heuristicas=fundo+vazio`).
+  const heuristicasPedidas = typeof config.heuristicas === "string"
+    ? config.heuristicas.split("+") : config.heuristicas;
+  const heuristicas = Array.isArray(heuristicasPedidas) && heuristicasPedidas.length > 0
+    ? HEURISTICAS_CONHECIDAS.filter((h) => heuristicasPedidas.includes(h))
+    : HEURISTICAS_CONTORNO;
+
   let base = receitasBase(motores, temGiroLivre, cortes, agrupamentos,
-    ordens.length > 0 ? ordens : ORDENS_CONTORNO);
+    ordens.length > 0 ? ordens : ORDENS_CONTORNO,
+    heuristicas.length > 0 ? heuristicas : HEURISTICAS_CONTORNO);
   // Um motor pode não ter receita nenhuma para este trabalho — o de faixas,
   // por exemplo, quando todas as peças têm a mesma largura e não há onde
   // dividir o rolo. Sem isto, a busca sorteava de uma lista vazia e quebrava.
   // Cai no contorno, que é o motor cujas unidades já foram preparadas aqui em
   // cima junto com as do de faixas.
-  if (base.length === 0) base = receitasBase(["contorno"], temGiroLivre, [], agrupamentos, ordens);
+  if (base.length === 0) {
+    base = receitasBase(["contorno"], temGiroLivre, [], agrupamentos, ordens, heuristicas);
+  }
 
   // A rede das receitas (opcional — ver encaixe-rede.js): pontua cada
   // candidata pela chance dela ganhar ESTE trabalho, generalizando a partir

@@ -218,6 +218,12 @@ async function buscarComoAProducao(motor, trabalho,
         : { k: comuns.indexOf(k), n: comuns.length },
       saltoX: puloDaFatia(k),
       semente: sementeDaFatia(semente, k, espalharSemente),
+      // O papel da fatia, do mesmo lugar que a produção usa
+      // (`papelDaFatia`, em encaixe-motor.js) — senão a bancada mediria uma
+      // repartição que não é a que roda na loja. O `--extra` da linha de
+      // comando vem depois, para dar para medir o motor COM e SEM o papel
+      // (`--extra podar=true`).
+      ...motor.papelDaFatia(k, fatias).config,
       ...extra,
     });
     tentativas += resultado.tentativas || 0;
@@ -344,9 +350,35 @@ async function principal() {
       corridas.push(corrida);
     }
     const media = (pegar) => corridas.reduce((s, c) => s + pegar(c), 0) / corridas.length;
+
+    /*
+     * MÉDIA NÃO BASTA PARA DECIDIR.
+     *
+     * A busca é sorteada, e a média entre sementes esconde as duas coisas que
+     * mais importam numa mexida no motor: se o ganho veio de UMA corrida de
+     * sorte (a mediana denuncia) e se a mexida piorou o PIOR CASO (o máximo
+     * denuncia). Uma ideia que melhora a média em 0,3% e piora o pior caso em
+     * 2% não serve para uma loja que decide corte por essa metragem.
+     *
+     * A média continua sendo o número da tabela e o do `--contra`, para as
+     * corridas guardadas antes disto continuarem comparáveis. Mediana, pior e
+     * desvio entram ao lado dela, e no JSON.
+     */
+    const consumos = corridas.map((c) => c.consumo).sort((a, b) => a - b);
+    const meio = Math.floor(consumos.length / 2);
+    const mediana = consumos.length % 2
+      ? consumos[meio] : (consumos[meio - 1] + consumos[meio]) / 2;
+    const consumoMedio = media((c) => c.consumo);
+    const desvio = Math.sqrt(
+      consumos.reduce((soma, v) => soma + (v - consumoMedio) ** 2, 0) / consumos.length);
+
     const linha = {
       nome,
-      consumo: media((c) => c.consumo),
+      consumo: consumoMedio,
+      mediana,
+      melhor: consumos[0],
+      pior: consumos[consumos.length - 1],
+      desvio,
       aproveitamento: media((c) => c.aproveitamento),
       tentativas: Math.round(media((c) => c.tentativas)),
       sobraram: Math.max(...corridas.map((c) => c.sobraram)),
@@ -357,7 +389,11 @@ async function principal() {
     };
     linhas.push(linha);
     saida.trabalhos[nome] = linha;
-    process.stdout.write(`  ${nome}: ${metros(linha.consumo)}\n`);
+    process.stdout.write(`  ${nome}: ${metros(linha.consumo)}`
+      + (corridas.length > 1
+        ? `   mediana ${metros(linha.mediana)} · melhor ${metros(linha.melhor)}`
+          + ` · pior ${metros(linha.pior)} · desvio ${(linha.desvio * 10).toFixed(1)} mm`
+        : "") + "\n");
   }
 
   console.log("");
