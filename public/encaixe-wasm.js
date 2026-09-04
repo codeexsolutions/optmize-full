@@ -115,10 +115,40 @@ function prepararUnidadesNoWasm(unidades) {
   const nUnidades = unidades.length;
   if (nUnidades === 0) return null;
 
+  /*
+   * O PLANO SÓ SERVE PARA O CONJUNTO QUE O MONTOU.
+   *
+   * A conferência olhava a primeira unidade e a QUANTIDADE, e isso não
+   * identifica um conjunto: duas listas podem começar pela mesma unidade, ter o
+   * mesmo tamanho e conter unidades diferentes. Quando isso acontece, o plano
+   * antigo é reaproveitado, os índices de forma passam a apontar para unidades
+   * que não estão nele, e o resultado é `forma` indefinida ou leitura fora da
+   * memória no Rust.
+   *
+   * Não era teórico: o encaixe por faixas reparte as MESMAS unidades em duas
+   * listas, e cada corte candidato reparte de um jeito. Ele quebrava em três
+   * dos oito trabalhos da bancada — "Cannot read properties of undefined
+   * (reading 'partes')" e "memory access out of bounds". Passou despercebido
+   * porque o motor de faixas nunca rodava em produção.
+   *
+   * Os outros encaixadores escapavam por sorte de uso: `contorno` e `vaos`
+   * sempre recebem o conjunto inteiro de um agrupamento, e embaralhar a ordem
+   * não muda quem está dentro.
+   *
+   * Agora todas as unidades têm que apontar para o MESMO plano. Com n unidades
+   * pertencendo a um plano montado para n, elas são exatamente os membros dele
+   * — não há como sobrar nem faltar. Custa n comparações de ponteiro, contra
+   * montar o plano inteiro, que percorre todas as formas de todas elas.
+   */
   const jaMontado = unidades[0]._wasm;
   if (jaMontado && jaMontado.motor === motorWasm
       && jaMontado.geracao === motorWasm.geracao && jaMontado.total === nUnidades) {
-    return jaMontado.plano;
+    let mesmoConjunto = true;
+    for (let k = 1; k < nUnidades; k++) {
+      const dela = unidades[k]._wasm;
+      if (!dela || dela.plano !== jaMontado.plano) { mesmoConjunto = false; break; }
+    }
+    if (mesmoConjunto) return jaMontado.plano;
   }
 
   let nFormas = 0;
