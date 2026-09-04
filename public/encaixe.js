@@ -2102,7 +2102,20 @@ btnEncaixar.addEventListener("click", async () => {
     // "sempre pelo contorno" e "sempre pela caixa" continuam sendo o que dizem
     // ser: quem escolhe um encaixador na mão está pedindo aquele, e não uma
     // disputa.
-    const motores = modoDeEncaixe === "auto" ? ["contorno", "retangulo", "vaos"]
+    // O DE FAIXAS ENTRA NO PORTFÓLIO COMUM, e não numa fatia própria.
+    //
+    // Ele também estava parado, e também nunca tinha rodado — quebrava, por um
+    // defeito no cache do plano do WASM que só ele exercitava (ver
+    // `prepararUnidadesNoWasm`). Consertado aquilo, ele foi medido nos dois
+    // sentidos: -0,21% e -0,19% de tecido.
+    //
+    // O ganho não vem de ele VENCER: nenhuma receita `faixas/...` venceu um
+    // trabalho sequer na medição. Vem de ele e o contorno mexerem nas mesmas
+    // unidades e dividirem o balde de "melhor ordem já vista" (ver
+    // `listaDaReceita`) — uma ordem boa que ele descobre é reaproveitada pelo
+    // contorno. Por isso ele entra junto com os outros, e não isolado numa
+    // fatia: isolado, ele não teria com quem dividir o que descobre.
+    const motores = modoDeEncaixe === "auto" ? ["contorno", "retangulo", "vaos", "faixas"]
       : modoDeEncaixe === "contorno" ? ["contorno"] : ["retangulo"];
 
     btnPararBusca.textContent = "Parar e usar este";
