@@ -381,7 +381,11 @@ async function buscarMelhorEncaixeEmParalelo(itens, config) {
         quebrou = true;
         pronto();
       }, { once: true });
-      w.postMessage({ tipo: "buscar", config: configLimpo, fatia: { k, n },
+      // O papel desta fatia (ver `papelDaFatia`, em encaixe-motor.js). Ele entra
+      // POR CIMA do config da tela: é ele que desliga a poda na fatia de
+      // controle, e a tela não tem por que saber disso.
+      const papel = papelDaFatia(k, n);
+      w.postMessage({ tipo: "buscar", config: { ...configLimpo, ...papel.config }, fatia: { k, n },
         saltoX: puloDaFatia(k), semente: sementeDaFatia(configLimpo.semente, k),
         motores: configLimpo.motores || [] });
     }));

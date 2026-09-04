@@ -36,6 +36,7 @@ const EXPOSTOS = [
   "montarUnidades", "montarUnidadesCruzadas", "formasDaPeca", "formaDePartes",
   "mascarasDeSilhueta", "silhuetaDeDados", "grade", "gradeDaPeca",
   "assinaturaDoTrabalho", "vetorDoTrabalho", "juntarGrupos", "familiaDaUnidade",
+  "papelDaFatia",
   "carregarMotorWasm", "temMotorWasm",
 ];
 
