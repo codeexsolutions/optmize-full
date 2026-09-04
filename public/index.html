@@ -499,18 +499,24 @@
                       <option value="1000 por polegada">1000 por polegada (PLT)</option>
                     </select>
                   </label>
-
-                  <label class="mt-2! text-[0.66rem] uppercase tracking-wide text-tinta-apagada [&>select]:mt-1 [&>select]:px-2 [&>select]:py-1.5 [&>select]:text-[0.82rem]">Como ler o vetor
-                    <select id="encaixe-modo-vetor">
-                      <option value="marcador">Marcador: cada peça separada</option>
-                      <option value="inteiro">Arte: o arquivo inteiro é uma peça</option>
-                    </select>
-                  </label>
                 </div>
               </details>
 
               <!-- A lista. É o único pedaço que rola. -->
               <div id="encaixe-aviso-cor" class="hidden"></div>
+
+              <!--
+                A barra dos grupos. Só aparece com peça marcada — sem seleção
+                ela não tem o que dizer, e uma barra permanente aqui roubaria
+                altura da lista, que é o único pedaço que rola.
+              -->
+              <div id="encaixe-barra-grupo" class="hidden shrink-0 items-center gap-1.5 border-b border-linha bg-painel-suave px-3 py-1.5">
+                <span id="encaixe-grupo-conta" class="min-w-0 flex-1 truncate text-[10px] text-tinta-apagada"></span>
+                <button type="button" id="btn-encaixe-criar-grupo" class="btn secondary btn-sm">Criar grupo</button>
+                <button type="button" id="btn-encaixe-tirar-grupo" class="btn secondary btn-sm hidden">Desagrupar</button>
+                <button type="button" id="btn-encaixe-limpar-selecao" class="btn-x" title="Limpar a seleção">&times;</button>
+              </div>
+
               <div id="encaixe-pecas-body" class="min-h-0 flex-1 overflow-y-auto"></div>
 
               <!--

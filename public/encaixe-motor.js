@@ -1711,9 +1711,83 @@ const HEURISTICAS_RETANGULO = ["bl", "bssf", "blsf", "baf"];
  * sacudida chamam isto a cada tentativa, e montar o texto toda vez apareceria
  * no perfil.
  */
+/*
+ * ===========================================================================
+ * OS GRUPOS DA PESSOA
+ * ===========================================================================
+ *
+ * Um grupo é um punhado de peças que a pessoa marcou na tabela para saírem
+ * PERTO UMAS DAS OUTRAS no rolo — as seis partes de uma camisa tamanho G, por
+ * exemplo. Não é sobre tecido: é sobre a mesa de corte. Achar as seis peças
+ * espalhadas em doze metros custa mais tempo de costureira do que os poucos
+ * centímetros que a vizinhança pode cobrar.
+ *
+ * A regra é uma só, e é barata: **as peças de um grupo entram na fila
+ * grudadas**. O encaixe por contorno desce cada peça por gravidade e encosta na
+ * anterior, então quem entra junto cai perto — é o mesmo raciocínio em que a
+ * ordem "familia" já se apoia, só que ali a família é o formato e aqui é a
+ * escolha da pessoa.
+ *
+ * O que NÃO se faz aqui é reservar faixa. Peça de fora continua livre para cair
+ * num vão entre duas do grupo, e é isso que mantém o custo em tecido baixo: o
+ * grupo fica numa REGIÃO, não num quarteirão isolado. Se um dia a produção
+ * pedir a faixa exclusiva, é outra regra e vai ter outro nome.
+ *
+ * Sem nenhum grupo marcado, tudo isto é identidade: `juntarGrupos` devolve a
+ * lista que recebeu e `familiaDaUnidade` responde o que sempre respondeu.
+ */
+
+/** O grupo de uma unidade (ou de uma peça solta). "" quando não tem. */
+function grupoDaUnidade(unidade) {
+  const peca = unidade.itens ? unidade.itens[0] : unidade;
+  return (peca && peca.grupo) || "";
+}
+
+/**
+ * Põe as peças de cada grupo lado a lado na fila, sem mexer em mais nada.
+ *
+ * O grupo fica NO LUGAR DO PRIMEIRO MEMBRO dele, e os membros mantêm a ordem
+ * relativa que tinham. Isso é o que deixa a busca continuar explorando à
+ * vontade: ela sacode a fila como sempre sacudiu — inclusive trocando peças de
+ * grupos diferentes de lugar —, e esta passada, feita depois, apenas recolhe
+ * cada grupo de volta. Nenhuma arrumação deixa de ser alcançável por causa dos
+ * grupos; elas só passam a ser visitadas já com os grupos inteiros.
+ *
+ * A alternativa seria proibir a sacudida de separar o grupo, e aí a busca
+ * perderia a metade do espaço que passa por arrumações intermediárias.
+ */
+function juntarGrupos(lista) {
+  let temGrupo = false;
+  for (let i = 0; i < lista.length; i++) {
+    if (grupoDaUnidade(lista[i])) { temGrupo = true; break; }
+  }
+  if (!temGrupo) return lista;
+
+  const blocos = new Map();
+  const saida = [];
+  lista.forEach((unidade) => {
+    const grupo = grupoDaUnidade(unidade);
+    if (!grupo) { saida.push(unidade); return; }
+    let bloco = blocos.get(grupo);
+    if (!bloco) {
+      bloco = [];
+      blocos.set(grupo, bloco);
+      saida.push(bloco); // o grupo inteiro ocupa o lugar do primeiro membro
+    }
+    bloco.push(unidade);
+  });
+  return saida.flat();
+}
+
+/**
+ * Com grupo marcado, o grupo É a família: é ele que a ordem "familia" mantém
+ * em bloco e que o `baguncarFamilias` sacode inteiro. Sem grupo, a família
+ * continua sendo o formato da peça, como sempre foi.
+ */
 function familiaDaUnidade(unidade) {
   if (unidade._familia == null) {
-    unidade._familia = unidade.itens.map((i) => i.indice).sort((a, b) => a - b).join("-");
+    unidade._familia = grupoDaUnidade(unidade)
+      || unidade.itens.map((i) => i.indice).sort((a, b) => a - b).join("-");
   }
   return unidade._familia;
 }
@@ -1900,7 +1974,18 @@ function assinaturaDoTrabalho(pecas, larguraTecido) {
     const proporcao = p.altura > 0 ? p.largura / p.altura : 1;
     return `${Math.round(ocupacao * 10)}:${Math.round(Math.log2(proporcao) * 2)}:${p.giro || "fixa"}`;
   }).sort();
-  return `l${Math.round(larguraTecido / 10)}|${formatos.join(",")}`;
+  // TER GRUPO é outro tipo de trabalho, pelo mesmo motivo do giro: ele muda
+  // qual receita ganha. Com as peças agrupadas, o grupo VIRA a família (ver
+  // `familiaDaUnidade`), e a receita "familia" — que sem grupo ganha de vez em
+  // quando — passa a ganhar quase sempre. Sem esta marca, o placar de um
+  // trabalho agrupado empurraria a "familia" para cima nos trabalhos soltos, e
+  // vice-versa.
+  //
+  // Só a MARCA entra, não os nomes dos grupos: quem decide a receita é haver
+  // blocos, não eles se chamarem A e B. Assim dois pedidos com o mesmo formato
+  // de peça e agrupamentos diferentes continuam aprendendo um com o outro.
+  const agrupado = pecas.some((p) => p.grupo) ? "g" : "";
+  return `l${Math.round(larguraTecido / 10)}${agrupado}|${formatos.join(",")}`;
 }
 
 /** Embaralha um pouco a ordem: troca alguns pares de lugar. */
@@ -2153,6 +2238,11 @@ async function buscarMelhorEncaixe(itens, config) {
     const guardada = partirDoMelhor ? melhoresOrdens.get(base.chave) : null;
     let lista = guardada ? guardada.lista.slice() : base.crua.slice().sort(base.ordem.comparar);
     if (embaralhar) lista = embaralhar(lista, guardada, base.ordem);
+    // Por último, e depois da sacudida de propósito: ver `juntarGrupos`. Vale
+    // para TODA receita, não só para a de família — do contrário o grupo
+    // dependeria de qual receita ganhasse a disputa, que é o mesmo que não
+    // valer.
+    lista = juntarGrupos(lista);
 
     const resultado = rodarNaLista(receita, lista);
     // Fica anotado de onde este resultado saiu, para a ordem ser guardada se

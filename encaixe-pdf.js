@@ -47,29 +47,66 @@
 
 const express = require("express");
 const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const router = express.Router();
 
-/**
- * As artes chegam antes, uma a uma, em binário puro, e ficam guardadas aqui até
- * o PDF ser montado.
+/*
+ * ===========================================================================
+ * AS ARTES FICAM EM DISCO, NÃO NA MEMÓRIA
+ * ===========================================================================
  *
- * Antes elas vinham dentro do JSON, em base64. Não dá: base64 engorda o dado em
- * um terço, e o servidor ainda precisa segurar tudo como texto na memória — um
- * encaixe com arte de verdade estourava o limite e derrubava o download. Em
- * binário o dado vai do tamanho que tem.
+ * As artes chegam antes do PDF, uma a uma, em binário puro. Elas já moraram
+ * dentro do JSON em base64 (engorda um terço e o servidor segura tudo como
+ * texto) e depois num Map de Buffers — melhor, e ainda assim o servidor
+ * segurava o trabalho INTEIRO na memória do primeiro envio até o PDF terminar.
+ *
+ * Era esse Map que cobrava o preço. Um trabalho de 155 artes distintas em
+ * tamanho real são centenas de MB paradas na RAM, e a tela pagava por isso
+ * derrubando a resolução da impressão para caber num teto de envio — quem
+ * pedia 150 dpi recebia 50. Trocar qualidade de imagem por memória de servidor
+ * é um mau negócio, e é um negócio que não precisava existir.
+ *
+ * Agora cada arte é escrita num arquivo temporário assim que chega, e o que
+ * fica na memória é o caminho dela. Na hora de montar o PDF, a arte é lida do
+ * disco, embutida e solta — o pdfkit zera o buffer dentro do `embed` (`this.data
+ * = null` no JPEG, `this.imgData = null` no PNG), então o pico passa a ser UMA
+ * arte, não a soma delas. Com isso o teto de envio saiu e o dpi ficou fixo em
+ * 150.
+ *
+ * A pasta é apagada quando o PDF sai, e um relógio recolhe o que ficou para
+ * trás quando alguém desiste no meio.
  */
 const artesGuardadas = new Map();
 const VALIDADE_MS = 10 * 60 * 1000;
 
+/** A pasta desta sessão. O nome é higienizado: ele vem do navegador. */
+function pastaDaSessao(sessao) {
+  return path.join(os.tmpdir(), "optmize-encaixe", sessao.replace(/[^A-Za-z0-9_-]/g, ""));
+}
+
+function apagarSessao(sessao) {
+  const guardadas = artesGuardadas.get(sessao);
+  artesGuardadas.delete(sessao);
+  try {
+    fs.rmSync(guardadas ? guardadas.pasta : pastaDaSessao(sessao),
+      { recursive: true, force: true });
+  } catch (erro) {
+    // Arquivo temporário que não some não estraga nada: o sistema recolhe.
+    console.warn(`[encaixe-pdf] não deu para limpar a sessão ${sessao}:`, erro.message);
+  }
+}
+
 function limparAntigas() {
   const agora = Date.now();
-  artesGuardadas.forEach((sessao, chave) => {
-    if (agora - sessao.criadaEm > VALIDADE_MS) artesGuardadas.delete(chave);
+  [...artesGuardadas.entries()].forEach(([sessao, dados]) => {
+    if (agora - dados.criadaEm > VALIDADE_MS) apagarSessao(sessao);
   });
 }
 
-/** Recebe uma arte já pronta, em binário. */
+/** Recebe uma arte já pronta, em binário, e põe no disco. */
 router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, res) => {
   limparAntigas();
   const sessao = String(req.query.sessao || "");
@@ -80,10 +117,24 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, re
 
   let guardadas = artesGuardadas.get(sessao);
   if (!guardadas) {
-    guardadas = { criadaEm: Date.now(), artes: new Map() };
+    guardadas = { criadaEm: Date.now(), pasta: pastaDaSessao(sessao), artes: new Map() };
+    try {
+      fs.mkdirSync(guardadas.pasta, { recursive: true });
+    } catch (erro) {
+      return res.status(500).json({ error: `Não deu para guardar a arte: ${erro.message}` });
+    }
     artesGuardadas.set(sessao, guardadas);
   }
-  guardadas.artes.set(chave, Buffer.from(req.body));
+
+  // O nome do arquivo também vem do navegador; nada dele entra no caminho sem
+  // passar por aqui.
+  const arquivo = path.join(guardadas.pasta, `${chave.replace(/[^A-Za-z0-9_-]/g, "")}.arte`);
+  try {
+    fs.writeFileSync(arquivo, req.body);
+  } catch (erro) {
+    return res.status(500).json({ error: `Não deu para guardar a arte: ${erro.message}` });
+  }
+  guardadas.artes.set(chave, arquivo);
   res.json({ ok: true, bytes: req.body.length });
 });
 
@@ -158,7 +209,7 @@ function paginasDoEncaixe(posicoes, consumo) {
  * rolo saírem em tamanhos diferentes por causa de um arredondamento, e esse
  * erro só aparece com o tecido já impresso.
  */
-function montarPdf({ larguraTecido, consumo, posicoes, buffers }, destino) {
+async function montarPdf({ larguraTecido, consumo, posicoes, buffers, lerArte }, destino) {
   const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
   const maiorAlturaPt = Math.max(...paginas.map((p) => (p.fundo - p.topo) * PT_POR_CM));
@@ -174,27 +225,81 @@ function montarPdf({ larguraTecido, consumo, posicoes, buffers }, destino) {
   });
   doc.pipe(destino);
 
-  // Cada arte entra no arquivo UMA vez e depois é só reaproveitada em cada
-  // posição. Passando o buffer direto, o pdfkit embutiria a mesma imagem cem
-  // vezes: o PDF fica enorme e leva quase dez segundos para montar.
+  /*
+   * DEIXAR O CANO ESCOAR ENTRE UMA PEÇA E OUTRA.
+   *
+   * Isto já foi um laço síncrono do começo ao fim, e o efeito era invisível até
+   * alguém medir: quando `montarPdf` retornava, ZERO byte tinha chegado ao
+   * destino e o PDF INTEIRO estava parado na fila do `doc`. Medido com 30 artes
+   * de 6,2 MB — 185,2 MB escoados, 185,2 MB vivos na fila, 0 no destino.
+   *
+   * Enquanto existia um teto de envio isso passava despercebido, porque o teto
+   * segurava o tamanho. Tirado o teto (a arte agora vem do disco, e a tela
+   * manda em 150 dpi sempre), a fila passaria a ser ela o limite — e o estouro
+   * teria só mudado de lugar, do envio para a montagem.
+   *
+   * Um `setImmediate` entre as peças basta: ele devolve a vez ao laço de
+   * eventos, o `pipe` move o que está na fila para o destino, e a montagem
+   * continua de onde parou. O pico deixa de ser o PDF inteiro e passa a ser o
+   * pedaço que ainda não escoou.
+   *
+   * Desiste de esperar se o destino morreu — quem baixava fechou a aba, e aí
+   * não há mais para onde escoar nem por que continuar segurando.
+   */
+  const FILA_MAXIMA = 8 * 1024 * 1024;
+  const escoar = () => new Promise((pronto) => {
+    const tentar = () => {
+      if (doc.readableLength <= FILA_MAXIMA || destino.destroyed || destino.writableEnded) {
+        pronto();
+        return;
+      }
+      setImmediate(tentar);
+    };
+    setImmediate(tentar);
+  });
+
+  /*
+   * Cada arte entra no arquivo UMA vez e depois é só reaproveitada em cada
+   * posição. Passando o buffer direto a cada peça, o pdfkit embutiria a mesma
+   * imagem cem vezes: o PDF fica enorme e leva quase dez segundos para montar.
+   *
+   * E ela é aberta SÓ QUANDO A PRIMEIRA PEÇA DELA VAI SER DESENHADA. Antes
+   * todas eram abertas de uma vez, aqui em cima, e o servidor segurava as 155
+   * artes de um trabalho grande na memória ao mesmo tempo. O `doc.image`
+   * embute no primeiro desenho e o pdfkit zera o buffer ali dentro (`this.data
+   * = null` no JPEG, `this.imgData = null` no PNG), então abrindo sob demanda o
+   * pico vira UMA arte. O que sobra no mapa é o objeto de imagem — referência,
+   * largura e altura —, que é o que faz a segunda peça reaproveitar a primeira.
+   *
+   * `lerArte` é quem sabe de onde vem o byte: do disco, no caminho normal (ver
+   * a rota do PDF), ou de um Map de buffers, que é como a bancada e os testes
+   * chamam.
+   */
+  const buscar = lerArte || ((chave) => (buffers ? buffers.get(chave) : null));
   const desenhos = new Map();
-  buffers.forEach((buffer, chave) => {
+  const desenhoDe = (chave) => {
+    if (desenhos.has(chave)) return desenhos.get(chave);
+    let desenho = null;
     try {
-      desenhos.set(chave, doc.openImage(buffer));
+      const bytes = buscar(chave);
+      if (bytes) desenho = doc.openImage(bytes);
     } catch (err) {
       // arte ilegível: as outras continuam
       console.warn(`[encaixe-pdf] arte ilegível (${chave}):`, err && err.message);
     }
-  });
+    desenhos.set(chave, desenho);
+    return desenho;
+  };
 
   let desenhadas = 0;
-  paginas.forEach((pagina, i) => {
+  for (let i = 0; i < paginas.length; i++) {
+    const pagina = paginas[i];
     if (i > 0) doc.addPage({ size: tamanhoDa(pagina), margin: 0 });
     if (unidade !== 1) doc.page.dictionary.data.UserUnit = unidade;
 
-    pagina.posicoes.forEach((pos) => {
-      const desenho = desenhos.get(pos.chave);
-      if (!desenho) return;
+    for (const pos of pagina.posicoes) {
+      const desenho = desenhoDe(pos.chave);
+      if (!desenho) continue;
       try {
         // O `y` da peça é medido no rolo inteiro; na página ele conta a partir
         // do começo da bancada.
@@ -208,8 +313,10 @@ function montarPdf({ larguraTecido, consumo, posicoes, buffers }, destino) {
         // uma imagem ruim não pode derrubar o PDF inteiro
         console.warn(`[encaixe-pdf] não deu para desenhar a peça ${pos.chave}:`, err && err.message);
       }
-    });
-  });
+      // Ver `escoar`: é aqui que a fila do cano deixa de crescer sem limite.
+      await escoar();
+    }
+  }
 
   doc.end();
   return {
@@ -234,25 +341,56 @@ router.post("/pdf", (req, res) => {
 
   const sessao = String(req.body.sessao || "");
   const guardadas = artesGuardadas.get(sessao);
-  const buffers = new Map();
+
+  // Onde está cada arte. A que veio antes em binário (o caminho normal) está no
+  // disco e só o caminho dela fica aqui; a que veio dentro do próprio pedido é
+  // o jeito curto dos testes, e essa vem em memória mesmo — são poucas e
+  // pequenas.
+  const daMemoria = new Map();
+  const doDisco = new Map();
   (imagens || []).forEach((img) => {
-    // A arte pode ter vindo antes em binário (o caminho normal) ou junto no
-    // próprio pedido, que é o jeito curto usado pelos testes.
-    const buffer = img.src ? bufferDaImagem(img.src) : (guardadas && guardadas.artes.get(img.chave));
-    if (buffer) buffers.set(img.chave, buffer);
+    if (img.src) {
+      const buffer = bufferDaImagem(img.src);
+      if (buffer) daMemoria.set(img.chave, buffer);
+      return;
+    }
+    const arquivo = guardadas && guardadas.artes.get(img.chave);
+    if (arquivo) doDisco.set(img.chave, arquivo);
   });
-  if (buffers.size === 0) {
+  if (daMemoria.size === 0 && doDisco.size === 0) {
     return res.status(400).json({ error: "Nenhuma imagem de peça chegou para o PDF." });
   }
+
+  // Lê a arte no instante em que ela vai ser embutida, e não antes: é isto que
+  // tira o trabalho inteiro da memória do servidor. Ver `montarPdf`.
+  const lerArte = (chave) => {
+    if (daMemoria.has(chave)) return daMemoria.get(chave);
+    const arquivo = doDisco.get(chave);
+    if (!arquivo) return null;
+    try {
+      return fs.readFileSync(arquivo);
+    } catch (erro) {
+      console.warn(`[encaixe-pdf] não deu para ler a arte ${chave}:`, erro.message);
+      return null;
+    }
+  };
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${nome || "encaixe"}.pdf"`);
 
-  montarPdf({ larguraTecido, consumo, posicoes, buffers }, res);
+  // `montarPdf` é assíncrona (ela cede a vez para o PDF escoar). O cabeçalho já
+  // foi mandado a esta altura, então não dá para responder um JSON de erro: o
+  // que resta é encerrar a resposta e deixar o registro.
+  montarPdf({ larguraTecido, consumo, posicoes, lerArte }, res).catch((erro) => {
+    console.error("[encaixe-pdf] falhou ao montar o PDF:", erro);
+    res.destroy(erro);
+  });
 
   // O rolo sai num arquivo só (com uma página por bancada), então este pedido é
-  // o último: as artes desta sessão já cumpriram o que tinham para cumprir.
-  artesGuardadas.delete(sessao);
+  // o último: as artes desta sessão já cumpriram o que tinham para cumprir. A
+  // limpeza espera o fim da resposta porque `montarPdf` ainda está lendo os
+  // arquivos enquanto o PDF sai pelo cano.
+  if (sessao) res.on("close", () => apagarSessao(sessao));
 });
 
 module.exports = router;

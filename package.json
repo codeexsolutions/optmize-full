@@ -18,6 +18,7 @@
     "bancada:conferir": "node bancada/conferir.js",
     "bancada:pdf": "node bancada/conferir-pdf.js",
     "bancada:arte": "node bancada/conferir-arte.js",
+    "bancada:grupos": "node bancada/conferir-grupos.js",
     "bancada:corte": "node bancada/conferir-bancada.js",
     "bancada:sobreposicao": "node bancada/conferir-sobreposicao.js",
     "bancada:vaos": "node bancada/vaos.js",

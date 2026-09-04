@@ -18,11 +18,15 @@ const encaixeEspacoInput = document.getElementById("encaixe-espaco");
 const encaixeComprimentoInput = document.getElementById("encaixe-comprimento");
 const encaixeTempoInput = document.getElementById("encaixe-tempo");
 const encaixeGiroTodasSelect = document.getElementById("encaixe-giro-todas");
+const encaixeBarraGrupo = document.getElementById("encaixe-barra-grupo");
+const encaixeGrupoConta = document.getElementById("encaixe-grupo-conta");
+const btnEncaixeCriarGrupo = document.getElementById("btn-encaixe-criar-grupo");
+const btnEncaixeTirarGrupo = document.getElementById("btn-encaixe-tirar-grupo");
+const btnEncaixeLimparSelecao = document.getElementById("btn-encaixe-limpar-selecao");
 const encaixeModoSelect = document.getElementById("encaixe-modo");
 const encaixeGuardadoAviso = document.getElementById("encaixe-guardado-aviso");
 const encaixeFilesInput = document.getElementById("encaixe-files");
 const encaixeUnidadeMoldeSelect = document.getElementById("encaixe-unidade-molde");
-const encaixeModoVetorSelect = document.getElementById("encaixe-modo-vetor");
 const btnLimparPecas = document.getElementById("btn-limpar-pecas");
 const encaixePecasBody = document.getElementById("encaixe-pecas-body");
 const encaixeContagem = document.getElementById("encaixe-contagem");
@@ -398,7 +402,12 @@ const ehMoldeVetorial = (file) => ehArquivoDeMolde(file);
  */
 async function lerMoldesDoArquivo(file) {
   const unidade = encaixeUnidadeMoldeSelect.value || null;
-  const modo = encaixeModoVetorSelect.value || "marcador";
+  // Sempre "marcador": cada peça fechada do arquivo vira uma linha da tabela.
+  // Havia um seletor aqui para ler o arquivo como UMA peça só ("inteiro"), e ele
+  // saiu da tela de Encaixe — quem chega aqui com um DXF/PLT está trazendo um
+  // molde para encaixar, e nesse caso a resposta é sempre esta. A tela de Moldes
+  // continua com a escolha, que é onde ela quer dizer alguma coisa.
+  const modo = "marcador";
   const lido = await lerMoldeVetorial(file, unidade, modo);
 
   if (lido.erro) throw new Error(`"${file.name}": ${lido.erro}`);
@@ -932,6 +941,119 @@ const giroPadrao = () => encaixeGiroTodasSelect.value;
  * quer o motor, o molde vetorial já vem com contorno, e a estampa que sangra
  * até a borda quer a caixa mesmo.
  */
+/*
+ * ===========================================================================
+ * OS GRUPOS: peças que a costureira quer achar juntas
+ * ===========================================================================
+ *
+ * Marcar peças na tabela e apertar "Criar grupo" diz ao encaixe que elas devem
+ * sair PERTO umas das outras no rolo. As seis partes de uma camisa G, por
+ * exemplo: espalhadas em doze metros, quem corta à mão gasta mais tempo
+ * procurando do que cortando.
+ *
+ * O grupo é só um nome guardado na peça (`peca.grupo`). Quem faz alguma coisa
+ * com ele é o motor, e de um jeito barato: as peças do grupo entram grudadas na
+ * fila de encaixe (ver "OS GRUPOS DA PESSOA", em encaixe-motor.js). Peça de fora
+ * continua podendo cair num vão entre elas — o grupo fica numa REGIÃO, não numa
+ * faixa isolada, e é isso que mantém o custo em tecido baixo.
+ *
+ * A seleção mora fora da peça, num conjunto de ids à parte: ela é estado de
+ * TELA, não do trabalho, e não faz sentido nem ser salva no projeto nem
+ * sobreviver a uma troca de lista.
+ */
+
+const selecionadas = new Set();
+
+// Letras, não números: "Grupo B" se lê e se fala na mesa de corte, "Grupo 2"
+// se confunde com quantidade. Depois de Z volta a AA.
+function proximoNomeDeGrupo() {
+  const usados = new Set(pecasEncaixe.map((p) => p.grupo).filter(Boolean));
+  for (let n = 0; n < 700; n++) {
+    let nome = "";
+    let resto = n;
+    do {
+      nome = String.fromCharCode(65 + (resto % 26)) + nome;
+      resto = Math.floor(resto / 26) - 1;
+    } while (resto >= 0);
+    if (!usados.has(nome)) return nome;
+  }
+  return `G${Date.now()}`;
+}
+
+// A cor sai do nome, então o mesmo grupo tem sempre a mesma cor, sem precisar
+// guardar nada — e ela é a mesma paleta das peças, para a tela não ganhar um
+// segundo vocabulário de cor.
+function corDoGrupo(nome) {
+  let n = 0;
+  for (let i = 0; i < nome.length; i++) n = (n * 31 + nome.charCodeAt(i)) >>> 0;
+  return CORES_PECA[n % CORES_PECA.length];
+}
+
+/** A barra só existe quando há o que fazer com ela. */
+function atualizarBarraDeGrupo() {
+  // Peça que saiu da lista não pode continuar marcada.
+  const vivas = new Set(pecasEncaixe.map((p) => p.id));
+  [...selecionadas].forEach((id) => { if (!vivas.has(id)) selecionadas.delete(id); });
+
+  const quantas = selecionadas.size;
+  encaixeBarraGrupo.classList.toggle("hidden", quantas === 0);
+  encaixeBarraGrupo.classList.toggle("flex", quantas > 0);
+  if (quantas === 0) return;
+
+  const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id));
+  const comGrupo = marcadas.filter((p) => p.grupo).length;
+  const grupos = [...new Set(marcadas.map((p) => p.grupo).filter(Boolean))];
+
+  encaixeGrupoConta.textContent = `${quantas} peça${quantas === 1 ? "" : "s"} marcada`
+    + `${quantas === 1 ? "" : "s"}`
+    + (grupos.length ? ` · ${grupos.length === 1 ? `grupo ${grupos[0]}` : `grupos ${grupos.join(", ")}`}` : "");
+
+  // Uma peça só não é grupo — não há de quem ficar perto.
+  btnEncaixeCriarGrupo.disabled = quantas < 2;
+  btnEncaixeCriarGrupo.textContent = grupos.length ? "Juntar num grupo" : "Criar grupo";
+  btnEncaixeTirarGrupo.classList.toggle("hidden", comGrupo === 0);
+}
+
+/**
+ * O risco que está na tela foi feito com os grupos de antes; mexer neles o
+ * invalida do mesmo jeito que tirar uma peça invalida (ver o clique do `×`).
+ */
+function grupoMudou(recado) {
+  renderPecasEncaixe();
+  if (!ultimoResultado) return;
+  ultimoResultado = null;
+  encaixeResultado.classList.add("hidden");
+  encaixeAndamento.textContent = recado;
+  encaixeAndamento.classList.remove("hidden");
+}
+
+btnEncaixeCriarGrupo.addEventListener("click", () => {
+  const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id));
+  if (marcadas.length < 2) return;
+  // Marcou peças de um grupo que já existe? Então é para juntar NELE, e não
+  // para criar mais um — do contrário, marcar o grupo inteiro mais uma peça
+  // renomearia tudo e a pessoa perderia o nome que já estava usando na mesa.
+  const jaExiste = marcadas.map((p) => p.grupo).filter(Boolean).sort()[0];
+  const nome = jaExiste || proximoNomeDeGrupo();
+  marcadas.forEach((p) => { p.grupo = nome; });
+  selecionadas.clear();
+  grupoMudou(`Grupo ${nome} criado com ${marcadas.length} peças. `
+    + `Faça o encaixe de novo para elas saírem juntas no rolo.`);
+});
+
+btnEncaixeTirarGrupo.addEventListener("click", () => {
+  const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id) && p.grupo);
+  if (marcadas.length === 0) return;
+  marcadas.forEach((p) => { p.grupo = null; });
+  selecionadas.clear();
+  grupoMudou(`${marcadas.length} peça(s) saíram do grupo. Faça o encaixe de novo.`);
+});
+
+btnEncaixeLimparSelecao.addEventListener("click", () => {
+  selecionadas.clear();
+  renderPecasEncaixe();
+});
+
 const CAMPO_MINI =
   "mt-0! text-[0.62rem] uppercase tracking-wide text-tinta-apagada " +
   "[&>input]:mt-1 [&>input]:px-2 [&>input]:py-1 [&>input]:text-[0.8rem] " +
@@ -1006,6 +1128,7 @@ function renderPecasEncaixe() {
          <p class="m-0 text-center text-[11px] text-tinta-apagada">Arraste os moldes ou as artes para cá.</p>
        </div>`;
     atualizarPainelDoTrabalho();
+    atualizarBarraDeGrupo();
     renderAvisosDeCor();
     return;
   }
@@ -1016,12 +1139,18 @@ function renderPecasEncaixe() {
     linha.className = "group border-b border-linha";
     linha.innerHTML = `
       <div class="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-painel-suave">
+        <input type="checkbox" data-sel-peca="${peca.id}"${selecionadas.has(peca.id) ? " checked" : ""}
+               aria-label="Marcar ${escapeHtml(peca.nome)} para agrupar"
+               class="size-3.5! shrink-0 cursor-pointer" />
         <span class="peca-thumb size-8! shrink-0" style="border-color: ${cor};"><img src="${peca.miniatura || peca.src}" alt="" /></span>
         ${seloDeCor(peca)}
 
         <span class="min-w-0 flex-1">
           <button type="button" data-abrir-peca="${peca.id}" class="flex w-full items-center gap-1 text-left" title="Medida, giro e contorno desta peça">
             <span class="truncate text-[11px] font-medium text-tinta">${escapeHtml(peca.nome)}</span>
+            ${peca.grupo ? `<span class="shrink-0 rounded px-1 font-mono text-[8px] font-semibold uppercase leading-[1.4]"
+                   style="background: ${corDoGrupo(peca.grupo)}22; color: ${corDoGrupo(peca.grupo)}; border: 1px solid ${corDoGrupo(peca.grupo)}66;"
+                   title="Grupo ${escapeHtml(peca.grupo)}: estas peças saem perto umas das outras no rolo">${escapeHtml(peca.grupo)}</span>` : ""}
             <svg class="size-3 shrink-0 text-tinta-apagada transition-colors group-hover:text-ambar" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#chevron-down" /></svg>
           </button>
           <span class="block truncate font-mono text-[9px] text-tinta-apagada">${formatarNumero(peca.largura, 1)} × ${formatarNumero(peca.altura, 1)} cm${peca.qtdDoArquivo ? " · qtd do nome" : ""}</span>
@@ -1067,6 +1196,7 @@ function renderPecasEncaixe() {
   });
 
   atualizarPainelDoTrabalho();
+  atualizarBarraDeGrupo();
   renderAvisosDeCor();
 }
 
@@ -1146,6 +1276,17 @@ encaixePecasBody.addEventListener("input", (e) => {
 });
 
 encaixePecasBody.addEventListener("change", (e) => {
+  const marcar = e.target.dataset.selPeca;
+  if (marcar) {
+    const id = Number(marcar);
+    if (e.target.checked) selecionadas.add(id);
+    else selecionadas.delete(id);
+    // Só a barra muda: redesenhar a tabela inteira aqui perderia a gaveta que
+    // estiver aberta e piscaria a lista a cada clique de uma seleção múltipla.
+    atualizarBarraDeGrupo();
+    return;
+  }
+
   const campo = e.target.dataset.campo;
   if (campo !== "girar" && campo !== "contorno") return;
   const peca = pecasEncaixe.find((p) => p.id === Number(e.target.dataset.id));
@@ -1400,8 +1541,12 @@ function embaralharTexto(texto) {
 }
 
 function chaveDoTrabalho(pecas, larguraTecido, espaco, comprimentoBancada) {
+  // O grupo entra na chave: ele muda a fila de entrada e, com ela, o encaixe.
+  // Sem isso, agrupar peças e refazer a procura traria de volta o risco salvo
+  // de ANTES do grupo, e a tela mostraria um encaixe que ignora o agrupamento
+  // como se fosse a resposta a ele.
   const lista = pecas.map((p) =>
-    [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH].join("~")
+    [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH, p.grupo || ""].join("~")
   ).sort().join("|");
   // O "b" antes do comprimento não é enfeite: sem ele, uma chave nova de
   // bancada 1 cm cairia em cima da chave velha de margem 1 cm, e o trabalho
@@ -2832,11 +2977,27 @@ btnBaixarEncaixe.addEventListener("click", () => {
  * onde um sinal trocado passa despercebido até alguém imprimir 12 metros de
  * tecido com as peças de cabeça para baixo.
  */
-const DPI_EXPORTACAO = 150; // qualidade de impressão sem estourar o tamanho do arquivo
-// Teto do que sobe para o servidor. Arte fotográfica de verdade passa fácil
-// disso a 150 dpi; em vez de derrubar o download, o sistema baixa a resolução
-// o suficiente para caber e avisa qual foi usada.
-const TETO_DE_ENVIO_MB = 300;
+/*
+ * A RESOLUÇÃO DE IMPRESSÃO, E ELA NÃO NEGOCIA.
+ *
+ * 150 dpi, sempre. Já foi um teto móvel: havia um limite de quanto podia subir
+ * para o servidor (`TETO_DE_ENVIO_MB`, 300 MB), e quando as artes passavam
+ * disso a tela baixava o dpi até caber. Parecia prudente e era um mau negócio
+ * — trocava QUALIDADE DE IMAGEM por MEMÓRIA DE SERVIDOR. No trabalho de 155
+ * artes distintas, quem pedia 150 dpi recebia 50, e o arquivo ainda saía com
+ * meio giga porque a redução era uma passada só e terminava acima do próprio
+ * teto.
+ *
+ * O teto saiu porque a razão dele saiu: o servidor não segura mais as artes na
+ * memória (elas vão para disco assim que chegam, e são lidas uma a uma na hora
+ * de embutir — ver o cabeçalho de encaixe-pdf.js). O peso do arquivo agora é
+ * resolvido onde tem que ser resolvido, que é na escolha do formato de cada
+ * arte e no passa-direto, e nenhum dos dois mexe em resolução.
+ *
+ * `desenharPecaGirada` continua nunca AUMENTANDO a arte: 150 dpi é um teto,
+ * não um piso. Arte que tem menos que isso entra com o que tem.
+ */
+const DPI_EXPORTACAO = 150;
 
 /*
  * ===========================================================================
@@ -2930,13 +3091,24 @@ const paraBlob = (canvas, tipo, qualidade) =>
  *
  *   4. ORIENTAÇÃO EXIF DIFERENTE DE 1 — e este é o perigoso.
  *
- * O quarto merece o parágrafo dele. O navegador APLICA a orientação do EXIF ao
- * decodificar: uma foto marcada "gire 90°" aparece em pé na tela, e é em pé que
- * ela entra no encaixe, na silhueta e na medida da peça. O PDF não aplica nada
- * — ele leva os bytes, e a RIP decodifica sem olhar EXIF. A arte sairia DEITADA
- * no tecido, com a peça encaixada como se estivesse em pé, sem erro em lugar
- * nenhum. É o mesmo defeito que este arquivo evita ao desenhar a peça já girada
- * em vez de girar dentro do PDF; seria uma pena reintroduzi-lo por aqui.
+ * O quarto merece o parágrafo dele, e merece ser contado direito. O navegador
+ * APLICA a orientação do EXIF ao decodificar: uma foto marcada "gire 90°"
+ * aparece em pé na tela, e é em pé que ela entra no encaixe, na silhueta e na
+ * medida da peça. O pdfkit também lê o EXIF (`exif.fromBuffer`, no JPEG) e
+ * também aplica — ou seja, o passa-direto de uma foto girada provavelmente
+ * SAIRIA CERTO. "Provavelmente" é a palavra que reprova.
+ *
+ * São três leitores de EXIF em fila — o navegador, o pdfkit e a RIP — e o
+ * resultado só sai certo se exatamente um deles aplicar. O pdfkit ainda troca
+ * largura por altura quando a orientação passa de 4; aqui isso não muda a
+ * medida (quem monta a página passa largura E altura explícitas, e o teste de
+ * geometria cobre isso), mas é uma engrenagem a mais girando debaixo de um
+ * arquivo que vai virar 12 metros de tecido. E a RIP decodifica o JPEG cru: se
+ * ela também aplicar, a arte gira duas vezes.
+ *
+ * Reprovar custa uma recodificação e devolve o controle: a arte é redesenhada
+ * já na posição certa, que é a mesma escolha que o resto deste arquivo faz ao
+ * desenhar a peça girada em vez de girar dentro do PDF.
  *
  * Na dúvida, reprova: arquivo truncado, marcador que não fecha, EXIF que não se
  * deixa ler. Reprovar custa uma recodificação. Deixar passar custa o rolo.
@@ -3086,8 +3258,6 @@ async function prepararArtes(posicoes, dpi) {
   return artes;
 }
 
-const somaDeBytes = (artes) => [...artes.values()].reduce((soma, b) => soma + (b ? b.size : 0), 0);
-
 /**
  * O PDF do encaixe é UM ARQUIVO SÓ, sempre — seja o rolo de 3 m ou de 40 m.
  *
@@ -3132,20 +3302,10 @@ async function baixarEncaixeEmPdf() {
   await new Promise((pronto) => setTimeout(pronto, 20));
 
   try {
-    let dpi = DPI_EXPORTACAO;
-    let artes = await prepararArtes(r.posicoes, dpi);
-    let total = somaDeBytes(artes);
-    const teto = TETO_DE_ENVIO_MB * 1024 * 1024;
-
-    // Arte grande demais: em vez de estourar no envio, reduz a resolução na
-    // medida certa para caber. Melhor um PDF em 90 dpi do que erro nenhum PDF.
-    if (total > teto) {
-      dpi = Math.max(50, Math.floor(dpi * Math.sqrt(teto / total)));
-      btnEncaixePdf.textContent = `Montando PDF (${dpi} dpi)…`;
-      await new Promise((pronto) => setTimeout(pronto, 20));
-      artes = await prepararArtes(r.posicoes, dpi);
-      total = somaDeBytes(artes);
-    }
+    // Resolução fixa: ver `DPI_EXPORTACAO`. Não há mais teto de envio para
+    // negociar, então não há mais o que reduzir.
+    const dpi = DPI_EXPORTACAO;
+    const artes = await prepararArtes(r.posicoes, dpi);
 
     // Cada arte sobe sozinha, em binário. Mandá-las dentro do JSON em base64
     // engordava tudo em um terço e derrubava o servidor com arte de verdade.
@@ -3192,10 +3352,6 @@ async function baixarEncaixeEmPdf() {
 
     baixarArquivo(await resposta.blob(), `${nome}.pdf`);
 
-    if (dpi < DPI_EXPORTACAO) {
-      mostrarErroEncaixe(`As artes são grandes: o PDF saiu em ${dpi} dpi (em vez de ${DPI_EXPORTACAO}) `
-        + `para não estourar o envio. O tamanho em centímetros continua exato.`);
-    }
   } catch (err) {
     // O recado amigável não pode ser o fim da linha: erro de programa aqui
     // (função que não existe, resposta fora do formato) sairia disfarçado de
