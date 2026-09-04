@@ -283,14 +283,48 @@ function empurrarParaBancada(y, alturaEmCelulas, linhasDaBancada) {
  * não a ordem de execução, e o consumo se repete nos dois sentidos.
  */
 
-/** Os encaixadores da fatia `k` de `n`. A última fica só com o de vãos. */
-function motoresDaFatia(k, n, motores) {
+/*
+ * Quantas fatias vão para o encaixe por vãos.
+ *
+ * UMA, e foi medido. Ele passou a vencer três dos quatro trabalhos da bancada
+ * com uma fatia só, e a pergunta óbvia era se dar mais a ele pagaria. Não paga
+ * — dá exatamente no mesmo:
+ *
+ *   2 fatias   10,603 m  e  10,596 m     média 10,600
+ *   1 fatia    10,585 m  e  10,615 m     média 10,600
+ *
+ * O A/B nos dois sentidos foi o que mostrou isso. Em cada sentido a SEGUNDA
+ * corrida ganhou, o que apontaria para lados opostos; e as duas corridas de uma
+ * fatia diferem 30 mm entre si, mais do que a diferença entre as configurações.
+ * Medido num sentido só, isto teria virado uma conclusão errada nos dois casos.
+ *
+ * O motivo provável é que uma fatia já basta: onde o de vãos ganha, ele ganha
+ * cedo, e a segunda fatia só refaz o mesmo caminho com outra semente. Onde ele
+ * perde, mais orçamento não o faz vencer — só tira do contorno, que é quem
+ * segura aqueles trabalhos.
+ *
+ * O botão fica, para remedir quando o motor mudar:
+ *   node bancada/medir.js --tempo 3 --sementes 5 --extra fatiasVaos=2
+ */
+const VAOS_FATIAS_PADRAO = 1;
+
+/**
+ * Os encaixadores da fatia `k` de `n`. As ÚLTIMAS `quantasDeVaos` ficam só com
+ * o de vãos.
+ *
+ * O de vãos passou a vencer a maioria dos trabalhos com uma fatia só, e a
+ * pergunta natural é se dar mais a ele paga. Nunca sobra menos de duas fatias
+ * para o resto: ele vence a maioria, não todos, e quem segura os trabalhos em
+ * que ele perde são as outras.
+ */
+function motoresDaFatia(k, n, motores, quantasDeVaos = VAOS_FATIAS_PADRAO) {
   if (!motores.includes("vaos")) return motores;
   const outros = motores.filter((m) => m !== "vaos");
   // Com uma ou duas fatias, dedicar uma inteira ao de vãos tira metade do
   // orçamento de quem faz o grosso do trabalho.
   if (n < 3 || outros.length === 0) return motores;
-  return k === n - 1 ? ["vaos"] : outros;
+  const quantas = Math.max(1, Math.min(n - 2, Math.round(quantasDeVaos) || 1));
+  return k >= n - quantas ? ["vaos"] : outros;
 }
 
 /**
@@ -301,16 +335,16 @@ function motoresDaFatia(k, n, motores) {
  * encaixador próprio e o `n` continuando 5, um quinto das receitas comuns não
  * roda em fatia nenhuma: fica órfão. Este projeto já sangrou por isso uma vez.
  */
-function fatiaDoPortfolio(k, n, motores) {
+function fatiaDoPortfolio(k, n, motores, quantasDeVaos = VAOS_FATIAS_PADRAO) {
   // Agrupa as fatias por CONJUNTO DE ENCAIXADORES e reparte o portfólio dentro
   // de cada grupo. Comparar o tamanho da lista da fatia com o da lista pedida
   // não serve: quando o de vãos sai para a fatia dele, as outras também ficam
   // com uma lista menor que a pedida, e todas passariam por "especialista" —
   // cada uma rodando o portfólio inteiro, quatro vezes o mesmo trabalho.
-  const meus = motoresDaFatia(k, n, motores).join("+");
+  const meus = motoresDaFatia(k, n, motores, quantasDeVaos).join("+");
   const irmas = [];
   for (let i = 0; i < n; i++) {
-    if (motoresDaFatia(i, n, motores).join("+") === meus) irmas.push(i);
+    if (motoresDaFatia(i, n, motores, quantasDeVaos).join("+") === meus) irmas.push(i);
   }
   return { k: irmas.indexOf(k), n: irmas.length };
 }
@@ -1849,6 +1883,28 @@ const HEURISTICAS_CONTORNO = ["fundo", "vazio"];
 // de outra manga. Ainda sem medição própria de bancada — entra na disputa
 // como mais uma receita, e só vence quando o resultado dela for realmente
 // menor; nunca deixa nada pior do que a receita "solta" já deixaria.
+/*
+ * O QUARTETO FICA DE FORA, e foi medido.
+ *
+ * `TAMANHO_DO_AGRUPAMENTO` conhece o quarteto e o código todo o suporta — ele
+ * só nunca entrou nesta lista. Posto para disputar, dá no mesmo:
+ *
+ *   com quarteto   10,611 m  e  10,576 m     média 10,594
+ *   sem quarteto   10,593 m  e  10,607 m     média 10,600
+ *
+ * Os 6 mm de diferença entre as duas configurações são menores que os 35 mm que
+ * a mesma configuração varia entre corridas. E, como no teste das fatias de
+ * vãos, cada sentido do A/B apontou para um lado — medir num sentido só teria
+ * produzido as duas conclusões opostas com o mesmo dado.
+ *
+ * Faz sentido que empate: o trio já cobre o ganho de empacotar cópias iguais em
+ * bloco, e bloco de quatro é mais difícil de posicionar do que de três. O que
+ * ele acrescenta em aperto, perde em flexibilidade — e ainda cobra receitas em
+ * três motores de uma vez.
+ *
+ * Para remedir:
+ *   node bancada/medir.js --tempo 3 --sementes 5  *     --extra agrupamentos=dupla+solta+trio+cruzada+quarteto
+ */
 const AGRUPAMENTOS_PADRAO = ["dupla", "solta", "trio", "cruzada"];
 const HEURISTICAS_RETANGULO = ["bl", "bssf", "blsf", "baf"];
 

@@ -174,7 +174,7 @@ async function buscarComoAProducao(motor, trabalho,
    * roda em fatia nenhuma: fica órfão.
    */
   for (let k = 0; k < fatias; k++) {
-    const motoresDaK = motor.motoresDaFatia(k, fatias, motoresPedidos);
+    const motoresDaK = motor.motoresDaFatia(k, fatias, motoresPedidos, extra.fatiasVaos);
     const resultado = await motor.buscarMelhorEncaixe(itens, {
       larguraTecido: receita.larguraTecido,
       espaco: receita.espaco,
@@ -196,7 +196,7 @@ async function buscarComoAProducao(motor, trabalho,
        * próprio, disjunto do das outras — cortá-lo de novo deixaria ela com um
        * quinto das receitas dela e quatro quintos de nada.
        */
-      fatia: motor.fatiaDoPortfolio(k, fatias, motoresPedidos),
+      fatia: motor.fatiaDoPortfolio(k, fatias, motoresPedidos, extra.fatiasVaos),
       saltoX: puloDaFatia(k),
       semente: sementeDaFatia(semente, k, espalharSemente),
       // O papel da fatia, do mesmo lugar que a produção usa
