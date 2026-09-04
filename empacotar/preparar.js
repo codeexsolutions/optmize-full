@@ -36,6 +36,8 @@ const LEVAR = [
   "uploads-arquivos.js",
   "encaixe-pdf.js",
   "encaixe-memoria.js",
+  "cor-api.js",
+  "cor-icc.js",
   "package.json",
   "public",     // a tela antiga
   "dist",       // a tela nova, compilada pelo Vite
@@ -163,6 +165,45 @@ function copiarNode(destino) {
   return { versao: process.version, trocou: true };
 }
 
+/**
+ * A LISTA ACIMA É ESCRITA À MÃO, E POR ISSO ELA FICA PARA TRÁS.
+ *
+ * Aconteceu: a tela de Cor entrou no projeto, o `server.js` passou a exigir
+ * `cor-api` (que exige `cor-icc`), e nenhum dos dois estava no `LEVAR`. O
+ * programa rodava perfeitamente aqui, compilava sem uma queixa, gerava o
+ * instalador — e quebrava no primeiro `require` da máquina do cliente, com um
+ * "Cannot find module" numa janela que nem console tem. É o pior formato de
+ * defeito que este projeto pode produzir: invisível para quem compila, fatal
+ * para quem instala.
+ *
+ * Então a lista deixou de ser só uma lista. Depois de copiar, cada `require`
+ * relativo dos arquivos do servidor é resolvido DENTRO da pasta que vai para o
+ * instalador. Se algum não resolve, o empacotamento para aqui, com o nome do
+ * arquivo que falta — e não lá na frente, no computador de quem comprou.
+ *
+ * Só a raiz é varrida, que é onde mora o servidor. `public/` é código de
+ * navegador (entra por `<script>` e `importScripts`, não por `require`) e
+ * `node_modules` resolve sozinho.
+ */
+function conferirRequires(pasta) {
+  const faltando = [];
+  const resolve = (alvo) =>
+    fs.existsSync(alvo) || fs.existsSync(`${alvo}.js`)
+      || fs.existsSync(path.join(alvo, "index.js"));
+
+  for (const arquivo of fs.readdirSync(pasta)) {
+    if (!arquivo.endsWith(".js")) continue;
+    const texto = fs.readFileSync(path.join(pasta, arquivo), "utf-8");
+    for (const achado of texto.matchAll(/require\(\s*["'](\.[^"']+)["']\s*\)/g)) {
+      const pedido = achado[1];
+      if (!resolve(path.resolve(pasta, pedido))) {
+        faltando.push(`  ${arquivo} pede "${pedido}", que não foi para o instalador`);
+      }
+    }
+  }
+  return faltando;
+}
+
 const PESADOS = new Set(["node_modules"]);
 
 for (const item of LEVAR) {
@@ -184,6 +225,15 @@ for (const item of LEVAR) {
   fs.rmSync(para, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(para), { recursive: true });
   copiar(path.join(RAIZ, item), para);
+}
+
+// Antes de seguir: o que foi copiado se sustenta sozinho? Ver `conferirRequires`.
+const faltando = conferirRequires(DESTINO);
+if (faltando.length > 0) {
+  console.error("preparar: o servidor copiado não fecha as próprias dependências.");
+  faltando.forEach((linha) => console.error(linha));
+  console.error("Acrescente o(s) arquivo(s) à lista LEVAR, em empacotar/preparar.js.");
+  process.exit(1);
 }
 
 // O Node da máquina que compila. `process.execPath` é o caminho do node.exe
