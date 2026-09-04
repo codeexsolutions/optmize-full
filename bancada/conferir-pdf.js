@@ -16,12 +16,22 @@
  * respeita o que o encaixe decidiu: página por bancada, toda peça desenhada uma
  * vez, e cada página do tamanho real da sua bancada.
  *
- * A segunda coisa conferida é a mais silenciosa das duas. Rolo acima de 508 cm
+ * A segunda coisa conferida é a mais silenciosa das três. Rolo acima de 508 cm
  * não cabe numa página de PDF, e quem resolve isso é o `/UserUnit` — que é
  * recurso do **PDF 1.6**, enquanto o pdfkit escreve `%PDF-1.3` por padrão.
  * Declarando 1.3, um leitor pode ignorar o `/UserUnit` e imprimir o rolo na
  * escala errada sem dar erro nenhum. Aqui a versão do arquivo é conferida junto
  * com o tamanho.
+ *
+ * A terceira é o TAMANHO NÃO SE MEXE. O peso do arquivo é escolhido por arte —
+ * PNG ou JPEG, o que sair menor, e às vezes a arte original inteira, sem
+ * redesenhar (ver "O PASSA-DIRETO", em public/encaixe.js). Nada disso pode
+ * encostar na medida: o que sai da impressora tem que medir o que a peça mede,
+ * seja a arte um PNG com alfa, um JPEG de metade da resolução ou um arquivo de
+ * proporção completamente diferente. É uma garantia fácil de perder sem
+ * perceber — quem imprime só descobre com o tecido na mão —, então ela é
+ * medida: o mesmo encaixe é montado com sete artes diferentes e a geometria
+ * dos sete tem que sair idêntica, do MediaBox às matrizes de posição.
  *
  *   node bancada/conferir-pdf.js
  */
@@ -38,25 +48,25 @@ const PNG_1X1 = Buffer.from(
 );
 
 /** Junta o que o documento escreveu, para dar para olhar dentro dele. */
-function gerar(encaixe) {
-  return new Promise((pronto, falhou) => {
-    // Um destino de verdade, e não um objeto de mentira com um `write`: o
-    // pdfkit escreve por `pipe`, e o que se quer conferir aqui é o arquivo que
-    // sairia pela rota, byte por byte.
-    const destino = new stream.PassThrough();
-    const pedacos = [];
-    destino.on("data", (pedaco) => pedacos.push(pedaco));
+async function gerar(encaixe) {
+  // Um destino de verdade, e não um objeto de mentira com um `write`: o pdfkit
+  // escreve por `pipe`, e o que se quer conferir aqui é o arquivo que sairia
+  // pela rota, byte por byte.
+  const destino = new stream.PassThrough();
+  const pedacos = [];
+  destino.on("data", (pedaco) => pedacos.push(pedaco));
+  // Os ouvintes entram antes de a montagem começar a empurrar byte.
+  const escoou = new Promise((pronto, falhou) => {
+    destino.on("end", pronto);
     destino.on("error", falhou);
-
-    let relatorio;
-    try {
-      relatorio = montarPdf(encaixe, destino);
-    } catch (erro) {
-      falhou(erro);
-      return;
-    }
-    destino.on("end", () => pronto({ bytes: Buffer.concat(pedacos), relatorio }));
   });
+
+  // `montarPdf` é assíncrona: ela cede a vez entre as peças para o PDF escoar
+  // em vez de encher a fila do cano (ver `escoar`, em encaixe-pdf.js). Quando
+  // ela volta, o documento foi fechado; o fim do fluxo ainda vem depois.
+  const relatorio = await montarPdf(encaixe, destino);
+  await escoou;
+  return { bytes: Buffer.concat(pedacos), relatorio };
 }
 
 /**
@@ -97,6 +107,128 @@ const CASOS = [
   { nome: "20 bancadas (40 m)", largura: 180, consumo: 4000, pecas: 80, bancadas: 20, esperaUserUnit: false },
   { nome: "bancada única", largura: 160, consumo: 300, pecas: 6, bancadas: 1, esperaUserUnit: false },
 ];
+
+// ==================== O TAMANHO NÃO SE MEXE ====================
+
+const zlib = require("zlib");
+
+/** Um JPEG mínimo e válido, de uma cor só, no tamanho pedido. */
+function jpegDe(largura, altura) {
+  const jpeg = require("jpeg-js");
+  const dados = Buffer.alloc(largura * altura * 4);
+  for (let i = 0; i < largura * altura; i++) {
+    dados[i * 4] = 200; dados[i * 4 + 1] = 120; dados[i * 4 + 2] = 60; dados[i * 4 + 3] = 255;
+  }
+  return Buffer.from(jpeg.encode({ data: dados, width: largura, height: altura }, 88).data);
+}
+
+/** Um PNG RGBA, com o alfa pedido, no tamanho pedido. */
+function pngDe(largura, altura, alfa) {
+  const crc = (b) => {
+    let c = -1;
+    for (let i = 0; i < b.length; i++) {
+      c ^= b[i];
+      for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+    }
+    return (c ^ -1) >>> 0;
+  };
+  const pedaco = (tipo, dados) => {
+    const t = Buffer.from(tipo, "ascii");
+    const tam = Buffer.alloc(4); tam.writeUInt32BE(dados.length);
+    const soma = Buffer.alloc(4); soma.writeUInt32BE(crc(Buffer.concat([t, dados])));
+    return Buffer.concat([tam, t, dados, soma]);
+  };
+  const linhas = Buffer.alloc(altura * (1 + largura * 4));
+  for (let y = 0; y < altura; y++) {
+    const base = y * (1 + largura * 4);
+    for (let x = 0; x < largura; x++) {
+      const i = base + 1 + x * 4;
+      linhas[i] = 200; linhas[i + 1] = 120; linhas[i + 2] = 60; linhas[i + 3] = alfa;
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(largura, 0); ihdr.writeUInt32BE(altura, 4);
+  ihdr[8] = 8; ihdr[9] = 6; // 8 bits por canal, RGBA
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pedaco("IHDR", ihdr),
+    pedaco("IDAT", zlib.deflateSync(linhas, { level: 6 })),
+    pedaco("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+/**
+ * Tudo que decide onde a arte vai parar no papel: a caixa de cada página e as
+ * matrizes de posição do conteúdo. Se qualquer arte mexer nisso, muda o que sai
+ * impresso.
+ */
+function geometriaDoPdf(bytes) {
+  const texto = bytes.toString("latin1");
+  const caixas = [...texto.matchAll(/\/MediaBox \[([^\]]+)\]/g)].map((m) => m[1].trim());
+  const unidades = [...texto.matchAll(/\/UserUnit (\S+?)[\s/>]/g)].map((m) => m[1]);
+  const matrizes = [];
+  const abre = /stream\r?\n/g;
+  let m;
+  while ((m = abre.exec(texto)) !== null) {
+    const inicio = m.index + m[0].length;
+    const fim = texto.indexOf("endstream", inicio);
+    if (fim < 0) continue;
+    try {
+      const cru = zlib.inflateSync(Buffer.from(texto.slice(inicio, fim), "latin1")).toString("latin1");
+      [...cru.matchAll(/([-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+ [-\d.]+) cm/g)]
+        .forEach((x) => matrizes.push(x[1]));
+    } catch (erro) { /* não era um fluxo de conteúdo comprimido */ }
+  }
+  return JSON.stringify({ caixas, unidades, matrizes });
+}
+
+// Um encaixe fixo de duas bancadas. O que muda entre as rodadas é só a arte.
+const ENCAIXE_FIXO = {
+  larguraTecido: 159,
+  consumo: 144,
+  posicoes: [
+    { chave: "arte", x: 0, y: 0, largura: 50, altura: 70, bancada: 0 },
+    { chave: "arte", x: 52, y: 0, largura: 50, altura: 70, bancada: 0 },
+    { chave: "arte", x: 104, y: 3.7, largura: 50, altura: 70, bancada: 0 },
+    { chave: "arte", x: 0, y: 72, largura: 50, altura: 70, bancada: 1 },
+  ],
+};
+
+const ARTES = [
+  ["PNG opaco", () => pngDe(120, 168, 255)],
+  ["PNG com alfa", () => pngDe(120, 168, 128)],
+  ["PNG de 1/4 da resolução", () => pngDe(30, 42, 255)],
+  ["PNG de 4x a resolução", () => pngDe(480, 672, 255)],
+  ["JPEG", () => jpegDe(120, 168)],
+  ["JPEG de metade da resolução", () => jpegDe(60, 84)],
+  // O caso que mais assusta: um arquivo cuja proporção não tem nada a ver com a
+  // da peça. Quem manda na medida é a peça, não a arte.
+  ["JPEG de outra proporção", () => jpegDe(160, 120)],
+];
+
+async function conferirQueOTamanhoNaoMexe(erro) {
+  let referencia = null;
+  let referenciaNome = "";
+  for (const [nome, fazer] of ARTES) {
+    const { bytes, relatorio } = await gerar({
+      ...ENCAIXE_FIXO, buffers: new Map([["arte", fazer()]]),
+    });
+    if (relatorio.desenhadas !== ENCAIXE_FIXO.posicoes.length) {
+      erro(`tamanho/${nome}: desenhou ${relatorio.desenhadas} de ${ENCAIXE_FIXO.posicoes.length} peças`);
+    }
+    const geometria = geometriaDoPdf(bytes);
+    if (referencia === null) {
+      referencia = geometria;
+      referenciaNome = nome;
+    } else if (geometria !== referencia) {
+      erro(`tamanho/${nome}: a geometria saiu diferente da de "${referenciaNome}" `
+        + `— a arte mexeu na medida impressa`);
+    }
+  }
+  const largura = Number(JSON.parse(referencia).caixas[0].split(" ")[2]);
+  process.stdout.write(`  ${"tamanho não se mexe".padEnd(24)} ${ARTES.length} artes diferentes`
+    + ` · mesma geometria · ${(largura / PT_POR_CM).toFixed(1)} cm de largura\n`);
+}
 
 async function principal() {
   const falhas = [];
@@ -165,10 +297,12 @@ async function principal() {
       + ` ${relatorio.paginaPt.map((v) => v.toFixed(0)).join("x")} pt\n`);
   }
 
+  await conferirQueOTamanhoNaoMexe((queixa) => falhas.push(queixa));
+
   console.log("");
   if (falhas.length === 0) {
-    console.log(`OK — ${CASOS.length} encaixes, todos num arquivo só,`
-      + ` com uma página por bancada.`);
+    console.log(`OK — ${CASOS.length} encaixes, todos num arquivo só, com uma página por`
+      + ` bancada, e ${ARTES.length} artes diferentes sem mexer no tamanho impresso.`);
     return;
   }
   console.log(`FALHOU — ${falhas.length} problema(s):`);

@@ -317,6 +317,15 @@ function expandir(pecas) {
         nome: peca.nome, qtd: peca.qtd, giro: peca.giro,
         largura: peca.largura, altura: peca.altura,
         mascaras: peca.mascaras,
+        // O grupo da tabela (ver "OS GRUPOS DA PESSOA", em encaixe-motor.js).
+        // Sem ele aqui, a bancada mede um encaixe sem grupo nenhum achando que
+        // está medindo o com — foi exatamente o que aconteceu na primeira
+        // tentativa de medir o custo do agrupamento.
+        grupo: peca.grupo || null,
+        // Rótulo livre, só para a bancada medir: ele atravessa a expansão sem
+        // o motor olhar para ele, e é o que deixa comparar o espalhamento do
+        // mesmo punhado de peças com e sem agrupamento.
+        conjunto: peca.conjunto || null,
       });
     }
   });
