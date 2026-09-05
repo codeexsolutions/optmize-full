@@ -161,6 +161,10 @@ function pecaParaWorker(item) {
     indice: item.indice, copia: item.copia,
     nome: item.nome, qtd: item.qtd, giro: item.giro,
     largura: item.largura, altura: item.altura,
+    // O grupo marcado na tabela. Sem ele do lado de lá, as peças do grupo não
+    // entrariam grudadas na fila e o encaixe sairia como se não houvesse grupo
+    // nenhum (ver "OS GRUPOS DA PESSOA", em encaixe-motor.js).
+    grupo: item.grupo || null,
     mascaras: mascarasParaBusca(item.mascaras),
   };
 }

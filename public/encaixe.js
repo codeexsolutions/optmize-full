@@ -11,23 +11,55 @@
  * Tudo roda no navegador — as imagens não sobem para o servidor.
  */
 
+// ==================== A FOLGA ENTRE PEÇAS ====================
+
+/**
+ * A folga pedida, em centímetro — a unidade dos dois campos e a do encaixe.
+ *
+ * A tela pergunta o vão em X e em Y separados, que é como a produção fala:
+ * o vão de lado e o vão no sentido do rolo são decisões diferentes.
+ *
+ * O motor, porém, ainda engorda a peça por um DISCO de raio único (ver
+ * `grade()` e o disco em encaixe-mascara.js) — um vão diferente por eixo
+ * pediria engordar por uma elipse, o que muda a máscara, o caminho em WASM
+ * e os testes da bancada. Enquanto isso não existe, vale o MAIOR dos dois.
+ *
+ * Maior e não menor, e não a média: folga a mais gasta um tiquinho de
+ * tecido, folga a menos estraga o corte. É a mesma regra que a `grade()`
+ * já segue quando não consegue a folga exata.
+ *
+ * A tela avisa quando os dois números diferem — ver `avisarEixo()`. Campo
+ * que promete o que não cumpre, calado, é pior que campo que não existe.
+ */
+function folgaPedida() {
+  const x = Math.max(0, Number(encaixeEspacoInput.value) || 0);
+  const y = Math.max(0, Number(encaixeEspacoYInput?.value) || 0);
+  return Math.max(x, y);
+}
+
 // ==================== ELEMENTOS ====================
 
 const encaixeLarguraInput = document.getElementById("encaixe-largura");
 const encaixeEspacoInput = document.getElementById("encaixe-espaco");
-const encaixeMargemInput = document.getElementById("encaixe-margem");
+const encaixeEspacoYInput = document.getElementById("encaixe-espaco-y");
+const encaixeComprimentoInput = document.getElementById("encaixe-comprimento");
 const encaixeTempoInput = document.getElementById("encaixe-tempo");
 const encaixeGiroTodasSelect = document.getElementById("encaixe-giro-todas");
+const encaixeBarraGrupo = document.getElementById("encaixe-barra-grupo");
+const encaixeGrupoConta = document.getElementById("encaixe-grupo-conta");
+const btnEncaixeCriarGrupo = document.getElementById("btn-encaixe-criar-grupo");
+const btnEncaixeTirarGrupo = document.getElementById("btn-encaixe-tirar-grupo");
+const btnEncaixeLimparSelecao = document.getElementById("btn-encaixe-limpar-selecao");
 const encaixeModoSelect = document.getElementById("encaixe-modo");
 const encaixeGuardadoAviso = document.getElementById("encaixe-guardado-aviso");
 const encaixeFilesInput = document.getElementById("encaixe-files");
 const encaixeUnidadeMoldeSelect = document.getElementById("encaixe-unidade-molde");
-const encaixeModoVetorSelect = document.getElementById("encaixe-modo-vetor");
 const btnLimparPecas = document.getElementById("btn-limpar-pecas");
 const encaixePecasBody = document.getElementById("encaixe-pecas-body");
 const encaixeContagem = document.getElementById("encaixe-contagem");
 const encaixeNumeros = document.getElementById("encaixe-numeros");
 const encaixeResumoLateral = document.getElementById("encaixe-resumo-lateral");
+const encaixeAvisoCor = document.getElementById("encaixe-aviso-cor");
 const encaixeError = document.getElementById("encaixe-error");
 const btnEncaixar = document.getElementById("btn-encaixar");
 const btnPararBusca = document.getElementById("btn-parar-busca");
@@ -42,13 +74,17 @@ const encaixeLoadingFill = document.getElementById("encaixe-loading-fill");
 const encaixeLoadingBarra = encaixeCarregamento.querySelector(".encaixe-loading-barra");
 const encaixeResultado = document.getElementById("encaixe-resultado");
 const encaixeStats = document.getElementById("encaixe-stats");
-const encaixeLarguraResumo = document.getElementById("encaixe-largura-resumo");
 const encaixeResumo = document.getElementById("encaixe-resumo");
 const encaixeSobras = document.getElementById("encaixe-sobras");
 const encaixeCanvas = document.getElementById("encaixe-canvas");
 const btnBaixarEncaixe = document.getElementById("btn-baixar-encaixe");
 const btnEncaixePdf = document.getElementById("btn-encaixe-pdf");
 const btnImprimirEncaixe = document.getElementById("btn-imprimir-encaixe");
+const menuExportar = document.getElementById("menu-exportar");
+const btnExportar = document.getElementById("btn-exportar");
+const btnExportarRotulo = document.getElementById("btn-exportar-rotulo");
+const menuExportarPainel = document.getElementById("menu-exportar-painel");
+const itensDoExportar = [...menuExportarPainel.querySelectorAll(".menu-item")];
 
 // Cada peça: { id, nome, src, img, pxW, pxH, largura, altura, qtd, giro }
 // largura/altura em centímetros; `giro` diz como ela pode virar (ver giroPadrao).
@@ -397,7 +433,12 @@ const ehMoldeVetorial = (file) => ehArquivoDeMolde(file);
  */
 async function lerMoldesDoArquivo(file) {
   const unidade = encaixeUnidadeMoldeSelect.value || null;
-  const modo = encaixeModoVetorSelect.value || "marcador";
+  // Sempre "marcador": cada peça fechada do arquivo vira uma linha da tabela.
+  // Havia um seletor aqui para ler o arquivo como UMA peça só ("inteiro"), e ele
+  // saiu da tela de Encaixe — quem chega aqui com um DXF/PLT está trazendo um
+  // molde para encaixar, e nesse caso a resposta é sempre esta. A tela de Moldes
+  // continua com a escolha, que é onde ela quer dizer alguma coisa.
+  const modo = "marcador";
   const lido = await lerMoldeVetorial(file, unidade, modo);
 
   if (lido.erro) throw new Error(`"${file.name}": ${lido.erro}`);
@@ -709,7 +750,7 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
     renderPecasEncaixe();
     const adicionadas = pecasEncaixe.length - totalAntes;
     const total = pecasEncaixe.reduce((soma, p) => soma + p.qtd, 0);
-    // O envio NÃO calcula nada: quem aperta "Fazer encaixe" é a pessoa, depois
+    // O envio NÃO calcula nada: quem aperta "Optmizar" é a pessoa, depois
     // de escolher por quantos segundos a busca vai rodar. A mensagem diz isso
     // com todas as letras, senão a tela parece estar calculando sozinha.
     finalizarCarregamento("concluido", {
@@ -717,7 +758,7 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
       titulo: "Projeto carregado no Encaixe",
       detalhe: `${adicionadas} arte${adicionadas === 1 ? "" : "s"} de "${nomeDoProjeto}" `
         + `× ${unidades} unidade${unidades === 1 ? "" : "s"} = ${total} peças. `
-        + `Escolha o tempo de procura e aperte "Fazer encaixe".`,
+        + `Escolha o tempo de procura e aperte "Optmizar".`,
     });
   } catch (err) {
     finalizarCarregamento("com-erro", {
@@ -812,6 +853,10 @@ async function adicionarArquivos(files) {
           // `cru.img` é o bitmap que a leitura acabou de decodificar e ainda
           // está vivo: a miniatura sai dele, sem decodificar nada de novo.
           const peca = await montarPecaDaImagem(cru, null, cru.img);
+          // O que o navegador vai fazer com a cor desta arte. Só lê o cabeçalho
+          // do arquivo (ver public/cor-do-arquivo.js) — não decodifica nada, e
+          // por isso não pesa na leitura.
+          peca.cor = await diagnosticoDeCorDoArquivo(file);
           prontas[indice] = [peca];
           pecasComFundo.set(indice, peca);
         }
@@ -927,10 +972,180 @@ const giroPadrao = () => encaixeGiroTodasSelect.value;
  * quer o motor, o molde vetorial já vem com contorno, e a estampa que sangra
  * até a borda quer a caixa mesmo.
  */
+/*
+ * ===========================================================================
+ * OS GRUPOS: peças que a costureira quer achar juntas
+ * ===========================================================================
+ *
+ * Marcar peças na tabela e apertar "Criar grupo" diz ao encaixe que elas devem
+ * sair PERTO umas das outras no rolo. As seis partes de uma camisa G, por
+ * exemplo: espalhadas em doze metros, quem corta à mão gasta mais tempo
+ * procurando do que cortando.
+ *
+ * O grupo é só um nome guardado na peça (`peca.grupo`). Quem faz alguma coisa
+ * com ele é o motor, e de um jeito barato: as peças do grupo entram grudadas na
+ * fila de encaixe (ver "OS GRUPOS DA PESSOA", em encaixe-motor.js). Peça de fora
+ * continua podendo cair num vão entre elas — o grupo fica numa REGIÃO, não numa
+ * faixa isolada, e é isso que mantém o custo em tecido baixo.
+ *
+ * A seleção mora fora da peça, num conjunto de ids à parte: ela é estado de
+ * TELA, não do trabalho, e não faz sentido nem ser salva no projeto nem
+ * sobreviver a uma troca de lista.
+ */
+
+const selecionadas = new Set();
+
+// Letras, não números: "Grupo B" se lê e se fala na mesa de corte, "Grupo 2"
+// se confunde com quantidade. Depois de Z volta a AA.
+function proximoNomeDeGrupo() {
+  const usados = new Set(pecasEncaixe.map((p) => p.grupo).filter(Boolean));
+  for (let n = 0; n < 700; n++) {
+    let nome = "";
+    let resto = n;
+    do {
+      nome = String.fromCharCode(65 + (resto % 26)) + nome;
+      resto = Math.floor(resto / 26) - 1;
+    } while (resto >= 0);
+    if (!usados.has(nome)) return nome;
+  }
+  return `G${Date.now()}`;
+}
+
+// A cor sai do nome, então o mesmo grupo tem sempre a mesma cor, sem precisar
+// guardar nada — e ela é a mesma paleta das peças, para a tela não ganhar um
+// segundo vocabulário de cor.
+function corDoGrupo(nome) {
+  let n = 0;
+  for (let i = 0; i < nome.length; i++) n = (n * 31 + nome.charCodeAt(i)) >>> 0;
+  return CORES_PECA[n % CORES_PECA.length];
+}
+
+/** A barra só existe quando há o que fazer com ela. */
+function atualizarBarraDeGrupo() {
+  // Peça que saiu da lista não pode continuar marcada.
+  const vivas = new Set(pecasEncaixe.map((p) => p.id));
+  [...selecionadas].forEach((id) => { if (!vivas.has(id)) selecionadas.delete(id); });
+
+  const quantas = selecionadas.size;
+  encaixeBarraGrupo.classList.toggle("hidden", quantas === 0);
+  encaixeBarraGrupo.classList.toggle("flex", quantas > 0);
+  if (quantas === 0) return;
+
+  const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id));
+  const comGrupo = marcadas.filter((p) => p.grupo).length;
+  const grupos = [...new Set(marcadas.map((p) => p.grupo).filter(Boolean))];
+
+  encaixeGrupoConta.textContent = `${quantas} peça${quantas === 1 ? "" : "s"} marcada`
+    + `${quantas === 1 ? "" : "s"}`
+    + (grupos.length ? ` · ${grupos.length === 1 ? `grupo ${grupos[0]}` : `grupos ${grupos.join(", ")}`}` : "");
+
+  // Uma peça só não é grupo — não há de quem ficar perto.
+  btnEncaixeCriarGrupo.disabled = quantas < 2;
+  btnEncaixeCriarGrupo.textContent = grupos.length ? "Juntar num grupo" : "Criar grupo";
+  btnEncaixeTirarGrupo.classList.toggle("hidden", comGrupo === 0);
+}
+
+/**
+ * O risco que está na tela foi feito com os grupos de antes; mexer neles o
+ * invalida do mesmo jeito que tirar uma peça invalida (ver o clique do `×`).
+ */
+function grupoMudou(recado) {
+  renderPecasEncaixe();
+  if (!ultimoResultado) return;
+  ultimoResultado = null;
+  encaixeResultado.classList.add("hidden");
+  encaixeAndamento.textContent = recado;
+  encaixeAndamento.classList.remove("hidden");
+}
+
+btnEncaixeCriarGrupo.addEventListener("click", () => {
+  const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id));
+  if (marcadas.length < 2) return;
+  // Marcou peças de um grupo que já existe? Então é para juntar NELE, e não
+  // para criar mais um — do contrário, marcar o grupo inteiro mais uma peça
+  // renomearia tudo e a pessoa perderia o nome que já estava usando na mesa.
+  const jaExiste = marcadas.map((p) => p.grupo).filter(Boolean).sort()[0];
+  const nome = jaExiste || proximoNomeDeGrupo();
+  marcadas.forEach((p) => { p.grupo = nome; });
+  selecionadas.clear();
+  grupoMudou(`Grupo ${nome} criado com ${marcadas.length} peças. `
+    + `Faça o encaixe de novo para elas saírem juntas no rolo.`);
+});
+
+btnEncaixeTirarGrupo.addEventListener("click", () => {
+  const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id) && p.grupo);
+  if (marcadas.length === 0) return;
+  marcadas.forEach((p) => { p.grupo = null; });
+  selecionadas.clear();
+  grupoMudou(`${marcadas.length} peça(s) saíram do grupo. Faça o encaixe de novo.`);
+});
+
+btnEncaixeLimparSelecao.addEventListener("click", () => {
+  selecionadas.clear();
+  renderPecasEncaixe();
+});
+
 const CAMPO_MINI =
   "mt-0! text-[0.62rem] uppercase tracking-wide text-tinta-apagada " +
   "[&>input]:mt-1 [&>input]:px-2 [&>input]:py-1 [&>input]:text-[0.8rem] " +
   "[&>select]:mt-1 [&>select]:px-2 [&>select]:py-1 [&>select]:text-[0.8rem]";
+
+/*
+ * ===========================================================================
+ * O AVISO DE COR
+ * ===========================================================================
+ *
+ * O programa carrega toda arte por canvas, e canvas só existe em RGB. Arte em
+ * CMYK, ou em RGB sem dizer em que espaço está, é convertida pelo navegador de
+ * um jeito que não é o do Photoshop — o desenho sai certo e a COR não. Metade
+ * das artes desta loja está num desses dois casos (ver public/cor-do-arquivo.js).
+ *
+ * O aviso mostra a MINIATURA junto: dizer "uma arte está em CMYK" no meio de 25
+ * arquivos não ajuda ninguém a achar qual é. Com a imagem, quem conhece o
+ * trabalho reconhece a peça de relance.
+ */
+const COR_SELO = {
+  cmyk: { rotulo: "CMYK", classe: "selo-cor-cmyk" },
+  "sem-perfil": { rotulo: "sem perfil", classe: "selo-cor-perfil" },
+};
+
+function seloDeCor(peca) {
+  const aviso = peca.cor && COR_SELO[peca.cor.risco];
+  if (!aviso) return "";
+  return `<span class="selo-cor ${aviso.classe}" title="${escapeHtml(peca.cor.titulo || "")}">`
+    + `${aviso.rotulo}</span>`;
+}
+
+/**
+ * O painel de avisos de cor: uma tira com a miniatura de cada arte problemática.
+ */
+function renderAvisosDeCor() {
+  if (!encaixeAvisoCor) return;
+  const comRisco = pecasEncaixe.filter((p) => p.cor && COR_SELO[p.cor.risco]);
+  if (comRisco.length === 0) {
+    encaixeAvisoCor.classList.add("hidden");
+    encaixeAvisoCor.innerHTML = "";
+    return;
+  }
+
+  const cartoes = comRisco.map((p) => `
+    <figure class="aviso-cor-item" title="${escapeHtml(p.cor.detalhe || "")}">
+      <img src="${p.miniatura || p.src}" alt="" />
+      <figcaption>
+        <strong>${escapeHtml(p.nome)}</strong>
+        <span>${escapeHtml(p.cor.perfil || p.cor.titulo || "")}</span>
+      </figcaption>
+    </figure>`).join("");
+
+  const quantos = comRisco.length;
+  encaixeAvisoCor.innerHTML = `
+    <p class="aviso-cor-titulo">
+      ${quantos === 1 ? "1 arte pode sair com a cor diferente" : `${quantos} artes podem sair com a cor diferente`}
+      — o desenho e a medida estão certos.
+    </p>
+    <div class="aviso-cor-tira">${cartoes}</div>`;
+  encaixeAvisoCor.classList.remove("hidden");
+}
 
 function renderPecasEncaixe() {
   encaixePecasBody.innerHTML = "";
@@ -938,12 +1153,14 @@ function renderPecasEncaixe() {
   if (pecasEncaixe.length === 0) {
     encaixePecasBody.innerHTML =
       `<div class="flex h-full flex-col items-center justify-center gap-3 px-4 py-8">
-         <span class="grid size-11 place-items-center rounded-xl border border-linha text-tinta-apagada">
+         <span class="mesa-vazia-selo grid size-11 place-items-center rounded-xl border border-linha">
            <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#file-text" /></svg>
          </span>
          <p class="m-0 text-center text-[11px] text-tinta-apagada">Arraste os moldes ou as artes para cá.</p>
        </div>`;
     atualizarPainelDoTrabalho();
+    atualizarBarraDeGrupo();
+    renderAvisosDeCor();
     return;
   }
 
@@ -953,11 +1170,18 @@ function renderPecasEncaixe() {
     linha.className = "group border-b border-linha";
     linha.innerHTML = `
       <div class="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-painel-suave">
+        <input type="checkbox" data-sel-peca="${peca.id}"${selecionadas.has(peca.id) ? " checked" : ""}
+               aria-label="Marcar ${escapeHtml(peca.nome)} para agrupar"
+               class="size-3.5! shrink-0 cursor-pointer" />
         <span class="peca-thumb size-8! shrink-0" style="border-color: ${cor};"><img src="${peca.miniatura || peca.src}" alt="" /></span>
+        ${seloDeCor(peca)}
 
         <span class="min-w-0 flex-1">
           <button type="button" data-abrir-peca="${peca.id}" class="flex w-full items-center gap-1 text-left" title="Medida, giro e contorno desta peça">
             <span class="truncate text-[11px] font-medium text-tinta">${escapeHtml(peca.nome)}</span>
+            ${peca.grupo ? `<span class="shrink-0 rounded px-1 font-mono text-[8px] font-semibold uppercase leading-[1.4]"
+                   style="background: ${corDoGrupo(peca.grupo)}22; color: ${corDoGrupo(peca.grupo)}; border: 1px solid ${corDoGrupo(peca.grupo)}66;"
+                   title="Grupo ${escapeHtml(peca.grupo)}: estas peças saem perto umas das outras no rolo">${escapeHtml(peca.grupo)}</span>` : ""}
             <svg class="size-3 shrink-0 text-tinta-apagada transition-colors group-hover:text-ambar" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#chevron-down" /></svg>
           </button>
           <span class="block truncate font-mono text-[9px] text-tinta-apagada">${formatarNumero(peca.largura, 1)} × ${formatarNumero(peca.altura, 1)} cm${peca.qtdDoArquivo ? " · qtd do nome" : ""}</span>
@@ -1003,6 +1227,8 @@ function renderPecasEncaixe() {
   });
 
   atualizarPainelDoTrabalho();
+  atualizarBarraDeGrupo();
+  renderAvisosDeCor();
 }
 
 /**
@@ -1081,6 +1307,17 @@ encaixePecasBody.addEventListener("input", (e) => {
 });
 
 encaixePecasBody.addEventListener("change", (e) => {
+  const marcar = e.target.dataset.selPeca;
+  if (marcar) {
+    const id = Number(marcar);
+    if (e.target.checked) selecionadas.add(id);
+    else selecionadas.delete(id);
+    // Só a barra muda: redesenhar a tabela inteira aqui perderia a gaveta que
+    // estiver aberta e piscaria a lista a cada clique de uma seleção múltipla.
+    atualizarBarraDeGrupo();
+    return;
+  }
+
   const campo = e.target.dataset.campo;
   if (campo !== "girar" && campo !== "contorno") return;
   const peca = pecasEncaixe.find((p) => p.id === Number(e.target.dataset.id));
@@ -1114,7 +1351,7 @@ let preparoDeFundo = Promise.resolve();
  * medida e quantidade enquanto o resto termina.
  *
  * Quem precisa do fundo removido é a silhueta do encaixe — e o encaixe espera
- * por esta promessa antes de começar (ver o botão "Fazer encaixe"). Sem essa
+ * por esta promessa antes de começar (ver o botão "Optmizar"). Sem essa
  * espera, um clique apressado encaixaria a peça pelo retângulo do fundo, e o
  * erro seria silencioso: sairia um encaixe pior, sem nenhum aviso.
  */
@@ -1183,7 +1420,37 @@ encaixePecasBody.addEventListener("click", (e) => {
 
   const id = e.target.dataset.delPeca;
   if (!id) return;
+
+  /*
+   * TIRAR UMA PEÇA DERRUBA O RISCO QUE ESTAVA NA TELA.
+   *
+   * Uma posição do risco não guarda a arte: guarda o `indice`, que é a LINHA
+   * desta tabela. Tirando uma linha do meio, todas as de baixo sobem um lugar —
+   * e cada posição passa a apontar para a peça da linha seguinte. O risco
+   * continua desenhado, com a mesma metragem de antes, e cada peça vestindo a
+   * arte da vizinha.
+   *
+   * Foi assim que uma peça verde saiu rosa: a arte rosa era a linha de baixo. E
+   * como o PDF é montado das mesmas posições, o erro não fica na tela — vai
+   * impresso no tecido.
+   *
+   * Renumerar as linhas e emendar o risco daria, mas a metragem não: cada motor
+   * fecha a conta do consumo de um jeito (ver `encaixe-motor.js`), e um consumo
+   * remendado seria um número quase certo estampado na barra como se fosse
+   * exato. Esta loja decide corte por essa metragem. Então o risco cai, do mesmo
+   * jeito que cai em "Limpar a lista", e a procura é refeita com a lista nova —
+   * que é o que a pessoa quer mesmo, já que a produção mudou.
+   */
+  const tinhaRisco = !!ultimoResultado;
   pecasEncaixe = pecasEncaixe.filter((p) => p.id !== Number(id));
+  if (tinhaRisco) {
+    ultimoResultado = null;
+    encaixeResultado.classList.add("hidden");
+    encaixeAndamento.textContent = pecasEncaixe.length
+      ? "A peça saiu da lista, então o risco anterior não vale mais. Faça o encaixe de novo."
+      : "";
+    encaixeAndamento.classList.toggle("hidden", !pecasEncaixe.length);
+  }
   renderPecasEncaixe();
 });
 
@@ -1261,7 +1528,7 @@ function silhuetaDaImagem(peca, cols, rows) {
 
 /**
  * Monta (e guarda em cache) as máscaras de uma peça nas quatro rotações. O
- * cache evita refazer tudo a cada clique em "Fazer encaixe" quando nada mudou.
+ * cache evita refazer tudo a cada clique em "Optmizar" quando nada mudou.
  */
 /** A chave do cache de máscaras: muda quando qualquer entrada muda. */
 function chaveDasMascaras(peca, passo, raio) {
@@ -1304,11 +1571,18 @@ function embaralharTexto(texto) {
   return n.toString(36);
 }
 
-function chaveDoTrabalho(pecas, larguraTecido, espaco, margem) {
+function chaveDoTrabalho(pecas, larguraTecido, espaco, comprimentoBancada) {
+  // O grupo entra na chave: ele muda a fila de entrada e, com ela, o encaixe.
+  // Sem isso, agrupar peças e refazer a procura traria de volta o risco salvo
+  // de ANTES do grupo, e a tela mostraria um encaixe que ignora o agrupamento
+  // como se fosse a resposta a ele.
   const lista = pecas.map((p) =>
-    [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH].join("~")
+    [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH, p.grupo || ""].join("~")
   ).sort().join("|");
-  return `${larguraTecido}/${espaco}/${margem}/${embaralharTexto(lista)}`;
+  // O "b" antes do comprimento não é enfeite: sem ele, uma chave nova de
+  // bancada 1 cm cairia em cima da chave velha de margem 1 cm, e o trabalho
+  // abriria com um encaixe guardado que não respeita bancada nenhuma.
+  return `${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
 }
 
 /** O encaixe do jeito que ele vai para o banco: só o essencial de cada peça. */
@@ -1320,6 +1594,11 @@ function posicoesParaGuardar(resultado) {
     y: Math.round(p.y * 1000) / 1000,
     rot: p.rot == null ? (p.girado ? 90 : 0) : p.rot,
     comMascara: !!p.mascara,
+    // A bancada vai junto: um encaixe guardado sem ela voltaria como um rolo
+    // inteiriço, e o PDF sairia numa página só depois de a busca ter respeitado
+    // a bancada. A chave do trabalho já inclui o comprimento (`chaveDoTrabalho`),
+    // então um guardado só volta para o mesmo comprimento de bancada.
+    bancada: p.bancada || 0,
   }));
 }
 
@@ -1381,8 +1660,7 @@ const guardarEncaixe = (dados) =>
  */
 async function usarEncaixeGuardado(guardado) {
   const larguraTecido = Number(encaixeLarguraInput.value);
-  const espaco = Math.max(0, Number(encaixeEspacoInput.value) || 0) / 10;
-  const margem = Math.max(0, Number(encaixeMargemInput.value) || 0);
+  const espaco = folgaPedida();
   const { passo, folgaReal } = grade(larguraTecido, espaco);
 
   // O "índice" de uma posição é a linha da tabela de peças, não um campo da
@@ -1407,6 +1685,7 @@ async function usarEncaixeGuardado(guardado) {
       girado: deitada,
       mascara: p.comMascara && mascaras ? mascaras.rotacoes[p.rot] : null,
       passo,
+      bancada: p.bancada || 0,
     });
   }
 
@@ -1668,27 +1947,41 @@ function mostrarAndamento(estado, aprendido) {
   });
 }
 
-btnEncaixar.addEventListener("click", async () => {
+/**
+ * O serviço: monta as peças, procura o encaixe e desenha o resultado.
+ *
+ * Não é mais o ouvinte do botão. Quem aperta Optmizar abre o modal de
+ * tecido e bancada, e é de lá que isto sai — ver `btnEncaixar` mais
+ * abaixo. A busca gasta minutos e come os núcleos da máquina; ver o rolo
+ * e a bancada uma última vez antes de disparar é barato perto disso.
+ */
+async function optmizar() {
   limparErroEncaixe();
 
-  if (pecasEncaixe.length === 0) {
-    mostrarErroEncaixe("Adicione pelo menos uma peça antes de encaixar.");
-    return;
-  }
+  // Sem peça não há o que fazer. Não avisa nada porque não há como chegar
+  // aqui assim: quem aperta Optmizar com a mesa vazia é levado ao seletor de
+  // arquivo, e o modal que chama esta função só abre depois disso.
+  if (pecasEncaixe.length === 0) return;
 
   const larguraTecido = Number(encaixeLarguraInput.value);
-  // O campo é em milímetro (é assim que se fala de folga de corte); daqui para
-  // dentro tudo continua em centímetro, como o resto da tela.
-  const espaco = Math.max(0, Number(encaixeEspacoInput.value) || 0) / 10;
-  const margem = Math.max(0, Number(encaixeMargemInput.value) || 0);
+  const espaco = folgaPedida();
+  // Vazio ou zero: rolo sem fim, como o programa sempre funcionou.
+  const comprimentoBancada = Math.max(0, Number(encaixeComprimentoInput.value) || 0);
 
   if (!larguraTecido || larguraTecido <= 0) {
     mostrarErroEncaixe("Informe a largura do tecido em centímetros.");
     return;
   }
-  if (larguraTecido - margem * 2 <= 0) {
-    mostrarErroEncaixe("As margens são maiores que a largura do tecido.");
-    return;
+  // A menor peça do trabalho tem que caber numa bancada. Sem esta conferência a
+  // busca rodaria o tempo inteiro para devolver "nenhuma peça coube", que é uma
+  // resposta cara e que não diz o que fazer.
+  if (comprimentoBancada > 0) {
+    const menorLado = Math.min(...pecasEncaixe.map((p) => Math.min(p.largura, p.altura)));
+    if (menorLado > comprimentoBancada) {
+      mostrarErroEncaixe(`A bancada de ${comprimentoBancada} cm é menor que a menor peça do `
+        + `trabalho (${formatarCm(menorLado)}). Aumente a bancada ou deixe o campo vazio.`);
+      return;
+    }
   }
 
   const modoDeEncaixe = encaixeModoSelect.value || "auto";
@@ -1733,7 +2026,7 @@ btnEncaixar.addEventListener("click", async () => {
     mostrarErroEncaixe("As peças precisam ter largura e altura maiores que zero.");
     finalizarCarregamento("com-erro");
     btnEncaixar.disabled = false;
-    btnEncaixar.textContent = "Fazer encaixe";
+    btnEncaixar.textContent = "Optmizar";
     btnPararBusca.classList.add("hidden");
     return;
   }
@@ -1782,7 +2075,7 @@ btnEncaixar.addEventListener("click", async () => {
     // num texto de balde — é o que a rede das receitas usa para generalizar
     // (ver public/encaixe-rede.js e a nota em cima de `buscarMelhorEncaixe`).
     const vetorTrabalho = vetorDoTrabalho(pecasEncaixe, larguraTecido);
-    const chave = chaveDoTrabalho(pecasEncaixe, larguraTecido, espaco, margem);
+    const chave = chaveDoTrabalho(pecasEncaixe, larguraTecido, espaco, comprimentoBancada);
     atualizarCarregamento({
       etapa: "Consultando histórico",
       titulo: "Procurando um encaixe anterior",
@@ -1799,7 +2092,7 @@ btnEncaixar.addEventListener("click", async () => {
     });
     const aprendido = await buscarMemoria(assinatura);
 
-    const alturaMax = itens.reduce((soma, it) => soma + Math.max(it.largura, it.altura) + espaco, margem * 2);
+    const alturaMax = itens.reduce((soma, it) => soma + Math.max(it.largura, it.altura) + espaco, 0);
     // Com o contorno ligado os dois encaixadores disputam: peça quase
     // retangular não ganha nada com o contorno, e aí o de retângulo gasta
     // menos. Ligar o contorno nunca piora o resultado.
@@ -1840,11 +2133,29 @@ btnEncaixar.addEventListener("click", async () => {
     // de todas as fatias. Sem worker disponível, ela mesma cai na busca de uma
     // thread só — daqui não muda nada: mesma chamada, mesmo resultado.
     ultimoResultado = await buscarMelhorEncaixeEmParalelo(itens, {
-      larguraTecido, espaco, margem, passo, alturaMax, motores,
+      larguraTecido, espaco, comprimentoBancada, passo, alturaMax, motores,
       memoria: aprendido ? aprendido.memoria : null,
-      // Recorde de encaixes parecidos: a busca não entrega pior que isso sem
-      // antes tentar de verdade alcançar.
-      alvo: aprendido ? aprendido.melhorAntes : null,
+      // O RECORDE VEM DA CHAVE EXATA, NÃO DO BALDE.
+      //
+      // Era `aprendido.melhorAntes`, o menor consumo já visto na assinatura. A
+      // assinatura é de propósito um balde LARGO — ela junta trabalhos
+      // parecidos para a memória das receitas poder generalizar, e para isso
+      // ela ignora a quantidade de cada peça, a folga e a bancada. Metragem
+      // não sobrevive a isso: no banco, o balde `l16|9:-1` guarda 243,6 cm (6
+      // peças) e 80,2 cm (2 peças) lado a lado, e o menor dos dois virava o
+      // alvo do outro.
+      //
+      // Alvo inalcançável não é inofensivo. `perseguindo` fica ligado durante
+      // os primeiros 60% do tempo, e enquanto ele está ligado a parede não
+      // dispara — a busca nunca troca para "refinar" e passa mais da metade do
+      // orçamento sacudindo forte. O próprio motor mediu isso em -1,55% de
+      // tecido (ver o laço de melhoria em encaixe-motor.js).
+      //
+      // `guardadoAntes` é o melhor encaixe deste trabalho EXATO: mesmas peças,
+      // mesmas quantidades, mesmo giro, mesma folga, mesma bancada (ver
+      // `chaveDoTrabalho`). É o único número que a busca de agora tem obrigação
+      // de alcançar, e o servidor só o substitui quando vem coisa melhor.
+      alvo: guardadoAntes ? guardadoAntes.consumo : null,
       // A rede das receitas (public/encaixe-rede.js): pontua cada receita
       // candidata pela chance dela ganhar ESTE trabalho, generalizando a
       // partir do formato das peças em vez de só do balde exato da
@@ -1904,8 +2215,8 @@ btnEncaixar.addEventListener("click", async () => {
       ? (ultimoResultado.areaReal / 10000 / areaTecido) * 100 : 0;
 
     // O encaixe inteiro fica guardado quando é o melhor já conseguido com
-    // estas peças. Quando não é, a tela oferece o de antes em vez de deixar o
-    // bom desaparecer.
+    // estas peças. Quando não é, a tela volta sozinha para o melhor — ver
+    // logo abaixo, depois do resumo da busca.
     atualizarCarregamento({
       etapa: "Salvando",
       titulo: "Guardando o melhor resultado",
@@ -1913,16 +2224,13 @@ btnEncaixar.addEventListener("click", async () => {
       progresso: 96,
     });
     await guardarEncaixe({
-      chave, assinatura, larguraTecido, espaco, margem,
+      chave, assinatura, larguraTecido, espaco, comprimentoBancada,
       consumo: ultimoResultado.consumo,
       aproveitamento,
       pecas: pecasEncaixe.map((p) => ({ nome: p.nome, qtd: p.qtd })),
       posicoes: posicoesParaGuardar(ultimoResultado),
       receita: ultimoResultado.receita,
     });
-    if (guardadoAntes && guardadoAntes.consumo < ultimoResultado.consumo - 0.05) {
-      mostrarOfertaDoGuardado(guardadoAntes, ultimoResultado.consumo);
-    }
 
     const anotado = await guardarNaMemoria({
       assinatura,
@@ -1936,9 +2244,50 @@ btnEncaixar.addEventListener("click", async () => {
       // O dado de treino da rede das receitas — ver a nota lá em cima de
       // `vetorTrabalho` e o cabeçalho de public/encaixe-rede.js.
       features: vetorTrabalho,
+      // Em qual versão do vetor estas features foram calculadas. Vai daqui, de
+      // quem calculou, e não do servidor: uma aba aberta desde antes de uma
+      // atualização continua rodando o encaixe-rede.js que ela baixou, e o
+      // carimbo tem que ser o dela. Ver `REDE_VERSAO_FEATURES`.
+      featuresVersao: REDE_VERSAO_FEATURES,
     });
 
-    mostrarResumoDaBusca(ultimoResultado, aprendido, anotado);
+    mostrarResumoDaBusca(ultimoResultado, aprendido, anotado, guardadoAntes);
+
+    /*
+     * A TELA FICA COM O MELHOR.
+     *
+     * A busca é sorteada: ela acha um encaixe muito bom numa rodada e pode não
+     * chegar lá na seguinte. Antes, a rodada pior tomava a tela, e o bom só
+     * voltava se a pessoa reparasse no aviso e clicasse num botão — na prática,
+     * o melhor se perdia.
+     *
+     * Agora a troca é automática e no sentido certo: se este trabalho já tinha
+     * um encaixe melhor guardado, é ele que fica na tela, e o que a procura de
+     * agora deu aparece no texto. Nada é escondido, e nada de bom se perde por
+     * distração.
+     *
+     * Isto vem DEPOIS de `guardarNaMemoria` e de `mostrarResumoDaBusca` de
+     * propósito: as duas contam o que ESTA busca fez, e trocar o
+     * `ultimoResultado` antes faria a memória aprender com o encaixe de ontem
+     * e o resumo mentir sobre as tentativas de agora.
+     */
+    if (guardadoAntes && guardadoAntes.consumo < ultimoResultado.consumo - 0.05) {
+      const consumoDaBusca = ultimoResultado.consumo;
+      const resumoDaBusca = encaixeAndamento.textContent;
+      const voltou = await usarEncaixeGuardado(guardadoAntes);
+      if (voltou) {
+        encaixeAndamento.textContent =
+          `Esta procura deu ${formatarMetros(consumoDaBusca)}, e o melhor já conseguido com `
+          + `estas peças é ${formatarMetros(guardadoAntes.consumo)} — a tela ficou com o melhor. · `
+          + resumoDaBusca;
+        encaixeAndamento.classList.remove("hidden");
+      } else {
+        // A tabela de peças mudou desde aquele encaixe: não dá para trazê-lo de
+        // volta sozinho. Aí a oferta manual continua valendo.
+        mostrarOfertaDoGuardado(guardadoAntes, consumoDaBusca);
+      }
+    }
+
     finalizarCarregamento(pararBusca ? "interrompido" : "concluido");
   } catch (err) {
     console.error("Falha ao fazer o encaixe:", err);
@@ -1951,13 +2300,13 @@ btnEncaixar.addEventListener("click", async () => {
   } finally {
     if (carregamentoAtivo) finalizarCarregamento(pararBusca ? "interrompido" : "com-erro");
     btnEncaixar.disabled = false;
-    btnEncaixar.textContent = "Fazer encaixe";
+    btnEncaixar.textContent = "Optmizar";
     btnPararBusca.classList.add("hidden");
   }
-});
+}
 
 /** Conta o que a busca fez e o quanto a memória já pesa. */
-function mostrarResumoDaBusca(resultado, aprendido, anotado) {
+function mostrarResumoDaBusca(resultado, aprendido, anotado, guardadoAntes) {
   const partes = [
     `${resultado.tentativas} tentativas em ${formatarSegundos(resultado.decorridoMs)}`,
   ];
@@ -1969,11 +2318,16 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado) {
   const total = anotado ? anotado.encaixesDoTipo : (aprendido ? aprendido.encaixesDoTipo : 0);
   if (total > 0) partes.push(`memória: ${total} encaixe(s) deste tipo`);
 
-  if (aprendido && aprendido.melhorAntes > 0) {
-    const diferenca = ((aprendido.melhorAntes - resultado.consumo) / aprendido.melhorAntes) * 100;
-    if (diferenca > 0.05) partes.push(`${formatarPorcento(diferenca)} melhor que o recorde anterior`);
-    else if (diferenca < -0.05) partes.push(`recorde do tipo segue em ${formatarMetros(aprendido.melhorAntes)}`);
-    else partes.push("empatou com o recorde deste tipo");
+  // O recorde comparado aqui é o deste trabalho exato, e não o do balde da
+  // assinatura: o balde mistura quantidades, folgas e bancadas, e a diferença
+  // percentual contra ele dizia coisas como "recorde do tipo segue em 0,80 m"
+  // num trabalho que precisa de 2,40 m. Ver o `alvo` da busca.
+  const recorde = guardadoAntes ? guardadoAntes.consumo : 0;
+  if (recorde > 0) {
+    const diferenca = ((recorde - resultado.consumo) / recorde) * 100;
+    if (diferenca > 0.05) partes.push(`${formatarPorcento(diferenca)} melhor que o recorde deste trabalho`);
+    else if (diferenca < -0.05) partes.push(`o melhor deste trabalho segue em ${formatarMetros(recorde)}`);
+    else partes.push("empatou com o melhor deste trabalho");
   }
 
   encaixeAndamento.textContent = partes.join(" · ");
@@ -2064,87 +2418,6 @@ function medidasLateraisDoEncaixe(r) {
   };
 }
 
-function renderLarguraDoEncaixe(medidas, rendimento) {
-  if (!encaixeLarguraResumo || !(medidas.larguraTecido > 0)) return;
-
-  const percentual = (valor) => Math.max(0, Math.min(100,
-    (valor / medidas.larguraTecido) * 100));
-  const esquerdaPct = percentual(medidas.sobraEsquerda);
-  const ocupadaPct = percentual(medidas.larguraOcupada);
-  const direitaPct = Math.max(0, 100 - esquerdaPct - ocupadaPct);
-  const descricao = `Tecido com ${formatarCm(medidas.larguraTecido)}: `
-    + `${formatarCm(medidas.sobraEsquerda)} livres à esquerda, `
-    + `${formatarCm(medidas.larguraOcupada)} ocupados e `
-    + `${formatarCm(medidas.sobraDireita)} livres à direita.`;
-
-  encaixeLarguraResumo.innerHTML = `
-    <div class="encaixe-largura-topo">
-      <div><span>Largura informada do tecido</span><strong>${formatarCm(medidas.larguraTecido)}</strong></div>
-      <div><span>Largura ocupada pelo encaixe</span><strong>${formatarCm(medidas.larguraOcupada)}</strong></div>
-      <div><span>Sobra lateral total</span><strong>${formatarCm(medidas.sobraTotal)}</strong></div>
-    </div>
-    <div class="encaixe-largura-barra" role="img" aria-label="${descricao}">
-      <!-- Estes três não passam pelos formatadores de propósito: são valores de
-           CSS, e ali o ponto decimal é a gramática do formato. Vírgula quebra. -->
-      <span class="encaixe-lateral-vazia" style="width:${esquerdaPct.toFixed(4)}%"></span>
-      <span class="encaixe-largura-ocupada" style="width:${ocupadaPct.toFixed(4)}%"></span>
-      <span class="encaixe-lateral-vazia" style="width:${direitaPct.toFixed(4)}%"></span>
-    </div>
-    <div class="encaixe-largura-lados">
-      <span><i class="largura-legenda-vazia"></i>Esquerda: <strong>${formatarCm(medidas.sobraEsquerda)}</strong></span>
-      <span><i class="largura-legenda-ocupada"></i>Peças: <strong>${formatarCm(medidas.larguraOcupada)}</strong></span>
-      <span><i class="largura-legenda-vazia"></i>Direita: <strong>${formatarCm(medidas.sobraDireita)}</strong></span>
-    </div>
-    <p>Se centralizar o conjunto no tecido: <strong>${formatarCm(medidas.sobraCentralizada)} de cada lado</strong>.</p>
-    ${textoDaSobraLateral(medidas, rendimento)}
-  `;
-  encaixeLarguraResumo.classList.remove("hidden");
-}
-
-/**
- * A frase que separa o que é culpa do encaixe do que é culpa da largura do
- * tecido.
- *
- * São dois aproveitamentos, e os dois são verdade:
- *
- *   o de sempre     área das peças ÷ tecido comprado (largura cheia × metragem)
- *   na faixa usada  área das peças ÷ (largura que as peças ocuparam × metragem)
- *
- * A diferença entre eles é exatamente a tira lateral que ninguém usou. Ela não
- * sai do primeiro número, e não deve sair: é tecido que foi pago, e um encaixe
- * que desperdiça MAIS na lateral não pode aparecer como melhor só porque a base
- * da conta encolheu junto. Mas ela também não é falha do encaixe — peça de
- * 56 cm em rolo de 160 deixa 48 cm mortos por mais perfeito que o encaixe
- * seja —, e é isso que o segundo número mostra: quanto o encaixe rendeu dentro
- * do espaço em que ele podia trabalhar.
- *
- * Lendo os dois lado a lado dá para saber onde mexer: se o de sempre está
- * muito abaixo do da faixa, o que está caro é a largura do tecido, não a
- * receita do encaixe.
- *
- * A largura ocupada sai da caixa da arte, e não da silhueta — arte com sobra
- * transparente em volta faz a faixa parecer maior do que é. O erro, quando
- * existe, é sempre para o lado seguro: a sobra lateral sai menor, e o número
- * da faixa fica mais perto do número de sempre.
- */
-function textoDaSobraLateral(medidas, rendimento) {
-  if (!rendimento || !(rendimento.consumo > 0)) return "";
-  // Meio milímetro de sobra é ruído de arredondamento da grade, não sobra.
-  if (!(medidas.sobraTotal > 0.05)) {
-    return `<p>As peças ocupam a largura inteira do tecido: não há sobra lateral,
-      e o aproveitamento de <strong>${formatarPorcento(rendimento.aproveitamento)}</strong>
-      já é o do encaixe puro.</p>`;
-  }
-
-  const areaSobra = (medidas.sobraTotal * rendimento.consumo) / 10000;
-  return `<p>A sobra lateral são ${formatarCm(medidas.sobraTotal)} ao longo do rolo inteiro —
-    <strong>${formatarM2(areaSobra)}</strong> de tecido. Ela entra no aproveitamento de
-    ${formatarPorcento(rendimento.aproveitamento)}, porque é tecido comprado. Dentro da faixa de
-    ${formatarCm(medidas.larguraOcupada)} que as peças ocuparam, o encaixe rendeu
-    <strong>${formatarPorcento(rendimento.naFaixa)}</strong>: a diferença entre os dois números é o
-    que a largura do tecido cobra, e não o encaixe.</p>`;
-}
-
 function renderResultado() {
   const r = ultimoResultado;
   const areaTecido = (r.larguraTecido * r.consumo) / 10000; // m²
@@ -2154,9 +2427,14 @@ function renderResultado() {
   const areaPecas = r.areaReal / 10000;
   const aproveitamento = areaTecido > 0 ? (areaPecas / areaTecido) * 100 : 0;
   const medidasLaterais = medidasLateraisDoEncaixe(r);
-  // O mesmo aproveitamento, medido só na faixa em que as peças couberam. Ver
-  // `textoDaSobraLateral` para o porquê de existirem os dois números, e por que
-  // este NÃO substitui o de cima.
+  const bancadas = bancadasDoResultado(r);
+  // O mesmo aproveitamento, medido só na faixa em que as peças couberam.
+  //
+  // São dois números e os dois são verdade: o de cima divide pela largura
+  // COMPRADA, este divide só pela faixa que as peças ocuparam. A diferença
+  // entre eles é a tira lateral que ninguém usou — e ela não sai do primeiro,
+  // nem deve: é tecido que foi pago. Este NÃO substitui o de cima; separa o
+  // que é culpa do encaixe do que é culpa da largura do rolo.
   const areaFaixaUsada = (medidasLaterais.larguraOcupada * r.consumo) / 10000;
   const aproveitamentoNaFaixa = areaFaixaUsada > 0 ? (areaPecas / areaFaixaUsada) * 100 : 0;
 
@@ -2199,23 +2477,32 @@ function renderResultado() {
         <span class="text-[11px] text-tinta-apagada">em ${r.larguraTecido} cm</span>
       </div>
       <p class="mt-1.5 mb-0 text-[11px] text-tinta-fraca">
-        ${formatarPorcento(aproveitamento)} de aproveitamento · ${r.posicoes.length} peça(s) encaixada(s)
+        ${formatarPorcento(aproveitamento)} de aproveitamento · ${r.posicoes.length} peça(s) encaixada(s)${
+        bancadas.length > 1 ? ` · ${bancadas.length} bancadas` : ""}
       </p>
     `;
   }
 
-  renderLarguraDoEncaixe(medidasLaterais, {
-    consumo: r.consumo, aproveitamento, naFaixa: aproveitamentoNaFaixa,
-  });
 
+  // Em centímetro, que é a unidade que o campo do modal pergunta. Estava em
+  // milímetro, de quando o campo também era — e ler "5 mm" de volta depois de
+  // digitar "0,5" faz a pessoa conferir a conta em vez de confiar nela.
   const folga = r.folgaReal > 0
-    ? `Folga entre peças: ${formatarNumero(r.folgaReal * 10, 1).replace(/,0$/, "")} mm` +
+    ? `Folga entre peças: ${formatarNumero(r.folgaReal, 2)} cm` +
       (r.folgaReal > r.folgaPedida + 1e-6
-        ? ` (pedi ${formatarNumero(r.folgaPedida * 10, 0)} mm, mas nessa medida a grade do encaixe arredonda para cima — nunca para menos). `
+        ? ` (pedi ${formatarNumero(r.folgaPedida, 2)} cm, mas nessa medida a grade do encaixe arredonda para cima — nunca para menos). `
         : ". ")
     : "";
 
-  encaixeResumo.textContent =
+  // O que a bancada acrescenta ao resumo: quantas mesas o trabalho vira, e o
+  // maior corte, que é a medida que precisa caber na mesa.
+  const porBancada = bancadas.length > 1
+    ? `O rolo sai em ${bancadas.length} bancadas, cortadas em `
+      + `${cortesEntreBancadas(bancadas).map((c) => formatarCm(c)).join(", ")} — `
+      + `a maior tem ${formatarCm(Math.max(...bancadas.map((b) => b.fundo - b.topo)))}. `
+    : "";
+
+  encaixeResumo.textContent = porBancada +
     `Na largura, as peças ocupam ${formatarCm(medidasLaterais.larguraOcupada)} ` +
     `dos ${formatarCm(medidasLaterais.larguraTecido)} do tecido; sobram ` +
     `${formatarCm(medidasLaterais.sobraEsquerda)} à esquerda e ` +
@@ -2226,9 +2513,19 @@ function renderResultado() {
 
   if (r.naoEncaixadas.length > 0) {
     const nomes = [...new Set(r.naoEncaixadas.map((i) => i.nome))].join(", ");
-    encaixeSobras.textContent =
-      `${r.naoEncaixadas.length} peça(s) não couberam na largura de ${r.larguraTecido} cm: ${nomes}. ` +
-      `Reduza a medida dessas peças, libere o giro ou use um tecido mais largo.`;
+    // Com bancada há duas razões diferentes para uma peça ficar de fora, e elas
+    // pedem coisas opostas de quem lê: larga demais para o tecido, ou comprida
+    // demais para a bancada. Dizer "use um tecido mais largo" para quem
+    // esbarrou no comprimento da mesa manda a pessoa para o lado errado.
+    const bancada = Number(encaixeComprimentoInput && encaixeComprimentoInput.value) || 0;
+    const naoCabeNaBancada = bancada > 0 && r.naoEncaixadas.some(
+      (i) => Math.min(i.largura, i.altura) > bancada);
+    encaixeSobras.textContent = naoCabeNaBancada
+      ? `${r.naoEncaixadas.length} peça(s) não couberam: ${nomes}. `
+        + `Há peça mais comprida que a bancada de ${bancada} cm — nenhuma bancada comporta ela. `
+        + `Aumente a bancada, ou deixe o campo vazio para o rolo correr sem corte.`
+      : `${r.naoEncaixadas.length} peça(s) não couberam na largura de ${r.larguraTecido} cm: ${nomes}. `
+        + `Reduza a medida dessas peças, libere o giro ou use um tecido mais largo.`;
     encaixeSobras.classList.remove("hidden");
   } else {
     encaixeSobras.classList.add("hidden");
@@ -2361,6 +2658,46 @@ function contornar(ctx, p, REGUA, px, cor) {
     const cx = faixas[i], cy = faixas[i + 1], quantas = faixas[i + 2];
     ctx.fillRect(x0 + cx * lado, y0 + cy * lado, (quantas - 1) * lado + grossura, grossura);
   }
+}
+
+/**
+ * As bancadas do resultado, na ordem, com o que cada uma ocupa no rolo.
+ *
+ * Quem decide a que bancada uma peça pertence é o MOTOR, que carimba o número
+ * em cada posição (ver `posicoesDasColocacoes` em encaixe-motor.js). Aqui só se
+ * mede o que cada grupo ocupa. Refazer a conta da geometria seria pedir para a
+ * tela e o PDF discordarem do motor sobre onde uma bancada termina — e é
+ * exatamente sobre esse ponto que o corte do tecido acontece.
+ *
+ * Os limites saem da caixa da ARTE, e não da silhueta: é a arte que vai
+ * impressa, e é ela que a página do PDF precisa conter inteira.
+ */
+function bancadasDoResultado(r) {
+  const porNumero = new Map();
+  (r.posicoes || []).forEach((p) => {
+    const n = p.bancada || 0;
+    const faixa = porNumero.get(n) || { numero: n, topo: Infinity, fundo: -Infinity, pecas: 0 };
+    faixa.topo = Math.min(faixa.topo, p.y);
+    faixa.fundo = Math.max(faixa.fundo, p.y + p.altura);
+    faixa.pecas++;
+    porNumero.set(n, faixa);
+  });
+  return [...porNumero.values()].sort((a, b) => a.numero - b.numero);
+}
+
+/**
+ * Onde o tecido é cortado entre uma bancada e a seguinte.
+ *
+ * No meio do vão entre a última peça de uma e a primeira da outra: peça
+ * nenhuma pode estar ali, então qualquer ponto do vão serve, e o meio é o que
+ * dá a mesma folga para os dois lados na hora de cortar com a tesoura.
+ */
+function cortesEntreBancadas(faixas) {
+  const cortes = [];
+  for (let i = 1; i < faixas.length; i++) {
+    cortes.push((faixas[i - 1].fundo + faixas[i].topo) / 2);
+  }
+  return cortes;
 }
 
 /**
@@ -2499,6 +2836,25 @@ function desenharEncaixe(canvas, r, { escala, comLegenda, deitado }) {
     }
   });
 
+  // A linha de corte entre bancadas. Vai por cima das peças de propósito: ela
+  // não cruza nenhuma, e é ela que a pessoa procura no desenho para saber onde
+  // o rolo se separa.
+  const faixasDeBancada = bancadasDoResultado(r);
+  if (faixasDeBancada.length > 1) {
+    ctx.save();
+    ctx.strokeStyle = "#f97316";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 6]);
+    cortesEntreBancadas(faixasDeBancada).forEach((cm) => {
+      const y = Math.round(cm * px) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(REGUA, y);
+      ctx.lineTo(REGUA + r.larguraTecido * px, y);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
   // Contorno do tecido
   ctx.strokeStyle = "#3a4448";
   ctx.lineWidth = 1;
@@ -2581,13 +2937,238 @@ btnBaixarEncaixe.addEventListener("click", () => {
  * onde um sinal trocado passa despercebido até alguém imprimir 12 metros de
  * tecido com as peças de cabeça para baixo.
  */
-const DPI_EXPORTACAO = 150; // qualidade de impressão sem estourar o tamanho do arquivo
-// Teto do que sobe para o servidor. Arte fotográfica de verdade passa fácil
-// disso a 150 dpi; em vez de derrubar o download, o sistema baixa a resolução
-// o suficiente para caber e avisa qual foi usada.
-const TETO_DE_ENVIO_MB = 300;
+/*
+ * A RESOLUÇÃO DE IMPRESSÃO, E ELA NÃO NEGOCIA.
+ *
+ * 150 dpi, sempre. Já foi um teto móvel: havia um limite de quanto podia subir
+ * para o servidor (`TETO_DE_ENVIO_MB`, 300 MB), e quando as artes passavam
+ * disso a tela baixava o dpi até caber. Parecia prudente e era um mau negócio
+ * — trocava QUALIDADE DE IMAGEM por MEMÓRIA DE SERVIDOR. No trabalho de 155
+ * artes distintas, quem pedia 150 dpi recebia 50, e o arquivo ainda saía com
+ * meio giga porque a redução era uma passada só e terminava acima do próprio
+ * teto.
+ *
+ * O teto saiu porque a razão dele saiu: o servidor não segura mais as artes na
+ * memória (elas vão para disco assim que chegam, e são lidas uma a uma na hora
+ * de embutir — ver o cabeçalho de encaixe-pdf.js). O peso do arquivo agora é
+ * resolvido onde tem que ser resolvido, que é na escolha do formato de cada
+ * arte e no passa-direto, e nenhum dos dois mexe em resolução.
+ *
+ * `desenharPecaGirada` continua nunca AUMENTANDO a arte: 150 dpi é um teto,
+ * não um piso. Arte que tem menos que isso entra com o que tem.
+ */
+const DPI_EXPORTACAO = 150;
 
-function desenharPecaGirada(peca, rot, larguraCm, alturaCm, dpi) {
+/*
+ * ===========================================================================
+ * O FORMATO DE CADA ARTE
+ * ===========================================================================
+ *
+ * Toda arte saía em PNG. PNG é sem perda, o que parece a escolha óbvia para
+ * quem vai imprimir 12 metros de tecido — e é a escolha certa para metade das
+ * artes e a errada para a outra metade.
+ *
+ * Medido nas duas artes que existem de verdade nesta oficina, uma peça de
+ * 50x70 cm a 150 dpi (2952 x 4132 px):
+ *
+ *                        PNG        JPEG q92
+ *   arte fotográfica   28,5 MB       7,1 MB     PNG custa 4,0x
+ *   arte chapada        0,1 MB       0,5 MB    JPEG custa 5,0x
+ *
+ * Os dois sentidos são grandes, e são opostos. O PNG guarda o ruído do
+ * degradê pixel a pixel, que é justamente o que o JPEG joga fora sem ninguém
+ * ver; e o JPEG põe chiado em volta de toda borda dura, que é justamente o que
+ * o PNG guarda de graça — um logo de duas cores comprime quase a nada.
+ *
+ * Escolher no atacado erra metade das vezes, e erra feio. Então não se escolhe:
+ * **os dois são gerados e fica o menor**. Custa uma codificação a mais por
+ * arte (não por peça — a arte é desenhada uma vez por rotação usada), e a
+ * decisão passa a ser medida em vez de adivinhada.
+ *
+ * DUAS TRAVAS, e as duas valem mais que os megabytes:
+ *
+ *   1. Arte com transparência nunca vai de JPEG. JPEG não tem canal alfa: o
+ *      transparente viraria preto, e o preto sairia impresso. A varredura é
+ *      exaustiva de propósito — um pixel translúcido perdido é uma mancha no
+ *      tecido, e amostrar acharia 99,99% deles.
+ *
+ *   2. O JPEG só entra se for MENOR. Empate ou perda fica com o PNG, que é sem
+ *      perda. Assim a arte chapada continua exatamente como sai hoje.
+ *
+ * O que isto custa em qualidade: na arte fotográfica, uma compressão q92 a 150
+ * dpi, que é o padrão de prova de cor e não se distingue a olho no tecido. Na
+ * arte chapada e na transparente, nada — elas continuam em PNG. Para voltar
+ * tudo ao PNG de antes, é só pôr `QUALIDADE_JPEG` em 0.
+ */
+const QUALIDADE_JPEG = 0.92;
+
+/**
+ * A arte tem algum pixel que não seja opaco?
+ *
+ * Varre em faixas porque `getImageData` da arte inteira seria um vetor de
+ * dezenas de MB de uma vez só — e no PDF de um lote grande isso acontece uma
+ * vez por arte.
+ */
+function totalmenteOpaca(ctx, largura, altura) {
+  const FAIXA = 256;
+  for (let y = 0; y < altura; y += FAIXA) {
+    const h = Math.min(FAIXA, altura - y);
+    const dados = ctx.getImageData(0, y, largura, h).data;
+    for (let i = 3; i < dados.length; i += 4) if (dados[i] !== 255) return false;
+  }
+  return true;
+}
+
+const paraBlob = (canvas, tipo, qualidade) =>
+  new Promise((pronto) => canvas.toBlob(pronto, tipo, qualidade));
+
+/*
+ * ===========================================================================
+ * O PASSA-DIRETO: a arte original, sem redesenhar
+ * ===========================================================================
+ *
+ * O caminho normal decodifica a arte, redesenha num canvas na resolução de
+ * impressão e codifica de novo. Quando a arte JÁ É um JPEG e a peça não está
+ * girada, isso é trabalho puro: os bytes do arquivo entram no PDF do jeito que
+ * estão (o pdfkit embute JPEG verbatim, como `/DCTDecode`, sem recodificar), o
+ * arquivo sai menor e não há geração de perda nenhuma — é o único caminho aqui
+ * que é sem perda de verdade.
+ *
+ * Só que "o pdfkit aceita" não é o mesmo que "a impressora aceita". O PDF
+ * carrega o JPEG cru até a RIP, e é ela que vai decodificar. Por isso nada
+ * passa sem ser lido marcador por marcador. Quatro coisas reprovam:
+ *
+ *   1. PROGRESSIVO (SOF2). O formato PDF permite, e RIP de verdade engasga — é
+ *      o caso clássico do arquivo que abre no computador e não sai na máquina.
+ *      Só o sequencial de Huffman (SOF0 e SOF1) passa, o que de quebra reprova
+ *      o aritmético, o sem perda e o diferencial, que moram nos outros SOF.
+ *
+ *   2. QUATRO COMPONENTES (CMYK/YCCK). Pedem `/DeviceCMYK` e, no CMYK da Adobe,
+ *      um `/Decode` invertido. Quem monta a página (encaixe-pdf.js) não faz nem
+ *      um nem outro, e o erro sairia como a arte impressa em negativo.
+ *
+ *   3. PRECISÃO DE 12 BITS. É válida no JPEG e quase nada decodifica.
+ *
+ *   4. ORIENTAÇÃO EXIF DIFERENTE DE 1 — e este é o perigoso.
+ *
+ * O quarto merece o parágrafo dele, e merece ser contado direito. O navegador
+ * APLICA a orientação do EXIF ao decodificar: uma foto marcada "gire 90°"
+ * aparece em pé na tela, e é em pé que ela entra no encaixe, na silhueta e na
+ * medida da peça. O pdfkit também lê o EXIF (`exif.fromBuffer`, no JPEG) e
+ * também aplica — ou seja, o passa-direto de uma foto girada provavelmente
+ * SAIRIA CERTO. "Provavelmente" é a palavra que reprova.
+ *
+ * São três leitores de EXIF em fila — o navegador, o pdfkit e a RIP — e o
+ * resultado só sai certo se exatamente um deles aplicar. O pdfkit ainda troca
+ * largura por altura quando a orientação passa de 4; aqui isso não muda a
+ * medida (quem monta a página passa largura E altura explícitas, e o teste de
+ * geometria cobre isso), mas é uma engrenagem a mais girando debaixo de um
+ * arquivo que vai virar 12 metros de tecido. E a RIP decodifica o JPEG cru: se
+ * ela também aplicar, a arte gira duas vezes.
+ *
+ * Reprovar custa uma recodificação e devolve o controle: a arte é redesenhada
+ * já na posição certa, que é a mesma escolha que o resto deste arquivo faz ao
+ * desenhar a peça girada em vez de girar dentro do PDF.
+ *
+ * Na dúvida, reprova: arquivo truncado, marcador que não fecha, EXIF que não se
+ * deixa ler. Reprovar custa uma recodificação. Deixar passar custa o rolo.
+ */
+
+/** Lê a orientação do EXIF. 1 = normal, 0 = não tem, -1 = não deu para ler. */
+function orientacaoExif(d, inicio, fim) {
+  // "Exif\0\0" e, logo atrás, um TIFF inteirinho dentro do segmento.
+  if (fim - inicio < 14) return -1;
+  if (!(d[inicio] === 0x45 && d[inicio + 1] === 0x78 && d[inicio + 2] === 0x69
+    && d[inicio + 3] === 0x66 && d[inicio + 4] === 0 && d[inicio + 5] === 0)) return 0;
+
+  const tiff = inicio + 6;
+  const ordem = (d[tiff] << 8) | d[tiff + 1];
+  if (ordem !== 0x4949 && ordem !== 0x4d4d) return -1;
+  const invertido = ordem === 0x4949; // "II": byte menos significativo primeiro
+  const u16 = (i) => (i + 1 >= fim ? -1
+    : (invertido ? d[i] | (d[i + 1] << 8) : (d[i] << 8) | d[i + 1]));
+  const u32 = (i) => (i + 3 >= fim ? -1
+    : (invertido ? (d[i] | (d[i + 1] << 8) | (d[i + 2] << 16) | (d[i + 3] << 24)) >>> 0
+      : ((d[i] << 24) | (d[i + 1] << 16) | (d[i + 2] << 8) | d[i + 3]) >>> 0));
+
+  if (u16(tiff + 2) !== 42) return -1;
+  const ifd = tiff + u32(tiff + 4);
+  if (ifd < tiff || ifd + 2 > fim) return -1;
+
+  const quantas = u16(ifd);
+  if (quantas < 0 || ifd + 2 + quantas * 12 > fim) return -1;
+  for (let e = 0; e < quantas; e++) {
+    const campo = ifd + 2 + e * 12;
+    if (u16(campo) === 0x0112) {            // Orientation
+      if (u16(campo + 2) !== 3) return -1;  // tem que ser SHORT
+      return u16(campo + 8);
+    }
+  }
+  return 1; // tem EXIF e não fala de orientação: o mesmo que normal
+}
+
+/** Este JPEG pode entrar no PDF do jeito que está? Ver o bloco acima. */
+function jpegSeguroParaPdf(d) {
+  if (!d || d.length < 4 || d[0] !== 0xff || d[1] !== 0xd8) return false;
+
+  let i = 2;
+  let viuSof = false;
+  while (i + 3 < d.length) {
+    if (d[i] !== 0xff) return false;        // fora de sincronia: não arrisca
+    let marcador = d[i + 1];
+    while (marcador === 0xff) { i++; marcador = d[i + 1]; } // preenchimento
+    if (marcador === 0xd9) break;           // EOI
+    if (marcador === 0x01 || (marcador >= 0xd0 && marcador <= 0xd7)) { i += 2; continue; }
+
+    const tamanho = (d[i + 2] << 8) | d[i + 3];
+    if (tamanho < 2 || i + 2 + tamanho > d.length) return false; // truncado
+    const carga = i + 4;
+    const fimDaCarga = i + 2 + tamanho;
+
+    if (marcador === 0xda) break;           // começo do dado: o cabeçalho acabou
+
+    if (marcador === 0xe1) {                // APP1: onde mora o EXIF
+      const orientacao = orientacaoExif(d, carga, fimDaCarga);
+      if (orientacao !== 0 && orientacao !== 1) return false;
+    }
+
+    // SOF0 e SOF1 são os sequenciais de Huffman. Todo outro SOF reprova por não
+    // estar nesta lista; DHT (C4), JPG (C8) e DAC (CC) não são SOF nenhum.
+    if (marcador === 0xc0 || marcador === 0xc1) {
+      if (fimDaCarga - carga < 6) return false;
+      if (d[carga] !== 8) return false;                       // precisão
+      const componentes = d[carga + 5];
+      if (componentes !== 1 && componentes !== 3) return false;
+      viuSof = true;
+    } else if (marcador >= 0xc0 && marcador <= 0xcf
+      && marcador !== 0xc4 && marcador !== 0xc8 && marcador !== 0xcc) {
+      return false;
+    }
+
+    i = fimDaCarga;
+  }
+  return viuSof;
+}
+
+/**
+ * A arte original, quando ela puder entrar no PDF sem ser tocada.
+ *
+ * `null` quer dizer "redesenha": peça girada, arte que não é JPEG, ou JPEG que
+ * não passou no validador. Falha de leitura cai aqui também — `src` pode ser um
+ * endereço de objeto que o navegador já recolheu.
+ */
+async function arteCrua(peca, rot) {
+  if (rot !== 0 || !peca.src) return null;   // girada, tem que ser redesenhada
+  try {
+    const blob = await (await fetch(peca.src)).blob();
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    return jpegSeguroParaPdf(bytes) ? blob : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function desenharPecaGirada(peca, rot, larguraCm, alturaCm, dpi) {
   // Nunca aumenta a imagem: se a arte tem menos resolução que isso, ampliar só
   // deixaria o arquivo maior sem ganhar qualidade nenhuma.
   const ppcmAlvo = dpi / 2.54;
@@ -2603,7 +3184,25 @@ function desenharPecaGirada(peca, rot, larguraCm, alturaCm, dpi) {
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingQuality = "high";
   desenharArte(ctx, { item: peca, rot }, 0, 0, largura, altura);
-  return new Promise((pronto) => canvas.toBlob(pronto, "image/png"));
+
+  const png = await paraBlob(canvas, "image/png");
+  // Ver o bloco acima: o JPEG só disputa quando a arte é opaca, e só ganha
+  // quando é menor de verdade.
+  let refeita = png;
+  if (png && QUALIDADE_JPEG > 0 && totalmenteOpaca(ctx, largura, altura)) {
+    const jpg = await paraBlob(canvas, "image/jpeg", QUALIDADE_JPEG);
+    if (jpg && jpg.size < png.size) refeita = jpg;
+  }
+
+  // E o passa-direto por último, porque ele precisa do tamanho da refeita para
+  // poder se comparar. A original ganha quando NÃO É MAIOR: aí ela é melhor nos
+  // dois eixos de uma vez — o mesmo byte de pixel que o arquivo trouxe, sem
+  // recodificação nenhuma, e o arquivo não cresce. Sendo maior ela perde, e
+  // perde certo: arte de resolução muito acima da exportação é justamente o que
+  // o `DPI_EXPORTACAO` existe para não mandar para a máquina.
+  const crua = await arteCrua(peca, rot);
+  if (crua && refeita && crua.size <= refeita.size) return crua;
+  return refeita || crua;
 }
 
 /** Desenha uma arte por rotação usada, na resolução pedida. */
@@ -2618,8 +3217,6 @@ async function prepararArtes(posicoes, dpi) {
   }
   return artes;
 }
-
-const somaDeBytes = (artes) => [...artes.values()].reduce((soma, b) => soma + (b ? b.size : 0), 0);
 
 /**
  * O PDF do encaixe é UM ARQUIVO SÓ, sempre — seja o rolo de 3 m ou de 40 m.
@@ -2659,26 +3256,17 @@ async function baixarEncaixeEmPdf() {
   const r = ultimoResultado;
   if (!r || r.posicoes.length === 0) return;
 
-  btnEncaixePdf.disabled = true;
-  const rotuloAntigo = btnEncaixePdf.textContent;
-  btnEncaixePdf.textContent = "Montando PDF…";
+  // O andamento vai no botão que ABRE o menu, e não no item lá dentro: o item
+  // já sumiu da tela junto com o menu, e é para o botão que a pessoa olha.
+  btnExportar.disabled = true;
+  btnExportarRotulo.textContent = "Montando PDF…";
   await new Promise((pronto) => setTimeout(pronto, 20));
 
   try {
-    let dpi = DPI_EXPORTACAO;
-    let artes = await prepararArtes(r.posicoes, dpi);
-    let total = somaDeBytes(artes);
-    const teto = TETO_DE_ENVIO_MB * 1024 * 1024;
-
-    // Arte grande demais: em vez de estourar no envio, reduz a resolução na
-    // medida certa para caber. Melhor um PDF em 90 dpi do que erro nenhum PDF.
-    if (total > teto) {
-      dpi = Math.max(50, Math.floor(dpi * Math.sqrt(teto / total)));
-      btnEncaixePdf.textContent = `Montando PDF (${dpi} dpi)…`;
-      await new Promise((pronto) => setTimeout(pronto, 20));
-      artes = await prepararArtes(r.posicoes, dpi);
-      total = somaDeBytes(artes);
-    }
+    // Resolução fixa: ver `DPI_EXPORTACAO`. Não há mais teto de envio para
+    // negociar, então não há mais o que reduzir.
+    const dpi = DPI_EXPORTACAO;
+    const artes = await prepararArtes(r.posicoes, dpi);
 
     // Cada arte sobe sozinha, em binário. Mandá-las dentro do JSON em base64
     // engordava tudo em um terço e derrubava o servidor com arte de verdade.
@@ -2690,13 +3278,16 @@ async function baixarEncaixeEmPdf() {
       const envio = await fetch(endereco, { method: "POST", body: arte });
       if (!envio.ok) throw new Error("o servidor não aceitou uma das artes.");
       enviados++;
-      btnEncaixePdf.textContent = `Enviando artes (${enviados}/${artes.size})…`;
+      btnExportarRotulo.textContent = `Enviando artes (${enviados}/${artes.size})…`;
     }
 
-    btnEncaixePdf.textContent = "Montando PDF…";
+    btnExportarRotulo.textContent = "Montando PDF…";
     const posicoes = r.posicoes.map((p) => ({
       chave: `${p.item.indice}-${p.rot || (p.girado ? 90 : 0)}`,
       x: p.x, y: p.y, largura: p.largura, altura: p.altura,
+      // A bancada vai junto: é ela que vira página no servidor
+      // (`paginasDoEncaixe`, em encaixe-pdf.js).
+      bancada: p.bancada || 0,
     }));
 
     const metros = (cm) => (cm / 100).toFixed(2).replace(".", ",");
@@ -2722,10 +3313,6 @@ async function baixarEncaixeEmPdf() {
 
     baixarArquivo(await resposta.blob(), `${nome}.pdf`);
 
-    if (dpi < DPI_EXPORTACAO) {
-      mostrarErroEncaixe(`As artes são grandes: o PDF saiu em ${dpi} dpi (em vez de ${DPI_EXPORTACAO}) `
-        + `para não estourar o envio. O tamanho em centímetros continua exato.`);
-    }
   } catch (err) {
     // O recado amigável não pode ser o fim da linha: erro de programa aqui
     // (função que não existe, resposta fora do formato) sairia disfarçado de
@@ -2733,8 +3320,8 @@ async function baixarEncaixeEmPdf() {
     console.error("[encaixe] falhou ao gerar o PDF:", err);
     mostrarErroEncaixe(`Não consegui gerar o PDF: ${err.message}`);
   } finally {
-    btnEncaixePdf.disabled = false;
-    btnEncaixePdf.textContent = rotuloAntigo;
+    btnExportar.disabled = false;
+    btnExportarRotulo.textContent = "Exportar";
   }
 }
 
@@ -2743,6 +3330,86 @@ btnEncaixePdf.addEventListener("click", baixarEncaixeEmPdf);
 btnImprimirEncaixe.addEventListener("click", () => {
   if (!ultimoResultado) return;
   window.print();
+});
+
+// ==================== O MENU DE EXPORTAR ====================
+
+/*
+ * PDF, PNG e impressora são três jeitos de tirar o MESMO risco daqui, então
+ * são um botão só, e as saídas moram dentro dele: a barra para de crescer a
+ * cada formato novo, e quem só quer o risco na mão não escolhe o formato
+ * antes de decidir exportar.
+ *
+ * Fechar tem animação, e animação precisa que o painel continue na tela
+ * enquanto ela roda — daí o `.saindo` antes do `.hidden`, e o relógio que
+ * guarda esse intervalo. Clicar de novo no meio da saída cancela o relógio;
+ * sem isso o menu reabriria e sumiria logo em seguida.
+ */
+let saidaDoMenuExportar = null;
+
+function menuExportarAberto() {
+  return btnExportar.getAttribute("aria-expanded") === "true";
+}
+
+function abrirMenuExportar() {
+  clearTimeout(saidaDoMenuExportar);
+  menuExportarPainel.classList.remove("hidden", "saindo");
+  btnExportar.setAttribute("aria-expanded", "true");
+}
+
+function fecharMenuExportar(devolverFoco) {
+  if (!menuExportarAberto()) return;
+  btnExportar.setAttribute("aria-expanded", "false");
+  menuExportarPainel.classList.add("saindo");
+  clearTimeout(saidaDoMenuExportar);
+  saidaDoMenuExportar = setTimeout(() => {
+    menuExportarPainel.classList.add("hidden");
+    menuExportarPainel.classList.remove("saindo");
+  }, 120);
+  // Só devolve o foco quando quem fechou foi o teclado: no clique fora o foco
+  // é de quem clicou, e roubá-lo de volta seria puxar a pessoa para trás.
+  if (devolverFoco) btnExportar.focus();
+}
+
+/* Andar pelos itens com as setas. Dá a volta nas pontas: quem está no último
+   e aperta para baixo quer o primeiro, não o nada. */
+function andarNoMenuExportar(passo) {
+  const agora = itensDoExportar.indexOf(document.activeElement);
+  const total = itensDoExportar.length;
+  const alvo = agora < 0 ? (passo > 0 ? 0 : total - 1) : (agora + passo + total) % total;
+  itensDoExportar[alvo].focus();
+}
+
+btnExportar.addEventListener("click", () => {
+  if (menuExportarAberto()) fecharMenuExportar();
+  else abrirMenuExportar();
+});
+
+btnExportar.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  e.preventDefault();
+  if (!menuExportarAberto()) abrirMenuExportar();
+  andarNoMenuExportar(e.key === "ArrowDown" ? 1 : -1);
+});
+
+menuExportarPainel.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown") { e.preventDefault(); andarNoMenuExportar(1); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); andarNoMenuExportar(-1); }
+  else if (e.key === "Tab") fecharMenuExportar();
+});
+
+// Escolher fecha o menu; o que a escolha FAZ continua sendo do botão de cada
+// item, que é onde o PDF, o PNG e a impressão já moravam.
+menuExportarPainel.addEventListener("click", () => fecharMenuExportar());
+
+/* `pointerdown` e não `click`: quem clica em outro botão da barra espera que o
+   menu já esteja fora do caminho quando o clique chegar lá. */
+window.addEventListener("pointerdown", (e) => {
+  if (!menuExportar.contains(e.target)) fecharMenuExportar();
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") fecharMenuExportar(true);
 });
 
 // Redesenha ao mudar o tamanho da janela para o encaixe continuar cabendo.
@@ -2986,3 +3653,170 @@ if (btnSelecaoAplicar) {
 // Trocar de tela larga a seleção junto: voltar depois com peças marcadas de um
 // trabalho que já mudou seria marcação fantasma.
 document.addEventListener("optimize:trocou-de-tela", () => limparSelecaoDoRisco({ redesenhar: false }));
+
+// ==================== O MODAL DE OPTMIZAR ====================
+
+/*
+ * Optmizar não dispara direto: abre este modal.
+ *
+ * Os ajustes moravam num `<details>` dentro da coluna dos arquivos. Abrir
+ * empurrava a lista de peças para baixo — justo a lista, que é o que se
+ * olha o tempo todo — e, pior, ninguém abria: o serviço saía com a largura
+ * do serviço anterior e só se descobria depois de imprimir.
+ *
+ * Pendurar o modal no próprio Optmizar resolve os dois: some da coluna, e
+ * o rolo e a bancada passam na frente dos olhos uma vez por serviço, no
+ * único instante em que isso importa. A busca gasta minutos e toma os
+ * núcleos da máquina; um confere de dois segundos é barato perto disso.
+ *
+ * O desenho é o do Optmize Lite (`OptimizeModal.tsx`): selo, contagem do
+ * trabalho e as medidas grandes em fonte de números. Quem usa os dois não
+ * deveria ter que aprender a mesma tela duas vezes.
+ */
+
+const modalAjustes = document.getElementById("modal-ajustes");
+const btnFecharAjustes = document.getElementById("btn-fechar-ajustes");
+const btnAjustesCancelar = document.getElementById("btn-ajustes-cancelar");
+const btnAjustesOptmizar = document.getElementById("btn-ajustes-optmizar");
+const ajustesContagem = document.getElementById("ajustes-contagem");
+const ajustesAvisoEixo = document.getElementById("ajustes-aviso-eixo");
+const giroOpcoes = [...document.querySelectorAll(".giro-op")];
+
+let saidaDoModalAjustes = null;
+
+function ajustesAberto() {
+  return !modalAjustes.classList.contains("hidden") && !modalAjustes.classList.contains("saindo");
+}
+
+function abrirAjustes() {
+  clearTimeout(saidaDoModalAjustes);
+  atualizarContagemDosAjustes();
+  modalAjustes.classList.remove("hidden", "saindo");
+  document.body.classList.add("modal-aberto");
+  // O foco vai para a largura da mídia, já selecionada: é o campo que muda
+  // de um serviço para o outro, e quem abriu quase sempre veio por causa dele.
+  encaixeLarguraInput.focus();
+  encaixeLarguraInput.select();
+}
+
+function fecharAjustes(devolverFoco) {
+  if (modalAjustes.classList.contains("hidden")) return;
+  modalAjustes.classList.add("saindo");
+  document.body.classList.remove("modal-aberto");
+  clearTimeout(saidaDoModalAjustes);
+  saidaDoModalAjustes = setTimeout(() => {
+    modalAjustes.classList.add("hidden");
+    modalAjustes.classList.remove("saindo");
+  }, 130);
+  // Cancelar devolve o foco ao botão que abriu; confirmar não, porque logo
+  // em seguida ele fica desabilitado e o foco cairia no vazio.
+  if (devolverFoco) btnEncaixar.focus();
+}
+
+/* A contagem no topo, montada a cada abertura. É o último lugar em que dá
+   para notar que faltou arte antes de gastar minutos de busca. */
+function atualizarContagemDosAjustes() {
+  const arquivos = pecasEncaixe.length;
+  const copias = pecasEncaixe.reduce((soma, p) => soma + (Number(p.qtd) || 0), 0);
+  ajustesContagem.textContent =
+    `${arquivos} arquivo${arquivos === 1 ? "" : "s"} · ${copias} peça${copias === 1 ? "" : "s"} no encaixe`;
+}
+
+/*
+ * Optmizar abre o confere. A lista vazia é barrada AQUI e não lá dentro:
+ * abrir um modal de tecido para depois dizer "não há peças" é fazer a
+ * pessoa atravessar uma porta para ouvir que a sala está fechada.
+ */
+btnEncaixar.addEventListener("click", () => {
+  limparErroEncaixe();
+  // Lista vazia não é erro: é o começo do trabalho. Acusar "adicione pelo
+  // menos uma peça" é dizer à pessoa o que ela já sabe e deixá-la procurar
+  // sozinha onde se faz isso. Optmizar sem nada na mesa só pode significar
+  // uma coisa, então abrimos o seletor de arquivo e ela já está no passo
+  // seguinte — o mesmo que o botão Adicionar faria.
+  if (pecasEncaixe.length === 0) {
+    encaixeFilesInput.click();
+    return;
+  }
+  abrirAjustes();
+});
+
+// Daqui sai o serviço. Fecha antes de começar: a busca segura a tela por
+// minutos, e um modal parado por cima dela pareceria travamento.
+btnAjustesOptmizar.addEventListener("click", () => {
+  fecharAjustes();
+  optmizar();
+});
+
+btnFecharAjustes.addEventListener("click", () => fecharAjustes(true));
+btnAjustesCancelar.addEventListener("click", () => fecharAjustes(true));
+
+// Clique no véu fecha; clique DENTRO da caixa não. O teste é o alvo ser o
+// próprio fundo — qualquer coisa dentro da caixa tem outro alvo.
+modalAjustes.addEventListener("click", (e) => {
+  if (e.target === modalAjustes) fecharAjustes(true);
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && ajustesAberto()) fecharAjustes(true);
+});
+
+/*
+ * A ESCOLHA DO GIRO
+ *
+ * Três botões no lugar de um <select>: escolha de três não devia morar num
+ * menu que esconde duas delas até você abrir.
+ *
+ * O <select> continua na página, oculto, e continua sendo o DONO do valor:
+ * é ele que `giroPadrao()` lê e é nele que o resto da tela já escuta o
+ * `change`. Os botões só escrevem nele e disparam o evento — assim nada
+ * mais precisou saber que o controle mudou de cara.
+ */
+function marcarGiro() {
+  const valor = encaixeGiroTodasSelect.value;
+  for (const op of giroOpcoes) {
+    op.setAttribute("aria-pressed", String(op.dataset.giro === valor));
+  }
+}
+
+for (const op of giroOpcoes) {
+  op.addEventListener("click", () => {
+    if (encaixeGiroTodasSelect.value === op.dataset.giro) return;
+    encaixeGiroTodasSelect.value = op.dataset.giro;
+    encaixeGiroTodasSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+/*
+ * O aviso do eixo.
+ *
+ * A tela pergunta X e Y separados porque é assim que a produção pensa o vão.
+ * O motor ainda engorda a peça por um disco de raio único, então um vão por
+ * eixo não tem como sair diferente hoje — ver `folgaPedida()` lá em cima.
+ *
+ * Some quando os dois são iguais, que é o caso normal: aviso que fica na
+ * tela o tempo todo deixa de ser lido em uma semana.
+ */
+function avisarEixo() {
+  const x = Math.max(0, Number(encaixeEspacoInput.value) || 0);
+  const y = Math.max(0, Number(encaixeEspacoYInput.value) || 0);
+  if (x === y) {
+    ajustesAvisoEixo.classList.add("hidden");
+    return;
+  }
+  // `toFixed` e de volta a número: com passo de 0,1 cm a soma de ponto
+  // flutuante produz "0.30000000000000004", que não é jeito de mostrar uma
+  // medida a ninguém.
+  const maior = Number(Math.max(x, y).toFixed(2));
+  ajustesAvisoEixo.textContent =
+    `Por enquanto o encaixe aplica um vão só, igual nos dois sentidos, e vai usar ${maior} cm — `
+    + `o maior dos dois. Folga a mais gasta um pouco de tecido; folga a menos estragaria o corte.`;
+  ajustesAvisoEixo.classList.remove("hidden");
+}
+
+encaixeEspacoInput.addEventListener("input", avisarEixo);
+encaixeEspacoYInput.addEventListener("input", avisarEixo);
+encaixeGiroTodasSelect.addEventListener("change", marcarGiro);
+
+avisarEixo();
+marcarGiro();

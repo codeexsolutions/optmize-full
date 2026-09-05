@@ -176,15 +176,16 @@ router.put("/:id", (req, res) => {
   const gravar = db.transaction(() => {
     db.prepare(`
       UPDATE projetos SET nome = ?, observacoes = ?, largura_tecido = ?, espaco = ?,
-        margem = ?, giro = ?, atualizado_em = ? WHERE id = ?
+        comprimento_bancada = ?, giro = ?, atualizado_em = ? WHERE id = ?
     `).run(
       nome,
       texto(req.body.observacoes, 500) || null,
       numero(req.body.larguraTecido),
-      // Folga e margem podem ser zero de propósito, então não passam pelo
-      // `numero`, que recusa zero.
+      // A folga pode ser zero de propósito, então não passa pelo `numero`, que
+      // recusa zero. O comprimento da bancada passa: zero ali é "rolo sem fim",
+      // que é a mesma coisa que não ter comprimento nenhum guardado.
       Number.isFinite(Number(req.body.espaco)) ? Number(req.body.espaco) : null,
-      Number.isFinite(Number(req.body.margem)) ? Number(req.body.margem) : null,
+      numero(req.body.comprimentoBancada),
       ["180", "fixa", "livre"].includes(req.body.giro) ? req.body.giro : null,
       agora(),
       projeto.id

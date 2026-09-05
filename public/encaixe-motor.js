@@ -33,16 +33,181 @@ function geradorDeSorteio(semente) {
 
 
 /**
+ * ===========================================================================
+ * A BANCADA
+ * ===========================================================================
+ *
+ * O rolo deixa de ser uma tira sem fim e passa a ser uma fila de bancadas do
+ * comprimento da mesa de corte. Toda essa ideia cabe numa regra só:
+ *
+ *     NENHUMA PEÇA CRUZA A LINHA ENTRE DUAS BANCADAS.
+ *
+ * Ela sozinha faz o resto do trabalho. Quando a peça não cabe no que sobrou da
+ * bancada, o único lugar onde ela cabe é a bancada seguinte — que é o "faz
+ * outra bancada e encaixa o resto", sem um segundo laço de encaixe e sem uma
+ * linha nova na busca. Um laço guloso ("enche a bancada 1, depois a 2") daria
+ * MAIS bancadas: o objetivo continua sendo o menor consumo, e menor consumo com
+ * esta trava já é o menor número de bancadas, porque elas são
+ * `teto(consumo / comprimento)`.
+ *
+ * É ela também que devolve a paginação ao PDF. A repartição saiu em a1b7c6d
+ * porque o corte procurava um vão entre peças — e encaixe bom é exatamente o
+ * que não deixa vão, então o corte acabava passando por cima de uma peça, que
+ * ia metade num arquivo e metade no outro. Agora o corte não procura nada: ele
+ * é um lugar onde peça nenhuma pode estar, por construção.
+ *
+ * A folga entre uma bancada e a seguinte sai de graça nos motores de grade:
+ * cada peça já carrega meia folga em volta dela (ver `grade` em
+ * encaixe-mascara.js), então a última peça de uma bancada e a primeira da
+ * outra ficam separadas pela folga inteira — a mesma que separa duas peças
+ * vizinhas. No motor de retângulo, que reserva a folga só à direita e embaixo,
+ * ela entra no período da bancada.
+ */
+
+/**
+ * Quanto o retângulo da ARTE passa da silhueta desta forma, em centímetros,
+ * para cima e para baixo.
+ *
+ * A trava prende a SILHUETA — é ela que não pode cruzar a linha, porque é ela
+ * que vira peça cortada. Só que o que a máquina imprime é o RETÂNGULO DA ARTE,
+ * e ele é maior: a arte de uma gola, por exemplo, traz 2 cm de fundo vazio em
+ * volta do contorno. Sem contar essa sobra, a página do PDF sairia mais
+ * comprida que a mesa — medido no catálogo da bancada, até 2 cm por ponta.
+ *
+ * Fica guardada na forma na primeira vez, como as sondas: ela não muda, e a
+ * busca chama os encaixadores milhares de vezes com as mesmas formas.
+ */
+function sobraDaArte(forma, passo) {
+  if (forma.sobraArte) return forma.sobraArte;
+
+  let primeira = Infinity;
+  let ultima = -Infinity;
+  for (let c = 0; c < forma.cols; c++) {
+    if (forma.topo[c] < 0) continue;
+    if (forma.topo[c] < primeira) primeira = forma.topo[c];
+    if (forma.base[c] > ultima) ultima = forma.base[c];
+  }
+
+  let acima = 0;
+  let abaixo = 0;
+  if (Number.isFinite(primeira)) {
+    const silhuetaTopo = primeira * passo;
+    const silhuetaFundo = (ultima + 1) * passo;
+    forma.partes.forEach((parte) => {
+      const m = parte.mascara;
+      if (!m) return;
+      const deitada = parte.rot === 90 || parte.rot === 270;
+      const altura = deitada ? parte.item.largura : parte.item.altura;
+      const arteTopo = parte.drow * passo - m.offY;
+      acima = Math.max(acima, silhuetaTopo - arteTopo);
+      abaixo = Math.max(abaixo, (arteTopo + altura) - silhuetaFundo);
+    });
+  }
+
+  forma.sobraArte = { acima: Math.max(0, acima), abaixo: Math.max(0, abaixo) };
+  return forma.sobraArte;
+}
+
+/**
+ * A maior sobra de arte do trabalho, somando as duas pontas.
+ *
+ * As duas pontas de uma bancada podem ser peças diferentes, então o pior caso é
+ * a maior sobra de cima com a maior sobra de baixo — mesmo que nenhuma forma
+ * tenha as duas.
+ */
+function reservaDaArte(unidades, passo) {
+  let acima = 0;
+  let abaixo = 0;
+  unidades.forEach((unidade) => {
+    unidade.formas.forEach((forma) => {
+      const sobra = sobraDaArte(forma, passo);
+      if (sobra.acima > acima) acima = sobra.acima;
+      if (sobra.abaixo > abaixo) abaixo = sobra.abaixo;
+    });
+  });
+  return acima + abaixo;
+}
+
+/**
+ * A bancada em CÉLULAS da grade, para os motores de contorno e vãos. `null`
+ * quer dizer rolo sem fim, que é como o programa sempre funcionou.
+ *
+ * Arredonda para baixo, e desconta a sobra da arte: a bancada sai menor ou
+ * igual à pedida, nunca maior — uma bancada que não cabe na mesa não serve
+ * para nada, e é ela que vira o comprimento da página do PDF.
+ */
+function bancadaEmCelulas(config, reserva = 0) {
+  if (!(config.comprimentoBancada > 0)) return null;
+  const linhas = Math.floor((config.comprimentoBancada - reserva) / config.passo);
+  return linhas > 0 ? linhas : null;
+}
+
+/**
+ * A bancada em CENTÍMETROS, para o motor de retângulo. Ele reserva a folga
+ * dentro do retângulo da peça, então o período leva a folga junto e a bancada
+ * ocupada continua sendo o comprimento pedido.
+ *
+ * `maximo` existe para o caso de alguém pedir uma bancada minúscula: sem ele, a
+ * lista de retângulos livres teria uma bancada por centímetro de rolo. Mais
+ * bancadas que peças nunca serve para nada — cada bancada recebe pelo menos uma.
+ */
+function bancadaEmCentimetros(config, quantasPecas) {
+  if (!(config.comprimentoBancada > 0)) return null;
+  const periodo = config.comprimentoBancada + config.espaco;
+  return { altura: periodo, periodo, maximo: Math.max(1, quantasPecas) };
+}
+
+/**
+ * Onde a peça pousa de verdade, respeitando a linha da bancada.
+ *
+ * A peça desce por gravidade até `y`. Se dali ela cruzaria a linha, desce mais
+ * um pouco: até o começo da bancada seguinte. Descer mais nunca cria
+ * sobreposição — o que estava livre abaixo continua livre —, e por isso isto
+ * pode ser aplicado DEPOIS da conta de gravidade, sem refazer nada dela.
+ *
+ * Também é isso que mantém a poda das duas varreduras válida: elas descartam
+ * posição comparando um piso do `y` com a melhor nota conhecida, e empurrar só
+ * aumenta o `y`. Um piso continua sendo um piso.
+ */
+function empurrarParaBancada(y, alturaEmCelulas, linhasDaBancada) {
+  if (!linhasDaBancada) return y;
+  const dentro = y % linhasDaBancada;
+  if (dentro + alturaEmCelulas <= linhasDaBancada) return y;
+  return y - dentro + linhasDaBancada;
+}
+
+/**
  * MaxRects: mantém a lista dos retângulos livres do tecido e, para cada peça,
  * escolhe o melhor lugar segundo a heurística pedida. É o mesmo algoritmo que
  * os encaixadores de retângulo usam — bem melhor que empilhar em fileiras,
  * porque aproveita o vão que sobra ao lado de uma peça alta.
  *
- * O rolo é tratado como um retângulo de altura "infinita" (alturaMax); o
- * consumo real é o ponto mais baixo que as peças alcançaram.
+ * Sem bancada, o rolo é um retângulo de altura "infinita" (alturaMax) e o
+ * consumo real é o ponto mais baixo que as peças alcançaram. Com bancada, o
+ * mesmo espaço nasce repartido: um retângulo livre por bancada, sem nada entre
+ * eles. O MaxRects nunca põe uma peça atravessando a borda de um livre, então a
+ * trava da bancada já está obedecida antes da primeira peça entrar.
  */
-function criarPacker(largura, alturaMax) {
-  return { largura, alturaMax, livres: [{ x: 0, y: 0, w: largura, h: alturaMax }] };
+function criarPacker(largura, alturaMax, bancada) {
+  if (!bancada) {
+    return { largura, alturaMax, livres: [{ x: 0, y: 0, w: largura, h: alturaMax, bancada: 0 }] };
+  }
+  const quantas = Math.max(1, Math.min(bancada.maximo, Math.ceil(alturaMax / bancada.periodo)));
+  const livres = [];
+  for (let k = 0; k < quantas; k++) {
+    // O NÚMERO DA BANCADA VIAJA COM O RETÂNGULO.
+    //
+    // A primeira versão descobria a bancada de cada peça dividindo o `y` dela
+    // pelo período. Parece a mesma coisa e não é: o `y` de uma peça que pousa
+    // exatamente no começo de uma bancada nasce de somas e subtrações de
+    // centímetros, e `1052,7999999999997 / 150,4` dá 6,999… — a peça era
+    // carimbada na bancada anterior e a página do PDF saía com 230 cm de
+    // comprimento para uma mesa de 150. Aqui não há divisão nenhuma: o
+    // retângulo livre sabe de que bancada ele é desde que nasceu, e os pedaços
+    // dele herdam esse número.
+    livres.push({ x: 0, y: k * bancada.periodo, w: largura, h: bancada.altura, bancada: k });
+  }
+  return { largura, alturaMax, livres };
 }
 
 function pontuar(livre, w, h, heuristica) {
@@ -76,7 +241,8 @@ function melhorPosicao(packer, w, h, podeGirar, heuristica) {
       if (t.w > livre.w + 1e-9 || t.h > livre.h + 1e-9) return;
       const [p1, p2] = pontuar(livre, t.w, t.h, heuristica);
       if (melhor && !(p1 < melhor.p1 - 1e-9 || (Math.abs(p1 - melhor.p1) < 1e-9 && p2 < melhor.p2 - 1e-9))) return;
-      melhor = { x: livre.x, y: livre.y, w: t.w, h: t.h, girado: t.girado, p1, p2 };
+      melhor = { x: livre.x, y: livre.y, w: t.w, h: t.h, girado: t.girado, p1, p2,
+        bancada: livre.bancada };
     });
   });
 
@@ -91,15 +257,16 @@ function recortar(livre, usado) {
   if (semSobreposicao) return [livre];
 
   const sobras = [];
-  if (usado.y > livre.y) sobras.push({ x: livre.x, y: livre.y, w: livre.w, h: usado.y - livre.y });
+  const b = livre.bancada;
+  if (usado.y > livre.y) sobras.push({ x: livre.x, y: livre.y, w: livre.w, h: usado.y - livre.y, bancada: b });
   if (usado.y + usado.h < livre.y + livre.h) {
     const y = usado.y + usado.h;
-    sobras.push({ x: livre.x, y, w: livre.w, h: livre.y + livre.h - y });
+    sobras.push({ x: livre.x, y, w: livre.w, h: livre.y + livre.h - y, bancada: b });
   }
-  if (usado.x > livre.x) sobras.push({ x: livre.x, y: livre.y, w: usado.x - livre.x, h: livre.h });
+  if (usado.x > livre.x) sobras.push({ x: livre.x, y: livre.y, w: usado.x - livre.x, h: livre.h, bancada: b });
   if (usado.x + usado.w < livre.x + livre.w) {
     const x = usado.x + usado.w;
-    sobras.push({ x, y: livre.y, w: livre.x + livre.w - x, h: livre.h });
+    sobras.push({ x, y: livre.y, w: livre.x + livre.w - x, h: livre.h, bancada: b });
   }
   return sobras.filter((r) => r.w > 1e-9 && r.h > 1e-9);
 }
@@ -124,12 +291,17 @@ function ocupar(packer, usado) {
  *
  * O espaço entre peças entra somando a folga na largura/altura de cada uma
  * (a peça é desenhada no canto de cima à esquerda do retângulo reservado).
+ *
+ * A bancada aqui não precisa de trava nenhuma no posicionamento: ela nasce da
+ * própria lista de retângulos livres. Começando com um retângulo por bancada em
+ * vez de um só de altura infinita, peça que cruzaria a linha simplesmente não
+ * cabe em retângulo nenhum — e o MaxRects, que nunca atravessa a borda de um
+ * livre, encontra sozinho o lugar dela na bancada seguinte.
  */
 function encaixar(itens, config) {
-  const { larguraTecido, espaco, margem, alturaMax } = config;
-  const larguraUtil = larguraTecido - margem * 2;
+  const { larguraTecido, espaco, alturaMax } = config;
 
-  const packer = criarPacker(larguraUtil, alturaMax);
+  const packer = criarPacker(larguraTecido, alturaMax, bancadaEmCentimetros(config, itens.length));
   const posicoes = [];
   const naoEncaixadas = [];
   let consumo = 0;
@@ -137,9 +309,9 @@ function encaixar(itens, config) {
   itens.forEach((item) => {
     const w = item.largura + espaco;
     const h = item.altura + espaco;
-    const cabeDeitada = podeDeitar(item) && item.altura <= larguraUtil;
+    const cabeDeitada = podeDeitar(item) && item.altura <= larguraTecido;
 
-    if (item.largura > larguraUtil && !cabeDeitada) {
+    if (item.largura > larguraTecido && !cabeDeitada) {
       naoEncaixadas.push(item);
       return;
     }
@@ -153,16 +325,17 @@ function encaixar(itens, config) {
     ocupar(packer, { x: pos.x, y: pos.y, w: pos.w, h: pos.h });
     posicoes.push({
       item,
-      x: pos.x + margem,
-      y: pos.y + margem,
+      x: pos.x,
+      y: pos.y,
       largura: pos.girado ? item.altura : item.largura,
       altura: pos.girado ? item.largura : item.altura,
       girado: pos.girado,
+      bancada: pos.bancada || 0,
     });
     consumo = Math.max(consumo, pos.y + pos.h);
   });
 
-  return { posicoes, naoEncaixadas, consumo: consumo > 0 ? consumo + margem * 2 - espaco : 0 };
+  return { posicoes, naoEncaixadas, consumo: consumo > 0 ? consumo - espaco : 0 };
 }
 
 /**
@@ -577,7 +750,8 @@ function sondasDaForma(forma) {
  * de buraco morto a escolha cria (`vazio`) e onde fica o ponto mais baixo dela
  * (`fundo`), que são as duas medidas usadas para comparar posições.
  */
-function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto = 1) {
+function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto = 1,
+  linhasBancada = 0) {
   let melhor = null;
   const usaVazio = heuristica === "vazio";
   const pulo = Math.max(1, Math.round(salto));
@@ -593,6 +767,10 @@ function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto =
 
   unidade.formas.forEach((forma) => {
     if (forma.cols > colsTecido) return;
+    // Forma mais comprida que a bancada não cabe em bancada nenhuma. Sair aqui
+    // é o que faz a peça ser reportada como não encaixada em vez de o empurrão
+    // ficar procurando para sempre uma bancada onde ela caiba.
+    if (linhasBancada && forma.maxBase + 1 > linhasBancada) return;
 
     // Cópias locais: este laço roda milhões de vezes num encaixe grande, e ler
     // a propriedade do objeto a cada volta custa mais que o cálculo em si.
@@ -669,6 +847,12 @@ function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto =
       }
 
       if (cortada) return;
+
+      // A gravidade já disse onde a peça encosta; a bancada diz se ela pode
+      // ficar ali. O empurrão entra aqui, antes das duas notas, para que o
+      // buraco que ele deixa no rabo da bancada anterior seja contado como o
+      // desperdício que é — e a posição perca para outra que não precise dele.
+      y = empurrarParaBancada(y, maxBase + 1, linhasBancada);
 
       const vazio = y * nCols + somaTopo - somaPerfil; // buraco morto que fica acima
       const fundo = y + maxBase + 1;
@@ -754,23 +938,29 @@ function assentarUnidade(perfil, escolha) {
  * (`repescarNosVaos`) mexer numa peça já assentada sem refazer conta de
  * centímetro: ela mexe na colocação, e as posições saem no fim, uma vez só.
  */
-function posicoesDasColocacoes(colocacoes, passo, margem) {
+function posicoesDasColocacoes(colocacoes, passo, linhasBancada) {
   const posicoes = [];
   colocacoes.forEach((col) => {
+    // A bancada sai da COLOCAÇÃO, em células, e não do `y` em centímetros da
+    // posição: o `y` da posição é o canto da ARTE, que o recorte da máscara
+    // empurra para cima da peça e pode jogar do outro lado da linha. Quem está
+    // preso à bancada é a peça.
+    const bancada = linhasBancada ? Math.floor(col.y / linhasBancada) : 0;
     col.forma.partes.forEach((parte) => {
       const m = parte.mascara;
       const deitada = parte.rot === 90 || parte.rot === 270;
       posicoes.push({
         item: parte.item,
         // canto da arte: desfaz o recorte da máscara para achar a imagem inteira
-        x: (col.x + parte.dcol) * passo + margem - m.offX,
-        y: (col.y + parte.drow) * passo + margem - m.offY,
+        x: (col.x + parte.dcol) * passo - m.offX,
+        y: (col.y + parte.drow) * passo - m.offY,
         largura: deitada ? parte.item.altura : parte.item.largura,
         altura: deitada ? parte.item.largura : parte.item.altura,
         rot: parte.rot,
         girado: deitada,
         mascara: m,
         passo,
+        bancada,
       });
     });
   });
@@ -848,7 +1038,7 @@ function ocuparIntervalos(colunas, col, sinal) {
  * ganhar dali para baixo, e parar cedo é o que deixa esta varredura caber no
  * orçamento.
  */
-function descerNosVaos(colunas, x, forma, tetoFundo, deOnde, quais, quantas) {
+function descerNosVaos(colunas, x, forma, tetoFundo, deOnde, quais, quantas, linhasBancada) {
   /*
    * `deOnde` e `quais` são o atalho do encaixe por vãos, e não mudam o
    * resultado — só evitam trabalho que já se sabe inútil:
@@ -863,7 +1053,10 @@ function descerNosVaos(colunas, x, forma, tetoFundo, deOnde, quais, quantas) {
    *
    * Sem eles (a repescagem chama assim), desce do zero olhando tudo.
    */
-  let y = deOnde || 0;
+  // A bancada entra na descida, e não depois dela: parar dentro de um vão que
+  // atravessa a linha não é uma posição válida que precise ser corrigida — é
+  // uma posição que não existe, e a descida tem que continuar dali.
+  let y = empurrarParaBancada(deOnde || 0, forma.maxBase + 1, linhasBancada);
   const olhaTodas = quais === undefined;
   const nColunas = olhaTodas ? forma.cols : quantas;
   for (let voltas = 0; voltas < 4096; voltas++) {
@@ -918,6 +1111,7 @@ function descerNosVaos(colunas, x, forma, tetoFundo, deOnde, quais, quantas) {
         }
       }
     }
+    proximo = empurrarParaBancada(proximo, forma.maxBase + 1, linhasBancada);
     if (proximo === y) return y;
     y = proximo;
     if (y + forma.maxBase + 1 >= tetoFundo) return null;
@@ -926,14 +1120,15 @@ function descerNosVaos(colunas, x, forma, tetoFundo, deOnde, quais, quantas) {
 }
 
 /** A melhor colocação nova para esta unidade, se houver alguma acima da atual. */
-function melhorVagaNosVaos(colunas, colsTecido, unidade, tetoFundo) {
+function melhorVagaNosVaos(colunas, colsTecido, unidade, tetoFundo, linhasBancada) {
   let melhor = null;
   unidade.formas.forEach((forma) => {
     if (forma.cols > colsTecido) return;
+    if (linhasBancada && forma.maxBase + 1 > linhasBancada) return;
     const ultimoX = colsTecido - forma.cols;
     for (let x = 0; x <= ultimoX; x++) {
       const teto = melhor ? melhor.fundo : tetoFundo;
-      const y = descerNosVaos(colunas, x, forma, teto);
+      const y = descerNosVaos(colunas, x, forma, teto, 0, undefined, undefined, linhasBancada);
       if (y === null) continue;
       const fundo = y + forma.maxBase + 1;
       if (fundo < teto) melhor = { forma, x, y, fundo };
@@ -948,7 +1143,7 @@ const REPESCA_MAX_PECAS = 16;
 // Só entra na roda a peça que termina no último terço do rolo.
 const REPESCA_FATIA_DO_RABO = 0.66;
 
-function repescarNosVaos(colocacoes, colsTecido) {
+function repescarNosVaos(colocacoes, colsTecido, linhasBancada) {
   const fundoDeTodas = () => colocacoes.reduce((m, c) => Math.max(m, fundoDaColocacao(c)), 0);
   if (colocacoes.length < 2) return fundoDeTodas();
 
@@ -963,7 +1158,7 @@ function repescarNosVaos(colocacoes, colsTecido) {
   doRabo.forEach((col) => {
     const antes = fundoDaColocacao(col);
     ocuparIntervalos(colunas, col, -1);
-    const vaga = melhorVagaNosVaos(colunas, colsTecido, col.unidade, antes);
+    const vaga = melhorVagaNosVaos(colunas, colsTecido, col.unidade, antes, linhasBancada);
     if (vaga) { col.forma = vaga.forma; col.x = vaga.x; col.y = vaga.y; }
     ocuparIntervalos(colunas, col, 1);
   });
@@ -971,10 +1166,10 @@ function repescarNosVaos(colocacoes, colsTecido) {
   return fundoDeTodas();
 }
 
-function resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo, margem) {
+function resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo) {
   return {
     posicoes, naoEncaixadas,
-    consumo: fundoMax > 0 ? fundoMax * passo + margem * 2 : 0,
+    consumo: fundoMax > 0 ? fundoMax * passo : 0,
     areaReal: posicoes.reduce((soma, p) => soma + p.item.mascaras.areaReal, 0),
   };
 }
@@ -991,13 +1186,14 @@ function encaixarContorno(unidades, config) {
     if (pelaViaRapida) {
       // A repescagem trabalha nas colocações, que o WASM também devolve.
       if (config.repescar && pelaViaRapida.colocacoes) {
-        const { passo, margem } = config;
+        const { passo } = config;
         const colsDoTecido = config.colsForcado
-          || Math.max(1, Math.floor((config.larguraTecido - margem * 2) / passo));
-        const fundo = repescarNosVaos(pelaViaRapida.colocacoes, colsDoTecido);
+          || Math.max(1, Math.floor(config.larguraTecido / passo));
+        const linhas = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
+        const fundo = repescarNosVaos(pelaViaRapida.colocacoes, colsDoTecido, linhas);
         const refeito = resultadoDoEncaixe(
-          posicoesDasColocacoes(pelaViaRapida.colocacoes, passo, margem),
-          pelaViaRapida.naoEncaixadas, fundo, passo, margem);
+          posicoesDasColocacoes(pelaViaRapida.colocacoes, passo, linhas),
+          pelaViaRapida.naoEncaixadas, fundo, passo);
         refeito.piorUnidade = pelaViaRapida.piorUnidade;
         refeito.piorVazio = pelaViaRapida.piorVazio;
         return refeito;
@@ -1006,11 +1202,11 @@ function encaixarContorno(unidades, config) {
     }
   }
 
-  const { larguraTecido, margem, passo, heuristica } = config;
+  const { larguraTecido, passo, heuristica } = config;
   // `colsForcado` é usado pelo encaixe por faixas: ali a largura não é a do
-  // rolo, é a da faixa — e a margem da borda já foi descontada uma vez só.
-  const colsTecido = config.colsForcado
-    || Math.max(1, Math.floor((larguraTecido - margem * 2) / passo));
+  // rolo, é a da faixa.
+  const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
+  const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
 
   const perfil = new Int32Array(colsTecido);
   const colocacoes = [];
@@ -1024,7 +1220,8 @@ function encaixarContorno(unidades, config) {
   let piorUnidade = null, piorVazio = -Infinity;
 
   unidades.forEach((unidade) => {
-    const escolha = melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, config.saltoX);
+    const escolha = melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, config.saltoX,
+      linhasBancada);
     if (!escolha) {
       unidade.itens.forEach((item) => naoEncaixadas.push(item));
       return;
@@ -1035,10 +1232,10 @@ function encaixarContorno(unidades, config) {
     if (escolha.vazio > piorVazio) { piorVazio = escolha.vazio; piorUnidade = unidade; }
   });
 
-  if (config.repescar) fundoMax = repescarNosVaos(colocacoes, colsTecido);
+  if (config.repescar) fundoMax = repescarNosVaos(colocacoes, colsTecido, linhasBancada);
 
   const resultado = resultadoDoEncaixe(
-    posicoesDasColocacoes(colocacoes, passo, margem), naoEncaixadas, fundoMax, passo, margem);
+    posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundoMax, passo);
   resultado.piorUnidade = piorUnidade;
   resultado.piorVazio = piorVazio;
   return resultado;
@@ -1079,13 +1276,14 @@ function encaixarContorno(unidades, config) {
  * onde o vão preso é pequeno, o contorno faz dez vezes mais tentativas e ganha;
  * onde o vão preso é grande, aqui é que está o tecido.
  */
-function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
+function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBancada) {
   const { colunas, perfil, topoLivre, maiorVao } = tecido;
   let melhor = null;
   const pulo = Math.max(1, Math.round(salto || 1));
 
   unidade.formas.forEach((forma) => {
     if (forma.cols > colsTecido) return;
+    if (linhasBancada && forma.maxBase + 1 > linhasBancada) return;
     const ultimoX = colsTecido - forma.cols;
     const { cols, topo, maxBase } = forma;
     const sondas = forma.sondas || (forma.sondas = sondasDaForma(forma));
@@ -1173,7 +1371,10 @@ function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
       }
       if (cortada) return;
 
-      let y = ySky;
+      // Pousar em cima de tudo sempre cabe — mas, com bancada, "em cima de
+      // tudo" pode ser em cima da linha, e aí o pouso é no começo da bancada
+      // seguinte. É este `y` que serve de teto para a descida cara logo abaixo.
+      let y = empurrarParaBancada(ySky, maxBase + 1, linhasBancada);
       /*
        * QUANDO A DESCIDA CARA NÃO PODE GANHAR NADA.
        *
@@ -1193,8 +1394,9 @@ function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
         // Aqui pode haver buraco fechado por cima: vale a descida de verdade.
         // Ela nunca devolve `y` maior que o do relevo, então o relevo já serve
         // de teto e a busca desiste cedo.
-        const teto = Math.min(melhor ? melhor.fundo : Infinity, ySky + maxBase + 1);
-        const yVao = descerNosVaos(colunas, x, forma, teto + 1, piso, colunasComVao, comVao);
+        const teto = Math.min(melhor ? melhor.fundo : Infinity, y + maxBase + 1);
+        const yVao = descerNosVaos(colunas, x, forma, teto + 1, piso, colunasComVao, comVao,
+          linhasBancada);
         if (yVao !== null && yVao < y) y = yVao;
       }
 
@@ -1218,9 +1420,9 @@ function melhorVagaPorVaos(tecido, colsTecido, unidade, salto) {
 }
 
 function encaixarPorVaos(unidades, config) {
-  const { larguraTecido, margem, passo } = config;
-  const colsTecido = config.colsForcado
-    || Math.max(1, Math.floor((larguraTecido - margem * 2) / passo));
+  const { larguraTecido, passo } = config;
+  const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
+  const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
 
   /*
    * O tecido, guardado de dois jeitos ao mesmo tempo:
@@ -1252,7 +1454,7 @@ function encaixarPorVaos(unidades, config) {
   let piorUnidade = null, piorVazio = -Infinity;
 
   unidades.forEach((unidade) => {
-    const escolha = melhorVagaPorVaos(tecido, colsTecido, unidade, config.saltoX);
+    const escolha = melhorVagaPorVaos(tecido, colsTecido, unidade, config.saltoX, linhasBancada);
     if (!escolha) {
       unidade.itens.forEach((item) => naoEncaixadas.push(item));
       return;
@@ -1304,7 +1506,7 @@ function encaixarPorVaos(unidades, config) {
   });
 
   const resultado = resultadoDoEncaixe(
-    posicoesDasColocacoes(colocacoes, passo, margem), naoEncaixadas, fundoMax, passo, margem);
+    posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundoMax, passo);
   resultado.colocacoes = colocacoes;
   resultado.piorUnidade = piorUnidade;
   resultado.piorVazio = piorVazio;
@@ -1348,8 +1550,8 @@ function larguraDaUnidade(unidade, passo) {
  * peça mais estreita — senão a segunda faixa nasceria morta.
  */
 function cortesDeFaixa(unidades, config) {
-  const { passo, margem, larguraTecido } = config;
-  const colsUtil = Math.max(1, Math.floor((larguraTecido - margem * 2) / passo));
+  const { passo, larguraTecido } = config;
+  const colsUtil = Math.max(1, Math.floor(larguraTecido / passo));
   const larguras = [...new Set(unidades.map((u) => larguraDaUnidade(u, passo)))].sort((a, b) => b - a);
   if (larguras.length < 2) return [];
 
@@ -1413,8 +1615,8 @@ function repartirEntreFaixas(unidades, colsEsquerda, colsDireita, passo) {
 }
 
 function encaixarPorFaixas(unidades, config) {
-  const { passo, margem, larguraTecido, corteCols } = config;
-  const colsUtil = Math.max(1, Math.floor((larguraTecido - margem * 2) / passo));
+  const { passo, larguraTecido, corteCols } = config;
+  const colsUtil = Math.max(1, Math.floor(larguraTecido / passo));
   const colsDireita = colsUtil - corteCols;
   if (corteCols <= 0 || colsDireita <= 0) {
     return { posicoes: [], naoEncaixadas: unidades.flatMap((u) => u.itens), consumo: 0, areaReal: 0 };
@@ -1422,8 +1624,10 @@ function encaixarPorFaixas(unidades, config) {
 
   const { esquerda, direita } = repartirEntreFaixas(unidades, corteCols, colsDireita, passo);
 
-  // As faixas dividem a mesma folga de borda do rolo: a margem entra uma vez
-  // só, na conta do tecido, e não uma vez por faixa.
+  // Cada faixa é um encaixe de contorno na largura dela, e por isso herda a
+  // trava da bancada sem precisar saber que ela existe: as duas faixas contam
+  // as linhas a partir do mesmo zero, então a linha de corte cai no mesmo lugar
+  // nas duas.
   const naEsquerda = encaixarContorno(esquerda, { ...config, colsForcado: corteCols });
   const naDireita = encaixarContorno(direita, { ...config, colsForcado: colsDireita });
 
@@ -1507,9 +1711,83 @@ const HEURISTICAS_RETANGULO = ["bl", "bssf", "blsf", "baf"];
  * sacudida chamam isto a cada tentativa, e montar o texto toda vez apareceria
  * no perfil.
  */
+/*
+ * ===========================================================================
+ * OS GRUPOS DA PESSOA
+ * ===========================================================================
+ *
+ * Um grupo é um punhado de peças que a pessoa marcou na tabela para saírem
+ * PERTO UMAS DAS OUTRAS no rolo — as seis partes de uma camisa tamanho G, por
+ * exemplo. Não é sobre tecido: é sobre a mesa de corte. Achar as seis peças
+ * espalhadas em doze metros custa mais tempo de costureira do que os poucos
+ * centímetros que a vizinhança pode cobrar.
+ *
+ * A regra é uma só, e é barata: **as peças de um grupo entram na fila
+ * grudadas**. O encaixe por contorno desce cada peça por gravidade e encosta na
+ * anterior, então quem entra junto cai perto — é o mesmo raciocínio em que a
+ * ordem "familia" já se apoia, só que ali a família é o formato e aqui é a
+ * escolha da pessoa.
+ *
+ * O que NÃO se faz aqui é reservar faixa. Peça de fora continua livre para cair
+ * num vão entre duas do grupo, e é isso que mantém o custo em tecido baixo: o
+ * grupo fica numa REGIÃO, não num quarteirão isolado. Se um dia a produção
+ * pedir a faixa exclusiva, é outra regra e vai ter outro nome.
+ *
+ * Sem nenhum grupo marcado, tudo isto é identidade: `juntarGrupos` devolve a
+ * lista que recebeu e `familiaDaUnidade` responde o que sempre respondeu.
+ */
+
+/** O grupo de uma unidade (ou de uma peça solta). "" quando não tem. */
+function grupoDaUnidade(unidade) {
+  const peca = unidade.itens ? unidade.itens[0] : unidade;
+  return (peca && peca.grupo) || "";
+}
+
+/**
+ * Põe as peças de cada grupo lado a lado na fila, sem mexer em mais nada.
+ *
+ * O grupo fica NO LUGAR DO PRIMEIRO MEMBRO dele, e os membros mantêm a ordem
+ * relativa que tinham. Isso é o que deixa a busca continuar explorando à
+ * vontade: ela sacode a fila como sempre sacudiu — inclusive trocando peças de
+ * grupos diferentes de lugar —, e esta passada, feita depois, apenas recolhe
+ * cada grupo de volta. Nenhuma arrumação deixa de ser alcançável por causa dos
+ * grupos; elas só passam a ser visitadas já com os grupos inteiros.
+ *
+ * A alternativa seria proibir a sacudida de separar o grupo, e aí a busca
+ * perderia a metade do espaço que passa por arrumações intermediárias.
+ */
+function juntarGrupos(lista) {
+  let temGrupo = false;
+  for (let i = 0; i < lista.length; i++) {
+    if (grupoDaUnidade(lista[i])) { temGrupo = true; break; }
+  }
+  if (!temGrupo) return lista;
+
+  const blocos = new Map();
+  const saida = [];
+  lista.forEach((unidade) => {
+    const grupo = grupoDaUnidade(unidade);
+    if (!grupo) { saida.push(unidade); return; }
+    let bloco = blocos.get(grupo);
+    if (!bloco) {
+      bloco = [];
+      blocos.set(grupo, bloco);
+      saida.push(bloco); // o grupo inteiro ocupa o lugar do primeiro membro
+    }
+    bloco.push(unidade);
+  });
+  return saida.flat();
+}
+
+/**
+ * Com grupo marcado, o grupo É a família: é ele que a ordem "familia" mantém
+ * em bloco e que o `baguncarFamilias` sacode inteiro. Sem grupo, a família
+ * continua sendo o formato da peça, como sempre foi.
+ */
 function familiaDaUnidade(unidade) {
   if (unidade._familia == null) {
-    unidade._familia = unidade.itens.map((i) => i.indice).sort((a, b) => a - b).join("-");
+    unidade._familia = grupoDaUnidade(unidade)
+      || unidade.itens.map((i) => i.indice).sort((a, b) => a - b).join("-");
   }
   return unidade._familia;
 }
@@ -1524,8 +1802,9 @@ const ORDENS_CONTORNO = [
    *
    * Veio de uma observação de produção: separando o pedido por silhueta
    * parecida e encaixando um arquivo de cada vez, o total deu menos do que
-   * encaixar tudo junto. Só que separar de verdade custa uma margem de borda
-   * por arquivo e joga fora a chance de a peça pequena cair no vão da grande.
+   * encaixar tudo junto. Só que separar de verdade custa um rabo de rolo mal
+   * aproveitado por arquivo e joga fora a chance de a peça pequena cair no vão
+   * da grande.
    * Esta ordem é o meio-termo: **um encaixe só**, com as famílias entrando em
    * bloco em vez de misturadas.
    *
@@ -1675,14 +1954,38 @@ function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = AGRUPAM
  * o formato — quanto a peça preenche a caixa dela e se é comprida ou quadrada.
  * Por isso dois pedidos diferentes com peças parecidas compartilham o que foi
  * aprendido.
+ *
+ * O GIRO ENTRA, e não é detalhe.
+ *
+ * Ele não descreve o formato da peça, descreve o que o encaixador pode fazer
+ * com ela — e por isso muda o próprio portfólio de receitas. Sem nenhuma peça
+ * livre, as receitas `retangulo/deitada/*` não existem (ver `receitasBase`), a
+ * "cruzada" some, e o contorno passa a ter uma posição por peça em vez de
+ * quatro. Duas rodadas do mesmo lote, uma com as peças fixas e a outra com
+ * elas livres, são trabalhos diferentes: o que uma aprendeu não vale para a
+ * outra, e a metragem de uma não é alcançável pela outra.
+ *
+ * Ficavam no mesmo balde. O giro é por peça, e a lista já vai ordenada, então
+ * trabalho com metade das peças liberadas também se distingue dos dois.
  */
 function assinaturaDoTrabalho(pecas, larguraTecido) {
   const formatos = pecas.map((p) => {
     const ocupacao = p.ocupacao == null ? 1 : p.ocupacao;
     const proporcao = p.altura > 0 ? p.largura / p.altura : 1;
-    return `${Math.round(ocupacao * 10)}:${Math.round(Math.log2(proporcao) * 2)}`;
+    return `${Math.round(ocupacao * 10)}:${Math.round(Math.log2(proporcao) * 2)}:${p.giro || "fixa"}`;
   }).sort();
-  return `l${Math.round(larguraTecido / 10)}|${formatos.join(",")}`;
+  // TER GRUPO é outro tipo de trabalho, pelo mesmo motivo do giro: ele muda
+  // qual receita ganha. Com as peças agrupadas, o grupo VIRA a família (ver
+  // `familiaDaUnidade`), e a receita "familia" — que sem grupo ganha de vez em
+  // quando — passa a ganhar quase sempre. Sem esta marca, o placar de um
+  // trabalho agrupado empurraria a "familia" para cima nos trabalhos soltos, e
+  // vice-versa.
+  //
+  // Só a MARCA entra, não os nomes dos grupos: quem decide a receita é haver
+  // blocos, não eles se chamarem A e B. Assim dois pedidos com o mesmo formato
+  // de peça e agrupamentos diferentes continuam aprendendo um com o outro.
+  const agrupado = pecas.some((p) => p.grupo) ? "g" : "";
+  return `l${Math.round(larguraTecido / 10)}${agrupado}|${formatos.join(",")}`;
 }
 
 /** Embaralha um pouco a ordem: troca alguns pares de lugar. */
@@ -1935,6 +2238,11 @@ async function buscarMelhorEncaixe(itens, config) {
     const guardada = partirDoMelhor ? melhoresOrdens.get(base.chave) : null;
     let lista = guardada ? guardada.lista.slice() : base.crua.slice().sort(base.ordem.comparar);
     if (embaralhar) lista = embaralhar(lista, guardada, base.ordem);
+    // Por último, e depois da sacudida de propósito: ver `juntarGrupos`. Vale
+    // para TODA receita, não só para a de família — do contrário o grupo
+    // dependeria de qual receita ganhasse a disputa, que é o mesmo que não
+    // valer.
+    lista = juntarGrupos(lista);
 
     const resultado = rodarNaLista(receita, lista);
     // Fica anotado de onde este resultado saiu, para a ordem ser guardada se
@@ -2030,6 +2338,38 @@ async function buscarMelhorEncaixe(itens, config) {
   const PODA_TOLERANCIA = 1.06;  // até 6% acima do melhor continua na roda
   const PODA_MINIMO = 4;         // nunca deixa a roda com menos que isso
   const PODA_FRESTA = 0.15;      // parte do sorteio que ignora a poda
+
+  /*
+   * A PODA POR MOTOR.
+   *
+   * A poda de cima larga a RECEITA que ficou para trás. Ela não resolve o caso
+   * que mais desperdiça: um encaixador inteiro que fica perto o bastante para
+   * sobreviver e longe o bastante para nunca vencer.
+   *
+   * Medido na produção, num trabalho de 57 peças, 60 s, mesma configuração:
+   *
+   *   automático            5,87 m · 95.332 tentativas · melhorou 6x
+   *   sempre pelo contorno  5,83 m · 58.436 tentativas · melhorou 18x
+   *
+   * A campeã foi de contorno nos dois. No automático, quase 40% das tentativas
+   * foram para o motor de caixa, que ficou 1 a 2% atrás — perto demais para a
+   * poda de 6% pegar. O contorno sozinho, com METADE das tentativas, achou um
+   * encaixe melhor: o que faltava a ele não era engenho, era orçamento.
+   *
+   * Aqui o corte é por motor e mais apertado, mas com três travas para nunca
+   * cortar quem ainda podia ganhar:
+   *
+   *   - só depois da passada base, quando todo motor já mostrou o que sabe;
+   *   - o motor que está na frente nunca é cortado;
+   *   - a fresta do sorteio continua valendo, então motor cortado ainda recebe
+   *     uma parte das tentativas e pode voltar (a poda é recalculada a cada
+   *     rodada, com o placar de agora).
+   *
+   * O 4% saiu de medição, e o 2% que parecia mais óbvio saiu junto: cortando a
+   * 2% a soma dos oito trabalhos da bancada deu -0,19%, e a 4% deu -0,37%.
+   * Cortar mais cedo tira motor que ainda tinha o que dar.
+   */
+  const PODA_MOTOR = config.podaMotor != null ? config.podaMotor : 1.04;
   // Chance de, ao refinar, reparar a peça que mais atrapalhou em vez de
   // sacudir a ordem toda sem direção (ver `repararPior`). Só refinando: em
   // "explorar" ainda não existe uma ordem-base cujo pior valha a pena mirar.
@@ -2048,7 +2388,32 @@ async function buscarMelhorEncaixe(itens, config) {
     const linhas = [...placar.values()];
     if (config.podar === false || !melhor || linhas.length <= PODA_MINIMO) return linhas;
     const limite = melhor.consumo * PODA_TOLERANCIA;
-    const vivas = linhas.filter((l) => l.tentativas === 0 || l.melhorConsumo <= limite);
+    let vivas = linhas.filter((l) => l.tentativas === 0 || l.melhorConsumo <= limite);
+
+    // A poda por motor, em cima do que sobrou. Ver `PODA_MOTOR` acima.
+    if (PODA_MOTOR > 1 && passadaBaseTerminou) {
+      const melhorDoMotor = new Map();
+      linhas.forEach((l) => {
+        if (l.tentativas === 0) return;
+        const motor = l.receita.motor;
+        const antes = melhorDoMotor.get(motor);
+        if (antes == null || l.melhorConsumo < antes) melhorDoMotor.set(motor, l.melhorConsumo);
+      });
+      if (melhorDoMotor.size > 1) {
+        const oMelhorDeTodos = Math.min(...melhorDoMotor.values());
+        const tetoDoMotor = oMelhorDeTodos * PODA_MOTOR;
+        const semChance = new Set();
+        melhorDoMotor.forEach((consumo, motor) => {
+          if (consumo > tetoDoMotor) semChance.add(motor);
+        });
+        // Nunca todos: se o corte levaria tudo, ele não vale.
+        if (semChance.size > 0 && semChance.size < melhorDoMotor.size) {
+          const sobrou = vivas.filter((l) => l.tentativas === 0 || !semChance.has(l.receita.motor));
+          if (sobrou.length > 0) vivas = sobrou;
+        }
+      }
+    }
+
     if (vivas.length >= PODA_MINIMO) return vivas;
     return linhas.slice().sort((a, b) => a.melhorConsumo - b.melhorConsumo).slice(0, PODA_MINIMO);
   };
@@ -2056,6 +2421,8 @@ async function buscarMelhorEncaixe(itens, config) {
   let melhor = null;
   let melhorChave = null;
   let receitaVencedora = null;
+  // A poda por motor só vale depois que toda receita teve a chance dela.
+  let passadaBaseTerminou = false;
   let tentativas = 0;
   let semGanho = 0;
   let perseguindo = false;
@@ -2209,6 +2576,7 @@ async function buscarMelhorEncaixe(itens, config) {
     }
   }
   avisar("base");
+  passadaBaseTerminou = true;
 
   // 2) Melhoria: sorteia receitas com peso e embaralha a ordem das peças.
   // Continua enquanto estiver rendendo.
