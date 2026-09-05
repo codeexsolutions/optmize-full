@@ -429,125 +429,7 @@ tbody tr:hover td {
   color: var(--text-dim);
 }
 
-.encaixe-largura-resumo {
-  margin: 12px 0 14px;
-  padding: 15px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card-bg-soft);
-}
-
-.encaixe-largura-topo {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1px;
-  overflow: hidden;
-  margin-bottom: 13px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--border);
-}
-
-.encaixe-largura-topo > div {
-  padding: 11px 12px;
-  background: var(--card-bg);
-}
-
-.encaixe-largura-topo span,
-.encaixe-largura-topo strong {
-  display: block;
-}
-
-.encaixe-largura-topo span {
-  margin-bottom: 5px;
-  color: var(--text-dim);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.encaixe-largura-topo strong {
-  font-family: var(--font-display);
-  font-size: 17px;
-}
-
-.encaixe-largura-topo > div:nth-child(2) strong {
-  color: var(--accent);
-}
-
-.encaixe-largura-topo > div:nth-child(3) strong {
-  color: var(--warn);
-}
-
-.encaixe-largura-barra {
-  width: 100%;
-  height: 18px;
-  display: flex;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--card-bg);
-}
-
-.encaixe-largura-barra > span {
-  display: block;
-  min-width: 0;
-  height: 100%;
-}
-
-.encaixe-lateral-vazia {
-  background: color-mix(in srgb, var(--warn) 22%, transparent);
-}
-
-.encaixe-largura-ocupada {
-  background: var(--accent);
-}
-
-.encaixe-largura-lados {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 9px;
-  color: var(--text-dim);
-  font-size: 10px;
-}
-
-.encaixe-largura-lados span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.encaixe-largura-lados strong {
-  color: var(--text);
-}
-
-.encaixe-largura-lados i {
-  width: 8px;
-  height: 8px;
-  display: inline-block;
-  border-radius: 2px;
-}
-
-.largura-legenda-vazia {
-  background: color-mix(in srgb, var(--warn) 62%, transparent);
-}
-
-.largura-legenda-ocupada {
-  background: var(--accent);
-}
-
-.encaixe-largura-resumo > p {
-  margin: 11px 0 0;
-  color: var(--text-dim);
-  font-size: 11px;
-}
-
-.encaixe-largura-resumo > p strong {
-  color: var(--text);
-}
-
-/* Carregamento visível do cálculo do encaixe. */.encaixe-carregamento {
+.encaixe-carregamento {
   position: fixed;
   right: 24px;
   bottom: 24px;
@@ -1507,14 +1389,6 @@ tbody tr:hover td {
     width: 100%;
   }
 
-  .encaixe-largura-topo {
-    grid-template-columns: 1fr;
-  }
-
-  .encaixe-largura-lados {
-    align-items: flex-start;
-    flex-direction: column;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1536,22 +1410,1017 @@ tbody tr:hover td {
   .encaixe-carregamento {
     display: none !important;
   }
+}
 
-  .encaixe-largura-resumo {
-    border-color: #ccc;
-    background: #fff;
-    color: #111;
+/* ===================================================================
+   AVISO DE COR — a arte que o canvas não sabe converter
+   =================================================================== */
+
+/* O selo na linha da peça: só o suficiente para o olho parar ali. O detalhe
+   fica no `title` e no painel de cima, com a imagem junto. */
+.selo-cor {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.selo-cor-cmyk {
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+
+.selo-cor-perfil {
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  color: var(--warn);
+}
+
+#encaixe-aviso-cor {
+  margin: 0 0 8px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 8%, var(--card-bg-soft));
+}
+
+.aviso-cor-titulo {
+  margin: 0 0 8px;
+  color: var(--warn);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* A tira rola de lado: com vinte artes problemáticas ela não pode empurrar a
+   lista de peças para fora da tela. */
+.aviso-cor-tira {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.aviso-cor-item {
+  flex: 0 0 auto;
+  width: 92px;
+  margin: 0;
+}
+
+.aviso-cor-item img {
+  display: block;
+  width: 92px;
+  height: 72px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  object-fit: contain;
+}
+
+.aviso-cor-item figcaption {
+  display: block;
+  margin-top: 3px;
+  line-height: 1.25;
+}
+
+.aviso-cor-item strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aviso-cor-item span {
+  display: block;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==================== TELA DE COR ==================== */
+/*
+ * Cada arte é um cartão com o antes e o depois lado a lado. Lado a lado, e não
+ * um sobre o outro: a diferença que interessa aqui é de TOM, e tom só se julga
+ * com os dois na mesma linha de visão — em cima e embaixo o olho já esqueceu o
+ * primeiro quando chega no segundo.
+ */
+
+.cor-lista {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.cor-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg-soft);
+}
+
+.cor-item > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cor-item > header strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cor-item .hint {
+  margin: 4px 0 0;
+}
+
+.cor-estado {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.cor-estado-espera { background: var(--card-bg); color: var(--text-dim); }
+.cor-estado-pronto { background: var(--accent-soft, var(--card-bg)); color: var(--accent); }
+.cor-estado-intacto { background: var(--card-bg); color: var(--text-dim); }
+.cor-estado-parado { background: var(--card-bg); color: var(--danger, var(--text-dim)); }
+
+.cor-par {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.cor-par figure {
+  margin: 0;
+}
+
+/* O xadrez por baixo: arte de sublimação é quase sempre fundo branco ou preto
+   chapado, e sem um fundo neutro atrás não dá para saber onde a arte acaba. */
+.cor-par img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--card-bg);
+  background-image:
+    linear-gradient(45deg, rgba(128, 128, 128, .12) 25%, transparent 25%, transparent 75%, rgba(128, 128, 128, .12) 75%),
+    linear-gradient(45deg, rgba(128, 128, 128, .12) 25%, transparent 25%, transparent 75%, rgba(128, 128, 128, .12) 75%);
+  background-position: 0 0, 8px 8px;
+  background-size: 16px 16px;
+}
+
+.cor-par figcaption {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-align: center;
+}
+
+/* ==================== MENU SUSPENSO ====================
+   Um botão que abre as opções, para quando três botões na barra são, na
+   verdade, três jeitos de fazer a MESMA coisa ("Exportar"). A barra para de
+   crescer a cada formato novo, e quem só quer o risco na mão não precisa
+   escolher entre PDF, PNG e impressora antes de clicar.
+
+   Não é um `<select>`: `<option>` não aceita desenho nem linha de apoio, e o
+   menu do sistema entra com a cara do sistema no meio de uma tela escura. */
+.menu-suspenso {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* A setinha diz o estado sem precisar de palavra: para baixo fechado, para
+   cima aberto, girando no meio. */
+.menu-chevron {
+  transition: transform .15s ease;
+}
+
+.menu-suspenso [aria-expanded="true"] .menu-chevron {
+  transform: rotate(180deg);
+}
+
+/* O painel nasce colado no botão e cresce dali (`transform-origin: top`): é o
+   que faz parecer que ele SAIU daquele clique, e não que apareceu do nada em
+   cima da tela. */
+.menu-painel {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  width: 256px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg);
+  box-shadow: 0 24px 48px -24px rgba(0, 0, 0, .8);
+  transform-origin: top;
+  animation: menu-descer .15s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.menu-painel.direita { right: 0; }
+.menu-painel.esquerda { left: 0; }
+
+/* Fechar é o passo que a pessoa já decidiu; esperar a animação de saída é
+   espera pura. Daí a saída mais curta que a entrada. */
+.menu-painel.saindo {
+  animation: menu-recolher .12s ease-in both;
+  pointer-events: none;
+}
+
+@keyframes menu-descer {
+  from { opacity: 0; transform: translateY(-6px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes menu-recolher {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-4px) scale(.98); }
+}
+
+.menu-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .1s ease;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--card-bg-soft);
+}
+
+.menu-item[disabled] {
+  opacity: .4;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.menu-item svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--text-dim);
+}
+
+.menu-item b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* A linha de apoio: o que esta saída serve, em poucas palavras. */
+.menu-item small {
+  display: block;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+/* ==================== A BANCADA EM TELA CHEIA ====================
+   O encaixe é a única tela em que a pessoa fica: as outras se resolvem numa
+   visita, e esta é onde ela passa a tarde olhando o rolo. Então aqui a casca
+   sai da frente — o cabeçalho, a folga do outlet e o vão entre as duas
+   colunas viram tecido na tela.
+
+   Quem manda é o `data-tela` que o interface.js escreve no `<body>`. O
+   cabeçalho e o outlet são IRMÃOS das telas, não pais: sem uma marca lá no
+   topo, a tela não teria como pedir a casca inteira para si.
+
+   A altura não é conta: `.main` já tem 100vh e o outlet é o `flex: 1` dele.
+   Com o cabeçalho fora, o que sobra para o outlet é a janela inteira, e a
+   bancada herda isso sem escrever `calc()` nenhum. */
+body[data-tela="encaixe"] .pageheader {
+  display: none;
+}
+
+/* Sem folga e sem rolagem: o que não couber é problema de quem está dentro
+   (a lista rola sozinha, a mesa se ajusta), nunca da página. */
+body[data-tela="encaixe"] .outlet {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* O vão entre a coluna e a mesa fecha. O que separa as duas passa a ser uma
+   linha de 1px — o mesmo desenho, um traço em vez de um corredor. */
+.bancada-encaixe {
+  gap: 0;
+}
+
+/* As duas caixas eram cartões soltos, com canto redondo e borda em volta;
+   coladas na janela viram painéis. A borda some das pontas e fica só na
+   costura entre elas, senão são dois traços encostados fazendo o papel de um. */
+.bancada-coluna,
+.bancada-mesa {
+  border-width: 0;
+  border-radius: 0;
+}
+
+/* A mesa mandava um piso de 60vh/380px para não sumir quando a página rolava.
+   Agora ela é o que sobra da janela, e um piso só faria a bancada estourar
+   para fora da tela que ela deveria caber. */
+.bancada-mesa {
+  min-height: 0;
+}
+
+@media (min-width: 801px) {
+  /* Empilhadas lado a lado: a costura é vertical. */
+  .bancada-coluna {
+    border-right-width: 1px;
+  }
+}
+
+@media (max-width: 800px) {
+  /* Empilhadas uma sobre a outra: a costura deita. */
+  .bancada-coluna {
+    border-bottom-width: 1px;
   }
 
-  .encaixe-largura-topo,
-  .encaixe-largura-topo > div {
-    border-color: #ccc;
-    background: #fff;
+  /* O botão do menu é `position: fixed` no canto de cima e não some com o
+     cabeçalho. Sem esta faixa ele cairia em cima da barra "Arquivos" — a
+     bancada perde 52px no celular para não engolir a única saída da tela. */
+  body[data-tela="encaixe"] .outlet {
+    padding-top: 52px;
+  }
+}
+
+/* ==================== O RODAPÉ DA SIDEBAR ====================
+   A data e a hora vinham do canto do cabeçalho. Como o cabeçalho some na
+   bancada do encaixe — a tela em que a pessoa fica — o relógio sumia com ele
+   justamente onde o turno é longo. Aqui embaixo ele vale para todas as telas
+   e não disputa espaço com nenhuma.
+
+   `margin-top: auto` encosta o bloco no pé da sidebar sozinho: não depende de
+   quantos botões o menu tem hoje nem de quantos vai ter. */
+.side-rodape {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: auto;
+  padding: 11px 10px 2px;
+  /* A linha de cima é mais apagada que a borda comum: separa sem virar
+     moldura, que num canto de descanso pesaria mais que a informação. */
+  border-top: 1px solid var(--border-hairline);
+}
+
+.side-rodape-icone {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--accent);
+  opacity: 0.75;
+}
+
+.side-rodape-texto {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.25;
+}
+
+.side-rodape-texto span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  text-transform: capitalize;
+}
+
+.side-rodape-texto strong {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* No celular a sidebar deita e vira barra: um rodapé empurrado para o "fim"
+   cairia na ponta direita da fila de ícones, longe do que ele acompanha. */
+@media (max-width: 800px) {
+  .side-rodape {
+    display: none;
+  }
+}
+
+/* ==================== PROFUNDIDADE ====================
+   Tirar as bordas colou os painéis na janela e achatou tudo num plano só.
+   Estas sombras devolvem a ordem das camadas — o que está por cima de quê —
+   sem trazer a moldura de volta.
+
+   São de propósito largas e fracas. Num fundo quase preto, sombra curta e
+   forte vira uma faixa cinza visível, que é sujeira; espalhada em 18~24px
+   com pouca opacidade ela não aparece como desenho, só como distância.
+   O par de camadas em cada uma é o mesmo truque do `--shadow`: um contato
+   curto e apertado que assenta a borda, e um halo longo que dá o ar. */
+
+/* A sidebar é o plano da frente: a mesa passa por baixo dela. */
+/* Só o halo: o traço de 1px já é o `border-right` lá em cima, e repeti-lo
+   aqui desenharia a linha duas vezes, uma ao lado da outra. */
+.sidebar {
+  box-shadow: 6px 0 18px -8px rgba(0, 0, 0, 0.55);
+}
+
+/* A coluna dos arquivos flutua um degrau acima da mesa — é ela que manda
+   trabalho para lá, e a sombra conta essa ordem antes de qualquer texto. */
+@media (min-width: 801px) {
+  .bancada-coluna {
+    position: relative;
+    z-index: 2;
+    box-shadow: 5px 0 16px -8px rgba(0, 0, 0, 0.6);
+  }
+}
+
+@media (max-width: 800px) {
+  .bancada-coluna {
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 5px 16px -8px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* A mesa é o fundo do poço: a sombra dela é para DENTRO, entrando pela
+   esquerda, por baixo da coluna. Sombra para fora aqui competiria com a da
+   coluna e as duas se anulariam num borrão. */
+.bancada-mesa {
+  box-shadow: inset 8px 0 20px -14px rgba(0, 0, 0, 0.85);
+}
+
+/* ==================== O MODAL, COM ANIMAÇÃO ====================
+   A casca do modal (`.modal-fundo`, `.modal`, `.modal-topo`…) já existia no
+   style.css e é usada pelo passo a passo de molde e pelo editor de projeto.
+   O que faltava era o movimento: ele aparecia e sumia de estalo, e num fundo
+   escuro isso lê como piscada de tela, não como algo que abriu.
+
+   `.modal-animado` é só a camada de movimento por cima dessa casca — quem
+   quiser animação põe a classe, quem não quiser fica como está. E a animação
+   é do FUNDO e da CAIXA em tempos diferentes: o véu escurece antes, a caixa
+   sobe depois. É o que dá a impressão de profundidade em vez de um bloco só
+   deslizando.
+
+   Sair é mais rápido que entrar (120ms contra 200ms): fechar é decisão já
+   tomada, e esperar a animação de saída é espera pura. */
+/* Acima da sidebar. A casca do modal nasceu com z-index 60 e a sidebar é 80:
+   sem esta linha o menu lateral atravessaria o véu e ficaria aceso por cima
+   do modal, como se ainda desse para clicar nele. */
+.modal-animado {
+  z-index: 90;
+  animation: modal-fundo-entra 0.18s ease both;
+}
+
+.modal-animado > .modal {
+  animation: modal-caixa-entra 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* Um piscar depois do véu: a caixa chega quando o fundo já escureceu. */
+  animation-delay: 0.04s;
+}
+
+.modal-animado.saindo {
+  animation: modal-fundo-sai 0.12s ease-in both;
+  pointer-events: none;
+}
+
+.modal-animado.saindo > .modal {
+  animation: modal-caixa-sai 0.12s ease-in both;
+  animation-delay: 0s;
+}
+
+@keyframes modal-fundo-entra {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-fundo-sai {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Sobe 12px e cresce de 0.97: pouco o bastante para não parecer salto, o
+   suficiente para o olho registrar que veio de trás da tela. */
+@keyframes modal-caixa-entra {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes modal-caixa-sai {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(6px) scale(0.985); }
+}
+
+/* Quem pediu ao sistema para parar de animar não quer isto. A caixa continua
+   aparecendo — só chega inteira, sem o percurso. */
+@media (prefers-reduced-motion: reduce) {
+  .modal-animado,
+  .modal-animado > .modal,
+  .modal-animado.saindo,
+  .modal-animado.saindo > .modal {
+    animation-duration: 0.01ms;
+    animation-delay: 0s;
+  }
+}
+
+
+/* ==================== O MODAL DE OPTMIZAR ====================
+   Desenhado igual ao do Optmize Lite: um cartão só, sem as três faixas
+   (topo, corpo, rodapé) que a casca de modal daqui usa. Lá o padding é do
+   cartão inteiro e o que separa as partes é espaço, não linha — e é o que
+   deixa a caixa parecer um cartão, e não uma janela de sistema.
+
+   Quem usa os dois programas não deveria ter que aprender a mesma tela duas
+   vezes. */
+.modal-ajustes {
+  width: min(452px, 100%);
+  padding: 22px;
+  border-radius: 16px;
+  gap: 20px;
+}
+
+/* ---- o topo: selo, título, contagem e o × ---- */
+.ajustes-topo {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* O selo âmbar. É o mesmo desenho do botão que abriu o modal (o raio), e
+   repeti-lo aqui é o que amarra o clique à caixa que ele abriu. */
+.ajustes-selo {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.ajustes-selo svg {
+  width: 21px;
+  height: 21px;
+}
+
+.ajustes-topo-texto {
+  min-width: 0;
+  flex: 1;
+}
+
+.ajustes-topo-texto h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+/* A contagem do trabalho. Confirma em números o que vai ser calculado — é o
+   último lugar em que dá para notar que faltou arte antes de gastar minutos
+   de busca. */
+.ajustes-topo-texto p {
+  margin: 2px 0 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.ajustes-x {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.ajustes-x svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ajustes-x:hover {
+  background: var(--card-bg-soft);
+  color: var(--text);
+}
+
+/* ---- o corpo ---- */
+.ajustes-corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+.campo-medida,
+.campo-bloco {
+  display: block;
+  margin: 0;
+}
+
+/* O rótulo do campo: miúdo, maiúsculo e espaçado. Some do caminho do número,
+   que é o que se lê. */
+.campo-rotulo {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* A caixa da medida. A unidade fica DENTRO dela, à direita: "160" e "cm"
+   viram uma coisa só, e o campo para de precisar do "(cm)" no rótulo. */
+.campo-caixa {
+  display: flex;
+  align-items: center;
+  padding-right: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg-soft);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.campo-caixa:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* O input perde a própria pele: quem desenha a borda é a caixa em volta.
+   Sem isto seriam duas bordas, uma dentro da outra. */
+.campo-caixa input {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  font-weight: 700;
+  outline: none;
+  box-shadow: none;
+}
+
+/* As setinhas do type=number brigam com a fonte de números e com a unidade
+   ao lado. O valor é digitado, não arrastado. */
+.campo-caixa input::-webkit-outer-spin-button,
+.campo-caixa input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.campo-caixa input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.campo-unidade {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.campo-par {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+/* Os selects que sobraram continuam com a pele padrão da tela; só ganham a
+   altura das caixas de medida para o formulário não ficar dente de serra. */
+.campo-medida > select {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  border-radius: 12px;
+}
+
+/* O <select> do giro, que virou só o dono do valor por trás dos botões. */
+.campo-oculto {
+  display: none;
+}
+
+/* ---- a escolha do giro: três botões do tamanho do dedo ---- */
+.giro-escolha {
+  display: flex;
+  gap: 8px;
+}
+
+.giro-op {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg-soft);
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.giro-op svg {
+  width: 17px;
+  height: 17px;
+}
+
+.giro-op b {
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.giro-op small {
+  color: var(--text-faint);
+  font-size: 9.5px;
+  line-height: 1.1;
+}
+
+.giro-op:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text);
+}
+
+/* A escolhida é a única com âmbar. Num trio, marcar uma é mais legível que
+   apagar duas. */
+.giro-op[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.giro-op[aria-pressed="true"] small {
+  color: color-mix(in srgb, var(--accent) 70%, var(--text));
+}
+
+/* ---- o rodapé ---- */
+.ajustes-rodape {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ajustes-rodape .btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* O aviso do eixo: âmbar, porque não é erro — é um "isto aqui não faz o que
+   você talvez esteja esperando". */
+.ajustes-nota {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.ajustes-nota.hidden {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .campo-par {
+    grid-template-columns: 1fr;
   }
 
-  .encaixe-largura-topo strong,
-  .encaixe-largura-lados strong,
-  .encaixe-largura-resumo > p strong {
-    color: #111;
+  .giro-op small {
+    display: none;
   }
+}
+
+/* ==================== A MÃOZINHA ====================
+   O ponteiro de clique em tudo que se clica.
+
+   `.btn` e `.nav-btn` já tinham; o resto da tela foi ganhando botão sem
+   classe — o zoom, o lixeira da lista, o × do modal, os três do giro, as
+   linhas do menu de exportar — e cada um desses ficava com a seta de sempre.
+   Ponteiro é a única pista de que algo é clicável antes de clicar, e faltando
+   nele o botão vira desenho.
+
+   A regra é no elemento, não em classe: `button` é o que se clica, e amarrar
+   isso a uma classe seria pedir para o próximo botão nascer errado de novo.
+   Especificidade baixa de propósito (0,0,1) — qualquer regra de classe que
+   queira outro cursor, como o `cursor: wait` do carregamento, continua
+   ganhando. */
+button,
+summary,
+[role="button"],
+label.file-label {
+  cursor: pointer;
+}
+
+/* Desabilitado não se clica, e a seta cortada diz isso antes do clique. */
+button:disabled,
+button[disabled] {
+  cursor: not-allowed;
+}
+
+/* ==================== OS ÍCONES DO MENU LATERAL ====================
+   Estavam em `--text-dim`, o mesmo cinza do texto de apoio, dentro de uma
+   caixinha de borda cinza. Cinza sobre preto num desenho de traço fino não
+   vira ícone apagado: vira ícone sem cor, branco-sujo, e os cinco ficavam
+   iguais entre si e iguais ao resto da tela.
+
+   A correção não é dar uma cor a cada um — a paleta é âmbar sobre preto e
+   existe num tema só, e cinco cores no menu seriam cinco identidades novas.
+   É deixar o âmbar entrar na proporção certa: um fio dele no repouso (para o
+   ícone ter temperatura), quase todo no hover, e cheio na tela aberta.
+
+   O `color-mix` faz esse meio-termo sair da MESMA cor de marca, então mexer
+   no `--accent` continua movendo tudo junto. */
+.nav-icon {
+  border-color: var(--border-soft);
+  background: var(--card-bg-soft);
+  color: color-mix(in srgb, var(--accent) 42%, var(--text-dim));
+  transition: color .14s ease, border-color .14s ease, background .14s ease;
+}
+
+.nav-btn:hover .nav-icon {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 85%, var(--text));
+}
+
+/* A tela aberta: âmbar cheio, e um halo curto por baixo para o ícone destacar
+   do painel em vez de só trocar de cor. */
+.nav-btn.active .nav-icon {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: 0 4px 12px -6px var(--accent);
+}
+
+/* O branco puro do rótulo ativo era o único hex escrito à mão nesta camada, e
+   a regra da casa é que cor nenhuma abaixo dos tokens seja hex direto. */
+.nav-btn.active {
+  color: var(--text);
+}
+
+/* O relógio do rodapé segue o mesmo tom de repouso do menu: é o mesmo canto
+   da tela, e dois âmbares diferentes lado a lado leem como erro de tinta. */
+.side-rodape-icone {
+  color: color-mix(in srgb, var(--accent) 65%, var(--text-dim));
+  opacity: 1;
+}
+
+/* ==================== OS ÍCONES DA BANCADA ====================
+   Mesma correção do menu lateral, pelo mesmo motivo: em `--text-dim` sobre
+   preto, traço fino não lê como ícone apagado — lê como ícone sem cor. Um fio
+   de âmbar no repouso dá temperatura sem gritar; o hover leva ao âmbar cheio.
+
+   Continua saindo tudo do `--accent` por `color-mix`, então a cor de marca
+   segue sendo o único lugar onde se mexe. */
+.menu-item svg,
+#btn-zoom-menos svg,
+#btn-zoom-mais svg,
+.mesa-vazia-selo svg {
+  color: color-mix(in srgb, var(--accent) 45%, var(--text-dim));
+  transition: color 0.12s ease;
+}
+
+.menu-item:hover svg,
+.menu-item:focus-visible svg,
+#btn-zoom-menos:hover svg,
+#btn-zoom-mais:hover svg {
+  color: var(--accent);
+}
+
+/* O selo da mesa vazia é o convite para arrastar arquivo: ganha o âmbar de
+   vez, com a caixa em volta acompanhando. É o único desenho numa tela que,
+   nesse instante, não tem mais nada. */
+.mesa-vazia-selo {
+  border-color: var(--accent-line) !important;
+  background: var(--accent-soft);
+  color: var(--accent) !important;
+}
+
+.mesa-vazia-selo svg {
+  color: var(--accent);
+}
+
+/* A lixeira fica em cinza no repouso de propósito — ela apaga a lista inteira,
+   e um âmbar ao lado de "Adicionar" a puxaria para o mesmo peso do vizinho,
+   que é a ação de quase toda abertura. O vermelho só aparece na intenção. */
+#btn-limpar-pecas svg {
+  transition: color 0.12s ease;
+}
+
+/* ==================== AS DUAS BARRAS DA BANCADA ====================
+   "ARQUIVOS" e "ÁREA DE TRABALHO" são a mesma coisa: o nome do painel que
+   começa logo abaixo. Estavam diferentes por acidente — uma com `py-2` e o
+   rótulo em cinza escrito em utilitários soltos, a outra com `py-1.5` e o
+   rótulo em `.eyebrow`. Lado a lado, duas alturas e duas cores para o mesmo
+   papel, e a costura entre a coluna e a mesa ficava torta.
+
+   Agora as duas dividem esta regra e as duas usam `.eyebrow`. A altura é
+   fixa e sai do botão que mora dentro delas (`.btn-sm`, 33px) mais folga:
+   assim continuam iguais mesmo quando uma tem botão e a outra não. */
+.barra-bancada {
+  min-height: 43px;
+  padding: 4px 12px;
+}
+
+/* ==================== OS ÍCONES QUE FALTAVAM ====================
+   O mesmo fio de âmbar do menu lateral e da mesa, nos que ficaram para trás.
+   A regra é sempre a mesma: `color-mix` sobre o `--accent`, nunca um cinza
+   solto, para que a tela inteira tenha uma temperatura só. */
+.giro-op svg,
+.ajustes-x svg,
+.mobile-menu-btn svg {
+  color: color-mix(in srgb, var(--accent) 45%, var(--text-dim));
+  transition: color 0.12s ease;
+}
+
+/* Nos três do giro o ícone segue o botão: quando ele é o escolhido, o desenho
+   vai junto para o âmbar cheio, senão o rótulo acendia e o ícone não. */
+.giro-op:hover svg,
+.ajustes-x:hover svg,
+.mobile-menu-btn:hover svg {
+  color: var(--accent);
+}
+
+.giro-op[aria-pressed="true"] svg {
+  color: var(--accent);
+}
+
+/* Os dois últimos que ficavam de fora.
+
+   A setinha de cada linha da lista de peças: são muitas na tela ao mesmo
+   tempo, então fica no tom de repouso e só acende na linha sob o mouse — em
+   âmbar cheio, cinquenta delas viravam confete.
+
+   A lixeira que limpa a lista inteira entra no mesmo tom dos vizinhos, para
+   não ser o único ícone cinza da tela. O que a marca como destrutiva continua
+   sendo o vermelho na intenção de clicar, não um cinza no repouso. */
+#encaixe-pecas-body svg,
+#btn-limpar-pecas svg {
+  color: color-mix(in srgb, var(--accent) 45%, var(--text-dim));
+  transition: color 0.12s ease;
+}
+
+#encaixe-pecas-body .group:hover svg {
+  color: var(--accent);
+}
+
+#btn-limpar-pecas:hover svg {
+  color: var(--danger);
+}
+
+/* O selo da lista vazia é o mesmo desenho do selo da mesa vazia — os dois
+   dizem "não há nada aqui ainda, traga arquivo" — e agora têm a mesma cara. */
+
+/* ==================== A MARCA ====================
+   Era um quadrado âmbar com as letras "OP" desenhadas em CSS. Agora é a logo
+   do Optmize Lite — a mesma imagem do ícone do aplicativo — para o produto ter
+   um rosto só nas duas telas em que ele aparece.
+
+   O fundo laranja, o canto redondo e a sombra JÁ ESTÃO no PNG. Manter os do
+   CSS por baixo pintaria um segundo quadrado, um pouco maior, aparecendo como
+   moldura torta nas bordas da imagem. */
+img.brand-mark {
+  border: 0;
+  background: none;
+  object-fit: contain;
+  /* O raio é o do desenho, e serve de rede: se um dia a imagem for trocada por
+     uma de canto reto, ela continua encaixando no lugar em vez de estourar. */
+  border-radius: 11px;
 }
