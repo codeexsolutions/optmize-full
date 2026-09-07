@@ -5,14 +5,18 @@
  * o de estilo Visual Studio, e o projeto global dele é o `VSTAGlobal.CgsAddon`
  * da pasta `Draw`. Por isso a macro daqui é um `.cs`, e não um `.bas`.
  *
- * POR QUE ISTO AINDA NÃO INSTALA SOZINHO
- * -------------------------------------
- * O `.CgsAddon` é um ZIP de arquivos de texto, então gerá-lo é possível — e é o
- * caminho para a instalação virar um clique. O que segura hoje é que existe UM
- * projeto global por aplicativo, e sobrescrevê-lo apagaria qualquer macro que a
- * pessoa já tenha escrito ali. Enquanto não houver como acrescentar sem
- * substituir, a tela entrega o arquivo e diz onde colá-lo.
+ * COMO A INSTALAÇÃO FUNCIONA
+ * --------------------------
+ * O `.CgsAddon` é um ZIP com o projeto C# dentro, e existe UM só por aplicativo
+ * — o da pessoa, com as macros dela. Por isso instalar é ACRESCENTAR, nunca
+ * substituir: `corel/instalar-no-corel.ps1` abre o pacote, põe o `.cs` dentro e
+ * cita o arquivo nas duas listas que o VSTA lê, deixando o resto intocado.
+ * Desinstalar desfaz exatamente esses três passos.
  *
+ * O script é PowerShell, e não Node, porque quem mexe no projeto de macros do
+ * Corel precisa rodar sozinho na máquina do usuário quando o servidor não está
+ * de pé — e porque o formato do pacote exige controle de byte que o `zlib` do
+ * Node não dá de graça (o `mimetype` tem que vir primeiro e sem compressão).
  */
 
 const express = require("express");
@@ -71,11 +75,15 @@ function comArquivo(item) {
 }
 
 /**
- * Onde o CorelDRAW desta máquina guarda as macros do usuário.
+ * O CorelDRAW desta máquina: onde ficam as macros e onde fica o projeto VSTA.
  *
  * Cada versão do Corel tem a pasta dela em `%APPDATA%\Corel`, e uma máquina de
  * produção costuma ter mais de uma instalada. Fica a mais nova: é a que a
  * pessoa está usando, e é onde ela vai procurar.
+ *
+ * O que interessa é a pasta `Draw`: é lá que mora o `VSTAGlobal.CgsAddon`. A
+ * pasta `CorelVSTA` ao lado é só o diretório de trabalho do editor, e costuma
+ * estar vazia — procurar a macro por lá não acha nada.
  */
 function pastaDoCorel() {
   if (process.platform !== "win32") return null;
@@ -84,10 +92,11 @@ function pastaDoCorel() {
   try {
     for (const nome of fs.readdirSync(raiz)) {
       if (!/CorelDRAW Graphics Suite/i.test(nome)) continue;
-      const gms = path.join(raiz, nome, "Draw", "GMS");
-      if (!fs.existsSync(gms)) continue;
+      const draw = path.join(raiz, nome, "Draw");
+      const addon = path.join(draw, "VSTAGlobal.CgsAddon");
+      if (!fs.existsSync(addon)) continue;
       const ano = Number((nome.match(/(\d{4})/) || [])[1] || 0);
-      if (!melhor || ano > melhor.ano) melhor = { ano, pasta: gms, versao: nome };
+      if (!melhor || ano > melhor.ano) melhor = { ano, pasta: draw, addon, versao: nome };
     }
   } catch (erro) {
     return null;
@@ -95,12 +104,59 @@ function pastaDoCorel() {
   return melhor;
 }
 
+/**
+ * A macro já está dentro do projeto do Corel?
+ *
+ * Procura o nome do arquivo nos bytes do pacote em vez de descompactá-lo: o
+ * ZIP guarda os nomes em texto claro nos cabeçalhos, então o nome aparece ali
+ * sempre que a entrada existe. É uma resposta de milissegundos para uma tela
+ * que a pede a cada carregamento — e o preço de errar é pequeno: o botão
+ * apareceria com o rótulo trocado, nunca instalaria errado.
+ */
+function jaInstalada(addon, nomeArquivo) {
+  try {
+    return fs.readFileSync(addon).includes(Buffer.from(nomeArquivo, "utf8"));
+  } catch (erro) {
+    return false;
+  }
+}
+
+/** Roda o instalador e devolve o JSON que ele imprime. */
+function rodarInstalador(args) {
+  return new Promise((resolve) => {
+    execFile("powershell.exe", [
+      "-NoProfile", "-ExecutionPolicy", "Bypass",
+      "-File", path.join(PASTA_DAS_MACROS, "instalar-no-corel.ps1"),
+      ...args,
+    ], { windowsHide: true }, (erro, saida, erroSaida) => {
+      // O script responde em JSON tanto no sucesso quanto na falha, e sai com
+      // código 1 quando falha — então `erro` sozinho não diz o que houve. O que
+      // vale é o JSON; o `erro` só entra se nem isso vier.
+      const texto = String(saida || "").trim();
+      try {
+        resolve(JSON.parse(texto.split(/\r?\n/).filter(Boolean).pop()));
+      } catch (falha) {
+        resolve({
+          ok: false,
+          mensagem: texto || String(erroSaida || "").trim()
+            || (erro ? erro.message : "O instalador não respondeu."),
+        });
+      }
+    });
+  });
+}
+
 /** O catálogo e o que se sabe do Corel desta máquina. */
 router.get("/", (req, res) => {
   const corel = pastaDoCorel();
   res.json({
-    macros: CATALOGO.map(comArquivo),
-    corel: corel ? { encontrado: true, versao: corel.versao, pasta: corel.pasta }
+    macros: CATALOGO.map((item) => {
+      const dados = comArquivo(item);
+      dados.instalada = corel ? jaInstalada(corel.addon, item.arquivo) : false;
+      return dados;
+    }),
+    corel: corel
+      ? { encontrado: true, versao: corel.versao, pasta: corel.pasta, addon: corel.addon }
       : { encontrado: false },
   });
 });
@@ -123,9 +179,10 @@ router.get("/:id/arquivo/:nome?", (req, res) => {
   if (!fs.existsSync(caminho)) {
     return res.status(404).json({ error: "O arquivo da macro não está no servidor." });
   }
-  // O .bas é ASCII de propósito (ver o cabeçalho dele): o editor do Corel lê
-  // ANSI, e um arquivo em UTF-8 aparece lá com os acentos quebrados.
-  res.setHeader("Content-Type", "text/plain; charset=windows-1252");
+  // O .cs é ASCII de propósito: o editor do VSTA abre o arquivo na página de
+  // código do sistema, e um acento em UTF-8 chegaria lá quebrado. Sem acento
+  // nenhum no arquivo, as duas leituras dão no mesmo.
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${pedido}"`);
   fs.createReadStream(caminho).pipe(res);
 });
@@ -133,10 +190,11 @@ router.get("/:id/arquivo/:nome?", (req, res) => {
 /**
  * Põe o arquivo na pasta do Corel e abre a pasta no Explorer.
  *
- * Isso NÃO instala — ver o cabeçalho. O que ele faz é tirar da frente a parte
- * chata: achar onde salvar e depois achar o que salvou. Depois disto sobra
- * `Alt+F11 > Arquivo > Importar arquivo`, com o arquivo já selecionado na
- * janela que abriu.
+ * É a saída para quando a instalação automática não serve: o Corel está aberto
+ * e a pessoa não quer fechá-lo agora, ou ela prefere pôr a macro num projeto
+ * seu em vez do global. O que ele faz é tirar da frente a parte chata — achar
+ * onde salvar e depois achar o que salvou —, deixando só o
+ * `Alt+F11 > Add > Existing Item` com o arquivo já selecionado na janela.
  */
 router.post("/:id/salvar-no-corel", (req, res) => {
   const item = CATALOGO.find((m) => m.id === req.params.id);
@@ -169,6 +227,41 @@ router.post("/:id/salvar-no-corel", (req, res) => {
   } catch (erro) { /* segue sem abrir */ }
 
   res.json({ ok: true, caminho: para, arquivos: todos, versao: corel.versao });
+});
+
+/**
+ * Instala (ou remove) a macro dentro do projeto VSTA do Corel.
+ *
+ * O trabalho todo é do `instalar-no-corel.ps1` — inclusive a recusa quando o
+ * CorelDRAW está aberto, que não é frescura: ao fechar, ele reescreve o projeto
+ * de macros a partir do que tem em memória e desfaria a instalação em silêncio.
+ */
+router.post("/:id/instalar-no-corel", async (req, res) => {
+  const item = CATALOGO.find((m) => m.id === req.params.id);
+  if (!item) return res.status(404).json({ error: "Macro desconhecida." });
+
+  const corel = pastaDoCorel();
+  if (!corel) {
+    return res.status(404).json({
+      error: "Não achei o projeto de macros do CorelDRAW nesta máquina.",
+    });
+  }
+
+  const tirar = req.query.remover === "1";
+  const resposta = await rodarInstalador([
+    "-Origem", path.join(PASTA_DAS_MACROS, item.arquivo),
+    "-Addon", corel.addon,
+    ...(tirar ? ["-Desinstalar"] : []),
+  ]);
+
+  if (!resposta.ok) return res.status(409).json({ error: resposta.mensagem });
+  res.json({
+    ok: true,
+    mensagem: resposta.mensagem,
+    versao: corel.versao,
+    instalada: !tirar,
+    macro: item.macro,
+  });
 });
 
 module.exports = router;

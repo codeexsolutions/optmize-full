@@ -1,13 +1,13 @@
 /**
  * A tela de Macros.
  *
- * Ela entrega o arquivo da macro do CorelDRAW e encurta o caminho até ele estar
- * funcionando lá. O passo de colar o arquivo no editor continua manual, e o
- * porquê está em macros-api.js.
+ * Ela instala a macro do CorelDRAW num clique — o servidor mexe no projeto VSTA
+ * pela pessoa (ver macros-api.js).
  *
- * A tela assume esse passo em vez de escondê-lo: mostra os cliques que faltam,
- * em ordem, e tira da frente as duas partes chatas — achar onde salvar e depois
- * achar o que salvou.
+ * O caminho manual continua escrito na tela, e não escondido atrás de um "ver
+ * detalhes": a instalação automática depende de achar o Corel e de ele estar
+ * fechado, e quando qualquer uma das duas falha a pessoa precisa da saída à
+ * mão ali mesmo, e não numa página de ajuda.
  */
 
 const macrosLista = document.getElementById("macros-lista");
@@ -66,7 +66,12 @@ function renderMacros() {
           <svg class="size-4" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#puzzle" /></svg>
         </span>
         <span class="min-w-0 flex-1">
-          <strong class="block text-[12px] text-tinta">${escapeHtml(m.nome)}</strong>
+          <strong class="block text-[12px] text-tinta">
+            ${escapeHtml(m.nome)}
+            ${m.instalada
+              ? `<span class="ml-1 rounded border border-linha px-1 py-px align-middle text-[9px] font-normal text-[var(--ok,#3b8)]">instalada</span>`
+              : ""}
+          </strong>
           <span class="mt-0.5 block text-[11px] leading-snug text-tinta-apagada">${escapeHtml(m.resumo)}</span>
           <span class="mt-1 block font-mono text-[9px] text-tinta-apagada">
             ${escapeHtml(m.arquivo)} · ${formatarKb(m.bytes)} · ${formatarQuando(m.atualizado)}
@@ -78,23 +83,37 @@ function renderMacros() {
         ${(m.arquivos || [m.arquivo]).map((nome) => `
           <a class="btn secondary btn-sm" href="/api/macros/${m.id}/arquivo/${encodeURIComponent(nome)}" download>${escapeHtml(nome)}</a>
         `).join("")}
+        ${temCorel && !m.instalada
+          ? `<button type="button" class="btn primary btn-sm" data-instalar="${m.id}">Instalar no Corel</button>`
+          : ""}
+        ${temCorel && m.instalada
+          ? `<button type="button" class="btn secondary btn-sm" data-remover="${m.id}">Remover do Corel</button>`
+          : ""}
         ${temCorel
-          ? `<button type="button" class="btn primary btn-sm" data-salvar="${m.id}">Salvar na pasta do Corel</button>`
+          ? `<button type="button" class="btn secondary btn-sm" data-salvar="${m.id}">Só salvar o arquivo</button>`
           : ""}
       </div>
 
-      <!--
-        Os passos ficam SEMPRE à vista, e não atrás de um "como instalar".
-        Quem chega nesta tela chega porque não sabe o caminho; esconder o
-        caminho atrás de mais um clique é esconder a resposta.
-      -->
-      <ol class="m-0 list-none border-t border-linha px-3 py-2.5 text-[11px] leading-relaxed text-tinta-apagada">
-        <li><strong class="text-tinta">1.</strong> No Corel: <strong class="text-tinta">Ferramentas &gt; Macros &gt; Editor de macros</strong> (Alt+F11).</li>
-        <li><strong class="text-tinta">2.</strong> No Solution Explorer, botão direito no projeto &gt;
-            <strong class="text-tinta">Add &gt; Existing Item</strong> e escolha o <code>${escapeHtml(m.arquivo)}</code>.</li>
-        <li><strong class="text-tinta">3.</strong> Salve e feche o editor.</li>
-        <li><strong class="text-tinta">4.</strong> <strong class="text-tinta">Ferramentas &gt; Macros &gt; Executar macro</strong> e rode <code>${escapeHtml(m.macro)}</code>.</li>
-      </ol>
+      ${m.instalada ? `
+        <p class="m-0 border-t border-linha px-3 py-2.5 text-[11px] leading-relaxed text-tinta-apagada">
+          Já está no Corel. Para usar: <strong class="text-tinta">Ferramentas &gt; Macros &gt;
+          Executar macro</strong> e rode <code>${escapeHtml(m.macro)}</code>.
+        </p>
+      ` : `
+        <!--
+          Os passos manuais ficam à vista mesmo com o botão de instalar logo
+          acima: o botão recusa quando o Corel está aberto, e nessa hora a
+          pessoa precisa da alternativa na mesma tela.
+        -->
+        <ol class="m-0 list-none border-t border-linha px-3 py-2.5 text-[11px] leading-relaxed text-tinta-apagada">
+          <li class="mb-1 text-tinta">Se preferir fazer à mão:</li>
+          <li><strong class="text-tinta">1.</strong> No Corel: <strong class="text-tinta">Ferramentas &gt; Macros &gt; Editor de macros</strong> (Alt+F11).</li>
+          <li><strong class="text-tinta">2.</strong> No Solution Explorer, botão direito no projeto &gt;
+              <strong class="text-tinta">Add &gt; Existing Item</strong> e escolha o <code>${escapeHtml(m.arquivo)}</code>.</li>
+          <li><strong class="text-tinta">3.</strong> Salve e feche o editor.</li>
+          <li><strong class="text-tinta">4.</strong> <strong class="text-tinta">Ferramentas &gt; Macros &gt; Executar macro</strong> e rode <code>${escapeHtml(m.macro)}</code>.</li>
+        </ol>
+      `}
 
       <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-tinta-apagada">
         Para virar botão ou atalho: <strong class="text-tinta">Ferramentas &gt; Opções &gt; Personalização &gt;
@@ -102,8 +121,10 @@ function renderMacros() {
         <code>${escapeHtml(m.macro)}</code> para uma barra — ou dê a ela uma tecla de atalho.
       </p>
 
-      <p class="m-0 border-t border-linha px-3 py-2 text-[10px] text-tinta-apagada">
+      <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-tinta-apagada">
         A macro só roda com o Optimize aberto: ela pergunta ao sistema se ele está de pé antes de começar.
+        Para instalar ou remover, o CorelDRAW precisa estar <strong class="text-tinta">fechado</strong> —
+        ao fechar, ele reescreve o projeto de macros e desfaria o que foi feito.
       </p>
     </article>
   `).join("");
@@ -131,6 +152,12 @@ async function carregarMacros() {
 
 if (macrosLista) {
   macrosLista.addEventListener("click", async (e) => {
+    const instalar = e.target.closest("[data-instalar], [data-remover]");
+    if (instalar) {
+      await instalarNoCorel(instalar);
+      return;
+    }
+
     const botao = e.target.closest("[data-salvar]");
     if (!botao) return;
 
@@ -155,6 +182,34 @@ if (macrosLista) {
       mostrarErroMacros(err.message);
     }
   });
+}
+
+/**
+ * Instala ou remove a macro do projeto do Corel.
+ *
+ * Ao terminar, recarrega a lista em vez de mexer no botão: o que mudou não é só
+ * o rótulo dele — mudam o selo, os passos e o outro botão. Um só lugar decide
+ * como a tela fica, e é o `renderMacros`.
+ */
+async function instalarNoCorel(botao) {
+  const remover = botao.hasAttribute("data-remover");
+  const id = remover ? botao.dataset.remover : botao.dataset.instalar;
+
+  const rotulo = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = remover ? "Removendo…" : "Instalando…";
+  try {
+    const resposta = await fetch(
+      `/api/macros/${id}/instalar-no-corel${remover ? "?remover=1" : ""}`,
+      { method: "POST" });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.error || "não deu");
+    await carregarMacros();
+  } catch (err) {
+    botao.disabled = false;
+    botao.textContent = rotulo;
+    mostrarErroMacros(err.message);
+  }
 }
 
 function mostrarErroMacros(mensagem) {
