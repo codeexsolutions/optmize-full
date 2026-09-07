@@ -77,7 +77,9 @@ function renderMacros() {
       </div>
 
       <div class="flex flex-wrap gap-1.5 border-t border-linha px-3 py-2">
-        <a class="btn secondary btn-sm" href="/api/macros/${m.id}/arquivo" download>Baixar o arquivo</a>
+        ${(m.arquivos || [m.arquivo]).map((nome) => `
+          <a class="btn secondary btn-sm" href="/api/macros/${m.id}/arquivo/${encodeURIComponent(nome)}" download>${escapeHtml(nome)}</a>
+        `).join("")}
         ${temCorel
           ? `<button type="button" class="btn primary btn-sm" data-salvar="${m.id}">Salvar na pasta do Corel</button>`
           : ""}
@@ -91,8 +93,18 @@ function renderMacros() {
       <ol class="m-0 list-none border-t border-linha px-3 py-2.5 text-[11px] leading-relaxed text-tinta-apagada">
         <li><strong class="text-tinta">1.</strong> No Corel: <strong class="text-tinta">Ferramentas &gt; Macros &gt; Editor de macros</strong> (Alt+F11).</li>
         <li><strong class="text-tinta">2.</strong> <strong class="text-tinta">Arquivo &gt; Importar arquivo…</strong> e escolha o <code>${escapeHtml(m.arquivo)}</code>.</li>
-        <li><strong class="text-tinta">3.</strong> <strong class="text-tinta">Ferramentas &gt; Macros &gt; Executar macro</strong> e rode <code>${escapeHtml(m.macro)}</code>.</li>
+        ${(m.extras || []).map((nome) => `
+        <li><strong class="text-tinta">3.</strong> Importe também o <code>${escapeHtml(nome)}</code> — é a tela.
+            <span class="block pl-4 text-[10px]">Nesta ordem: ela usa o que veio no arquivo de cima.</span></li>
+        `).join("")}
+        <li><strong class="text-tinta">${(m.extras || []).length ? 4 : 3}.</strong> <strong class="text-tinta">Ferramentas &gt; Macros &gt; Executar macro</strong> e rode <code>${escapeHtml(m.macro)}</code>.</li>
       </ol>
+
+      <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-tinta-apagada">
+        Se a tela não importar na sua versão do Corel, o <code>${escapeHtml(m.arquivo)}</code> sozinho
+        continua funcionando: rode <code>Optimize.NomesENumeros</code>, que pergunta a lista numa
+        caixinha em vez de abrir a tela. As duas fazem o mesmo desenho.
+      </p>
 
       <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-tinta-apagada">
         Para virar botão ou atalho: <strong class="text-tinta">Ferramentas &gt; Opções &gt; Personalização &gt;

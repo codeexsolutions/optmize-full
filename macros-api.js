@@ -47,23 +47,35 @@ const CATALOGO = [
     resumo: "Monta uma página por jogador, nome em cima e número embaixo, "
       + "nas medidas da camisa. Nome comprido é condensado, nunca diminuído.",
     entrada: "Uma linha por jogador: NOME;NÚMERO",
-    macro: "Optimize.NomesENumeros",
+    macro: "Optimize.Painel",
+    // O painel é um UserForm, e UserForm é um segundo arquivo. Os dois vão
+    // juntos: o `.bas` sozinho funciona (pelo `Optimize.NomesENumeros`, que
+    // pergunta a lista numa caixinha), e com o `.frm` do lado nasce a tela.
+    extras: ["PainelOptimize.frm"],
   },
 ];
 
 /** Os dados de um item do catálogo, já com o que veio do disco. */
 function comArquivo(item) {
-  const caminho = path.join(PASTA_DAS_MACROS, item.arquivo);
+  // O item pode ser mais de um arquivo (ver `extras`): o tamanho e a data são
+  // do conjunto, e a data é a do mais novo — é ela que responde "o que está no
+  // Corel é mais velho que o do sistema?".
+  const todos = [item.arquivo, ...(item.extras || [])];
   let bytes = 0;
-  let atualizado = null;
-  try {
-    const info = fs.statSync(caminho);
-    bytes = info.size;
-    atualizado = info.mtime.toISOString();
-  } catch (erro) {
-    return { ...item, existe: false, bytes: 0, atualizado: null };
+  let atualizado = 0;
+  for (const nome of todos) {
+    try {
+      const info = fs.statSync(path.join(PASTA_DAS_MACROS, nome));
+      bytes += info.size;
+      if (info.mtimeMs > atualizado) atualizado = info.mtimeMs;
+    } catch (erro) {
+      return { ...item, arquivos: todos, existe: false, bytes: 0, atualizado: null };
+    }
   }
-  return { ...item, existe: true, bytes, atualizado };
+  return {
+    ...item, arquivos: todos, existe: true, bytes,
+    atualizado: new Date(atualizado).toISOString(),
+  };
 }
 
 /**
@@ -102,18 +114,27 @@ router.get("/", (req, res) => {
 });
 
 /** O arquivo em si, para baixar. */
-router.get("/:id/arquivo", (req, res) => {
+router.get("/:id/arquivo/:nome?", (req, res) => {
   const item = CATALOGO.find((m) => m.id === req.params.id);
   if (!item) return res.status(404).json({ error: "Macro desconhecida." });
 
-  const caminho = path.join(PASTA_DAS_MACROS, item.arquivo);
+  // Sem nome, vem o arquivo principal. Com nome, tem que ser um dos declarados
+  // no catálogo — o nome vem da URL, e caminho vindo de fora nunca escolhe
+  // arquivo sozinho.
+  const pedido = req.params.nome || item.arquivo;
+  const permitidos = [item.arquivo, ...(item.extras || [])];
+  if (!permitidos.includes(pedido)) {
+    return res.status(404).json({ error: "Esta macro não tem esse arquivo." });
+  }
+
+  const caminho = path.join(PASTA_DAS_MACROS, pedido);
   if (!fs.existsSync(caminho)) {
     return res.status(404).json({ error: "O arquivo da macro não está no servidor." });
   }
   // O .bas é ASCII de propósito (ver o cabeçalho dele): o editor do Corel lê
   // ANSI, e um arquivo em UTF-8 aparece lá com os acentos quebrados.
   res.setHeader("Content-Type", "text/plain; charset=windows-1252");
-  res.setHeader("Content-Disposition", `attachment; filename="${item.arquivo}"`);
+  res.setHeader("Content-Disposition", `attachment; filename="${pedido}"`);
   fs.createReadStream(caminho).pipe(res);
 });
 
@@ -137,10 +158,14 @@ router.post("/:id/salvar-no-corel", (req, res) => {
     });
   }
 
-  const de = path.join(PASTA_DAS_MACROS, item.arquivo);
-  const para = path.join(corel.pasta, item.arquivo);
+  const todos = [item.arquivo, ...(item.extras || [])];
+  let para = null;
   try {
-    fs.copyFileSync(de, para);
+    for (const nome of todos) {
+      const destino = path.join(corel.pasta, nome);
+      fs.copyFileSync(path.join(PASTA_DAS_MACROS, nome), destino);
+      if (!para) para = destino; // o Explorer abre no principal
+    }
   } catch (erro) {
     return res.status(500).json({ error: `Não deu para salvar: ${erro.message}` });
   }
@@ -151,7 +176,7 @@ router.post("/:id/salvar-no-corel", (req, res) => {
     execFile("explorer.exe", ["/select,", para], () => {});
   } catch (erro) { /* segue sem abrir */ }
 
-  res.json({ ok: true, caminho: para, versao: corel.versao });
+  res.json({ ok: true, caminho: para, arquivos: todos, versao: corel.versao });
 });
 
 module.exports = router;
