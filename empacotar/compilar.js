@@ -90,6 +90,15 @@ async function compilarServidor() {
 
   const antes = DO_SERVIDOR.reduce((soma, n) => soma + tamanho(path.join(DESTINO, n)), 0);
 
+  // O bytecode anterior sai primeiro, e não é arrumação.
+  //
+  // O `preparar.js` apaga e recopia tudo que é leve, mas o `.jsc` não é dele
+  // e sobrevive entre builds. Se este script escrevesse o carregador e falhasse
+  // antes de gerar o bytecode novo, o programa subiria rodando o código do
+  // build ANTERIOR — sem erro nenhum, que é o pior jeito de estar errado.
+  const jsc = path.join(DESTINO, "servidor.jsc");
+  fs.rmSync(jsc, { force: true });
+
   // 1. Um arquivo só, com os `require` locais resolvidos.
   //
   // `packages: "external"` deixa o node_modules de fora: o better-sqlite3 é
@@ -110,7 +119,6 @@ async function compilarServidor() {
   });
 
   // 2. Bytecode. O `.jsc` guarda o que o V8 produziu ao compilar.
-  const jsc = path.join(DESTINO, "servidor.jsc");
   await bytenode.compileFile({ filename: juntos, output: jsc, electron: false });
   fs.rmSync(juntos, { force: true });
 
@@ -230,6 +238,12 @@ function conferirLimpeza() {
   const entrada = fs.readFileSync(path.join(DESTINO, ENTRADA), "utf-8");
   if (entrada.length > 200) {
     console.error("compilar: o server.js devia ser só o carregador, e está grande.");
+    process.exit(1);
+  }
+
+  // O carregador aponta para um bytecode que existe?
+  if (!fs.existsSync(path.join(DESTINO, "servidor.jsc"))) {
+    console.error("compilar: o server.js virou carregador e o servidor.jsc não existe.");
     process.exit(1);
   }
 }
