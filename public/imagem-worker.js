@@ -44,6 +44,34 @@
  * de 12 MP daria 192 megapixels, 768 MB de memória — e era exatamente por isso
  * que a tela travava o botão em imagem grande, em vez de fazer o que dava.
  *
+ * A REDE MEXE NA COR, E ISSO É CORRIGIDO AQUI
+ * -------------------------------------------
+ * Medido com manchas de cor conhecida, ampliadas 4x e conferidas no miolo:
+ *
+ *   quase branco  245 -> 254   (+9)
+ *   cinza médio   128 -> 131   (+3)
+ *   quase preto    12 ->   8   (-4)
+ *
+ * Ela estica o contraste — empurra o claro para o branco e o escuro para o
+ * preto — e ainda clareia tudo um pouco. Não é canal trocado nem erro de
+ * faixa: é a rede fazendo o que aprendeu, e some no meio do caminho o detalhe
+ * de quem já estava perto do branco.
+ *
+ * A CORREÇÃO é separar o que a rede faz bem do que ela faz mal. O que ela faz
+ * bem é detalhe fino; o que ela estraga é tom e cor, que são informação GROSSA
+ * e já estavam certos no original. Então:
+ *
+ *   1. reduz o resultado da rede ao tamanho do original e amplia de volta —
+ *      sobra só a parte grossa dele, sem detalhe nenhum;
+ *   2. faz o mesmo caminho com o original, por amplia&ccedil;&atilde;o limpa;
+ *   3. troca uma parte grossa pela outra, mantendo a fina.
+ *
+ * O resultado tem o detalhe que a rede inventou e o tom que o arquivo tinha.
+ *
+ * A AMPLIAÇÃO LIMPA VOLTA JUNTO, e não por economia: é ela que a tela usa como
+ * o outro extremo da dose. Misturar as duas na tela é instantâneo; refazer a
+ * rede a cada mexida na barra levaria minutos.
+ *
  * O QUE ELE NÃO FAZ
  * -----------------
  * Não decide se vale a pena ampliar — quem decide é a tela, com o tamanho de
@@ -61,6 +89,24 @@ const ESCALA = 4;
 const LADO = 128;
 const MARGEM = 8;
 const PASSO = LADO - MARGEM * 2;   // 112: o que cada ladrilho realmente entrega
+
+/** Um canvas com esses pixels dentro, para o `drawImage` poder redimensionar. */
+function telaCom(pixels, largura, altura) {
+  const tela = new OffscreenCanvas(largura, altura);
+  tela.getContext("2d").putImageData(
+    new ImageData(new Uint8ClampedArray(pixels), largura, altura), 0, 0);
+  return tela;
+}
+
+/** Redesenha uma fonte qualquer noutro tamanho, com a melhor reamostragem. */
+function redimensionar(fonte, largura, altura) {
+  const tela = new OffscreenCanvas(largura, altura);
+  const pincel = tela.getContext("2d", { willReadFrequently: true });
+  pincel.imageSmoothingEnabled = true;
+  pincel.imageSmoothingQuality = "high";
+  pincel.drawImage(fonte, 0, 0, largura, altura);
+  return tela;
+}
 
 let ort = null;
 let sessao = null;
@@ -271,10 +317,41 @@ async function ampliar(pixels, largura, altura, escala, avisar) {
     }
   }
 
-  const pronto = pincel.getImageData(0, 0, saidaLargura, saidaAltura);
-  reporAlfa(pronto.data, saidaLargura, saidaAltura, pixels, largura, altura);
+  avisar({ etapa: "acertando" });
 
-  return { pixels: pronto.data, largura: saidaLargura, altura: saidaAltura, ondeRodou };
+  const pronto = pincel.getImageData(0, 0, saidaLargura, saidaAltura);
+
+  // A ampliação limpa do original: referência de cor, e o outro extremo da dose.
+  const telaDaFonte = telaCom(pixels, largura, altura);
+  const limpo = redimensionar(telaDaFonte, saidaLargura, saidaAltura)
+    .getContext("2d").getImageData(0, 0, saidaLargura, saidaAltura);
+
+  // A parte GROSSA do que a rede fez: reduzida ao tamanho do original e
+  // ampliada de volta, o detalhe fino se perde e sobra só o tom.
+  const grossoDaRede = redimensionar(
+    redimensionar(tela, largura, altura), saidaLargura, saidaAltura)
+    .getContext("2d").getImageData(0, 0, saidaLargura, saidaAltura);
+
+  // Troca o tom da rede pelo tom do arquivo, e o detalhe fica.
+  const r = pronto.data;
+  const l = limpo.data;
+  const gr = grossoDaRede.data;
+  for (let i = 0; i < r.length; i += 4) {
+    r[i] = Math.max(0, Math.min(255, r[i] + l[i] - gr[i]));
+    r[i + 1] = Math.max(0, Math.min(255, r[i + 1] + l[i + 1] - gr[i + 1]));
+    r[i + 2] = Math.max(0, Math.min(255, r[i + 2] + l[i + 2] - gr[i + 2]));
+  }
+
+  reporAlfa(r, saidaLargura, saidaAltura, pixels, largura, altura);
+  reporAlfa(l, saidaLargura, saidaAltura, pixels, largura, altura);
+
+  return {
+    pixels: r,
+    limpo: l,
+    largura: saidaLargura,
+    altura: saidaAltura,
+    ondeRodou,
+  };
 }
 
 self.onmessage = async (evento) => {
@@ -288,7 +365,7 @@ self.onmessage = async (evento) => {
   try {
     const r = await ampliar(new Uint8ClampedArray(pixels), largura, altura,
                             Math.min(ESCALA, Math.max(1, escala || ESCALA)), avisar);
-    self.postMessage({ id, resultado: r }, [r.pixels.buffer]);
+    self.postMessage({ id, resultado: r }, [r.pixels.buffer, r.limpo.buffer]);
   } catch (erro) {
     const mensagem = String((erro && erro.message) || erro);
     self.postMessage({ id, erro: mensagem, cancelado: mensagem === "cancelado" });
