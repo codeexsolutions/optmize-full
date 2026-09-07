@@ -27,6 +27,28 @@
  * inventa pode não ser o que estava escrito. A tela avisa isso onde importa, e
  * o antes/depois existe para a conferência ser possível, e não decorativa.
  *
+ * TRÊS COISAS QUE ESTA TELA APRENDEU DEPOIS DE ALGUÉM USAR
+ * --------------------------------------------------------
+ * O primeiro uso de verdade devolveu "deu certo mas saiu meio estranho", e o
+ * estranho tinha três nomes: a cor mudou, ficou plastificado, e apareceu halo
+ * nas bordas. A cor era defeito, e está consertada no worker. Os outros dois
+ * são a rede sendo a rede — e para eles a resposta não é um conserto, é dar
+ * controle e dar como ver:
+ *
+ *   A PROVA. A rede roda primeiro num pedaço do meio da imagem, em segundos.
+ *   Descobrir que ficou estranho tem que ser barato; antes disso custava dois
+ *   minutos de espera para então se arrepender.
+ *
+ *   A LUPA. Miniatura lado a lado não serve para julgar nada — o defeito que
+ *   incomoda na impressão tem o tamanho de um pixel. A comparação é 1:1, e é
+ *   entre a AMPLIAÇÃO LIMPA e a rede, porque é essa a decisão de verdade: vale
+ *   o que a rede inventou, ou era melhor sem ela?
+ *
+ *   A DOSE. Uma barra entre as duas. Plastificado e halo são o exagero da
+ *   rede, e a dose é o remédio: em 70% costuma sobrar o ganho e sumir o ar de
+ *   plástico. Ela mistura duas imagens já prontas, então mexer na barra é
+ *   instantâneo — a rede não roda de novo.
+ *
  * ONDE O TRABALHO ACONTECE
  * ------------------------
  * No navegador, em worker — ver imagem-worker.js. Nada sobe para servidor
@@ -211,13 +233,22 @@ async function receberArquivos(arquivos) {
       nome: arquivo.name,
       bytes: arquivo.size,
       antes: dados,
-      depois: null,
+      depois: null,           // o que a lupa e o download usam, já com a dose
+      rede: null,             // o resultado puro da rede
+      limpo: null,            // a ampliação sem rede, o outro extremo da dose
+      ehProva: false,         // veio de um pedaço só?
       comoFoi: null,          // "rede" ou "limpo"
       ondeRodou: null,
       chapada: pareceArteChapada(dados),
       larguraCm: 30,          // um palpite para a conta já aparecer preenchida
       andamento: null,
       erro: null,
+      // 70 e não 100 de propósito: o primeiro uso reclamou de plastificado, e
+      // a rede inteira é justamente o que dá esse ar. Quem quiser tudo puxa a
+      // barra para 100 e vê na hora.
+      dose: 70,
+      telas: null,            // os canvas de trabalho da lupa
+      vista: { x: 0, y: 0 },  // que canto da imagem a lupa mostra
     });
   }
   renderImagem();
@@ -261,14 +292,19 @@ function ampliarLimpo(dados) {
   return atual;
 }
 
-async function ampliarComRede(item) {
+/**
+ * Roda a rede. Com `ehProva`, só num recorte do meio — segundos em vez de
+ * minutos, e o suficiente para ver se o resultado agrada.
+ */
+async function ampliarComRede(item, ehProva) {
   const worker = pegarWorker();
   imagemEstado.trabalhando = item.id;
   item.erro = null;
   item.andamento = { etapa: "runtime" };
   renderImagem();
 
-  const copia = new Uint8ClampedArray(item.antes.data);
+  const fonte = ehProva ? recorteDaProva(item.antes) : item.antes;
+  const copia = new Uint8ClampedArray(fonte.data);
   const plano = planoDaImagem(item);
 
   return new Promise((resolver) => {
@@ -305,10 +341,16 @@ async function ampliarComRede(item) {
       }
 
       const r = dados.resultado;
-      item.depois = new ImageData(r.pixels, r.largura, r.altura);
+      item.rede = new ImageData(r.pixels, r.largura, r.altura);
+      item.limpo = new ImageData(r.limpo, r.largura, r.altura);
+      item.ehProva = !!ehProva;
       item.comoFoi = "rede";
       item.ondeRodou = r.ondeRodou;
+      item.telas = null;
+      aplicarDose(item);
+      centrarLupa(item);
       renderImagem();
+      desenharLupa(item);
       resolver();
     };
 
@@ -316,8 +358,8 @@ async function ampliarComRede(item) {
       {
         id: item.id,
         pixels: copia.buffer,
-        largura: item.antes.width,
-        altura: item.antes.height,
+        largura: fonte.width,
+        altura: fonte.height,
         escala: plano.escala,
       },
       [copia.buffer],
@@ -327,6 +369,126 @@ async function ampliarComRede(item) {
 
 function cancelarAmpliacao() {
   if (imagemEstado.worker) imagemEstado.worker.postMessage({ tipo: "cancelar" });
+}
+
+
+// ==================== A PROVA: UM PEDAÇO, EM SEGUNDOS ====================
+
+/** O lado do quadrado que a prova recorta. Dois ladrilhos da rede. */
+const LADO_DA_PROVA = 224;
+
+/**
+ * Um recorte do meio da imagem, para a rede rodar em segundos.
+ *
+ * Do MEIO porque é onde costuma estar o assunto — rosto, escudo, o que
+ * importa. Canto de foto é céu ou parede, e julgar a rede por um pedaço de
+ * parede lisa não diz nada.
+ */
+function recorteDaProva(dados) {
+  const lado = Math.min(LADO_DA_PROVA, dados.width, dados.height);
+  const x0 = Math.floor((dados.width - lado) / 2);
+  const y0 = Math.floor((dados.height - lado) / 2);
+
+  const tela = document.createElement("canvas");
+  tela.width = dados.width;
+  tela.height = dados.height;
+  tela.getContext("2d").putImageData(dados, 0, 0);
+
+  const corte = document.createElement("canvas");
+  corte.width = lado;
+  corte.height = lado;
+  const pincel = corte.getContext("2d", { willReadFrequently: true });
+  pincel.drawImage(tela, x0, y0, lado, lado, 0, 0, lado, lado);
+  return pincel.getImageData(0, 0, lado, lado);
+}
+
+// ==================== A DOSE ====================
+
+/**
+ * Mistura a ampliação limpa com o resultado da rede.
+ *
+ * As duas já estão prontas e do mesmo tamanho, então isto é uma passada por
+ * pixel — rápido o bastante para a barra responder enquanto se arrasta. Se a
+ * rede rodasse de novo a cada mexida, a barra seria inútil.
+ */
+function misturarDose(item) {
+  if (!item.rede || !item.limpo) return null;
+  const dose = Math.max(0, Math.min(100, item.dose)) / 100;
+
+  if (dose >= 1) return item.rede;
+  if (dose <= 0) return item.limpo;
+
+  const r = item.rede.data;
+  const l = item.limpo.data;
+  const saida = new ImageData(item.rede.width, item.rede.height);
+  const d = saida.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = l[i] + (r[i] - l[i]) * dose;
+    d[i + 1] = l[i + 1] + (r[i + 1] - l[i + 1]) * dose;
+    d[i + 2] = l[i + 2] + (r[i + 2] - l[i + 2]) * dose;
+    d[i + 3] = r[i + 3];
+  }
+  return saida;
+}
+
+function aplicarDose(item) {
+  item.depois = misturarDose(item);
+  if (item.telas) item.telas.depois = null;   // a lupa refaz o canvas dela
+}
+
+// ==================== A LUPA ====================
+
+/** O tamanho da janela da lupa, em pixels de tela. */
+const LUPA_LARGURA = 300;
+const LUPA_ALTURA = 220;
+
+/** Canvas com um ImageData dentro, guardado para a lupa não refazer a cada quadro. */
+function telaDe(dados) {
+  const tela = document.createElement("canvas");
+  tela.width = dados.width;
+  tela.height = dados.height;
+  tela.getContext("2d").putImageData(dados, 0, 0);
+  return tela;
+}
+
+/**
+ * Desenha as duas janelas da lupa: a ampliação limpa e o resultado com a dose.
+ *
+ * 1:1, sem suavizar. Ampliar a comparação seria inventar um defeito que a
+ * impressão não tem; encolher esconderia o que ela tem. O que se procura aqui
+ * — halo, textura de plástico, detalhe inventado — vive no tamanho de um pixel.
+ */
+function desenharLupa(item) {
+  const artigo = document.querySelector(`[data-item="${item.id}"]`);
+  if (!artigo || !item.depois || !item.limpo) return;
+
+  const antes = artigo.querySelector("[data-lupa-antes]");
+  const depois = artigo.querySelector("[data-lupa-depois]");
+  if (!antes || !depois) return;
+
+  if (!item.telas) item.telas = { limpo: telaDe(item.limpo), depois: null };
+  if (!item.telas.depois) item.telas.depois = telaDe(item.depois);
+
+  const maxX = Math.max(0, item.depois.width - LUPA_LARGURA);
+  const maxY = Math.max(0, item.depois.height - LUPA_ALTURA);
+  item.vista.x = Math.max(0, Math.min(maxX, item.vista.x));
+  item.vista.y = Math.max(0, Math.min(maxY, item.vista.y));
+
+  for (const [tela, fonte] of [[antes, item.telas.limpo], [depois, item.telas.depois]]) {
+    const pincel = tela.getContext("2d");
+    pincel.imageSmoothingEnabled = false;
+    pincel.clearRect(0, 0, tela.width, tela.height);
+    pincel.drawImage(fonte, item.vista.x, item.vista.y, tela.width, tela.height,
+                     0, 0, tela.width, tela.height);
+  }
+}
+
+/** A lupa começa no meio: é onde a prova recortou, e onde o assunto costuma estar. */
+function centrarLupa(item) {
+  item.vista = {
+    x: Math.max(0, Math.round((item.depois.width - LUPA_LARGURA) / 2)),
+    y: Math.max(0, Math.round((item.depois.height - LUPA_ALTURA) / 2)),
+  };
 }
 
 // ==================== SALVAR ====================
@@ -442,9 +604,18 @@ function renderImagem() {
         </label>
       </div>
 
+      <!--
+        A linha "depois" mostra o que a IMAGEM INTEIRA vai dar, e nunca o
+        tamanho da prova: a prova é um recorte, e anunciar os 331 px dela como
+        resultado seria dizer que a foto encolheu.
+      -->
       <div class="grid gap-1 px-3 py-2.5">
         ${linhaDoDpi(item, item.antes, "hoje")}
-        ${item.depois ? linhaDoDpi(item, item.depois, "depois") : ""}
+        ${item.depois && !item.ehProva
+          ? linhaDoDpi(item, item.depois, "depois")
+          : (!plano.jaBasta && !plano.grandeDemais
+              ? linhaDoDpi(item, { width: plano.largura, height: plano.altura }, "vai dar")
+              : "")}
       </div>
 
       ${item.chapada && !item.depois ? `
@@ -476,15 +647,50 @@ function renderImagem() {
           ${escapeHtml(item.erro)}
         </p>` : ""}
 
-      ${item.depois ? `
+      ${item.depois && item.rede ? `
         <div class="border-t border-linha px-3 py-3">
-          <span class="mb-2 flex items-center gap-2 text-[11px] text-tinta-apagada">
-            ${item.comoFoi === "rede"
-              ? `Melhorada com a rede${item.ondeRodou === "cpu" ? " (no processador)" : ""}.
-                 <strong class="text-tinta">Confira antes de imprimir</strong> — ela reconstrói
-                 detalhe, e o que aparece é o provável, não o que estava no arquivo.`
-              : "Ampliada sem inventar detalhe."}
+          ${item.ehProva ? `
+            <p class="m-0 mb-2 rounded border border-linha bg-painel-suave px-2 py-1.5 text-[10px] leading-relaxed text-tinta">
+              Isto é uma <strong>prova</strong>: a rede rodou só num pedaço do meio da imagem.
+              Se agradar, mande fazer a imagem inteira.
+            </p>` : ""}
+
+          <!--
+            A comparação é entre a AMPLIAÇÃO LIMPA e a rede, e não contra o
+            original pequeno: as duas no mesmo tamanho, 1:1, é a única forma de
+            responder a pergunta que interessa — vale o que a rede inventou?
+          -->
+          <span class="mb-1.5 flex items-baseline justify-between text-[10px] text-tinta-apagada">
+            <span>Comparação 1:1 &mdash; arraste para andar pela imagem</span>
+            ${item.ondeRodou === "cpu" ? `<span>rodou no processador</span>` : ""}
           </span>
+          <span class="grid grid-cols-2 gap-2" data-lupa="${item.id}">
+            <figure class="m-0">
+              <canvas class="w-full cursor-move rounded border border-linha"
+                      width="${LUPA_LARGURA}" height="${LUPA_ALTURA}" data-lupa-antes></canvas>
+              <figcaption class="mt-1 text-[10px] text-tinta-apagada">só ampliada</figcaption>
+            </figure>
+            <figure class="m-0">
+              <canvas class="w-full cursor-move rounded border border-linha"
+                      width="${LUPA_LARGURA}" height="${LUPA_ALTURA}" data-lupa-depois></canvas>
+              <figcaption class="mt-1 text-[10px] text-tinta-apagada">com a rede, ${item.dose}%</figcaption>
+            </figure>
+          </span>
+
+          <label class="mt-2.5! flex items-center gap-2 text-[11px] text-tinta-apagada">
+            <span class="shrink-0">Dose da rede</span>
+            <input class="mt-0! w-full" type="range" min="0" max="100" step="5"
+                   value="${item.dose}" data-dose="${item.id}">
+            <strong class="w-9 shrink-0 text-right text-tinta">${item.dose}%</strong>
+          </label>
+          <p class="m-0 mt-1 text-[10px] leading-relaxed text-tinta-apagada">
+            Em 0% é só ampliação, sem inventar nada. Em 100% é a rede inteira &mdash; que é
+            também onde aparecem o ar de plástico e o contorno duro. Mexa e olhe a janela da
+            direita: ela muda na hora.
+          </p>
+        </div>` : item.depois ? `
+        <div class="border-t border-linha px-3 py-3">
+          <span class="mb-2 block text-[11px] text-tinta-apagada">Ampliada sem inventar detalhe.</span>
           <span class="grid grid-cols-2 gap-2">
             <figure class="m-0">
               <img class="w-full rounded border border-linha" src="${miniatura(item.antes, 420)}" alt="">
@@ -509,10 +715,20 @@ function renderImagem() {
             ? "Passar a rede (limpar)"
             : `Melhorar para ${plano.escala.toFixed(1).replace(".", ",")}×`}
         </button>
+        <!--
+          A prova vem ANTES da imagem inteira porque descobrir que ficou
+          estranho tem que ser barato. São segundos contra minutos.
+        -->
+        <button type="button" class="btn secondary btn-sm" data-prova="${item.id}"
+                ${ocupado || plano.grandeDemais ? "disabled" : ""}>
+          Ver uma prova
+        </button>
         <button type="button" class="btn secondary btn-sm" data-limpo="${item.id}" ${ocupado ? "disabled" : ""}>
           Só ampliar, sem inventar
         </button>
-        ${item.depois ? `<button type="button" class="btn secondary btn-sm" data-baixar="${item.id}">Baixar PNG</button>` : ""}
+        ${item.depois && !item.ehProva
+          ? `<button type="button" class="btn secondary btn-sm" data-baixar="${item.id}">Baixar PNG</button>`
+          : ""}
       </div>
 
       ${plano.grandeDemais ? `
@@ -539,6 +755,18 @@ function renderImagem() {
         </p>` : ""}
     </article>`;
   }).join("");
+
+  // O `innerHTML` acima jogou fora os canvas antigos junto com o que estava
+  // desenhado neles. Repor tem que ser aqui, e não em cada lugar que chama o
+  // render, senão um dia alguém acrescenta uma chamada e a lupa fica preta.
+  redesenharLupas();
+}
+
+/** Depois de refazer o HTML, as janelas da lupa voltam vazias: redesenha. */
+function redesenharLupas() {
+  imagemEstado.itens.forEach((item) => {
+    if (item.depois && item.rede) desenharLupa(item);
+  });
 }
 
 // ==================== OS CLIQUES ====================
@@ -560,19 +788,47 @@ if (imagemLista) {
     if (alvo.dataset.baixar) { baixar(achar(alvo.dataset.baixar)); return; }
     if (alvo.dataset.limpo) {
       const item = achar(alvo.dataset.limpo);
-      item.depois = ampliarLimpo(item.antes);
+      // Sem rede não há dose nem comparação: os dois lados seriam iguais.
+      item.limpo = ampliarLimpo(item.antes);
+      item.rede = null;
+      item.depois = item.limpo;
+      item.ehProva = false;
       item.comoFoi = "limpo";
       item.ondeRodou = null;
+      item.telas = null;
       renderImagem();
+      return;
+    }
+    if (alvo.dataset.prova) {
+      if (imagemEstado.trabalhando !== null) return;
+      await ampliarComRede(achar(alvo.dataset.prova), true);
       return;
     }
     if (alvo.dataset.rede) {
       if (imagemEstado.trabalhando !== null) return;
-      await ampliarComRede(achar(alvo.dataset.rede));
+      await ampliarComRede(achar(alvo.dataset.rede), false);
     }
   });
 
   imagemLista.addEventListener("input", (evento) => {
+    const barra = evento.target.closest("[data-dose]");
+    if (barra) {
+      const item = imagemEstado.itens.find((i) => i.id === Number(barra.dataset.dose));
+      if (!item) return;
+      item.dose = Number(barra.value);
+      aplicarDose(item);
+      desenharLupa(item);
+      // Só o rótulo muda; refazer a tela inteira aqui perderia o arrasto da
+      // barra no meio do movimento.
+      const artigo = barra.closest("article");
+      const numero = barra.parentElement.querySelector("strong");
+      if (numero) numero.textContent = item.dose + "%";
+      const legenda = artigo.querySelector("[data-lupa-depois]")
+        ?.closest("figure")?.querySelector("figcaption");
+      if (legenda) legenda.textContent = `com a rede, ${item.dose}%`;
+      return;
+    }
+
     const campo = evento.target.closest("[data-cm]");
     if (!campo) return;
     const item = imagemEstado.itens.find((i) => i.id === Number(campo.dataset.cm));
@@ -587,6 +843,50 @@ if (imagemLista) {
         + (item.depois ? linhaDoDpi(item, item.depois, "depois") : "");
     }
   });
+}
+
+/**
+ * Arrastar qualquer uma das duas janelas anda com as DUAS.
+ *
+ * Comparar exige que os dois lados mostrem o mesmo ponto; janelas que andam
+ * separadas transformariam a comparação num quebra-cabeça.
+ */
+if (imagemLista) {
+  let arrastando = null;
+
+  imagemLista.addEventListener("pointerdown", (evento) => {
+    const tela = evento.target.closest("[data-lupa-antes], [data-lupa-depois]");
+    if (!tela) return;
+    const caixa = tela.closest("[data-lupa]");
+    const item = imagemEstado.itens.find((i) => i.id === Number(caixa.dataset.lupa));
+    if (!item || !item.depois) return;
+
+    // O canvas é desenhado em LUPA_LARGURA mas exibido esticado pelo CSS: sem
+    // esta razão, arrastar um centímetro andaria menos do que um centímetro.
+    const razao = tela.width / tela.getBoundingClientRect().width;
+    arrastando = { item, x: evento.clientX, y: evento.clientY, razao };
+    tela.setPointerCapture(evento.pointerId);
+    evento.preventDefault();
+  });
+
+  imagemLista.addEventListener("pointermove", (evento) => {
+    if (!arrastando) return;
+    const { item, razao } = arrastando;
+    item.vista.x -= (evento.clientX - arrastando.x) * razao;
+    item.vista.y -= (evento.clientY - arrastando.y) * razao;
+    arrastando.x = evento.clientX;
+    arrastando.y = evento.clientY;
+    desenharLupa(item);
+  });
+
+  // No WINDOW, e não na lista: se o dedo levanta fora dela — e levanta, porque
+  // arrastar leva o ponteiro para longe — o "soltou" nunca chegaria, e o
+  // arrasto ficaria grudado. Depois disso, mexer em qualquer outra coisa da
+  // tela arrastaria a imagem junto. Foi assim que a barra de dose parou de
+  // responder no primeiro teste.
+  const soltar = () => { arrastando = null; };
+  window.addEventListener("pointerup", soltar);
+  window.addEventListener("pointercancel", soltar);
 }
 
 if (imagemEntrada) {
