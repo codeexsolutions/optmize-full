@@ -291,6 +291,82 @@ function avisarSobreRitmo(linhas, antes) {
   console.log("");
 }
 
+/*
+ * ===========================================================================
+ * A COMPARAÇÃO PAREADA
+ * ===========================================================================
+ *
+ * Duas corridas da bancada usam AS MESMAS SEMENTES — elas saem de
+ * `20260824 + s * 7919`, que não depende de nada da corrida. Isso quer dizer
+ * que a corrida A e a corrida B não são duas amostras independentes: elas são
+ * o MESMO sorteio, com uma configuração diferente em cima.
+ *
+ * Comparar a média de uma com a média da outra joga isso fora. A semente que
+ * calha de ser boa levanta as DUAS corridas juntas, e a diferença entre elas
+ * não sabe disso — o ruído da semente entra inteiro na conta, mesmo sendo
+ * comum aos dois lados.
+ *
+ * Pareando, ele cancela. Para cada semente, soma-se o consumo dos trabalhos nas
+ * duas configurações e olha-se a DIFERENÇA. O que sobra é o efeito da mudança,
+ * sem a sorte do sorteio.
+ *
+ * Foi isto que faltou hoje. Duas ideias (a segunda fatia do encaixe por vãos e
+ * o agrupamento quarteto) deram resultados que apontavam para lados opostos
+ * conforme a ordem de execução, e a conclusão só apareceu ao rodar o A/B duas
+ * vezes — 40 minutos para responder o que o pareamento responde de graça.
+ *
+ * O VEREDITO compara a média das diferenças com o erro padrão delas
+ * (desvio / raiz do número de sementes). Passando de duas vezes o erro padrão,
+ * o zero fica fora do intervalo e a bancada chama de efeito; abaixo disso, ela
+ * diz que não sabe.
+ *
+ * A primeira versão desta regra era "todos os sinais iguais", e ela reprovava
+ * coisa boa: numa medição em que quatro sementes deram diferença negativa e a
+ * quinta deu exatamente zero, ela dizia "ruído" — sendo que nenhuma semente
+ * tinha ido para o outro lado. O erro padrão não se deixa enganar por um empate.
+ */
+function compararEmPares(linhas, antes) {
+  if (!antes) return;
+  const pares = linhas.filter((l) => antes.trabalhos[l.nome]
+    && Array.isArray(l.corridas) && Array.isArray(antes.trabalhos[l.nome].corridas)
+    && l.corridas.length === antes.trabalhos[l.nome].corridas.length);
+  if (pares.length === 0 || pares[0].corridas.length < 2) {
+    console.log("  (sem comparação pareada: a corrida guardada não tem as sementes uma a uma)\n");
+    return;
+  }
+
+  const quantas = pares[0].corridas.length;
+  const somaAgora = new Array(quantas).fill(0);
+  const somaAntes = new Array(quantas).fill(0);
+  pares.forEach((l) => {
+    const anterior = antes.trabalhos[l.nome];
+    for (let s = 0; s < quantas; s++) {
+      somaAgora[s] += l.corridas[s].consumo;
+      somaAntes[s] += anterior.corridas[s].consumo;
+    }
+  });
+
+  const difs = somaAgora.map((v, s) => v - somaAntes[s]);
+  const media = difs.reduce((a, b) => a + b, 0) / quantas;
+  const desvio = Math.sqrt(difs.reduce((a, d) => a + (d - media) ** 2, 0) / quantas);
+  const base = somaAntes.reduce((a, b) => a + b, 0) / quantas;
+  const emPorcento = (base > 0 ? (media / base) * 100 : 0);
+
+  const erroPadrao = desvio / Math.sqrt(quantas);
+  const forca = erroPadrao > 0 ? Math.abs(media) / erroPadrao : (media === 0 ? 0 : Infinity);
+
+  console.log(`  pareado por semente (${quantas} sementes, ${pares.length} trabalho(s)):`);
+  console.log(`    diferença por semente  ${difs.map((d) => (d >= 0 ? "+" : "") + (d / 100).toFixed(3)).join("  ")}  m`);
+  console.log(`    média ${media >= 0 ? "+" : ""}${(media / 100).toFixed(3)} m`
+    + ` (${emPorcento >= 0 ? "+" : ""}${emPorcento.toFixed(2)}%)`
+    + ` · erro padrão ${(erroPadrao / 100).toFixed(3)} m`);
+  console.log(forca >= 2
+    ? `    VEREDITO: efeito real — a média é ${forca.toFixed(1)}x o erro padrão.`
+    : `    VEREDITO: dentro do ruído — a média é só ${forca.toFixed(1)}x o erro padrão`
+      + ` (precisa de 2). Com mais sementes talvez apareça.`);
+  console.log("");
+}
+
 function imprimirTabela(linhas, antes) {
   const col = (t, n) => String(t).padEnd(n);
   const dir = (t, n) => String(t).padStart(n);
@@ -450,6 +526,7 @@ async function principal() {
 
   console.log("");
   avisarSobreRitmo(linhas, antes);
+  compararEmPares(linhas, antes);
   imprimirTabela(linhas, antes);
   console.log(`\n${((Date.now() - comeco) / 1000).toFixed(0)}s de bancada.`);
 
