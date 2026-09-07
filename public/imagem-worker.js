@@ -32,6 +32,18 @@
  * ladrilhos avançam de 112 em 112, então o que se descarta de um é justamente
  * o que o vizinho cobre com miolo.
  *
+ * A REDE AMPLIA 4x, MAS QUASE NUNCA É 4x QUE SE QUER
+ * --------------------------------------------------
+ * O modelo só sabe multiplicar por quatro. O que a gráfica precisa, porém, sai
+ * do tamanho de impressão: uma foto que vai para 30 cm precisa de 3543 px de
+ * largura, e nem um a mais — pixel além disso não vira tinta, vira espera.
+ *
+ * Então a escala pedida chega por parâmetro, e cada ladrilho é DESENHADO já no
+ * tamanho final, em vez de a imagem inteira ser montada em 4x e reduzida no
+ * fim. Isso não é detalhe de implementação: montar 4x de uma foto de celular
+ * de 12 MP daria 192 megapixels, 768 MB de memória — e era exatamente por isso
+ * que a tela travava o botão em imagem grande, em vez de fazer o que dava.
+ *
  * O QUE ELE NÃO FAZ
  * -----------------
  * Não decide se vale a pena ampliar — quem decide é a tela, com o tamanho de
@@ -119,54 +131,85 @@ function recortar(origem, largura, altura, x0, y0, destino) {
 }
 
 /**
- * Escreve o miolo de um ladrilho ampliado na imagem final.
+ * O miolo de um ladrilho ampliado, como ImageData pronto para desenhar.
  *
  * `saida` vem em 0..1 e escapa um pouco dos dois lados (medido: -0,07 a 1,13),
  * porque a última camada não tem nada que a prenda na faixa. Cortar é o certo:
  * o que passou de 1 é branco, o que ficou abaixo de 0 é preto.
  *
- * A opacidade vem da origem sem passar pela rede. O modelo tem três canais e
- * não sabe da transparência; esticá-la junto seria inventar borda onde havia
- * recorte limpo, então ela é ampliada pelo vizinho mais próximo — que num
- * canal binário é exatamente o que se quer.
+ * Sai opaco. A transparência é reposta no fim, de uma vez — ver `reporAlfa`.
  */
-function colar(saida, destino, largura, altura, origem, larguraOrigem, alturaOrigem, x0, y0) {
+function miolo(saida) {
   const L = LADO * ESCALA;
   const porCanal = L * L;
   const recorte = MARGEM * ESCALA;
   const util = PASSO * ESCALA;
 
-  const dx = (x0 + MARGEM) * ESCALA;
-  const dy = (y0 + MARGEM) * ESCALA;
-
+  const pedaco = new ImageData(util, util);
+  const d = pedaco.data;
   for (let y = 0; y < util; y++) {
-    const ty = dy + y;
-    if (ty < 0 || ty >= altura) continue;
     const sy = recorte + y;
     for (let x = 0; x < util; x++) {
-      const tx = dx + x;
-      if (tx < 0 || tx >= largura) continue;
       const de = sy * L + recorte + x;
-      const para = (ty * largura + tx) * 4;
+      const para = (y * util + x) * 4;
+      d[para] = Math.max(0, Math.min(255, Math.round(saida[de] * 255)));
+      d[para + 1] = Math.max(0, Math.min(255, Math.round(saida[porCanal + de] * 255)));
+      d[para + 2] = Math.max(0, Math.min(255, Math.round(saida[porCanal * 2 + de] * 255)));
+      d[para + 3] = 255;
+    }
+  }
+  return pedaco;
+}
 
-      destino[para] = Math.max(0, Math.min(255, Math.round(saida[de] * 255)));
-      destino[para + 1] = Math.max(0, Math.min(255, Math.round(saida[porCanal + de] * 255)));
-      destino[para + 2] = Math.max(0, Math.min(255, Math.round(saida[porCanal * 2 + de] * 255)));
+/**
+ * Devolve a transparência do original à imagem pronta.
+ *
+ * O modelo tem três canais e não sabe da transparência; passá-la por ele
+ * inventaria borda onde havia recorte limpo. Ela volta pelo vizinho mais
+ * próximo, que num canal quase sempre binário é o que se quer.
+ *
+ * Se a imagem era toda opaca, não há o que repor — e é o caso comum, então
+ * vale conferir antes de varrer tudo.
+ */
+function reporAlfa(destino, largura, altura, origem, larguraOrigem, alturaOrigem) {
+  let temFuro = false;
+  for (let i = 3; i < origem.length; i += 4) {
+    if (origem[i] !== 255) { temFuro = true; break; }
+  }
+  if (!temFuro) return;
 
-      const ox = Math.min(larguraOrigem - 1, Math.floor(tx / ESCALA));
-      const oy = Math.min(alturaOrigem - 1, Math.floor(ty / ESCALA));
-      destino[para + 3] = origem[(oy * larguraOrigem + ox) * 4 + 3];
+  for (let y = 0; y < altura; y++) {
+    const oy = Math.min(alturaOrigem - 1, Math.floor((y / altura) * alturaOrigem));
+    for (let x = 0; x < largura; x++) {
+      const ox = Math.min(larguraOrigem - 1, Math.floor((x / largura) * larguraOrigem));
+      destino[(y * largura + x) * 4 + 3] = origem[(oy * larguraOrigem + ox) * 4 + 3];
     }
   }
 }
 
-/** Amplia a imagem inteira, ladrilho por ladrilho, avisando o andamento. */
-async function ampliar(pixels, largura, altura, avisar) {
+/**
+ * Amplia a imagem inteira, ladrilho por ladrilho, avisando o andamento.
+ *
+ * `escala` é o que se QUER, entre 1 e 4. A rede entrega sempre 4x; o ajuste
+ * acontece no desenho de cada pedaço, e por isso a memória segue o tamanho
+ * final e não o de 4x.
+ */
+async function ampliar(pixels, largura, altura, escala, avisar) {
   await ligar(avisar);
 
-  const saidaLargura = largura * ESCALA;
-  const saidaAltura = altura * ESCALA;
-  const destino = new Uint8ClampedArray(saidaLargura * saidaAltura * 4);
+  const saidaLargura = Math.max(1, Math.round(largura * escala));
+  const saidaAltura = Math.max(1, Math.round(altura * escala));
+
+  const tela = new OffscreenCanvas(saidaLargura, saidaAltura);
+  const pincel = tela.getContext("2d", { willReadFrequently: true });
+  pincel.imageSmoothingEnabled = true;
+  pincel.imageSmoothingQuality = "high";
+
+  // Um canvas do tamanho de UM ladrilho, reaproveitado: `drawImage` sabe
+  // reduzir, `putImageData` não — ele ignora escala e recorte.
+  const util = PASSO * ESCALA;
+  const telaDoPedaco = new OffscreenCanvas(util, util);
+  const pincelDoPedaco = telaDoPedaco.getContext("2d");
 
   const colunas = Math.ceil(largura / PASSO);
   const linhas = Math.ceil(altura / PASSO);
@@ -192,8 +235,27 @@ async function ampliar(pixels, largura, altura, avisar) {
       const t = new ort.Tensor("float32", entrada, [1, 3, LADO, LADO]);
       const r = await sessao.run({ [nome]: t });
 
-      colar(r[nomeSaida].data, destino, saidaLargura, saidaAltura,
-            pixels, largura, altura, x0, y0);
+      pincelDoPedaco.putImageData(miolo(r[nomeSaida].data), 0, 0);
+
+      // Quanto DESTE ladrilho é imagem de verdade: o último de cada fila
+      // costuma sobrar para fora, e a sobra não pode ser desenhada.
+      const usoX = Math.min(largura, (lx + 1) * PASSO) - lx * PASSO;
+      const usoY = Math.min(altura, (ly + 1) * PASSO) - ly * PASSO;
+
+      // O destino sai de coordenadas ABSOLUTAS arredondadas, e não de uma
+      // largura por ladrilho: com escala quebrada, arredondar cada largura
+      // sozinha deixaria fresta de um pixel entre um pedaço e o vizinho.
+      // Assim o fim de um é exatamente o começo do outro.
+      const ex = Math.round(lx * PASSO * escala);
+      const ey = Math.round(ly * PASSO * escala);
+      const larguraNoDestino = Math.round((lx * PASSO + usoX) * escala) - ex;
+      const alturaNoDestino = Math.round((ly * PASSO + usoY) * escala) - ey;
+
+      if (usoX > 0 && usoY > 0 && larguraNoDestino > 0 && alturaNoDestino > 0) {
+        pincel.drawImage(telaDoPedaco,
+          0, 0, usoX * ESCALA, usoY * ESCALA,
+          ex, ey, larguraNoDestino, alturaNoDestino);
+      }
 
       feitos++;
       // O tempo que falta sai do ritmo medido, e não de uma conta feita antes:
@@ -209,11 +271,14 @@ async function ampliar(pixels, largura, altura, avisar) {
     }
   }
 
-  return { pixels: destino, largura: saidaLargura, altura: saidaAltura, ondeRodou };
+  const pronto = pincel.getImageData(0, 0, saidaLargura, saidaAltura);
+  reporAlfa(pronto.data, saidaLargura, saidaAltura, pixels, largura, altura);
+
+  return { pixels: pronto.data, largura: saidaLargura, altura: saidaAltura, ondeRodou };
 }
 
 self.onmessage = async (evento) => {
-  const { id, tipo, pixels, largura, altura } = evento.data;
+  const { id, tipo, pixels, largura, altura, escala } = evento.data;
 
   if (tipo === "cancelar") { cancelado = true; return; }
 
@@ -221,7 +286,8 @@ self.onmessage = async (evento) => {
   const avisar = (dados) => self.postMessage({ id, andamento: dados });
 
   try {
-    const r = await ampliar(new Uint8ClampedArray(pixels), largura, altura, avisar);
+    const r = await ampliar(new Uint8ClampedArray(pixels), largura, altura,
+                            Math.min(ESCALA, Math.max(1, escala || ESCALA)), avisar);
     self.postMessage({ id, resultado: r }, [r.pixels.buffer]);
   } catch (erro) {
     const mensagem = String((erro && erro.message) || erro);
