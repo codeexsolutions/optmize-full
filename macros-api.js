@@ -1,24 +1,18 @@
 /**
  * A tela de Macros: entregar o arquivo da macro e ajudar a pô-lo no Corel.
  *
- * POR QUE ISTO NÃO INSTALA SOZINHO
- * --------------------------------
- * O caminho óbvio seria o sistema enfiar a macro no Corel sem ninguém mexer.
- * Ele não existe, e isso foi conferido nesta máquina, não deduzido:
+ * O CorelDRAW 2025 roda macro em VSTA (C#), não em VBA — o editor do Alt+F11 é
+ * o de estilo Visual Studio, e o projeto global dele é o `VSTAGlobal.CgsAddon`
+ * da pasta `Draw`. Por isso a macro daqui é um `.cs`, e não um `.bas`.
  *
- *   - `CorelDRAW.Application.VBE` responde, mas devolve um objeto vazio — o
- *     `MainWindow.Visible` nem existe nele e `VBProjects.Count` fica em zero
- *     mesmo com o programa aberto e um documento na tela. O modelo de projeto
- *     do VBA não é alcançável por automação, então não dá para importar o
- *     `.bas` por fora.
+ * POR QUE ISTO AINDA NÃO INSTALA SOZINHO
+ * -------------------------------------
+ * O `.CgsAddon` é um ZIP de arquivos de texto, então gerá-lo é possível — e é o
+ * caminho para a instalação virar um clique. O que segura hoje é que existe UM
+ * projeto global por aplicativo, e sobrescrevê-lo apagaria qualquer macro que a
+ * pessoa já tenha escrito ali. Enquanto não houver como acrescentar sem
+ * substituir, a tela entrega o arquivo e diz onde colá-lo.
  *
- *   - A pasta que o Corel varre sozinho ao abrir (`GMSManager.UserGMSPath`)
- *     carrega `.gms`, que é projeto compilado do VBA — formato binário que não
- *     se escreve à mão. Copiar um `.bas` para lá não faz o Corel enxergá-lo.
- *
- * Então o que sobra, e é o que esta tela faz bem: entregar o arquivo, deixá-lo
- * num lugar que a pessoa acha, e dizer os três cliques que faltam. O passo
- * manual é `Alt+F11 > Arquivo > Importar arquivo`, e é uma vez só por máquina.
  */
 
 const express = require("express");
@@ -42,16 +36,14 @@ const PASTA_DAS_MACROS = path.join(__dirname, "corel");
 const CATALOGO = [
   {
     id: "nomes-e-numeros",
-    arquivo: "Optimize.bas",
+    arquivo: "OptimizeCamisa.cs",
     nome: "Nome e número de camisa",
     resumo: "Monta uma página por jogador, nome em cima e número embaixo, "
       + "nas medidas da camisa. Nome comprido é condensado, nunca diminuído.",
     entrada: "Uma linha por jogador: NOME;NÚMERO",
-    macro: "Optimize.Painel",
-    // O painel é um UserForm, e UserForm é um segundo arquivo. Os dois vão
-    // juntos: o `.bas` sozinho funciona (pelo `Optimize.NomesENumeros`, que
-    // pergunta a lista numa caixinha), e com o `.frm` do lado nasce a tela.
-    extras: ["PainelOptimize.frm"],
+    macro: "CamisaDeTime",
+    // Um arquivo só. No VSTA o painel é WinForms montado em código, então não
+    // existe o par .frm/.frx que o VBA obrigaria a carregar junto.
   },
 ];
 
