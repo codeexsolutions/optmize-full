@@ -41,6 +41,10 @@
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#spline" /></svg>
           <span>Vetor</span>
         </button>
+        <button class="nav-btn" data-page="macros" data-title="Macros">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#puzzle" /></svg>
+          <span>Macros</span>
+        </button>
       </nav>
     </aside>
 
@@ -901,6 +905,37 @@
           </section>
         </div>
 
+        <div class="page" data-page="macros">
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-copy">
+                <h2>Macros do CorelDRAW</h2>
+                <p class="hint">Ferramentas que rodam dentro do Corel e conversam com este sistema.</p>
+              </div>
+            </div>
+
+            <details class="ajuda">
+              <summary>Por que a instala&ccedil;&atilde;o tem um passo manual</summary>
+              <div class="ajuda-corpo">
+                <p>
+                  O caminho &oacute;bvio seria este sistema enfiar a macro no Corel sem ningu&eacute;m mexer.
+                  Ele n&atilde;o existe: o Corel n&atilde;o deixa mexer no projeto do VBA de fora do programa,
+                  e a pasta que ele varre ao abrir s&oacute; carrega projeto j&aacute; compilado, que
+                  n&atilde;o se escreve &agrave; m&atilde;o.
+                </p>
+                <p>
+                  Ent&atilde;o o que d&aacute; para fazer &eacute; encurtar o caminho, e &eacute; o que esta tela faz:
+                  ela p&otilde;e o arquivo num lugar que voc&ecirc; acha e mostra os tr&ecirc;s cliques que faltam.
+                  &Eacute; uma vez s&oacute; por m&aacute;quina.
+                </p>
+              </div>
+            </details>
+
+            <div id="macros-corel" class="hidden"></div>
+            <div id="macros-lista" class="grid gap-2"></div>
+          </section>
+        </div>
+
 
       </div>
     </main>
@@ -940,6 +975,7 @@
   <script src="projetos.js"></script>
   <script src="cor.js"></script>
   <script src="vetor.js"></script>
+  <script src="macros.js"></script>
   <script src="vetor-tela.js"></script>
 </body>
 </html>

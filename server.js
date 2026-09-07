@@ -23,6 +23,7 @@ const express = require("express");
 const { RAIZ_DE_UPLOADS } = require("./caminhos");
 require("./db"); // garante que o banco SQLite e as tabelas existem antes de tudo
 const encaixePdfRouter = require("./encaixe-pdf");
+const macrosRouter = require("./macros-api");
 const encaixeMemoriaRouter = require("./encaixe-memoria");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
@@ -56,6 +57,8 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/app", express.static(path.join(__dirname, "dist")));
 
 app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
+// A tela de Macros: entrega o .bas da macro do Corel e ajuda a pô-lo lá.
+app.use("/api/macros", macrosRouter);
 app.use("/api/moldes", moldesRouter);
 app.use("/api/projetos", projetosRouter);
 
