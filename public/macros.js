@@ -2,14 +2,12 @@
  * A tela de Macros.
  *
  * Ela entrega o arquivo da macro do CorelDRAW e encurta o caminho até ele estar
- * funcionando lá. O que ela NÃO faz é instalar sozinha, e isso não é preguiça:
- * o modelo de projeto do VBA não é alcançável de fora do Corel (o `VBE` que ele
- * expõe vem vazio), e a pasta que ele varre ao abrir carrega `.gms`, que é
- * projeto compilado. O porquê inteiro está em macros-api.js.
+ * funcionando lá. O passo de colar o arquivo no editor continua manual, e o
+ * porquê está em macros-api.js.
  *
- * Então a tela assume o passo manual em vez de escondê-lo: mostra os três
- * cliques que faltam, em ordem, e tira da frente as duas partes chatas — achar
- * onde salvar e depois achar o que salvou.
+ * A tela assume esse passo em vez de escondê-lo: mostra os cliques que faltam,
+ * em ordem, e tira da frente as duas partes chatas — achar onde salvar e depois
+ * achar o que salvou.
  */
 
 const macrosLista = document.getElementById("macros-lista");
@@ -92,19 +90,11 @@ function renderMacros() {
       -->
       <ol class="m-0 list-none border-t border-linha px-3 py-2.5 text-[11px] leading-relaxed text-tinta-apagada">
         <li><strong class="text-tinta">1.</strong> No Corel: <strong class="text-tinta">Ferramentas &gt; Macros &gt; Editor de macros</strong> (Alt+F11).</li>
-        <li><strong class="text-tinta">2.</strong> <strong class="text-tinta">Arquivo &gt; Importar arquivo…</strong> e escolha o <code>${escapeHtml(m.arquivo)}</code>.</li>
-        ${(m.extras || []).map((nome) => `
-        <li><strong class="text-tinta">3.</strong> Importe também o <code>${escapeHtml(nome)}</code> — é a tela.
-            <span class="block pl-4 text-[10px]">Nesta ordem: ela usa o que veio no arquivo de cima.</span></li>
-        `).join("")}
-        <li><strong class="text-tinta">${(m.extras || []).length ? 4 : 3}.</strong> <strong class="text-tinta">Ferramentas &gt; Macros &gt; Executar macro</strong> e rode <code>${escapeHtml(m.macro)}</code>.</li>
+        <li><strong class="text-tinta">2.</strong> No Solution Explorer, botão direito no projeto &gt;
+            <strong class="text-tinta">Add &gt; Existing Item</strong> e escolha o <code>${escapeHtml(m.arquivo)}</code>.</li>
+        <li><strong class="text-tinta">3.</strong> Salve e feche o editor.</li>
+        <li><strong class="text-tinta">4.</strong> <strong class="text-tinta">Ferramentas &gt; Macros &gt; Executar macro</strong> e rode <code>${escapeHtml(m.macro)}</code>.</li>
       </ol>
-
-      <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-tinta-apagada">
-        Se a tela não importar na sua versão do Corel, o <code>${escapeHtml(m.arquivo)}</code> sozinho
-        continua funcionando: rode <code>Optimize.NomesENumeros</code>, que pergunta a lista numa
-        caixinha em vez de abrir a tela. As duas fazem o mesmo desenho.
-      </p>
 
       <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-tinta-apagada">
         Para virar botão ou atalho: <strong class="text-tinta">Ferramentas &gt; Opções &gt; Personalização &gt;
