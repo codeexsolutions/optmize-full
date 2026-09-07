@@ -79,8 +79,46 @@ const DPI_OTIMO = 300;
 const DPI_ACEITAVEL = 150;
 const DPI_LONGE = 100;
 
-/** O máximo que o modelo sabe fazer. Ele só multiplica por quatro. */
+/** O máximo que os modelos sabem fazer. Os dois só multiplicam por quatro. */
 const ESCALA_DA_REDE = 4;
+
+/**
+ * As duas redes, e o que cada uma custa — tudo medido, nada estimado no olho.
+ *
+ * A régua é `bancada-imagem.html`: encolhe-se uma imagem detalhada, pede-se à
+ * rede que desfaça o estrago, e compara-se com o original que ainda existe.
+ *
+ *   rápido    PSNR 23,68 na dose 70%    363 ms por ladrilho de 112 px úteis
+ *   capricho  PSNR 24,51 na dose 100%  12244 ms por ladrilho de 224 px úteis
+ *
+ * O capricho ganha 0,83 dB e custa 8,7x mais por pixel. E a DOSE ÓTIMA de cada
+ * um é diferente, o que não é detalhe: o rápido piora depois de 70% porque
+ * inventa demais, e o capricho não — ele acerta mais, então não precisa ser
+ * segurado.
+ *
+ * O tempo por ladrilho é desta máquina, com WebGPU, e serve para o palpite que
+ * a tela dá ANTES de começar. Enquanto roda, o que vale é o ritmo medido de
+ * verdade — ver a barra de andamento.
+ */
+const REDES = {
+  rapido: {
+    nome: "rápida",
+    uteis: 112,
+    msPorLadrilho: 363,
+    dose: 70,
+    resumo: "boa para quase tudo",
+  },
+  capricho: {
+    nome: "capricho",
+    uteis: 224,
+    msPorLadrilho: 12244,
+    dose: 100,
+    resumo: "mais detalhe, bem mais devagar",
+  },
+};
+
+/** Acima disto a espera deixa de ser "vou tomar um café". */
+const ESPERA_CONFORTAVEL_MS = 120_000;
 
 /**
  * O teto do que faz sentido produzir.
@@ -186,11 +224,21 @@ function planoDaImagem(item) {
   const altura = Math.round(h * escala);
   const ladrilhos = Math.ceil(w / 112) * Math.ceil(h / 112);
 
+  // Quanto cada rede levaria NESTA imagem. É o número que decide a escolha, e
+  // é o que a tela mostra ao lado de cada opção — escolher às cegas entre
+  // "rápida" e "capricho" não é escolher.
+  const tempos = {};
+  for (const [chave, r] of Object.entries(REDES)) {
+    const n = Math.ceil(w / r.uteis) * Math.ceil(h / r.uteis);
+    tempos[chave] = { ladrilhos: n, ms: n * r.msPorLadrilho };
+  }
+
   return {
     escala,
     largura,
     altura,
     ladrilhos,
+    tempos,
     cortadaPeloTeto,
     dpiQueDa: dpiNaLargura(largura, item.larguraCm),
     jaBasta: escala <= 1.02 && !cortadaPeloTeto,
@@ -234,7 +282,7 @@ async function receberArquivos(arquivos) {
       bytes: arquivo.size,
       antes: dados,
       depois: null,           // o que a lupa e o download usam, já com a dose
-      rede: null,             // o resultado puro da rede
+      resultadoDaRede: null,  // o resultado puro da rede
       limpo: null,            // a ampliação sem rede, o outro extremo da dose
       ehProva: false,         // veio de um pedaço só?
       comoFoi: null,          // "rede" ou "limpo"
@@ -243,10 +291,10 @@ async function receberArquivos(arquivos) {
       larguraCm: 30,          // um palpite para a conta já aparecer preenchida
       andamento: null,
       erro: null,
-      // 70 e não 100 de propósito: o primeiro uso reclamou de plastificado, e
-      // a rede inteira é justamente o que dá esse ar. Quem quiser tudo puxa a
-      // barra para 100 e vê na hora.
-      dose: 70,
+      // A dose ótima é a da rede escolhida, medida na bancada — e não um
+      // número fixo. Ver REDES.
+      rede: null,             // qual delas; decidido no primeiro render
+      dose: REDES.rapido.dose,
       telas: null,            // os canvas de trabalho da lupa
       vista: { x: 0, y: 0 },  // que canto da imagem a lupa mostra
     });
@@ -306,6 +354,7 @@ async function ampliarComRede(item, ehProva) {
   const fonte = ehProva ? recorteDaProva(item.antes) : item.antes;
   const copia = new Uint8ClampedArray(fonte.data);
   const plano = planoDaImagem(item);
+  const qualRede = redeEscolhida(item, plano);
 
   return new Promise((resolver) => {
     // Sem isto, um worker que morre (modelo que não carrega, memória que
@@ -341,8 +390,13 @@ async function ampliarComRede(item, ehProva) {
       }
 
       const r = dados.resultado;
-      item.rede = new ImageData(r.pixels, r.largura, r.altura);
+      item.resultadoDaRede = new ImageData(r.pixels, r.largura, r.altura);
       item.limpo = new ImageData(r.limpo, r.largura, r.altura);
+      // A dose ótima é a da rede que rodou, e não a de quando o arquivo
+      // entrou: trocar de rede sem trocar a dose entregaria o capricho
+      // segurado em 70%, que é jogar fora metade do que se esperou.
+      item.rede = r.modelo || qualRede;
+      item.dose = REDES[item.rede] ? REDES[item.rede].dose : item.dose;
       item.ehProva = !!ehProva;
       item.comoFoi = "rede";
       item.ondeRodou = r.ondeRodou;
@@ -361,6 +415,7 @@ async function ampliarComRede(item, ehProva) {
         largura: fonte.width,
         altura: fonte.height,
         escala: plano.escala,
+        modelo: qualRede,
       },
       [copia.buffer],
     );
@@ -371,6 +426,19 @@ function cancelarAmpliacao() {
   if (imagemEstado.worker) imagemEstado.worker.postMessage({ tipo: "cancelar" });
 }
 
+
+/**
+ * Qual rede usar, quando ninguém escolheu ainda.
+ *
+ * O capricho é melhor sempre; o que muda é se cabe na paciência. Numa imagem
+ * pequena ele custa segundos e não há razão para não usá-lo. Numa foto de
+ * celular ele custaria vinte minutos, e aí o padrão tem que ser o rápido —
+ * com o tempo do capricho escrito ao lado, para a escolha existir.
+ */
+function redeEscolhida(item, plano) {
+  if (item.rede) return item.rede;
+  return plano.tempos.capricho.ms <= ESPERA_CONFORTAVEL_MS ? "capricho" : "rapido";
+}
 
 // ==================== A PROVA: UM PEDAÇO, EM SEGUNDOS ====================
 
@@ -412,15 +480,15 @@ function recorteDaProva(dados) {
  * rede rodasse de novo a cada mexida, a barra seria inútil.
  */
 function misturarDose(item) {
-  if (!item.rede || !item.limpo) return null;
+  if (!item.resultadoDaRede || !item.limpo) return null;
   const dose = Math.max(0, Math.min(100, item.dose)) / 100;
 
-  if (dose >= 1) return item.rede;
+  if (dose >= 1) return item.resultadoDaRede;
   if (dose <= 0) return item.limpo;
 
-  const r = item.rede.data;
+  const r = item.resultadoDaRede.data;
   const l = item.limpo.data;
-  const saida = new ImageData(item.rede.width, item.rede.height);
+  const saida = new ImageData(item.resultadoDaRede.width, item.resultadoDaRede.height);
   const d = saida.data;
   for (let i = 0; i < d.length; i += 4) {
     d[i] = l[i] + (r[i] - l[i]) * dose;
@@ -571,6 +639,7 @@ function renderImagem() {
 
   imagemLista.innerHTML = imagemEstado.itens.map((item) => {
     const plano = planoDaImagem(item);
+    const qualRede = redeEscolhida(item, plano);
 
     return `
     <article class="rounded-lg border border-linha" data-item="${item.id}">
@@ -618,6 +687,27 @@ function renderImagem() {
               : "")}
       </div>
 
+      <!--
+        A escolha da rede fica ao lado do TEMPO que cada uma custa nesta
+        imagem. "Rápida ou capricho?" sem o tempo não é uma pergunta que dê
+        para responder; com ele, responde-se sozinha.
+      -->
+      ${!plano.grandeDemais ? `
+        <div class="flex flex-wrap items-center gap-1.5 border-t border-linha px-3 py-2">
+          <span class="mr-1 text-[10px] uppercase tracking-wide text-tinta-apagada">Rede</span>
+          ${Object.entries(REDES).map(([chave, r]) => `
+            <button type="button" data-qual="${item.id}" data-escolher="${chave}"
+                    class="btn btn-sm ${chave === qualRede ? "primary" : "secondary"}">
+              ${escapeHtml(r.nome)} &middot; ${comoTempo(plano.tempos[chave].ms)}
+            </button>
+          `).join("")}
+          <span class="w-full text-[10px] leading-relaxed text-tinta-apagada">
+            ${escapeHtml(REDES[qualRede].resumo)}${qualRede === "rapido"
+              ? " — o capricho rende mais detalhe, se a espera couber."
+              : " — é a melhor que existe aqui."}
+          </span>
+        </div>` : ""}
+
       ${item.chapada && !item.depois ? `
         <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-tinta-apagada">
           Isto parece <strong class="text-tinta">arte chapada</strong> — logo, escudo, poucas cores.
@@ -647,7 +737,7 @@ function renderImagem() {
           ${escapeHtml(item.erro)}
         </p>` : ""}
 
-      ${item.depois && item.rede ? `
+      ${item.depois && item.resultadoDaRede ? `
         <div class="border-t border-linha px-3 py-3">
           ${item.ehProva ? `
             <p class="m-0 mb-2 rounded border border-linha bg-painel-suave px-2 py-1.5 text-[10px] leading-relaxed text-tinta">
@@ -673,7 +763,7 @@ function renderImagem() {
             <figure class="m-0">
               <canvas class="w-full cursor-move rounded border border-linha"
                       width="${LUPA_LARGURA}" height="${LUPA_ALTURA}" data-lupa-depois></canvas>
-              <figcaption class="mt-1 text-[10px] text-tinta-apagada">com a rede, ${item.dose}%</figcaption>
+              <figcaption class="mt-1 text-[10px] text-tinta-apagada">rede ${escapeHtml(REDES[item.rede] ? REDES[item.rede].nome : "")}, ${item.dose}%</figcaption>
             </figure>
           </span>
 
@@ -765,7 +855,7 @@ function renderImagem() {
 /** Depois de refazer o HTML, as janelas da lupa voltam vazias: redesenha. */
 function redesenharLupas() {
   imagemEstado.itens.forEach((item) => {
-    if (item.depois && item.rede) desenharLupa(item);
+    if (item.depois && item.resultadoDaRede) desenharLupa(item);
   });
 }
 
@@ -780,6 +870,20 @@ if (imagemLista) {
 
     const achar = (id) => imagemEstado.itens.find((i) => i.id === Number(id));
 
+    if (alvo.dataset.qual) {
+      const item = achar(alvo.dataset.qual);
+      if (!item || imagemEstado.trabalhando !== null) return;
+      item.rede = alvo.dataset.escolher;
+      item.dose = REDES[item.rede].dose;
+      // O resultado que estava na tela é da OUTRA rede: mantê-lo ao lado do
+      // novo botão diria que ele veio dela.
+      item.depois = null;
+      item.resultadoDaRede = null;
+      item.limpo = null;
+      item.telas = null;
+      renderImagem();
+      return;
+    }
     if (alvo.dataset.tirar) {
       imagemEstado.itens = imagemEstado.itens.filter((i) => i.id !== Number(alvo.dataset.tirar));
       renderImagem();
@@ -790,7 +894,7 @@ if (imagemLista) {
       const item = achar(alvo.dataset.limpo);
       // Sem rede não há dose nem comparação: os dois lados seriam iguais.
       item.limpo = ampliarLimpo(item.antes);
-      item.rede = null;
+      item.resultadoDaRede = null;
       item.depois = item.limpo;
       item.ehProva = false;
       item.comoFoi = "limpo";
@@ -825,7 +929,10 @@ if (imagemLista) {
       if (numero) numero.textContent = item.dose + "%";
       const legenda = artigo.querySelector("[data-lupa-depois]")
         ?.closest("figure")?.querySelector("figcaption");
-      if (legenda) legenda.textContent = `com a rede, ${item.dose}%`;
+      if (legenda) {
+        const nome = REDES[item.rede] ? REDES[item.rede].nome : "";
+        legenda.textContent = `rede ${nome}, ${item.dose}%`;
+      }
       return;
     }
 
