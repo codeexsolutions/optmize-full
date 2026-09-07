@@ -53,6 +53,14 @@ confere que o WASM dá o mesmo resultado que o JavaScript. **Mexida no motor sem
 uma corrida de bancada antes e depois é chute**: o resultado depende do sorteio,
 do tempo e do formato da peça ao mesmo tempo.
 
+**Engordar em duas passadas desenha um quadrado.** Horizontal e depois vertical,
+cada uma de `raio` células, é rápido e não é um contorno: alcança `raio` de lado
+e `raio × √2` na diagonal. Foi assim que a folga entre peças virou um mínimo em
+vez de uma medida — pedindo 10 mm, saía 15. Borda de peça é disco
+(`discoDoRaio`, em encaixe-mascara.js), e quem mede se a promessa está sendo
+cumprida é a distância REAL entre silhuetas no `conferir-sobreposicao`, não o
+teste de encostar das peças já engordadas.
+
 **O relevo por coluna esquece o que fica acima.** O encaixe por contorno guarda
 o tecido como uma altura por coluna, e no instante em que uma peça é assentada
 tudo o que ficou acima dela naquela coluna some do mapa — é por isso que a gola

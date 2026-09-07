@@ -70,22 +70,9 @@ const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : PULO_PADRAO);
 const PASSO_DA_SEMENTE = 104729;
 const sementeDaFatia = (semente, k, espalhar) => semente + (espalhar ? k * PASSO_DA_SEMENTE : 0);
 
-/**
- * Quais encaixadores cada fatia usa — espelha `motoresDaFatia` do
- * encaixe-paralelo.js.
- *
- * O encaixe por vãos custa ~100x mais por tentativa que o por relevo. Solto no
- * portfólio de todas as fatias, ele rouba orçamento do contorno justamente nos
- * trabalhos grandes, onde o contorno precisa de milhares de tentativas. Numa
- * fatia só dele, ele gasta o que é dele: onde ele ganha, ganha; onde perde, as
- * outras quatro fatias seguram o resultado.
- */
-const motoresDaFatia = (k, n, motores) => {
-  if (!motores.includes("vaos")) return motores;
-  const outros = motores.filter((m) => m !== "vaos");
-  if (n < 3 || outros.length === 0) return motores;
-  return k === n - 1 ? ["vaos"] : outros;
-};
+// `motoresDaFatia` e `fatiaDoPortfolio` vêm do motor (ver "A FATIA DO ENCAIXE
+// POR VÃOS", em encaixe-motor.js): a bancada tem que medir a MESMA repartição
+// que a produção roda, e duas cópias da regra são duas chances de divergirem.
 
 
 // ==================== ARGUMENTOS ====================
@@ -160,7 +147,7 @@ function prepararTrabalho(motor, nome) {
   }));
   const itens = expandir(pecas);
   const alturaMax = itens.reduce(
-    (soma, it) => soma + Math.max(it.largura, it.altura) + receita.espaco, receita.margem * 2);
+    (soma, it) => soma + Math.max(it.largura, it.altura) + receita.espaco, 0);
   return { nome, receita, pecas, itens, passo, raio, folgaReal, alturaMax };
 }
 
@@ -186,17 +173,12 @@ async function buscarComoAProducao(motor, trabalho,
    * encaixador próprio e o `n` continuando 5, um quinto das receitas comuns não
    * roda em fatia nenhuma: fica órfão.
    */
-  const comuns = [];
-  for (let i = 0; i < fatias; i++) {
-    if (motoresDaFatia(i, fatias, motoresPedidos).length === motoresPedidos.length) comuns.push(i);
-  }
   for (let k = 0; k < fatias; k++) {
-    const motoresDaK = motoresDaFatia(k, fatias, motoresPedidos);
-    const soDele = motoresDaK.length !== motoresPedidos.length;
+    const motoresDaK = motor.motoresDaFatia(k, fatias, motoresPedidos, extra.fatiasVaos);
     const resultado = await motor.buscarMelhorEncaixe(itens, {
       larguraTecido: receita.larguraTecido,
       espaco: receita.espaco,
-      margem: receita.margem,
+      comprimentoBancada: receita.comprimentoBancada || 0,
       passo, alturaMax,
       motores: motoresDaK,
       // Sem memória e sem rede: a bancada mede o motor, não o histórico da
@@ -214,10 +196,15 @@ async function buscarComoAProducao(motor, trabalho,
        * próprio, disjunto do das outras — cortá-lo de novo deixaria ela com um
        * quinto das receitas dela e quatro quintos de nada.
        */
-      fatia: soDele ? { k: 0, n: 1 }
-        : { k: comuns.indexOf(k), n: comuns.length },
+      fatia: motor.fatiaDoPortfolio(k, fatias, motoresPedidos, extra.fatiasVaos),
       saltoX: puloDaFatia(k),
       semente: sementeDaFatia(semente, k, espalharSemente),
+      // O papel da fatia, do mesmo lugar que a produção usa
+      // (`papelDaFatia`, em encaixe-motor.js) — senão a bancada mediria uma
+      // repartição que não é a que roda na loja. O `--extra` da linha de
+      // comando vem depois, para dar para medir o motor COM e SEM o papel
+      // (`--extra podar=true`).
+      ...motor.papelDaFatia(k, fatias).config,
       ...extra,
     });
     tentativas += resultado.tentativas || 0;
@@ -248,12 +235,145 @@ async function buscarComoAProducao(motor, trabalho,
 const metros = (cm) => `${(cm / 100).toFixed(3)} m`;
 const porcento = (f) => `${(f * 100).toFixed(1)}%`;
 
+/*
+ * ===========================================================================
+ * O RITMO DA MÁQUINA, E POR QUE ELE ENTRA NO RELATÓRIO
+ * ===========================================================================
+ *
+ * A bancada compara duas corridas pelo consumo. Isso só vale se as duas
+ * tiveram o MESMO poder de fogo — e não têm, quando a máquina está ocupada.
+ * O orçamento aqui é de tempo, não de tentativas: uma corrida com o
+ * computador carregado faz menos tentativas no mesmo segundo, acha um encaixe
+ * pior, e a diferença aparece na tabela como se fosse efeito da mudança que
+ * se estava medindo.
+ *
+ * Aconteceu, e passou despercebido até alguém somar as colunas. O mesmo
+ * trabalho, mesmo orçamento, três corridas de uma tarde:
+ *
+ *   261.460  ->  246.501  ->  190.620 tentativas
+ *
+ * Uma queda de 27% que não tinha nada a ver com o motor. Duas conclusões
+ * foram tiradas em cima disso antes de o padrão ser notado.
+ *
+ * Agora a corrida diz quantas tentativas por segundo ela conseguiu, e quando
+ * há `--contra` o relatório compara esse ritmo com o da corrida guardada. Se
+ * eles não baterem, o aviso vem antes da tabela — porque a essa altura a
+ * tabela não está medindo o que diz medir.
+ */
+
+// Acima disto a diferença de ritmo já explica sozinha uma diferença de consumo
+// da ordem que este projeto costuma perseguir (décimos de por cento).
+const RITMO_TOLERANCIA = 0.10;
+
+function avisarSobreRitmo(linhas, antes) {
+  if (!antes) return;
+  const pares = linhas
+    .map((l) => ({ nome: l.nome, agora: l.tentPorSegundo,
+      antes: antes.trabalhos[l.nome] ? antes.trabalhos[l.nome].tentPorSegundo : 0 }))
+    .filter((x) => x.agora > 0 && x.antes > 0);
+  if (pares.length === 0) {
+    // Corrida guardada antes de o ritmo existir: dá para comparar o consumo,
+    // mas não dá para saber se as duas tiveram o mesmo poder de fogo.
+    console.log("  aviso: a corrida guardada não registrou o ritmo da máquina —"
+      + " não dá para saber se as duas tiveram o mesmo poder de fogo.\n");
+    return;
+  }
+  const fora = pares.filter((x) => Math.abs(x.agora - x.antes) / x.antes > RITMO_TOLERANCIA);
+  if (fora.length === 0) return;
+  console.log(`  AVISO: o ritmo da máquina mudou em ${fora.length} de ${pares.length}`
+    + " trabalho(s). A comparação abaixo NÃO é confiável — refaça as duas");
+  console.log("  corridas seguidas, com a máquina livre.");
+  fora.forEach((x) => {
+    const dif = ((x.agora - x.antes) / x.antes) * 100;
+    console.log(`    ${x.nome.padEnd(24)} ${String(x.antes).padStart(7)} → `
+      + `${String(x.agora).padStart(7)} tent./s   ${dif > 0 ? "+" : ""}${dif.toFixed(0)}%`);
+  });
+  console.log("");
+}
+
+/*
+ * ===========================================================================
+ * A COMPARAÇÃO PAREADA
+ * ===========================================================================
+ *
+ * Duas corridas da bancada usam AS MESMAS SEMENTES — elas saem de
+ * `20260824 + s * 7919`, que não depende de nada da corrida. Isso quer dizer
+ * que a corrida A e a corrida B não são duas amostras independentes: elas são
+ * o MESMO sorteio, com uma configuração diferente em cima.
+ *
+ * Comparar a média de uma com a média da outra joga isso fora. A semente que
+ * calha de ser boa levanta as DUAS corridas juntas, e a diferença entre elas
+ * não sabe disso — o ruído da semente entra inteiro na conta, mesmo sendo
+ * comum aos dois lados.
+ *
+ * Pareando, ele cancela. Para cada semente, soma-se o consumo dos trabalhos nas
+ * duas configurações e olha-se a DIFERENÇA. O que sobra é o efeito da mudança,
+ * sem a sorte do sorteio.
+ *
+ * Foi isto que faltou hoje. Duas ideias (a segunda fatia do encaixe por vãos e
+ * o agrupamento quarteto) deram resultados que apontavam para lados opostos
+ * conforme a ordem de execução, e a conclusão só apareceu ao rodar o A/B duas
+ * vezes — 40 minutos para responder o que o pareamento responde de graça.
+ *
+ * O VEREDITO compara a média das diferenças com o erro padrão delas
+ * (desvio / raiz do número de sementes). Passando de duas vezes o erro padrão,
+ * o zero fica fora do intervalo e a bancada chama de efeito; abaixo disso, ela
+ * diz que não sabe.
+ *
+ * A primeira versão desta regra era "todos os sinais iguais", e ela reprovava
+ * coisa boa: numa medição em que quatro sementes deram diferença negativa e a
+ * quinta deu exatamente zero, ela dizia "ruído" — sendo que nenhuma semente
+ * tinha ido para o outro lado. O erro padrão não se deixa enganar por um empate.
+ */
+function compararEmPares(linhas, antes) {
+  if (!antes) return;
+  const pares = linhas.filter((l) => antes.trabalhos[l.nome]
+    && Array.isArray(l.corridas) && Array.isArray(antes.trabalhos[l.nome].corridas)
+    && l.corridas.length === antes.trabalhos[l.nome].corridas.length);
+  if (pares.length === 0 || pares[0].corridas.length < 2) {
+    console.log("  (sem comparação pareada: a corrida guardada não tem as sementes uma a uma)\n");
+    return;
+  }
+
+  const quantas = pares[0].corridas.length;
+  const somaAgora = new Array(quantas).fill(0);
+  const somaAntes = new Array(quantas).fill(0);
+  pares.forEach((l) => {
+    const anterior = antes.trabalhos[l.nome];
+    for (let s = 0; s < quantas; s++) {
+      somaAgora[s] += l.corridas[s].consumo;
+      somaAntes[s] += anterior.corridas[s].consumo;
+    }
+  });
+
+  const difs = somaAgora.map((v, s) => v - somaAntes[s]);
+  const media = difs.reduce((a, b) => a + b, 0) / quantas;
+  const desvio = Math.sqrt(difs.reduce((a, d) => a + (d - media) ** 2, 0) / quantas);
+  const base = somaAntes.reduce((a, b) => a + b, 0) / quantas;
+  const emPorcento = (base > 0 ? (media / base) * 100 : 0);
+
+  const erroPadrao = desvio / Math.sqrt(quantas);
+  const forca = erroPadrao > 0 ? Math.abs(media) / erroPadrao : (media === 0 ? 0 : Infinity);
+
+  console.log(`  pareado por semente (${quantas} sementes, ${pares.length} trabalho(s)):`);
+  console.log(`    diferença por semente  ${difs.map((d) => (d >= 0 ? "+" : "") + (d / 100).toFixed(3)).join("  ")}  m`);
+  console.log(`    média ${media >= 0 ? "+" : ""}${(media / 100).toFixed(3)} m`
+    + ` (${emPorcento >= 0 ? "+" : ""}${emPorcento.toFixed(2)}%)`
+    + ` · erro padrão ${(erroPadrao / 100).toFixed(3)} m`);
+  console.log(forca >= 2
+    ? `    VEREDITO: efeito real — a média é ${forca.toFixed(1)}x o erro padrão.`
+    : `    VEREDITO: dentro do ruído — a média é só ${forca.toFixed(1)}x o erro padrão`
+      + ` (precisa de 2). Com mais sementes talvez apareça.`);
+  console.log("");
+}
+
 function imprimirTabela(linhas, antes) {
   const col = (t, n) => String(t).padEnd(n);
   const dir = (t, n) => String(t).padStart(n);
   const cabecalho = [col("trabalho", 22), dir("consumo", 11)];
   if (antes) cabecalho.push(dir("antes", 11), dir("dif.", 9));
-  cabecalho.push(dir("aprov.", 8), dir("tent.", 8), col("  receita vencedora", 30));
+  cabecalho.push(dir("aprov.", 8), dir("tent.", 8), dir("tent./s", 9),
+    col("  receita vencedora", 30));
   console.log(cabecalho.join(""));
   console.log("-".repeat(cabecalho.join("").length));
 
@@ -270,6 +390,7 @@ function imprimirTabela(linhas, antes) {
       }
     }
     partes.push(dir(porcento(l.aproveitamento), 8), dir(l.tentativas, 8),
+      dir(l.tentPorSegundo, 9),
       col(`  ${l.receita}${l.sobraram ? ` (${l.sobraram} de fora!)` : ""}`, 30));
     console.log(partes.join(""));
   });
@@ -313,11 +434,24 @@ async function principal() {
     // A média entre sementes é o que dá para comparar: uma semente sozinha
     // mede tanto a mexida quanto a sorte do sorteio daquela vez.
     const corridas = [];
+    // Quanto trabalho a MÁQUINA entregou neste trabalho — ver `tentPorSegundo`
+    // no relatório.
+    let msDeBusca = 0;
+    let tentativasFeitas = 0;
     for (let s = 0; s < opcoes.sementes; s++) {
-      // Cada rodada é um clique em "Fazer encaixe": sorteio novo, busca nova.
+      /*
+       * Cada rodada é um clique em "Fazer encaixe": sorteio novo, busca nova.
+       *
+       * O que fica é o MELHOR das rodadas, não a última — é o que a produção vê,
+       * porque a tela guarda o melhor encaixe do trabalho e volta para ele
+       * quando a procura seguinte sai pior. Reportar a última rodada media a
+       * sorte do último sorteio, e não o que a pessoa leva para o corte.
+       */
       let corrida = null;
+      let melhorDasRodadas = null;
       for (let rodada = 0; rodada < opcoes.rodadas; rodada++) {
-        corrida = await buscarComoAProducao(motor, trabalho, {
+        const relogio = Date.now();
+        const desta = await buscarComoAProducao(motor, trabalho, {
           tempoMs: opcoes.tempo * 1000,
           // Semente diferente por rodada: dois cliques seguidos no mesmo
           // trabalho não repetem o mesmo sorteio na produção.
@@ -327,15 +461,54 @@ async function principal() {
           extra: opcoes.extra,
           espalharSemente: opcoes.espalharSemente,
         });
+        // O relógio de parede da rodada. Ele é somado SEMPRE, inclusive das
+        // rodadas que perderam: o que se quer medir aqui é quanto trabalho a
+        // máquina entregou, e não quanto o vencedor custou.
+        msDeBusca += Date.now() - relogio;
+        tentativasFeitas += desta.tentativas || 0;
+        if (!melhorDasRodadas
+          || desta.sobraram < melhorDasRodadas.sobraram
+          || (desta.sobraram === melhorDasRodadas.sobraram
+            && desta.consumo < melhorDasRodadas.consumo)) melhorDasRodadas = desta;
       }
+      corrida = melhorDasRodadas;
       corridas.push(corrida);
     }
     const media = (pegar) => corridas.reduce((s, c) => s + pegar(c), 0) / corridas.length;
+
+    /*
+     * MÉDIA NÃO BASTA PARA DECIDIR.
+     *
+     * A busca é sorteada, e a média entre sementes esconde as duas coisas que
+     * mais importam numa mexida no motor: se o ganho veio de UMA corrida de
+     * sorte (a mediana denuncia) e se a mexida piorou o PIOR CASO (o máximo
+     * denuncia). Uma ideia que melhora a média em 0,3% e piora o pior caso em
+     * 2% não serve para uma loja que decide corte por essa metragem.
+     *
+     * A média continua sendo o número da tabela e o do `--contra`, para as
+     * corridas guardadas antes disto continuarem comparáveis. Mediana, pior e
+     * desvio entram ao lado dela, e no JSON.
+     */
+    const consumos = corridas.map((c) => c.consumo).sort((a, b) => a - b);
+    const meio = Math.floor(consumos.length / 2);
+    const mediana = consumos.length % 2
+      ? consumos[meio] : (consumos[meio - 1] + consumos[meio]) / 2;
+    const consumoMedio = media((c) => c.consumo);
+    const desvio = Math.sqrt(
+      consumos.reduce((soma, v) => soma + (v - consumoMedio) ** 2, 0) / consumos.length);
+
     const linha = {
       nome,
-      consumo: media((c) => c.consumo),
+      consumo: consumoMedio,
+      mediana,
+      melhor: consumos[0],
+      pior: consumos[consumos.length - 1],
+      desvio,
       aproveitamento: media((c) => c.aproveitamento),
       tentativas: Math.round(media((c) => c.tentativas)),
+      // Tentativas por segundo de relógio. Não é uma medida do motor: é uma
+      // medida da MÁQUINA enquanto esta corrida rodou. Ver `avisarSobreRitmo`.
+      tentPorSegundo: msDeBusca > 0 ? Math.round(tentativasFeitas / (msDeBusca / 1000)) : 0,
       sobraram: Math.max(...corridas.map((c) => c.sobraram)),
       // A receita que venceu mais vezes, para saber de onde veio o resultado.
       receita: corridas.map((c) => c.receita).sort()[Math.floor(corridas.length / 2)],
@@ -344,10 +517,16 @@ async function principal() {
     };
     linhas.push(linha);
     saida.trabalhos[nome] = linha;
-    process.stdout.write(`  ${nome}: ${metros(linha.consumo)}\n`);
+    process.stdout.write(`  ${nome}: ${metros(linha.consumo)}`
+      + (corridas.length > 1
+        ? `   mediana ${metros(linha.mediana)} · melhor ${metros(linha.melhor)}`
+          + ` · pior ${metros(linha.pior)} · desvio ${(linha.desvio * 10).toFixed(1)} mm`
+        : "") + "\n");
   }
 
   console.log("");
+  avisarSobreRitmo(linhas, antes);
+  compararEmPares(linhas, antes);
   imprimirTabela(linhas, antes);
   console.log(`\n${((Date.now() - comeco) / 1000).toFixed(0)}s de bancada.`);
 

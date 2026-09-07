@@ -30,14 +30,26 @@
 // ==================== O TRABALHO, EM NÚMEROS ====================
 
 /**
- * Resume uma lista de números em média, desvio, mínimo e máximo — a mesma
- * ideia usada nas quatro estatísticas que descrevem o formato das peças.
+ * Resume uma lista de números em média, desvio, mínimo e máximo, PESANDO cada
+ * valor pela quantidade de peças que ele representa.
+ *
+ * O peso é a razão de ser da função. Sem ele, uma linha de 200 camisetas e uma
+ * linha de 1 gola contam igual na média — e o que o encaixador vê no rolo são
+ * 201 peças, das quais 200 são camiseta. A estatística tem que descrever o
+ * TECIDO, não a tabela.
+ *
+ * Mínimo e máximo não levam peso: o extremo é extremo com uma cópia ou com
+ * mil.
  */
-function estatisticasDaLista(lista) {
-  if (lista.length === 0) return { media: 0, desvio: 0, min: 0, max: 0 };
-  const media = lista.reduce((s, v) => s + v, 0) / lista.length;
-  const variancia = lista.reduce((s, v) => s + (v - media) ** 2, 0) / lista.length;
-  return { media, desvio: Math.sqrt(variancia), min: Math.min(...lista), max: Math.max(...lista) };
+function estatisticasPesadas(valores, pesos) {
+  if (valores.length === 0) return { media: 0, desvio: 0, min: 0, max: 0 };
+  const total = pesos.reduce((s, q) => s + q, 0) || 1;
+  const media = valores.reduce((s, v, i) => s + v * pesos[i], 0) / total;
+  const variancia = valores.reduce((s, v, i) => s + ((v - media) ** 2) * pesos[i], 0) / total;
+  return {
+    media, desvio: Math.sqrt(variancia),
+    min: Math.min(...valores), max: Math.max(...valores),
+  };
 }
 
 // 12 números: quantidade, largura do rolo, 4 de ocupação, 4 de proporção, e a
@@ -47,24 +59,58 @@ function estatisticasDaLista(lista) {
 // assinatura trataria como iguais.
 const REDE_DIM_TRABALHO = 12;
 
+/**
+ * A VERSÃO DAS FEATURES.
+ *
+ * `REDE_DIM_ENTRADA` protege contra o vetor mudar de TAMANHO — é o que acontece
+ * quando um encaixador ou uma ordem nova entra no vocabulário, e `redeServeAinda`
+ * (encaixe-memoria.js) pega isso na hora. Só que ele não pega o caso pior: o
+ * vetor continuar do mesmo tamanho e os campos passarem a QUERER DIZER OUTRA
+ * COISA. Aí os pesos velhos casam com a entrada nova sem reclamar, e a rede
+ * responde com convicção sobre um trabalho que ela nunca viu.
+ *
+ * Foi exatamente o que aconteceu da versão 1 para a 2: `pecas` sempre foram as
+ * LINHAS da tabela, não as cópias. A rede lia "3 peças" num trabalho de 200, e
+ * a média de ocupação de um lote de 200 camisetas mais 1 gola saía meio a meio.
+ * Os doze números continuaram doze; só o significado de cinco deles mudou.
+ *
+ * Por isso a versão viaja com o dado: cada linha do histórico grava em qual
+ * versão as features dela foram calculadas (`features_versao`, ver db.js), o
+ * treino só junta linhas da versão de agora, e os pesos salvos carregam a versão
+ * em que nasceram. Mudou o significado de qualquer campo do vetor do trabalho,
+ * sobe o número aqui — e o histórico velho para de contaminar o treino sozinho,
+ * sem migração e sem apagar nada.
+ */
+const REDE_VERSAO_FEATURES = 2;
+
+/**
+ * `pecas` são as LINHAS da tabela (uma por formato), cada uma com o `qtd` dela.
+ * Tudo aqui dentro é contado por CÓPIA, que é o que vai para o rolo.
+ */
 function vetorDoTrabalho(pecas, larguraTecido) {
-  const ocupacoes = pecas.map((p) => (p.ocupacao == null ? 1 : p.ocupacao));
-  const proporcoes = pecas.map((p) => Math.log2(p.altura > 0 ? p.largura / p.altura : 1));
-  const oc = estatisticasDaLista(ocupacoes);
-  const pr = estatisticasDaLista(proporcoes);
-  const livres = pecas.filter((p) => p.giro === "livre").length;
-  const fixas = pecas.filter((p) => p.giro === "fixa").length;
-  const n = pecas.length || 1;
+  const usadas = pecas.filter((p) => (p.qtd == null ? 1 : Number(p.qtd)) > 0);
+  const pesos = usadas.map((p) => (p.qtd == null ? 1 : Number(p.qtd)));
+  const total = pesos.reduce((s, q) => s + q, 0) || 1;
+  const ocupacoes = usadas.map((p) => (p.ocupacao == null ? 1 : p.ocupacao));
+  const proporcoes = usadas.map((p) => Math.log2(p.altura > 0 ? p.largura / p.altura : 1));
+  const oc = estatisticasPesadas(ocupacoes, pesos);
+  const pr = estatisticasPesadas(proporcoes, pesos);
+  const somarSe = (modo) =>
+    usadas.reduce((s, p, i) => s + (p.giro === modo ? pesos[i] : 0), 0);
 
   return [
-    Math.log2(1 + pecas.length) / 6,
+    // Dividido por 8, e não mais por 6: o número passou a ser de cópias, e o
+    // divisor é só a escala que põe o trabalho típico perto de 1 (2^8 = 256
+    // peças). Com 6 e contando cópias, um lote grande saía em 1,3 e empurrava
+    // a primeira camada para o canto plano da tanh.
+    Math.log2(1 + total) / 8,
     Math.min(2, larguraTecido / 300),
     oc.media, oc.desvio, oc.min, oc.max,
     pr.media / 3, pr.desvio / 3,
     Math.max(-1, Math.min(1, pr.min / 3)),
     Math.max(-1, Math.min(1, pr.max / 3)),
-    livres / n,
-    fixas / n,
+    somarSe("livre") / total,
+    somarSe("fixa") / total,
   ];
 }
 
@@ -227,6 +273,11 @@ function pontuarReceitas(rede, vetorTrabalho, chaves) {
   // entrada —, então o certo é não ter opinião nenhuma até o servidor treinar
   // de novo. `null` é o mesmo que a busca já recebe quando não há rede.
   if (!rede || !Array.isArray(rede.tamanhos) || rede.tamanhos[0] !== REDE_DIM_ENTRADA) return null;
+  // E rede treinada com features de outro significado, ainda que do mesmo
+  // tamanho. O servidor já não manda uma dessas (ver `redeServeAinda`), mas a
+  // checagem é barata e este é o lugar onde o palpite errado sairia — a busca
+  // corta receita com base nele quando a rede está madura.
+  if (rede.versaoFeatures !== REDE_VERSAO_FEATURES) return null;
 
   const pontos = new Map();
   chaves.forEach((chave) => {
@@ -238,18 +289,28 @@ function pontuarReceitas(rede, vetorTrabalho, chaves) {
 
 // ==================== GUARDAR E CARREGAR OS PESOS ====================
 
+// A versão das features vai junto com os pesos, e não ao lado deles: os pesos
+// só querem dizer alguma coisa em cima do vetor que os treinou. Guardados
+// juntos, não tem como um chegar sem o outro.
 function pesosParaJSON(rede) {
-  return JSON.stringify({ tamanhos: rede.tamanhos, camadas: rede.camadas });
+  return JSON.stringify({
+    tamanhos: rede.tamanhos, camadas: rede.camadas,
+    versaoFeatures: REDE_VERSAO_FEATURES,
+  });
 }
 
 function redeDoJSON(texto) {
   const dados = JSON.parse(texto);
-  return { tamanhos: dados.tamanhos, camadas: dados.camadas };
+  // Pesos gravados antes da versão existir são, por definição, da versão 1.
+  return {
+    tamanhos: dados.tamanhos, camadas: dados.camadas,
+    versaoFeatures: dados.versaoFeatures == null ? 1 : dados.versaoFeatures,
+  };
 }
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    REDE_DIM_TRABALHO, REDE_DIM_RECEITA, REDE_DIM_ENTRADA,
+    REDE_DIM_TRABALHO, REDE_DIM_RECEITA, REDE_DIM_ENTRADA, REDE_VERSAO_FEATURES,
     REDE_MOTORES, REDE_AGRUPAMENTOS, REDE_ORDENS, REDE_HEURISTICAS,
     vetorDoTrabalho, vetorDaReceita,
     criarRede, prever, treinarRede, pontuarReceitas,

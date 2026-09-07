@@ -171,35 +171,79 @@ function validarSilhueta(bits, total, modo) {
 }
 
 /**
+ * A largura de cada linha do disco de raio `raio`, em células.
+ *
+ * `alcance[dy]` é até onde a borda vai na horizontal, `dy` linhas acima ou
+ * abaixo do centro. O arredondamento é para CIMA de propósito: o disco fica um
+ * tiquinho maior que o pedido, nunca menor. Errar para mais gasta um pouco de
+ * tecido; errar para menos encosta a peça e estraga o corte.
+ *
+ * Fica guardado por raio: o mesmo disco serve para todas as peças do trabalho.
+ */
+const discosPorRaio = new Map();
+
+function discoDoRaio(raio) {
+  let disco = discosPorRaio.get(raio);
+  if (disco) return disco;
+  disco = new Int32Array(raio + 1);
+  for (let dy = 0; dy <= raio; dy++) {
+    disco[dy] = Math.ceil(Math.sqrt(Math.max(0, raio * raio - dy * dy)) - 1e-9);
+  }
+  discosPorRaio.set(raio, disco);
+  return disco;
+}
+
+/**
  * Engorda a silhueta pelo raio pedido, que é como o espaço entre peças entra
  * na conta: cada peça carrega metade da folga em volta dela, então duas peças
- * encostadas ficam com a folga inteira entre uma e outra. Separável em duas
- * passadas (horizontal e vertical) para não ficar caro.
+ * encostadas ficam com a folga inteira entre uma e outra.
+ *
+ * A borda é um DISCO, e isso importa mais do que parece.
+ *
+ * Isto já foi duas passadas separáveis, horizontal e vertical, cada uma de
+ * `raio` células. É rápido e está errado: duas passadas assim desenham um
+ * QUADRADO, não uma borda. O quadrado alcança `raio` de lado mas `raio × √2`
+ * na diagonal — 41% a mais. Na prática, a folga pedida só saía exata onde duas
+ * peças se tocavam por uma borda reta; em qualquer contato em curva ou
+ * diagonal, que é quase toda a silhueta de um molde, ela saía até 41% maior.
+ *
+ * Era isso que fazia a folga se comportar como um MÍNIMO em vez de uma medida:
+ * pedir 4 mm e receber de 4 a 5,7 mm, conforme o ângulo do encosto. Com o
+ * disco, o excesso na diagonal cai de 41% para menos de 6% — o que sobra é a
+ * grade, que só tem células inteiras.
+ *
+ * O laço percorre só as células de borda da silhueta: o disco de uma célula do
+ * meio já está inteiro dentro do disco das vizinhas dela, então carimbá-la de
+ * novo é trabalho perdido.
  */
 function engordar(bits, cols, rows, raio) {
   if (raio <= 0) return bits;
 
-  const horizontal = new Uint8Array(cols * rows);
-  for (let y = 0; y < rows; y++) {
-    const linha = y * cols;
-    for (let x = 0; x < cols; x++) {
-      if (!bits[linha + x]) continue;
-      const ini = Math.max(0, x - raio);
-      const fim = Math.min(cols - 1, x + raio);
-      for (let k = ini; k <= fim; k++) horizontal[linha + k] = 1;
-    }
-  }
+  const disco = discoDoRaio(raio);
+  const saida = new Uint8Array(cols * rows);
+  const cheia = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows && bits[y * cols + x] === 1;
 
-  const vertical = new Uint8Array(cols * rows);
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
-      if (!horizontal[y * cols + x]) continue;
-      const ini = Math.max(0, y - raio);
-      const fim = Math.min(rows - 1, y + raio);
-      for (let k = ini; k <= fim; k++) vertical[k * cols + x] = 1;
+      if (!bits[y * cols + x]) continue;
+      saida[y * cols + x] = 1;
+      // Célula cercada por todos os lados não acrescenta nada ao contorno.
+      if (cheia(x - 1, y) && cheia(x + 1, y) && cheia(x, y - 1) && cheia(x, y + 1)
+        && cheia(x - 1, y - 1) && cheia(x + 1, y - 1)
+        && cheia(x - 1, y + 1) && cheia(x + 1, y + 1)) continue;
+
+      for (let dy = -raio; dy <= raio; dy++) {
+        const linha = y + dy;
+        if (linha < 0 || linha >= rows) continue;
+        const largura = disco[dy < 0 ? -dy : dy];
+        const ini = Math.max(0, x - largura);
+        const fim = Math.min(cols - 1, x + largura);
+        const base = linha * cols;
+        for (let k = ini; k <= fim; k++) saida[base + k] = 1;
+      }
     }
   }
-  return vertical;
+  return saida;
 }
 
 /**

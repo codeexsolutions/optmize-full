@@ -23,9 +23,11 @@ const express = require("express");
 const { RAIZ_DE_UPLOADS } = require("./caminhos");
 require("./db"); // garante que o banco SQLite e as tabelas existem antes de tudo
 const encaixePdfRouter = require("./encaixe-pdf");
+const macrosRouter = require("./macros-api");
 const encaixeMemoriaRouter = require("./encaixe-memoria");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
+const corRouter = require("./cor-api");
 
 const app = express();
 
@@ -36,6 +38,10 @@ const app = express();
 // limite); aqui sobra só o desenho do encaixe, que é pequeno.
 app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixePdfRouter);
 app.use("/api/encaixe", express.json({ limit: "2mb" }), encaixeMemoriaRouter);
+
+// A conversão de cor recebe a arte crua, e arte de produção passa de 15 MB com
+// frequência. Como o PDF acima, precisa vir antes do express.json geral.
+app.use("/api/cor", corRouter);
 
 app.use(express.json({ limit: "15mb" })); // dá folga para o contorno de um molde com muitas peças
 
@@ -51,6 +57,8 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/app", express.static(path.join(__dirname, "dist")));
 
 app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
+// A tela de Macros: entrega o .bas da macro do Corel e ajuda a pô-lo lá.
+app.use("/api/macros", macrosRouter);
 app.use("/api/moldes", moldesRouter);
 app.use("/api/projetos", projetosRouter);
 
