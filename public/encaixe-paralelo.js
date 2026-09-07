@@ -161,6 +161,10 @@ function pecaParaWorker(item) {
     indice: item.indice, copia: item.copia,
     nome: item.nome, qtd: item.qtd, giro: item.giro,
     largura: item.largura, altura: item.altura,
+    // O grupo marcado na tabela. Sem ele do lado de lá, as peças do grupo não
+    // entrariam grudadas na fila e o encaixe sairia como se não houvesse grupo
+    // nenhum (ver "OS GRUPOS DA PESSOA", em encaixe-motor.js).
+    grupo: item.grupo || null,
     mascaras: mascarasParaBusca(item.mascaras),
   };
 }
@@ -377,9 +381,19 @@ async function buscarMelhorEncaixeEmParalelo(itens, config) {
         quebrou = true;
         pronto();
       }, { once: true });
-      w.postMessage({ tipo: "buscar", config: configLimpo, fatia: { k, n },
+      // O papel desta fatia (ver `papelDaFatia`, em encaixe-motor.js). Ele entra
+      // POR CIMA do config da tela: é ele que desliga a poda na fatia de
+      // controle, e a tela não tem por que saber disso.
+      const papel = papelDaFatia(k, n);
+      // Os encaixadores desta fatia e o pedaço do portfólio que cabe a ela —
+      // ver `motoresDaFatia` e `fatiaDoPortfolio`, em encaixe-motor.js. A fatia
+      // dedicada a um encaixador próprio recebe o portfólio inteiro DELE; as
+      // outras redividem o comum entre si, senão sobra receita órfã.
+      const pedidos = configLimpo.motores || [];
+      w.postMessage({ tipo: "buscar", config: { ...configLimpo, ...papel.config },
+        fatia: fatiaDoPortfolio(k, n, pedidos),
         saltoX: puloDaFatia(k), semente: sementeDaFatia(configLimpo.semente, k),
-        motores: configLimpo.motores || [] });
+        motores: motoresDaFatia(k, n, pedidos) });
     }));
 
     // 3) O botão de parar mora na tela; daqui ele vira um aviso para as fatias.

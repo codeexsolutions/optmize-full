@@ -132,7 +132,7 @@ async function principal() {
     const itens = expandir(pecas);
     const r = motor.encaixarContorno(motor.montarUnidades(itens, 1), {
       larguraTecido: receita.larguraTecido, espaco: receita.espaco,
-      margem: receita.margem, passo, heuristica: "fundo",
+      comprimentoBancada: receita.comprimentoBancada || 0, passo, heuristica: "fundo",
     });
 
     const cols = Math.ceil(receita.larguraTecido / passo);

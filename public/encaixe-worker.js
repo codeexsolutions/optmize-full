@@ -68,6 +68,10 @@ function resultadoParaEnviar(r) {
       largura: p.largura, altura: p.altura,
       rot: p.rot, girado: p.girado,
       comMascara: !!p.mascara, passo: p.passo,
+      // A bancada em que a peça caiu. Sem ela de volta, a tela não desenha a
+      // linha de corte e o PDF sai numa página só — o encaixe teria respeitado
+      // a bancada e ninguém veria.
+      bancada: p.bancada || 0,
     })),
   };
 }

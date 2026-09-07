@@ -102,7 +102,7 @@ db.exec(`
     assinatura TEXT,
     largura_tecido REAL,
     espaco REAL,
-    margem REAL,
+    comprimento_bancada REAL,
     consumo REAL NOT NULL,
     aproveitamento REAL,
     pecas TEXT,
@@ -135,9 +135,9 @@ db.exec(`
   );
 
   -- O projeto guarda também os ajustes do encaixe (largura do tecido, folga,
-  -- margem e giro). É isso que faz "repetir" ser um clique: abrir o projeto e
-  -- mandar para o Encaixe já vai com tudo preenchido, do jeito que deu certo da
-  -- última vez.
+  -- comprimento da bancada e giro). É isso que faz "repetir" ser um clique:
+  -- abrir o projeto e mandar para o Encaixe já vai com tudo preenchido, do
+  -- jeito que deu certo da última vez.
   CREATE TABLE IF NOT EXISTS projetos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cliente_id INTEGER NOT NULL REFERENCES projeto_clientes(id) ON DELETE CASCADE,
@@ -145,7 +145,7 @@ db.exec(`
     observacoes TEXT,
     largura_tecido REAL,
     espaco REAL,
-    margem REAL,
+    comprimento_bancada REAL,
     giro TEXT,
     criado_em TEXT NOT NULL,
     atualizado_em TEXT
@@ -209,12 +209,42 @@ function garantirColuna(tabela, coluna, definicao) {
   if (!existe) db.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${definicao}`);
 }
 
+/**
+ * Coluna que saiu. A margem de borda deixou de existir quando o comprimento da
+ * bancada entrou no lugar dela (ver o cabeçalho da BANCADA em
+ * public/encaixe-motor.js): ela reservava tecido nas quatro bordas do rolo, e
+ * quem decide onde o rolo é cortado agora é a bancada.
+ *
+ * Sai debaixo de um try porque `DROP COLUMN` só existe no SQLite 3.35 em
+ * diante. Num banco mais velho a coluna fica lá, sem ninguém escrever nem ler
+ * nada nela — o que não estraga coisa alguma.
+ */
+function removerColuna(tabela, coluna) {
+  const existe = db.prepare(`PRAGMA table_info(${tabela})`).all().some((c) => c.name === coluna);
+  if (!existe) return;
+  try {
+    db.exec(`ALTER TABLE ${tabela} DROP COLUMN ${coluna}`);
+  } catch (erro) {
+    console.warn(`[db] não deu para remover ${tabela}.${coluna}:`, erro.message);
+  }
+}
+
 garantirColuna("projeto_pecas", "miniatura", "TEXT");
+garantirColuna("projetos", "comprimento_bancada", "REAL");
+garantirColuna("encaixe_guardados", "comprimento_bancada", "REAL");
+removerColuna("projetos", "margem");
+removerColuna("encaixe_guardados", "margem");
 // O vetor de features do trabalho e o placar daquela busca específica — o que
 // treina a rede das receitas (ver public/encaixe-rede.js). Ficam nulos nas
 // linhas gravadas antes desta versão; a rede só usa quem tem os dois.
 garantirColuna("encaixe_historico", "features", "TEXT");
 garantirColuna("encaixe_historico", "placar", "TEXT");
+// Em qual versão do vetor as features desta linha foram calculadas (ver
+// `REDE_VERSAO_FEATURES`, em public/encaixe-rede.js). Sem ela, um vetor que
+// mudou de significado sem mudar de tamanho entraria no treino misturado com
+// os antigos, e ninguém veria. Linha gravada antes disto fica NULL, que é
+// tratado como versão 1 e simplesmente não entra mais no treino.
+garantirColuna("encaixe_historico", "features_versao", "INTEGER");
 
 db.pragma("optimize");
 

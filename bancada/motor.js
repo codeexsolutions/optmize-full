@@ -35,7 +35,8 @@ const EXPOSTOS = [
   "buscarMelhorEncaixe", "encaixarContorno", "encaixarPorVaos", "encaixar",
   "montarUnidades", "montarUnidadesCruzadas", "formasDaPeca", "formaDePartes",
   "mascarasDeSilhueta", "silhuetaDeDados", "grade", "gradeDaPeca",
-  "assinaturaDoTrabalho", "vetorDoTrabalho",
+  "assinaturaDoTrabalho", "vetorDoTrabalho", "juntarGrupos", "familiaDaUnidade",
+  "papelDaFatia", "ORDENS_CONTORNO", "motoresDaFatia", "fatiaDoPortfolio",
   "carregarMotorWasm", "temMotorWasm",
 ];
 

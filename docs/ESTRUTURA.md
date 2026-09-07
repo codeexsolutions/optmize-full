@@ -60,9 +60,13 @@ a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
   **preso** — vazio com peça por baixo, que o relevo por coluna não alcança mais
   — e o que caberia no maior deles. É a medida que justificou a repescagem.
 - `bancada/conferir-pdf.js`: `npm run bancada:pdf`. O PDF do encaixe tem que
-  sair num arquivo só, numa página só, no tamanho real certo — e, quando usa o
-  `/UserUnit`, declarando PDF 1.6. **Peça partida é peça perdida**: se alguém
-  reintroduzir a repartição do rolo, é este arquivo que grita.
+  sair num arquivo só, com uma página por bancada, no tamanho real certo — e,
+  quando usa o `/UserUnit`, declarando PDF 1.6. **Peça partida é peça perdida**:
+  se alguém reintroduzir a repartição em ARQUIVOS, é este arquivo que grita.
+- `bancada/conferir-bancada.js`: `npm run bancada:corte`. A trava da bancada:
+  nenhuma peça cruza a linha entre duas, cada bancada cabe no comprimento
+  pedido, e a arte impressa também. É a regra em que a paginação do PDF se
+  apoia, e ela também mede quanto a trava custou de tecido.
 
 **Como medir uma mexida:** ela entra atrás de um ajuste do `config` com padrão,
 e as duas corridas saem do mesmo código — `--extra reparoChance=0` de um lado,
@@ -103,7 +107,7 @@ As duas telas guardam trabalho para reaproveitar, mas o que elas guardam é dife
 - **Moldes** guarda a **geometria** da peça (o contorno em centímetros). A estampa é aplicada nele depois, e o mesmo molde serve para P, M e G.
 - **Projetos** guarda a **arte já aplicada** — a estampa na camisa, na bandeira. Não há passo seguinte: a peça vai direto para o encaixe.
 
-Por isso o projeto guarda também os ajustes do encaixe (largura do tecido, folga, margem, giro): repetir um pedido é abrir, dizer quantas unidades e mandar calcular.
+Por isso o projeto guarda também os ajustes do encaixe (largura do tecido, folga, comprimento da bancada, giro): repetir um pedido é abrir, dizer quantas unidades e mandar calcular.
 
 ## Arquivos que não são código-fonte
 

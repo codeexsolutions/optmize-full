@@ -288,7 +288,7 @@ passo — vai direto para o encaixe.
    dpi e o número fica editável na linha — e o que você corrigir fica guardado,
    para não ter que descobrir de novo na próxima repetição. Cada arte diz também
    **quantas vão em uma unidade** (uma manga entra 2×).
-4. **Ajustes do encaixe** — largura do tecido, folga, margem e giro ficam
+4. **Ajustes do encaixe** — largura do tecido, folga, comprimento da bancada e giro ficam
    guardados **com o projeto**. É isso que faz a repetição ser um clique: não se
    redescobre o que já deu certo.
 5. **Fundo** — a arte é guardada **como veio**, com o fundo que tinha: a
@@ -315,8 +315,17 @@ PNG/JPG), diz a largura do rolo e o sistema posiciona tudo sozinho, calculando
 quantos metros vão ser gastos.
 
 1. **Tecido** — largura útil do rolo em centímetros, o **espaço entre peças em
-   milímetros** (a folga da faca/tesoura) e a margem nas bordas. O comprimento
-   é livre: o resultado diz quantos metros o encaixe consumiu.
+   milímetros** (a folga da faca/tesoura) e o **comprimento da bancada** em
+   centímetros. Deixando a bancada vazia, o comprimento é livre e o resultado
+   diz quantos metros o encaixe consumiu — é como o programa sempre funcionou.
+
+   Preenchendo, o rolo passa a sair repartido em bancadas do tamanho da sua
+   mesa de corte: quando a peça não cabe no que sobrou, o encaixe começa outra
+   bancada. Nenhuma peça cruza a linha entre duas — e é essa garantia que faz o
+   PDF poder sair com **uma página por bancada**, cada uma já do tamanho da
+   mesa. Custa tecido: medido na bancada de testes, +2,6% com bancada de 3 m
+   (bancada curta demais custa mais — 200 cm nos mesmos trabalhos deu +7,3%).
+   A tela desenha a linha de corte em laranja tracejado.
 
    A folga é aplicada engordando cada peça pela metade dela, e esse engorde
    acontece na grade do encaixe — então é a grade que decide a precisão. Por
@@ -597,6 +606,15 @@ quantos metros vão ser gastos.
    insistir nas receitas que ganharam antes sufoca a variação que acharia algo
    melhor desta vez. O sorteio é parelho de propósito.
 
+   **A tela fica com o melhor, sozinha.** A busca é sorteada: ela acha um
+   encaixe muito bom numa rodada e pode não chegar lá na seguinte. Antes, a
+   rodada pior tomava a tela e o bom só voltava se a pessoa reparasse num aviso
+   e clicasse num botão — na prática, o melhor se perdia. Hoje, quando a procura
+   sai pior do que o melhor já conseguido com aquelas mesmas peças, a tela volta
+   sozinha para o melhor e diz o que esta procura deu. Nada é escondido; o que
+   muda é que nada de bom se perde por distração. A bancada mede do mesmo jeito:
+   com `--rodadas`, o número relatado é o melhor das rodadas, não o da última.
+
    **O melhor encaixe já conseguido fica guardado inteiro.** Guardar só a
    metragem do recorde não bastava: a busca é sorteada, então ela acha um
    encaixe muito bom numa rodada e pode não chegar lá de novo na seguinte — e o
@@ -611,7 +629,8 @@ quantos metros vão ser gastos.
 
    O que identifica "o mesmo trabalho" é a lista exata de peças (nome, medida,
    quantidade, giro e contorno de cada uma) junto com a largura do tecido, a
-   folga e a margem. Mudou qualquer coisa disso, o encaixe guardado não serve e
+   folga e o comprimento da bancada. Mudou qualquer coisa disso, o encaixe
+   guardado não serve e
    não é oferecido — diferente da *assinatura* do aprendizado, que agrupa
    trabalhos só parecidos de propósito. Encaixe melhor toma o lugar do
    guardado; empate não troca.
@@ -623,11 +642,12 @@ quantos metros vão ser gastos.
    sobra, junto do desenho do rolo com cada arte no lugar e o contorno que o
    encaixe enxergou.
 
-   **Baixar PDF (tamanho real)** gera o encaixe em escala 1:1, numa **página
-   só**: ela tem exatamente a largura do tecido e o comprimento do encaixe, em
-   centímetros de verdade, por mais comprida que fique — um encaixe de 11,31 m
-   sai como uma página de 160 x 1131 cm. É esse o formato que o RIP da plotter
-   espera; quebrar em trechos estraga o envio. As artes vão embutidas na
+   **Baixar PDF (tamanho real)** gera o encaixe em escala 1:1, num **arquivo
+   só**. Sem bancada é também uma **página só**: ela tem exatamente a largura do
+   tecido e o comprimento do encaixe, em centímetros de verdade, por mais
+   comprida que fique — um encaixe de 11,31 m sai como uma página de
+   160 x 1131 cm. Com bancada, sai **uma página por bancada**, cada uma do
+   tamanho da mesa; o arquivo continua sendo um só. As artes vão embutidas na
    resolução de impressão (até 150 dpi, ou a resolução da arte, o que for
    menor). Imprimindo sem "ajustar à página", o que sai no papel mede o que a
    peça mede. Vai só o desenho — nada de régua, nome de peça ou rodapé, que
@@ -640,6 +660,25 @@ quantos metros vão ser gastos.
    e o download simplesmente falhava. Se mesmo assim as artes forem grandes
    demais, o sistema **reduz a resolução na medida certa para caber** e avisa
    qual foi usada; o tamanho em centímetros continua exato.
+
+   **A folga sai do tamanho pedido, e isso já foi diferente.** Cada peça carrega
+   metade da folga como uma borda em volta da silhueta, então duas peças
+   encostadas ficam com a folga inteira entre elas. Essa borda era desenhada com
+   uma passada horizontal e outra vertical — o que produz um **quadrado**, não um
+   contorno. Quadrado alcança o raio pedido de lado e `raio × √2` na diagonal,
+   então a folga só saía exata onde duas peças se tocavam por uma reta; em
+   qualquer encosto em curva, que é quase toda a silhueta de um molde, ela saía
+   maior. Medido na bancada: pedindo 10 mm, a menor folga real do encaixe era
+   **15,0 mm**. A folga se comportava como um mínimo, não como uma medida.
+
+   Hoje a borda é um **disco**, e a mesma medição dá **11,2 mm** — o que sobra é
+   a grade, que só tem células inteiras. O arredondamento do disco é para cima
+   de propósito: errar para mais gasta um tiquinho de tecido, errar para menos
+   encosta a peça e estraga o corte. Quem confere isso a cada mexida é o
+   `npm run bancada:sobreposicao`, que agora mede a **distância real entre as
+   silhuetas** do encaixe pronto, e não só se as peças engordadas se tocam — essa
+   última pergunta é quase uma tautologia, porque a peça engordada é o que o
+   motor usa para decidir.
 
    O PDF não aceita página com mais de 5,08 m de lado, e encaixe de vários
    metros passa longe disso. Em vez de cortar em trechos, o arquivo usa o
@@ -655,20 +694,27 @@ quantos metros vão ser gastos.
    leitor tem todo o direito de ignorar o `/UserUnit` e imprimir o rolo na
    escala errada — sem erro nenhum, que é o pior jeito de descobrir. Por isso o
    documento nasce 1.6 quando o `/UserUnit` entra em ação, e 1.3 quando não
-   precisa dele. Quem confere isso, junto com "uma página só" e "o tamanho real
-   bate", é `npm run bancada:pdf`.
+   precisa dele. Quem confere isso, junto com "uma página por bancada" e "o
+   tamanho real bate", é `npm run bancada:pdf`.
 
-   > **Já foi repartido, e não é mais.** Por um tempo o rolo saía em arquivos
-   > de até 10 m, para o RIP processar um trecho enquanto imprimia o anterior.
-   > Só que repartir precisa de um lugar para cortar, e encaixe bom é
-   > exatamente o que não deixa vão: num rolo denso o corte acabava passando
-   > por cima de uma peça, que saía pela metade num arquivo e pela outra metade
-   > no seguinte. Os dois pedaços só fecham se os arquivos entrarem na máquina
-   > colados, sem um milímetro de folga entre um trabalho e o outro, e na
-   > prática isso não acontece. **Peça partida é peça perdida.** Se um rolo
-   > muito longo engasgar o RIP, o caminho não é voltar a partir peça: é
-   > separar o trabalho em dois encaixes menores, na tela, onde dá para
-   > escolher onde cortar.
+   Repartindo por bancada, o `/UserUnit` costuma nem entrar em ação: um rolo de
+   40 m em bancadas de 2 m vira 20 páginas que cabem folgadas no limite do
+   formato, e o arquivo sai como PDF 1.3 — o caso de maior compatibilidade.
+
+   > **Já foi repartido em ARQUIVOS, e não é mais.** Por um tempo o rolo saía em
+   > arquivos de até 10 m, para o RIP processar um trecho enquanto imprimia o
+   > anterior. O defeito não era repartir: era **onde** o corte caía. Ele
+   > procurava um vão entre as peças, e encaixe bom é exatamente o que não deixa
+   > vão — num rolo denso o corte acabava passando por cima de uma peça, que
+   > saía pela metade num arquivo e pela outra metade no seguinte. Os dois
+   > pedaços só fecham se os arquivos entrarem na máquina colados, sem um
+   > milímetro de folga entre um trabalho e o outro, e na prática isso não
+   > acontece. **Peça partida é peça perdida.**
+   >
+   > A bancada resolve isso pelo outro lado. O corte não procura mais nada: o
+   > encaixe é feito com a trava de que nenhuma peça cruza a linha, então a
+   > página nasce de um lugar onde peça nenhuma **pode** estar. E continua tudo
+   > num arquivo só, que é o que dispensa a emenda entre envios.
 
    Também dá para baixar o desenho em PNG (só para conferir na tela, não tem
    escala) ou imprimir a tela.
@@ -855,8 +901,7 @@ O que está pronto e conferido: as divisões candidatas saem das larguras das
 próprias peças (uma peça por fileira, duas, três...) e só entram na lista se o
 que sobra ainda comporta a peça mais estreita; o reparte manda cada peça para a
 faixa onde ela cabe e, quando cabe nas duas, para a que estiver mais vazia; as
-faixas dividem a margem do rolo em vez de cada uma criar a sua; e o consumo é o
-da faixa mais comprida. Nada atravessa a linha da divisão e nada fica em cima
+e o consumo é o da faixa mais comprida. Nada atravessa a linha da divisão e nada fica em cima
 de nada.
 
 O que **não** está pronto é ganhar do encaixe que já existe. Medindo:
@@ -1040,13 +1085,13 @@ cresce:
 | calça+bolso | 2,330 m | 2,510 m | +7,7% |
 | lote grande (130 peças) | 13,900 m | 14,105 m | +1,5% |
 
-Separar cobra duas coisas: uma margem de borda por arquivo, e a chance de a peça
-pequena cair no vão da grande. Mas repare na tendência — de +49% para +1,5%
+Separar cobra duas coisas: um rabo de rolo mal aproveitado por arquivo, e a
+chance de a peça pequena cair no vão da grande. Mas repare na tendência — de +49% para +1,5%
 conforme o trabalho engorda. A vantagem de misturar encolhe justamente onde a
 observação nasceu.
 
 Daí a receita `contorno/solta/familia/…`: o meio-termo entre os dois. **Um
-encaixe só** — uma margem, um rolo —, mas com as famílias entrando em bloco:
+encaixe só**, um rolo, mas com as famílias entrando em bloco:
 todas as camisetas, depois todas as mangas, depois todas as golas. Quem escolhe
 a sequência de formatos é a busca, sacudindo blocos inteiros
 (`baguncarFamilias`) em vez de peça por peça, que desmancharia o agrupamento na
@@ -1316,7 +1361,8 @@ npm run bancada -- --todos --tempo 5     os seis trabalhos, 5 s por fatia
 npm run bancada -- --json depois.json    guarda a corrida
 npm run bancada -- --contra antes.json   compara com uma corrida anterior
 npm run bancada:conferir                 o WASM bate com o JavaScript?
-npm run bancada:pdf                      o PDF sai num arquivo e numa página?
+npm run bancada:pdf                      o PDF sai num arquivo, uma página por bancada?
+node bancada/conferir-bancada.js         nenhuma peça cruza a linha da bancada?
 ```
 
 O que ela roda é o **motor de verdade**: os mesmos sete arquivos que o
@@ -1853,7 +1899,8 @@ optimize/
 │   ├── trabalhos.js          # os seis lotes de referência
 │   ├── medir.js              # a corrida: consumo, aproveitamento e a comparação
 │   ├── conferir.js           # o WASM tem que dar o mesmo resultado do JavaScript
-│   ├── conferir-pdf.js       # o PDF: um arquivo, uma página, no tamanho real certo
+│   ├── conferir-pdf.js       # o PDF: um arquivo, uma página por bancada, no tamanho certo
+│   ├── conferir-bancada.js   # nenhuma peça cruza a linha entre duas bancadas
 │   ├── conferir-sobreposicao.js  # nenhuma peça pisa em cima de outra
 │   └── vaos.js               # quanto do rolo virou vão que o motor não alcança
 ├── src/                      # a tela nova: React + TypeScript (ver docs/ARQUITETURA.md)

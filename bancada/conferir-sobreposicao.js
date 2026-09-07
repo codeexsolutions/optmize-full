@@ -15,8 +15,8 @@
  * O encaixe por perfil e o por caixa não sobrepõem **por construção** — o perfil
  * só desce até onde o relevo deixa, e a caixa recorta a área livre a cada peça.
  * Só que "por construção" é um argumento, não uma medida, e argumento não pega
- * erro de arredondamento: a posição que a tela recebe passa por `offX`, pelo
- * passo da grade e pela margem, e é ela que está sendo conferida aqui.
+ * erro de arredondamento: a posição que a tela recebe passa por `offX` e pelo
+ * passo da grade, e é ela que está sendo conferida aqui.
  *
  * Como a conferência é feita
  * --------------------------
@@ -60,8 +60,8 @@ function celulasDaPeca(pos, qual) {
   if (qual === "folga") {
     // A peça já com a folga: em cada coluna ela vai de `topo` a `base`. É a
     // mesma leitura que o encaixe faz para descer a peça, mas aqui aplicada à
-    // posição FINAL que a tela recebeu — que passou por offX, pelo passo e pela
-    // margem no caminho, e é justamente esse caminho que se quer conferir.
+    // posição FINAL que a tela recebeu — que passou por offX e pelo passo no
+    // caminho, e é justamente esse caminho que se quer conferir.
     for (let c = 0; c < m.cols; c++) {
       if (m.topo[c] < 0) continue;
       for (let r = m.topo[c]; r <= m.base[c]; r++) celulas.push([col0 + c, row0 + r]);
@@ -86,27 +86,130 @@ function celulasDaPeca(pos, qual) {
  * manga #3 em cima da camiseta #1 em tal centímetro diz tudo.
  */
 function acharSobreposicao(posicoes, qual) {
-  const ocupadas = new Map();
+  /*
+   * O tecido inteiro num vetor tipado, e não num Map de células ocupadas.
+   *
+   * O Map era natural — só as células ocupadas entram — e estourava: ele tem
+   * teto de umas 16,7 milhões de entradas, e um lote de 260 peças num rolo
+   * comprido passa disso. A conferência morria com "Map maximum size exceeded"
+   * justamente no trabalho maior, que é onde ela mais precisa rodar.
+   *
+   * O vetor gasta memória pelo rolo inteiro em vez de pelo que está ocupado, e
+   * isso sai barato: um rolo de 40 m a 0,25 cm por célula são 11 milhões de
+   * células, 44 MB de Int32Array. Em troca, o acesso é um índice direto e não
+   * há teto nenhum.
+   *
+   * Guarda `indice + 1` para o zero poder significar "vazia".
+   */
+  let maxCol = 0;
+  let maxLin = 0;
+  const daPeca = [];
+  posicoes.forEach((pos) => {
+    if (!pos.mascara || (qual !== "folga" && !pos.mascara[qual])) { daPeca.push(null); return; }
+    const celulas = celulasDaPeca(pos, qual);
+    celulas.forEach(([c, r]) => {
+      if (c > maxCol) maxCol = c;
+      if (r > maxLin) maxLin = r;
+    });
+    daPeca.push(celulas);
+  });
+
+  const largura = maxCol + 1;
+  const ocupadas = new Int32Array(largura * (maxLin + 1));
   let repetidas = 0;
   let exemplo = null;
+  let celulas = 0;
 
   posicoes.forEach((pos, indice) => {
-    if (!pos.mascara || (qual !== "folga" && !pos.mascara[qual])) return;
-    celulasDaPeca(pos, qual).forEach(([c, r]) => {
-      const chave = c * 100000 + r;
-      const antes = ocupadas.get(chave);
-      if (antes === undefined) { ocupadas.set(chave, indice); return; }
+    const minhas = daPeca[indice];
+    if (!minhas) return;
+    minhas.forEach(([c, r]) => {
+      const onde = r * largura + c;
+      const antes = ocupadas[onde];
+      if (antes === 0) { ocupadas[onde] = indice + 1; celulas++; return; }
       repetidas++;
       if (!exemplo) {
         exemplo = {
-          a: descrever(posicoes[antes]), b: descrever(pos),
+          a: descrever(posicoes[antes - 1]), b: descrever(pos),
           cm: [(c * pos.passo).toFixed(1), (r * pos.passo).toFixed(1)],
         };
       }
     });
   });
 
-  return { repetidas, exemplo, celulas: ocupadas.size };
+  return { repetidas, exemplo, celulas };
+}
+
+/**
+ * A folga DE VERDADE entre as peças de um encaixe: a menor distância, em linha
+ * reta, entre a silhueta de uma peça e a de outra.
+ *
+ * A conferência por `topo`/`base` logo acima olha a peça já engordada, e a peça
+ * engordada é o que o motor usa para decidir — então ela responde "o motor
+ * seguiu a própria regra", que é quase uma tautologia. Esta aqui pergunta outra
+ * coisa: **a distância que sobrou no tecido é a que a produção pediu?**
+ *
+ * Foi essa pergunta que pegou o defeito da borda quadrada. Engordar a silhueta
+ * com uma passada horizontal e outra vertical desenha um quadrado, e quadrado
+ * alcança 41% a mais na diagonal — então a folga saía certa onde duas peças se
+ * tocavam por uma reta e até 41% maior em qualquer encosto em curva. Pedir
+ * 4 mm e receber de 4 a 5,7 mm conforme o ângulo.
+ *
+ * Só as células de BORDA de cada peça entram na conta: a distância mínima entre
+ * duas silhuetas é sempre entre bordas, e olhar o miolo multiplicaria o custo
+ * por nada.
+ */
+function medirFolga(posicoes, larguraTecido, consumo, passo, folgaPedida) {
+  const cols = Math.ceil(larguraTecido / passo) + 2;
+  const rows = Math.ceil(consumo / passo) + 2;
+  const dono = new Int32Array(cols * rows).fill(-1);
+
+  posicoes.forEach((pos, i) => {
+    const m = pos.mascara;
+    if (!m) return;
+    const c0 = Math.round((pos.x + m.offX) / passo);
+    const r0 = Math.round((pos.y + m.offY) / passo);
+    for (let y = 0; y < m.rows; y++) {
+      const ly = r0 + y;
+      if (ly < 0 || ly >= rows) continue;
+      for (let x = 0; x < m.cols; x++) {
+        const lx = c0 + x;
+        if (lx < 0 || lx >= cols) continue;
+        if (m.desenho[y * m.cols + x]) dono[ly * cols + lx] = i;
+      }
+    }
+  });
+
+  const alcance = Math.ceil(folgaPedida / passo) + 2;
+  let menor = Infinity;
+  let abaixoDoPedido = 0;
+  let exemplo = null;
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const a = dono[y * cols + x];
+      if (a < 0) continue;
+      // só borda
+      if (dono[y * cols + x - 1] === a && dono[y * cols + x + 1] === a
+        && y > 0 && dono[(y - 1) * cols + x] === a
+        && y + 1 < rows && dono[(y + 1) * cols + x] === a) continue;
+
+      for (let dy = -alcance; dy <= alcance; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= rows) continue;
+        for (let dx = -alcance; dx <= alcance; dx++) {
+          const nx = x + dx;
+          if (nx < 0 || nx >= cols) continue;
+          const b = dono[ny * cols + nx];
+          if (b < 0 || b === a) continue;
+          const d = Math.hypot(dx, dy) * passo;
+          if (d < menor) { menor = d; exemplo = { a: posicoes[a], b: posicoes[b] }; }
+          if (d < folgaPedida - 1e-9) abaixoDoPedido++;
+        }
+      }
+    }
+  }
+  return { menor, abaixoDoPedido, exemplo };
 }
 
 const descrever = (pos) =>
@@ -115,10 +218,10 @@ const descrever = (pos) =>
 /** Roda um encaixador só, sem busca: o que se confere é o posicionamento. */
 function encaixarCom(motor, motorNome, itens, receita, passo) {
   const config = {
-    larguraTecido: receita.larguraTecido, espaco: receita.espaco, margem: receita.margem,
+    larguraTecido: receita.larguraTecido, espaco: receita.espaco,
+    comprimentoBancada: receita.comprimentoBancada || 0,
     passo, heuristica: "fundo",
-    alturaMax: itens.reduce((s, i) => s + Math.max(i.largura, i.altura) + receita.espaco,
-      receita.margem * 2),
+    alturaMax: itens.reduce((s, i) => s + Math.max(i.largura, i.altura) + receita.espaco, 0),
   };
   if (motorNome === "retangulo") return motor.encaixar(itens, { ...config, heuristica: "bl" });
   // "contorno+repesca" é o caminho da repescagem nos vãos, e ele merece
@@ -158,25 +261,45 @@ async function principal() {
     }));
     const itens = expandir(pecas);
 
+    // Com e sem bancada. A trava empurra a peça para BAIXO do ponto em que a
+    // gravidade a deixou, e empurrar para baixo é justamente o movimento que
+    // enfiaria uma peça dentro de outra se em algum motor "abaixo" não quisesse
+    // dizer "livre".
+    for (const bancada of [0, 200]) {
     for (const motorNome of opcoes.motores) {
-      const r = encaixarCom(motor, motorNome, itens, receita, passo);
+      const r = encaixarCom(motor, motorNome, itens,
+        { ...receita, comprimentoBancada: bancada }, passo);
       // O encaixe por caixa não devolve máscara (ele trabalha só com o
       // retângulo), então não há silhueta para conferir.
       if (!r.posicoes.some((p) => p.mascara)) {
-        process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)} sem máscara, nada a conferir\n`);
+        process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)}`
+          + ` bancada ${bancada ? `${bancada} cm` : "sem   "} · sem máscara, nada a conferir\n`);
         continue;
       }
 
       const real = acharSobreposicao(r.posicoes, "desenho");
       const comFolga = acharSobreposicao(r.posicoes, "folga");
+      const distancia = medirFolga(r.posicoes, receita.larguraTecido, r.consumo, passo, receita.espaco);
       const situacao = real.repetidas > 0
         ? `SOBREPÕE ${real.repetidas} células`
         : comFolga.repetidas > 0
           ? `folga comida em ${comFolga.repetidas} células`
-          : "limpo";
+          : distancia.abaixoDoPedido > 0
+            ? `FOLGA CURTA: ${(distancia.menor * 10).toFixed(1)} mm`
+            : "limpo";
 
       process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)}`
-        + ` ${r.posicoes.length} peças · ${(r.consumo / 100).toFixed(2)} m · ${situacao}\n`);
+        + ` bancada ${bancada ? `${bancada} cm` : "sem   "} ·`
+        + ` ${r.posicoes.length} peças · ${(r.consumo / 100).toFixed(2)} m`
+        + ` · folga ${(distancia.menor * 10).toFixed(1)}/${(receita.espaco * 10).toFixed(0)} mm`
+        + ` · ${situacao}\n`);
+
+      if (distancia.abaixoDoPedido > 0) {
+        falhas.push(`${nome} · ${motorNome}: a folga entre peças ficou em`
+          + ` ${(distancia.menor * 10).toFixed(1)} mm, abaixo dos`
+          + ` ${(receita.espaco * 10).toFixed(0)} mm pedidos`
+          + `\n      ${descrever(distancia.exemplo.a)}\n      ${descrever(distancia.exemplo.b)}`);
+      }
 
       if (real.repetidas > 0) {
         falhas.push(`${nome} · ${motorNome}: ${real.repetidas} células com duas peças`
@@ -187,6 +310,7 @@ async function principal() {
           + ` ${comFolga.repetidas} células (as peças não se sobrepõem, mas encostam)`
           + `\n      ${comFolga.exemplo.a}\n      ${comFolga.exemplo.b}`);
       }
+    }
     }
   }
 
