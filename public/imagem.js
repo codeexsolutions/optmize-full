@@ -57,11 +57,21 @@ const DPI_OTIMO = 300;
 const DPI_ACEITAVEL = 150;
 const DPI_LONGE = 100;
 
+/** O máximo que o modelo sabe fazer. Ele só multiplica por quatro. */
 const ESCALA_DA_REDE = 4;
 
-/** Quanto a rede aguenta antes de a espera virar castigo. */
-const PIXELS_DEMAIS = 4_000_000;      // na entrada: ~2000x2000
-const SAIDA_DEMAIS = 60_000_000;      // na saída: acima disso o canvas engasga
+/**
+ * O teto do que faz sentido produzir.
+ *
+ * Não é um limite de memória escolhido no susto — é o que sobra depois de a
+ * escala já ter sido cortada pelo tamanho de impressão. Alguém que digita
+ * "500 cm de largura" pede 59 mil pixels; isso não é um trabalho, é um engano
+ * de digitação, e a tela avisa em vez de tentar.
+ */
+const SAIDA_DEMAIS = 80_000_000;
+
+/** A partir daqui a espera passa de alguns minutos, e vale dizer isso antes. */
+const LADRILHOS_MUITOS = 400;
 
 // ==================== O DIAGNÓSTICO ====================
 
@@ -71,9 +81,16 @@ function dpiNaLargura(pixels, centimetros) {
   return pixels / (centimetros / 2.54);
 }
 
-/** O recado sobre o dpi, e a cor dele. */
+/**
+ * O recado sobre o dpi, e a cor dele.
+ *
+ * Compara o valor ARREDONDADO, que é o que a pessoa lê. Sem isso, a imagem que
+ * a própria tela ampliou para bater 300 dpi mostrava "300 dpi" e o recado de
+ * quem não chegou lá — por 3 centésimos.
+ */
 function vereditoDoDpi(dpi) {
   if (dpi === null) return { texto: "diga a largura de impressão", tom: "neutro" };
+  dpi = Math.round(dpi);
   if (dpi >= DPI_OTIMO) return { texto: "ótimo, imprime de perto", tom: "bom" };
   if (dpi >= DPI_ACEITAVEL) return { texto: "bom para a maioria dos trabalhos", tom: "bom" };
   if (dpi >= DPI_LONGE) return { texto: "serve para banner, visto de longe", tom: "meio" };
@@ -102,6 +119,64 @@ function pareceArteChapada(dados) {
   }
   if (opacos < 100) return false;
   return cores.size <= 24;
+}
+
+/**
+ * A escala que ESTA imagem precisa para ESTE tamanho de impressão.
+ *
+ * Aqui mora a correção do erro que travava o botão. Antes a tela oferecia 4x e
+ * nada mais, e então precisava recusar imagem grande, porque 4x de uma foto de
+ * celular é memória demais. Só que 4x quase nunca era o que se queria: uma foto
+ * de 12 MP impressa a 30 cm já passa de 300 dpi, e ampliar aquilo seria gastar
+ * minutos para produzir pixel que não vira tinta.
+ *
+ * Então a conta é a de verdade: quantos pixels faltam para chegar aos 300 dpi
+ * na largura pedida. O resto — quanto a rede consegue, quanta memória cabe —
+ * são tetos aplicados em cima disso, e não o ponto de partida.
+ */
+function escalaQuePrecisa(item) {
+  const alvo = (item.larguraCm / 2.54) * DPI_OTIMO;
+  const bruta = alvo / item.antes.width;
+  if (!(bruta > 1)) return 1;                       // já tem tamanho de sobra
+  return Math.min(ESCALA_DA_REDE, bruta);
+}
+
+/** O que a tela precisa saber para decidir o que oferecer. */
+function planoDaImagem(item) {
+  const w = item.antes.width;
+  const h = item.antes.height;
+
+  let escala = escalaQuePrecisa(item);
+
+  // Estourou o teto? Reduz até caber, em vez de recusar.
+  //
+  // Isto é deliberado, e é a lição do botão travado: pedir 1 m a 300 dpi
+  // é pedir 104 megapixels, e a resposta certa não é "não dá", é entregar o
+  // maior que cabe e dizer com quantos dpi ficou. Quem imprime a 1 m olha de
+  // longe e nem queria 300.
+  let cortadaPeloTeto = false;
+  if (Math.round(w * escala) * Math.round(h * escala) > SAIDA_DEMAIS) {
+    escala = Math.sqrt(SAIDA_DEMAIS / (w * h));
+    cortadaPeloTeto = true;
+  }
+
+  const largura = Math.round(w * escala);
+  const altura = Math.round(h * escala);
+  const ladrilhos = Math.ceil(w / 112) * Math.ceil(h / 112);
+
+  return {
+    escala,
+    largura,
+    altura,
+    ladrilhos,
+    cortadaPeloTeto,
+    dpiQueDa: dpiNaLargura(largura, item.larguraCm),
+    jaBasta: escala <= 1.02 && !cortadaPeloTeto,
+    // Só sobra "grande demais" quando nem a imagem como está cabe: aí não
+    // existe ampliação nenhuma a oferecer.
+    grandeDemais: escala < 1,
+    demorado: ladrilhos > LADRILHOS_MUITOS,
+  };
 }
 
 // ==================== LER O ARQUIVO ====================
@@ -194,8 +269,22 @@ async function ampliarComRede(item) {
   renderImagem();
 
   const copia = new Uint8ClampedArray(item.antes.data);
+  const plano = planoDaImagem(item);
 
   return new Promise((resolver) => {
+    // Sem isto, um worker que morre (modelo que não carrega, memória que
+    // acaba) deixa `trabalhando` preso para sempre e TODOS os botões da tela
+    // apagados, sem dizer por quê. Foi assim que a primeira versão travou.
+    worker.onerror = (evento) => {
+      imagemEstado.trabalhando = null;
+      item.andamento = null;
+      item.erro = "A rede parou: " + (evento.message || "erro dentro do worker")
+        + ". Tente de novo, ou use \"Só ampliar\".";
+      imagemEstado.worker = null;   // o próximo clique cria um worker novo
+      renderImagem();
+      resolver();
+    };
+
     worker.onmessage = (evento) => {
       const dados = evento.data;
 
@@ -224,7 +313,13 @@ async function ampliarComRede(item) {
     };
 
     worker.postMessage(
-      { id: item.id, pixels: copia.buffer, largura: item.antes.width, altura: item.antes.height },
+      {
+        id: item.id,
+        pixels: copia.buffer,
+        largura: item.antes.width,
+        altura: item.antes.height,
+        escala: plano.escala,
+      },
       [copia.buffer],
     );
   });
@@ -313,10 +408,7 @@ function renderImagem() {
   const ocupado = imagemEstado.trabalhando !== null;
 
   imagemLista.innerHTML = imagemEstado.itens.map((item) => {
-    const grande = item.antes.width * item.antes.height > PIXELS_DEMAIS;
-    const saidaEnorme =
-      item.antes.width * item.antes.height * ESCALA_DA_REDE * ESCALA_DA_REDE > SAIDA_DEMAIS;
-    const rodando = imagemEstado.trabalhando === item.id;
+    const plano = planoDaImagem(item);
 
     return `
     <article class="rounded-lg border border-linha" data-item="${item.id}">
@@ -406,9 +498,16 @@ function renderImagem() {
         </div>` : ""}
 
       <div class="flex flex-wrap gap-1.5 border-t border-linha px-3 py-2">
+        <!--
+          O rótulo diz a escala REAL, e não "4x": é o número que a impressão
+          pediu. Botão que promete quatro e entrega dois mente; botão que diz
+          "1,8x" explica sozinho por que a espera é curta.
+        -->
         <button type="button" class="btn primary btn-sm" data-rede="${item.id}"
-                ${ocupado || saidaEnorme ? "disabled" : ""}>
-          Melhorar com a rede (4×)
+                ${ocupado || plano.grandeDemais ? "disabled" : ""}>
+          ${plano.jaBasta
+            ? "Passar a rede (limpar)"
+            : `Melhorar para ${plano.escala.toFixed(1).replace(".", ",")}×`}
         </button>
         <button type="button" class="btn secondary btn-sm" data-limpo="${item.id}" ${ocupado ? "disabled" : ""}>
           Só ampliar, sem inventar
@@ -416,16 +515,27 @@ function renderImagem() {
         ${item.depois ? `<button type="button" class="btn secondary btn-sm" data-baixar="${item.id}">Baixar PNG</button>` : ""}
       </div>
 
-      ${saidaEnorme ? `
+      ${plano.grandeDemais ? `
+        <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-[var(--warn,#f5b740)]">
+          Esta imagem sozinha já passa do que o navegador desenha
+          (${(item.antes.width * item.antes.height / 1e6).toFixed(0)} megapixels). Não há ampliação a
+          oferecer — e uma imagem desse tamanho dificilmente precisa de uma.
+        </p>` : plano.cortadaPeloTeto ? `
+        <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-tinta-apagada">
+          A ${item.larguraCm.toLocaleString("pt-BR")} cm, 300 dpi pediria mais pixels do que o
+          navegador desenha. Vai até onde cabe: ${plano.largura.toLocaleString("pt-BR")} ×
+          ${plano.altura.toLocaleString("pt-BR")} px, que dão
+          <strong class="text-tinta">${Math.round(plano.dpiQueDa)} dpi</strong> nessa largura —
+          e trabalho desse tamanho é visto de longe.
+        </p>` : plano.jaBasta ? `
+        <p class="m-0 border-t border-linha px-3 py-2 text-[10px] leading-relaxed text-tinta-apagada">
+          Esta imagem <strong class="text-tinta">já tem tamanho de sobra</strong> para imprimir a
+          ${item.larguraCm.toLocaleString("pt-BR")} cm. Passar a rede aqui não vai aumentar nada —
+          serve só para limpar ruído e marca de JPEG, e leva o mesmo tempo de uma amplia&ccedil;&atilde;o.
+        </p>` : plano.demorado ? `
         <p class="m-0 border-t border-linha px-3 py-2 text-[10px] text-tinta-apagada">
-          Grande demais para a rede: ampliada 4×, esta imagem daria
-          ${(item.antes.width * ESCALA_DA_REDE).toLocaleString("pt-BR")} ×
-          ${(item.antes.height * ESCALA_DA_REDE).toLocaleString("pt-BR")} px, e o navegador não
-          desenha isso. Ela já é grande — veja o dpi acima antes de concluir que precisa aumentar.
-        </p>` : grande ? `
-        <p class="m-0 border-t border-linha px-3 py-2 text-[10px] text-tinta-apagada">
-          Imagem grande: a rede vai levar vários minutos. Confira o dpi acima — se já estiver bom
-          no tamanho que você vai imprimir, não há o que melhorar.
+          São ${plano.ladrilhos.toLocaleString("pt-BR")} pedaços para a rede processar: pode levar
+          vários minutos. Dá para cancelar no meio.
         </p>` : ""}
     </article>`;
   }).join("");
