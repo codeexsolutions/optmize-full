@@ -18,7 +18,15 @@
 const fs = require("fs");
 const path = require("path");
 
-const RAIZ = path.join(__dirname, "..");
+// De onde vêm os arquivos do motor.
+//
+// Normalmente é o projeto. Com `OPTIMIZE_MOTOR_RAIZ`, é outra pasta — e o uso
+// que justifica isso é conferir o motor JÁ MINIFICADO que vai dentro do
+// instalável. Testar o fonte e mandar outra coisa para o cliente seria testar
+// o que não roda.
+const RAIZ = process.env.OPTIMIZE_MOTOR_RAIZ
+  ? path.resolve(process.env.OPTIMIZE_MOTOR_RAIZ)
+  : path.join(__dirname, "..");
 
 // A mesma lista, na mesma ordem, do importScripts do encaixe-worker.js.
 const ARQUIVOS = [

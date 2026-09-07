@@ -5,7 +5,7 @@
   "identifier": "br.com.optimize.desktop",
   "build": {
     "frontendDist": "../empacotar/janela",
-    "beforeBuildCommand": "node empacotar/preparar.js",
+    "beforeBuildCommand": "node empacotar/preparar.js && node empacotar/compilar.js",
     "beforeDevCommand": "node empacotar/preparar.js"
   },
   "app": {
