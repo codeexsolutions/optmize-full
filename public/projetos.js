@@ -405,7 +405,14 @@ ${p.capa ? `<img src="${p.capa}" alt="" />` : `<span class="pasta-sem-capa">sem 
       if (campo) campo.value = valor;
     };
     ajuste("encaixe-largura", campoLargura.value);
-    ajuste("encaixe-espaco", campoEspaco.value);
+    // O projeto guarda a folga em MILÍMETRO (é o que o campo desta tela
+    // pergunta) e o Encaixe passou a perguntar em CENTÍMETRO. A conversão é
+    // aqui, na passagem, e não no que está gravado: mexer na unidade do banco
+    // reinterpretaria todo projeto já salvo — 5 viraria 5 cm, dez vezes a
+    // folga, e o tecido a mais só apareceria depois de imprimir.
+    const espacoCm = campoEspaco.value === "" ? "" : Number(campoEspaco.value) / 10;
+    ajuste("encaixe-espaco", espacoCm);
+    ajuste("encaixe-espaco-y", espacoCm);
     ajuste("encaixe-comprimento", campoComprimento.value);
     const seletorGiro = document.getElementById("encaixe-giro-todas");
     if (seletorGiro) seletorGiro.value = campoGiro.value;
@@ -560,12 +567,17 @@ ${p.capa ? `<img src="${p.capa}" alt="" />` : `<span class="pasta-sem-capa">sem 
 
   // A estante é montada quando a tela é aberta pela primeira vez: carregar na
   // partida gastaria requisição em quem nunca entra aqui.
+  //
+  // Escuta a TROCA DE TELA, e não o clique no menu. Desde que as telas
+  // ganharam endereço (`#/projetos`), há três jeitos de chegar aqui sem
+  // clicar em nada: recarregar já nesta tela, voltar no navegador e abrir um
+  // link direto. No clique, esses três abriam a estante vazia.
   let jaMontou = false;
-  document.querySelector('.nav-btn[data-page="projetos"]').addEventListener("click", () => {
-    if (jaMontou) return;
+  document.addEventListener("optimize:trocou-de-tela", (e) => {
+    if (e.detail.pagina !== "projetos" || jaMontou) return;
     jaMontou = true;
-    mostrarClientes().catch((e) => {
-      lista.innerHTML = `<p class="hint error">Não deu para carregar: ${escapar(e.message)}</p>`;
+    mostrarClientes().catch((erro) => {
+      lista.innerHTML = `<p class="hint error">Não deu para carregar: ${escapar(erro.message)}</p>`;
     });
   });
 
