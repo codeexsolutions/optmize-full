@@ -47,7 +47,7 @@ const LEVAR = [
   "package.json",
   "public",     // a tela antiga
   "dist",       // a tela nova, compilada pelo Vite
-  "estatico",   // o sprite de ícones e o wasm, servidos como estão
+  "estatico",   // o sprite de ícones, o wasm do encaixe e a IA da tela de Imagem
   "node_modules",
 ];
 
