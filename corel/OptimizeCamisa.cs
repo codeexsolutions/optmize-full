@@ -46,6 +46,7 @@
 // =============================================================================
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -93,12 +94,28 @@ namespace VSTAGlobal
         private const double CentroXCm = 25.0;
         private const double BaseYCm = 20.0;
 
-        // A camisa a que os centimetros acima se referem. Ela nao muda nada
-        // enquanto ninguem marcar uma camisa: e so o denominador da conta de
-        // proporcao. Uma camisa adulta de frente tem por volta de 70 cm de
-        // altura, entao marcar uma dessas da escala 1, e os valores do painel
-        // valem como estao escritos.
-        private const double AlturaCamisaRefCm = 70.0;
+        // ==================== COM A CAMISA MARCADA, A CONTA E SOZINHA ====================
+        //
+        // Ninguem deveria ter que pensar em centimetro nenhum para montar uma
+        // camisa. Com uma camisa marcada, todos os numeros acima deixam de ser
+        // digitados e passam a sair DELA, em proporcao - e as proporcoes abaixo
+        // sao exatamente os centimetros de cima relidos sobre uma camisa adulta
+        // de 70 cm de altura por 50 de largura:
+        //
+        //   numero    22 / 70 = 31%     da altura da camisa
+        //   nome       6 / 70 =  8,6%
+        //   espaco     2 / 70 =  2,9%
+        //   base      20 / 70 = 29%     acima da barra
+        //   folga    ( 50 - 38 ) / 2 / 50 = 12%   de cada lado
+        //
+        // Marcou uma camisa de crianca, tudo encolhe junto. Marcou uma de
+        // adulto, sai o que ja estava afinado. Quem quiser mexer mexe, mas em
+        // "Ajustes", e sobre numeros que ja vem prontos.
+        private const double ParteAlturaNumero = 0.31;
+        private const double ParteAlturaNome = 0.086;
+        private const double ParteEspaco = 0.029;
+        private const double ParteBase = 0.29;
+        private const double ParteFolgaLado = 0.12;
 
         private const string EnderecoSistema =
             "http://localhost:8000/api/encaixe/guardado?chave=macro-corel";
@@ -241,12 +258,19 @@ namespace VSTAGlobal
             public double Barra;     // a borda de baixo: e dai que o texto sobe
             public double Largura;
             public double Altura;
-            public double Escala;    // quanto ela e maior/menor que a de referencia
+        }
+
+        // Os centimetros de verdade que a macro vai usar. Eles nascem prontos da
+        // camisa marcada; o painel so os mostra, e aceita que sejam mudados.
+        private class Medidas
+        {
+            public double AlturaNome, AlturaNumero, LarguraNome, Espaco;
+            public double CentroX, BaseNumero;
         }
 
         // Le a selecao. Sem nada marcado devolve null, e a macro segue no modo
         // antigo - pagina em branco, texto nos centimetros do painel.
-        private Camisa LerCamisaMarcada(Document doc, double alturaReferencia)
+        private Camisa LerCamisaMarcada(Document doc)
         {
             ShapeRange marcada = doc.SelectionRange;
             if (marcada == null || marcada.Count == 0) return null;
@@ -258,8 +282,40 @@ namespace VSTAGlobal
             c.Barra = marcada.PositionY;
             c.Largura = marcada.SizeWidth;
             c.Altura = marcada.SizeHeight;
-            c.Escala = (alturaReferencia > 0 && c.Altura > 0) ? c.Altura / alturaReferencia : 1.0;
             return c;
+        }
+
+        // As medidas para a camisa marcada - ou, sem nenhuma, os centimetros
+        // fixos de sempre, que e o que sobra quando nao ha de onde tirar.
+        //
+        // Repare que `CentroX` e `BaseNumero` saem daqui como coordenadas
+        // ABSOLUTAS, ja somadas a posicao da camisa. E de proposito: assim o
+        // resto da macro nao precisa saber que existe camisa marcada para
+        // colocar o texto no lugar, e o painel mostra o numero que sera usado
+        // de fato, e nao uma proporcao que a pessoa teria que imaginar.
+        private Medidas MedidasPara(Camisa c)
+        {
+            var m = new Medidas();
+            if (c == null)
+            {
+                m.AlturaNome = AlturaNomeCm;
+                m.AlturaNumero = AlturaNumeroCm;
+                m.LarguraNome = LarguraMaxNomeCm;
+                m.Espaco = EspacoEntreCm;
+                m.CentroX = CentroXCm;
+                m.BaseNumero = BaseYCm;
+                return m;
+            }
+            m.AlturaNome = c.Altura * ParteAlturaNome;
+            m.AlturaNumero = c.Altura * ParteAlturaNumero;
+            m.Espaco = c.Altura * ParteEspaco;
+            m.CentroX = c.CentroX;
+            m.BaseNumero = c.Barra + c.Altura * ParteBase;
+            // O nome ocupa a largura da camisa menos a folga dos dois lados. E
+            // so isso: nao existe largura "maxima" a escolher, existe o espaco
+            // que a camisa tem.
+            m.LarguraNome = c.Largura * (1.0 - 2.0 * ParteFolgaLado);
+            return m;
         }
 
         // Uma copia da camisa marcada, na pagina que estiver ativa, no mesmo
@@ -278,15 +334,11 @@ namespace VSTAGlobal
 
         // Uma frase para o painel dizer o que esta marcado, antes de a pessoa
         // clicar em Montar. Sem ela, "marcar a camisa" vira adivinhacao.
-        private string DescreverMarcada(double alturaReferencia)
+        private string DescreverMarcada(Camisa c)
         {
             try
             {
-                Document doc = app.ActiveDocument;
-                if (doc == null) return "Nenhum documento aberto.";
-                doc.Unit = cdrUnit.cdrCentimeter;
-
-                Camisa c = LerCamisaMarcada(doc, alturaReferencia);
+                if (app.ActiveDocument == null) return "Nenhum documento aberto.";
                 if (c == null)
                 {
                     return "Nada marcado: vai montar so o texto, uma pagina por jogador."
@@ -294,9 +346,9 @@ namespace VSTAGlobal
                         + "Para copiar a camisa, feche, selecione a arte dela e rode de novo.";
                 }
                 return "Camisa marcada: " + Math.Round(c.Largura, 1) + " x "
-                    + Math.Round(c.Altura, 1) + " cm em " + c.Forma.Count + " objeto(s)."
-                    + Environment.NewLine + "Escala " + Math.Round(c.Escala, 2)
-                    + " sobre a camisa de referencia.";
+                    + Math.Round(c.Altura, 1) + " cm, em " + c.Forma.Count + " objeto(s)."
+                    + Environment.NewLine
+                    + "As medidas do texto ja saem dela - veja em Ajustes.";
             }
             catch (Exception erro)
             {
@@ -312,7 +364,7 @@ namespace VSTAGlobal
         // Devolve um recado pronto para mostrar.
         public string MontarCamisas(string lista, string fonte, double alturaNome,
                                     double alturaNumero, double larguraMax, double espaco,
-                                    double centroX, double baseY, double alturaReferencia)
+                                    double centroX, double baseY)
         {
             Document doc = app.ActiveDocument;
             if (doc == null) return "Abra um documento antes.";
@@ -321,22 +373,10 @@ namespace VSTAGlobal
             doc.Unit = cdrUnit.cdrCentimeter;
 
             // Lida antes do primeiro AddPages: dai para frente a selecao ja nao
-            // e mais a que a pessoa fez.
-            Camisa camisa = LerCamisaMarcada(doc, alturaReferencia);
-
-            // Com camisa marcada, os centimetros do painel valem para a camisa
-            // de referencia e sao esticados para a que foi marcada; sem ela,
-            // valem como estao.
-            double escala = camisa == null ? 1.0 : camisa.Escala;
-            double hNome = alturaNome * escala;
-            double hNumero = alturaNumero * escala;
-            double folga = espaco * escala;
-            double meio = camisa == null ? centroX : camisa.CentroX;
-
-            // A largura do nome nunca passa da camisa, mesmo que o painel peca
-            // mais: um nome saindo pela manga nao e uma escolha, e um engano.
-            double larguraNome = larguraMax * escala;
-            if (camisa != null && larguraNome > camisa.Largura) larguraNome = camisa.Largura;
+            // e mais a que a pessoa fez. Aqui ela serve so para COPIAR a arte -
+            // onde o texto vai, quem ja decidiu foi o `MedidasPara`, e veio
+            // pronto nos parametros.
+            Camisa camisa = LerCamisaMarcada(doc);
 
             // Uma operacao so: o Corel desfaz tudo com um Ctrl+Z, e nao linha
             // por linha.
@@ -377,21 +417,17 @@ namespace VSTAGlobal
                     }
                     doc.ActivePage.Name = numero.Length > 0 ? nome + " " + numero : nome;
 
-                    // Sem camisa, a base e a da pagina; com camisa, ela sobe a
-                    // partir da barra da camisa que esta nesta pagina.
-                    double baseDoNumero = camisa == null ? baseY : camisa.Barra + baseY * escala;
-
-                    double baseDoNome = baseDoNumero;
+                    double baseDoNome = baseY;
                     if (numero.Length > 0)
                     {
-                        TextoNaAltura(doc, numero, fonte, hNumero, meio, baseDoNumero);
-                        baseDoNome = baseDoNumero + hNumero + folga;
+                        TextoNaAltura(doc, numero, fonte, alturaNumero, centroX, baseY);
+                        baseDoNome = baseY + alturaNumero + espaco;
                     }
 
                     if (nome.Length > 0)
                     {
-                        Shape sNome = TextoNaAltura(doc, nome, fonte, hNome, meio, baseDoNome);
-                        double quanto = Condensa(sNome, larguraNome, meio);
+                        Shape sNome = TextoNaAltura(doc, nome, fonte, alturaNome, centroX, baseDoNome);
+                        double quanto = Condensa(sNome, larguraMax, centroX);
                         if (quanto < CondensaMinima)
                         {
                             apertados.Append(Environment.NewLine + "   " + nome
@@ -424,26 +460,70 @@ namespace VSTAGlobal
         }
 
 
+        // ==================== AS FONTES ====================
+        //
+        // A lista vem do proprio Corel, e nao do Windows. Duas razoes: o
+        // `InstalledFontCollection` mora em `System.Drawing`, que nao esta
+        // referenciado no projeto VSTA (ver a nota do topo); e a lista do Corel
+        // e a certa de qualquer jeito, porque e ela que o documento aceita.
+        private string[] ListaDeFontes()
+        {
+            var nomes = new List<string>();
+            try
+            {
+                // Pelo enumerador, e nao por indice: assim nao importa se a
+                // colecao do Corel comeca em 0 ou em 1.
+                foreach (object item in app.FontList)
+                {
+                    string nome = Convert.ToString(item);
+                    if (!string.IsNullOrEmpty(nome) && !nomes.Contains(nome)) nomes.Add(nome);
+                }
+            }
+            catch (Exception)
+            {
+                // Sem a lista o painel ainda tem que abrir. Cai no `if` abaixo.
+            }
+
+            nomes.Sort(StringComparer.CurrentCultureIgnoreCase);
+            if (nomes.Count == 0) nomes.Add(FonteCamisa);
+            return nomes.ToArray();
+        }
+
+
         // ==================== O PAINEL ====================
         //
         // WinForms montado em codigo, sem arquivo de designer: um .cs so, que da
         // para ler e versionar. Ver a nota do topo sobre System.Drawing - por
         // isso so `Left`, `Top`, `Width` e `Height` aparecem aqui.
-        private Form MontarPainel(string marcada,
-                                  out TextBox lista, out TextBox fonte, out TextBox altNome,
-                                  out TextBox altNumero, out TextBox largMax, out TextBox espaco,
-                                  out TextBox centroX, out TextBox baseY, out TextBox altRef,
+        //
+        // O QUE FICA A VISTA e a lista de jogadores e a fonte, e mais nada.
+        // Montar uma camisa nao deveria exigir que alguem decidisse a altura do
+        // numero em centimetros: com a camisa marcada, todos esses numeros ja
+        // sairam dela. Eles continuam ali, atras de "Ajustes...", e ja chegam
+        // preenchidos com o que vai ser usado de fato - quem quiser conferir ou
+        // mexer, confere e mexe; quem nao quiser, nunca precisa abrir.
+
+        // As caixas dos numeros, para o ponto de entrada poder le-las depois.
+        private class Ajustes
+        {
+            public TextBox AlturaNome, AlturaNumero, LarguraNome, Espaco;
+            public TextBox CentroX, BaseNumero;
+        }
+
+        private Form MontarPainel(Camisa camisa, Medidas medidas,
+                                  out TextBox lista, out ComboBox fonte, out Ajustes ajustes,
                                   out Label recado, out Button montar)
         {
             var f = new Form();
             f.Text = "Optimize - nome e numero";
             f.Width = 620;
-            f.Height = 530;
+            f.Height = 560;
             f.FormBorderStyle = FormBorderStyle.FixedDialog;
             f.MaximizeBox = false;
             f.MinimizeBox = false;
             f.StartPosition = FormStartPosition.CenterScreen;
 
+            // ---------- a lista ----------
             f.Controls.Add(Rotulo("Jogadores - uma linha por camisa, NOME;NUMERO", 12, 10, 340));
             lista = new TextBox();
             lista.Left = 12; lista.Top = 30; lista.Width = 340; lista.Height = 330;
@@ -455,45 +535,80 @@ namespace VSTAGlobal
                        + "GONCALVES;23";
             f.Controls.Add(lista);
 
-            int x = 370;
-            int y = 10;
-            fonte = Campo(f, "Fonte", x, ref y, 210, FonteCamisa);
-            altNome = Campo(f, "Altura do nome (cm)", x, ref y, 90, Texto(AlturaNomeCm));
-            altNumero = Campo(f, "Altura do numero (cm)", x, ref y, 90, Texto(AlturaNumeroCm));
-            largMax = Campo(f, "Largura maxima do nome (cm)", x, ref y, 90, Texto(LarguraMaxNomeCm));
-            espaco = Campo(f, "Espaco entre nome e numero (cm)", x, ref y, 90, Texto(EspacoEntreCm));
-            centroX = Campo(f, "Centro X (cm)", x, ref y, 90, Texto(CentroXCm));
-            baseY = Campo(f, "Base Y (cm)", x, ref y, 90, Texto(BaseYCm));
-            altRef = Campo(f, "Altura da camisa de referencia (cm)", x, ref y, 90,
-                           Texto(AlturaCamisaRefCm));
-
-            // O que esta marcado, dito antes de a pessoa clicar em Montar. Um
-            // painel que so contasse depois nao serviria: a selecao tem que ser
-            // feita ANTES de a macro abrir, porque enquanto ela esta aberta o
-            // Corel nao aceita clique.
-            var oQueEstaMarcado = new Label();
-            oQueEstaMarcado.Left = 12; oQueEstaMarcado.Top = 366;
-            oQueEstaMarcado.Width = 340; oQueEstaMarcado.Height = 46;
-            oQueEstaMarcado.Text = marcada;
-            f.Controls.Add(oQueEstaMarcado);
-
             recado = new Label();
-            recado.Left = 12; recado.Top = 416; recado.Width = 340; recado.Height = 55;
+            recado.Left = 12; recado.Top = 368; recado.Width = 340; recado.Height = 58;
             recado.Text = "";
             f.Controls.Add(recado);
 
             montar = new Button();
             montar.Text = "Montar";
-            montar.Left = x; montar.Top = 425; montar.Width = 100; montar.Height = 28;
+            montar.Left = 12; montar.Top = 432; montar.Width = 110; montar.Height = 30;
             f.Controls.Add(montar);
             f.AcceptButton = montar;
 
             var fechar = new Button();
             fechar.Text = "Fechar";
-            fechar.Left = x + 110; fechar.Top = 425; fechar.Width = 100; fechar.Height = 28;
+            fechar.Left = 132; fechar.Top = 432; fechar.Width = 110; fechar.Height = 30;
             fechar.Click += delegate { f.Close(); };
             f.Controls.Add(fechar);
             f.CancelButton = fechar;
+
+            // ---------- a fonte ----------
+            int x = 370;
+            f.Controls.Add(Rotulo("Fonte", x, 10, 210));
+            fonte = new ComboBox();
+            fonte.Left = x; fonte.Top = 26; fonte.Width = 210;
+            // `DropDownList`: escolher da lista, e nao digitar. Nome de fonte
+            // digitado errado nao avisa - o Corel troca por outra calado, e a
+            // camisa sai com a letra que ninguem pediu.
+            fonte.DropDownStyle = ComboBoxStyle.DropDownList;
+            foreach (string nome in ListaDeFontes()) fonte.Items.Add(nome);
+            int qual = fonte.Items.IndexOf(FonteCamisa);
+            if (qual < 0 && fonte.Items.Count > 0) qual = 0;
+            if (qual >= 0) fonte.SelectedIndex = qual;
+            f.Controls.Add(fonte);
+
+            // ---------- o que esta marcado ----------
+            var oQueEstaMarcado = new Label();
+            oQueEstaMarcado.Left = x; oQueEstaMarcado.Top = 62;
+            oQueEstaMarcado.Width = 215; oQueEstaMarcado.Height = 56;
+            // Dito ANTES de a pessoa clicar em Montar, porque enquanto a macro
+            // esta aberta o Corel nao aceita clique: a selecao tem que ter sido
+            // feita antes, e so aqui da para saber se foi.
+            oQueEstaMarcado.Text = DescreverMarcada(camisa);
+            f.Controls.Add(oQueEstaMarcado);
+
+            // ---------- os numeros, guardados ----------
+            var abrir = new Button();
+            abrir.Text = "Ajustes...";
+            abrir.Left = x; abrir.Top = 122; abrir.Width = 110; abrir.Height = 26;
+            f.Controls.Add(abrir);
+
+            var caixa = new Panel();
+            caixa.Left = x; caixa.Top = 156; caixa.Width = 225; caixa.Height = 285;
+            caixa.Visible = false;
+            f.Controls.Add(caixa);
+
+            int y = 0;
+            ajustes = new Ajustes();
+            ajustes.AlturaNome = Campo(caixa, "Altura do nome (cm)", 0, ref y, 90,
+                                       Texto(medidas.AlturaNome));
+            ajustes.AlturaNumero = Campo(caixa, "Altura do numero (cm)", 0, ref y, 90,
+                                         Texto(medidas.AlturaNumero));
+            ajustes.LarguraNome = Campo(caixa, "Largura do nome (cm)", 0, ref y, 90,
+                                        Texto(medidas.LarguraNome));
+            ajustes.Espaco = Campo(caixa, "Espaco entre nome e numero (cm)", 0, ref y, 90,
+                                   Texto(medidas.Espaco));
+            ajustes.CentroX = Campo(caixa, "Centro do texto (cm)", 0, ref y, 90,
+                                    Texto(medidas.CentroX));
+            ajustes.BaseNumero = Campo(caixa, "Base do numero (cm)", 0, ref y, 90,
+                                       Texto(medidas.BaseNumero));
+
+            abrir.Click += delegate
+            {
+                caixa.Visible = !caixa.Visible;
+                abrir.Text = caixa.Visible ? "Esconder ajustes" : "Ajustes...";
+            };
 
             return f;
         }
@@ -508,20 +623,31 @@ namespace VSTAGlobal
 
         // Um rotulo e a caixa embaixo dele, empilhados. `y` anda sozinho, para a
         // ordem dos campos ser a ordem das chamadas e nao uma tabela de numeros.
-        private static TextBox Campo(Form f, string rotulo, int x, ref int y, int larg, string valor)
+        //
+        // Recebe um `Control`, e nao um `Form`, para os campos poderem morar
+        // dentro do painel de Ajustes - esconder um painel esconde tudo que esta
+        // nele, rotulos junto.
+        // Qualificado: `Control` sozinho e ambiguo, como o `Application` la
+        // embaixo - `System.Windows.Forms` e `Corel.Interop.VGCore` tem cada um
+        // uma classe com esse nome, e os dois estao no `using`.
+        private static TextBox Campo(System.Windows.Forms.Control dono, string rotulo,
+                                     int x, ref int y,
+                                     int larg, string valor)
         {
-            f.Controls.Add(Rotulo(rotulo, x, y, 220));
+            dono.Controls.Add(Rotulo(rotulo, x, y, 220));
             var t = new TextBox();
             t.Left = x; t.Top = y + 16; t.Width = larg;
             t.Text = valor;
-            f.Controls.Add(t);
+            dono.Controls.Add(t);
             y += 45;
             return t;
         }
 
+        // Uma casa decimal basta para centimetro de camisa, e um numero curto e
+        // conferivel de relance - que e para isso que ele aparece.
         private static string Texto(double v)
         {
-            return v.ToString(CultureInfo.InvariantCulture);
+            return Math.Round(v, 1).ToString(CultureInfo.InvariantCulture);
         }
 
 
@@ -543,14 +669,25 @@ namespace VSTAGlobal
                 return;
             }
 
-            TextBox lista, fonte, altNome, altNumero, largMax, espaco, centroX, baseY, altRef;
+            // A camisa marcada e as medidas dela, lidas antes de o painel abrir:
+            // e o painel que precisa delas, para chegar com os numeros prontos.
+            Camisa camisa = null;
+            Document doc = app.ActiveDocument;
+            if (doc != null)
+            {
+                doc.Unit = cdrUnit.cdrCentimeter;
+                camisa = LerCamisaMarcada(doc);
+            }
+            Medidas medidas = MedidasPara(camisa);
+
+            TextBox lista;
+            ComboBox fonte;
+            Ajustes ajustes;
             Label recado;
             Button montar;
 
-            using (Form painel = MontarPainel(DescreverMarcada(AlturaCamisaRefCm),
-                                              out lista, out fonte, out altNome, out altNumero,
-                                              out largMax, out espaco, out centroX, out baseY,
-                                              out altRef, out recado, out montar))
+            using (Form painel = MontarPainel(camisa, medidas, out lista, out fonte,
+                                              out ajustes, out recado, out montar))
             {
                 montar.Click += delegate
                 {
@@ -567,15 +704,18 @@ namespace VSTAGlobal
                     // uma classe com esse nome, e os dois estao no `using`.
                     System.Windows.Forms.Application.DoEvents();
 
+                    // O padrao de cada campo e a medida CALCULADA, e nao a
+                    // constante do topo: se alguem apagar uma caixa em Ajustes,
+                    // o que volta e o valor daquela camisa, e nao o de uma
+                    // camisa generica que talvez nem seja esta.
                     recado.Text = MontarCamisas(
                         lista.Text, fonte.Text,
-                        ParaNumero(altNome.Text, AlturaNomeCm),
-                        ParaNumero(altNumero.Text, AlturaNumeroCm),
-                        ParaNumero(largMax.Text, LarguraMaxNomeCm),
-                        ParaNumero(espaco.Text, EspacoEntreCm),
-                        ParaNumero(centroX.Text, CentroXCm),
-                        ParaNumero(baseY.Text, BaseYCm),
-                        ParaNumero(altRef.Text, AlturaCamisaRefCm));
+                        ParaNumero(ajustes.AlturaNome.Text, medidas.AlturaNome),
+                        ParaNumero(ajustes.AlturaNumero.Text, medidas.AlturaNumero),
+                        ParaNumero(ajustes.LarguraNome.Text, medidas.LarguraNome),
+                        ParaNumero(ajustes.Espaco.Text, medidas.Espaco),
+                        ParaNumero(ajustes.CentroX.Text, medidas.CentroX),
+                        ParaNumero(ajustes.BaseNumero.Text, medidas.BaseNumero));
 
                     montar.Enabled = true;
                 };
