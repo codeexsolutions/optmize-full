@@ -86,27 +86,58 @@ function celulasDaPeca(pos, qual) {
  * manga #3 em cima da camiseta #1 em tal centímetro diz tudo.
  */
 function acharSobreposicao(posicoes, qual) {
-  const ocupadas = new Map();
+  /*
+   * O tecido inteiro num vetor tipado, e não num Map de células ocupadas.
+   *
+   * O Map era natural — só as células ocupadas entram — e estourava: ele tem
+   * teto de umas 16,7 milhões de entradas, e um lote de 260 peças num rolo
+   * comprido passa disso. A conferência morria com "Map maximum size exceeded"
+   * justamente no trabalho maior, que é onde ela mais precisa rodar.
+   *
+   * O vetor gasta memória pelo rolo inteiro em vez de pelo que está ocupado, e
+   * isso sai barato: um rolo de 40 m a 0,25 cm por célula são 11 milhões de
+   * células, 44 MB de Int32Array. Em troca, o acesso é um índice direto e não
+   * há teto nenhum.
+   *
+   * Guarda `indice + 1` para o zero poder significar "vazia".
+   */
+  let maxCol = 0;
+  let maxLin = 0;
+  const daPeca = [];
+  posicoes.forEach((pos) => {
+    if (!pos.mascara || (qual !== "folga" && !pos.mascara[qual])) { daPeca.push(null); return; }
+    const celulas = celulasDaPeca(pos, qual);
+    celulas.forEach(([c, r]) => {
+      if (c > maxCol) maxCol = c;
+      if (r > maxLin) maxLin = r;
+    });
+    daPeca.push(celulas);
+  });
+
+  const largura = maxCol + 1;
+  const ocupadas = new Int32Array(largura * (maxLin + 1));
   let repetidas = 0;
   let exemplo = null;
+  let celulas = 0;
 
   posicoes.forEach((pos, indice) => {
-    if (!pos.mascara || (qual !== "folga" && !pos.mascara[qual])) return;
-    celulasDaPeca(pos, qual).forEach(([c, r]) => {
-      const chave = c * 100000 + r;
-      const antes = ocupadas.get(chave);
-      if (antes === undefined) { ocupadas.set(chave, indice); return; }
+    const minhas = daPeca[indice];
+    if (!minhas) return;
+    minhas.forEach(([c, r]) => {
+      const onde = r * largura + c;
+      const antes = ocupadas[onde];
+      if (antes === 0) { ocupadas[onde] = indice + 1; celulas++; return; }
       repetidas++;
       if (!exemplo) {
         exemplo = {
-          a: descrever(posicoes[antes]), b: descrever(pos),
+          a: descrever(posicoes[antes - 1]), b: descrever(pos),
           cm: [(c * pos.passo).toFixed(1), (r * pos.passo).toFixed(1)],
         };
       }
     });
   });
 
-  return { repetidas, exemplo, celulas: ocupadas.size };
+  return { repetidas, exemplo, celulas };
 }
 
 /**
