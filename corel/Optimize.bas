@@ -35,12 +35,12 @@ Option Explicit
 ' precisa ser tocado.
 
 ' A fonte do nome e a do numero. Se o time usa a mesma, repita.
-Private Const FONTE_NOME As String = "Arial Black"
-Private Const FONTE_NUMERO As String = "Arial Black"
+Public Const FONTE_NOME As String = "Arial Black"
+Public Const FONTE_NUMERO As String = "Arial Black"
 
 ' Alturas, em centimetros. Sao as medidas de verdade da camisa.
-Private Const ALTURA_NOME_CM As Double = 6#
-Private Const ALTURA_NUMERO_CM As Double = 22#
+Public Const ALTURA_NOME_CM As Double = 6#
+Public Const ALTURA_NUMERO_CM As Double = 22#
 
 ' A largura maxima que o nome pode ocupar. Passando disso, ele condensa.
 '
@@ -59,10 +59,10 @@ Private Const ALTURA_NUMERO_CM As Double = 22#
 ' que e o comportamento certo: doze letras numa camisa realmente e problema.
 '
 ' Se a sua camisa tem outra largura util, meca a sua e troque aqui.
-Private Const LARGURA_MAX_NOME_CM As Double = 38#
+Public Const LARGURA_MAX_NOME_CM As Double = 38#
 
 ' O espaco entre a base do nome e o topo do numero.
-Private Const ESPACO_ENTRE_CM As Double = 2#
+Public Const ESPACO_ENTRE_CM As Double = 2#
 
 ' Ate onde o nome pode ser esmagado. 0.55 quer dizer "pode chegar a 55% da
 ' largura natural". Abaixo disso a letra vira risco vertical e ninguem le da
@@ -70,15 +70,57 @@ Private Const ESPACO_ENTRE_CM As Double = 2#
 '
 ' O par (38 cm, 55%) foi escolhido junto: ele aceita ate onze letras e reclama
 ' da decima segunda. Mexer num sem olhar o outro tira o sentido dos dois.
-Private Const CONDENSA_MINIMA As Double = 0.55
+Public Const CONDENSA_MINIMA As Double = 0.55
 
 ' Onde o bloco fica na pagina, medido do canto de baixo a esquerda.
-Private Const CENTRO_X_CM As Double = 25#
-Private Const BASE_Y_CM As Double = 20#
+Public Const CENTRO_X_CM As Double = 25#
+Public Const BASE_Y_CM As Double = 20#
 
 ' O endereco do Optimize nesta maquina.
 Private Const ENDERECO_SISTEMA As String = _
     "http://localhost:8000/api/encaixe/guardado?chave=macro-corel"
+
+
+'==================== O PADRAO DA CASA, PARA O PAINEL ====================
+'
+' O painel (PainelOptimize.frm) abre com estes valores nas caixas. Eles vem
+' daqui e nao estao repetidos la: um dia alguem troca a altura do numero e nao
+' pode ter que lembrar de trocar em dois lugares.
+
+Public Function PadraoFonte() As String
+    PadraoFonte = FONTE_NOME
+End Function
+Public Function PadraoAlturaNome() As String
+    PadraoAlturaNome = CStr(ALTURA_NOME_CM)
+End Function
+Public Function PadraoAlturaNumero() As String
+    PadraoAlturaNumero = CStr(ALTURA_NUMERO_CM)
+End Function
+Public Function PadraoLarguraMax() As String
+    PadraoLarguraMax = CStr(LARGURA_MAX_NOME_CM)
+End Function
+Public Function PadraoEspaco() As String
+    PadraoEspaco = CStr(ESPACO_ENTRE_CM)
+End Function
+Public Function PadraoCentroX() As String
+    PadraoCentroX = CStr(CENTRO_X_CM)
+End Function
+Public Function PadraoBaseY() As String
+    PadraoBaseY = CStr(BASE_Y_CM)
+End Function
+
+' Numero digitado a mao, com a virgula que o teclado brasileiro produz e o
+' ponto que copiar-e-colar traz. Vazio ou torto cai no padrao em vez de derrubar
+' a macro no meio da lista.
+Public Function ParaNumero(ByVal texto As String, ByVal padrao As Double) As Double
+    Dim t As String
+    t = Replace(Trim(texto), ".", ",")
+    If Not IsNumeric(t) Then
+        ParaNumero = padrao
+    Else
+        ParaNumero = CDbl(t)
+    End If
+End Function
 
 
 '==================== A TRAVA: O SISTEMA TEM QUE ESTAR NO PC ====================
@@ -183,7 +225,8 @@ End Function
 
 ' Esmaga o texto na horizontal ate caber na largura, mantendo a altura.
 ' Devolve quanto ele ficou da largura natural (1 = nao precisou).
-Private Function Condensa(ByVal s As Shape, ByVal larguraMaxCm As Double) As Double
+Private Function Condensa(ByVal s As Shape, ByVal larguraMaxCm As Double, _
+                          ByVal centroX As Double) As Double
     Dim altura As Double
 
     If s.SizeWidth <= larguraMaxCm Or s.SizeWidth <= 0 Then
@@ -195,15 +238,21 @@ Private Function Condensa(ByVal s As Shape, ByVal larguraMaxCm As Double) As Dou
     altura = s.SizeHeight
     ' Largura nova, altura intacta: o esmagamento e so na horizontal.
     s.SetSize larguraMaxCm, altura
-    s.CenterX = CENTRO_X_CM
+    s.CenterX = centroX
 End Function
 
 
-'==================== A MACRO ====================
+'==================== A REGRA, PARAMETRIZADA ====================
+'
+' Aqui mora o desenho da camisa. Ela recebe tudo por parametro em vez de ler as
+' constantes, e por isso serve tanto ao painel quanto ao ponto de entrada
+' simples. Devolve um recado pronto para mostrar.
 
-Public Sub NomesENumeros()
+Public Function MontarCamisas(ByVal lista As String, ByVal fonte As String, _
+                              ByVal alturaNome As Double, ByVal alturaNumero As Double, _
+                              ByVal larguraMax As Double, ByVal espaco As Double, _
+                              ByVal centroX As Double, ByVal baseY As Double) As String
     Dim doc As Document
-    Dim lista As String
     Dim linhas As Variant
     Dim i As Long
     Dim nome As String
@@ -215,23 +264,12 @@ Public Sub NomesENumeros()
     Dim sNumero As Shape
     Dim baseDoNome As Double
 
-    If Not SistemaEstaLigado() Then
-        MsgBox "O Optimize precisa estar aberto nesta maquina para esta macro rodar." & _
-               vbCrLf & vbCrLf & "Abra o programa e tente de novo.", _
-               vbExclamation, "Optimize nao encontrado"
-        Exit Sub
-    End If
-
     Set doc = ActiveDocument
     If doc Is Nothing Then
-        MsgBox "Abra um documento antes.", vbExclamation, "Optimize"
-        Exit Sub
+        MontarCamisas = "Abra um documento antes."
+        Exit Function
     End If
-
-    lista = InputBox("Cole a lista, uma linha por jogador:" & vbCrLf & vbCrLf & _
-                     "GABRIEL;10" & vbCrLf & "SA;7" & vbCrLf & "GONCALVES;23", _
-                     "Nomes e numeros")
-    If Len(Trim(lista)) = 0 Then Exit Sub
+    If Len(Trim(fonte)) = 0 Then fonte = FONTE_NOME
 
     doc.Unit = cdrCentimeter
 
@@ -254,17 +292,15 @@ Public Sub NomesENumeros()
             End If
             doc.ActivePage.Name = nome & IIf(Len(numero) > 0, " " & numero, "")
 
-            baseDoNome = BASE_Y_CM
+            baseDoNome = baseY
             If Len(numero) > 0 Then
-                Set sNumero = TextoNaAltura(numero, FONTE_NUMERO, ALTURA_NUMERO_CM, _
-                                            CENTRO_X_CM, BASE_Y_CM)
-                baseDoNome = BASE_Y_CM + ALTURA_NUMERO_CM + ESPACO_ENTRE_CM
+                Set sNumero = TextoNaAltura(numero, fonte, alturaNumero, centroX, baseY)
+                baseDoNome = baseY + alturaNumero + espaco
             End If
 
             If Len(nome) > 0 Then
-                Set sNome = TextoNaAltura(nome, FONTE_NOME, ALTURA_NOME_CM, _
-                                          CENTRO_X_CM, baseDoNome)
-                quanto = Condensa(sNome, LARGURA_MAX_NOME_CM)
+                Set sNome = TextoNaAltura(nome, fonte, alturaNome, centroX, baseDoNome)
+                quanto = Condensa(sNome, larguraMax, centroX)
                 If quanto < CONDENSA_MINIMA Then
                     apertados = apertados & vbCrLf & "   " & nome & _
                                 " (" & Format(quanto * 100, "0") & "% da largura)"
@@ -278,19 +314,60 @@ Public Sub NomesENumeros()
     doc.EndCommandGroup
 
     If Len(apertados) > 0 Then
-        MsgBox prontos & " camisa(s) prontas." & vbCrLf & vbCrLf & _
-               "Estes nomes ficaram mais apertados que o limite de " & _
-               Format(CONDENSA_MINIMA * 100, "0") & "%:" & apertados & vbCrLf & vbCrLf & _
-               "Confira se ainda da para ler de longe. Se nao der, aumente a largura " & _
-               "maxima ou use o nome curto do jogador.", vbExclamation, "Optimize"
+        MontarCamisas = prontos & " camisa(s) prontas. Ficaram apertados alem do " & _
+                        "limite de " & Format(CONDENSA_MINIMA * 100, "0") & "%:" & apertados
     Else
-        MsgBox prontos & " camisa(s) prontas.", vbInformation, "Optimize"
+        MontarCamisas = prontos & " camisa(s) prontas."
     End If
-    Exit Sub
+    Exit Function
 
 Falhou:
     doc.EndCommandGroup
-    MsgBox "Parou na linha " & (i + 1) & ": " & Err.Description & vbCrLf & vbCrLf & _
-           "O que ja foi feito continua no documento; um Ctrl+Z desfaz tudo de uma vez.", _
-           vbCritical, "Optimize"
+    MontarCamisas = "Parou na linha " & (i + 1) & ": " & Err.Description & _
+                    " - o que ja foi feito continua no documento, e um Ctrl+Z desfaz tudo."
+End Function
+
+
+'==================== OS PONTOS DE ENTRADA ====================
+'
+' Dois, de proposito.
+'
+' `Painel` abre a tela (PainelOptimize.frm) e e o caminho normal.
+'
+' `NomesENumeros` faz a mesma coisa por InputBox, sem tela nenhuma. Ele fica
+' porque o painel e um UserForm, e UserForm depende de o import ter dado certo
+' na maquina; enquanto o do painel nao for confirmado, este aqui sempre roda.
+' Os dois chamam a MESMA `MontarCamisas`, entao nao ha duas regras da camisa.
+'
+' Sao tambem os dois nomes que aparecem em Ferramentas > Opcoes >
+' Personalizacao > Comandos > Macros, para virar botao de barra ou atalho.
+
+Public Sub Painel()
+    If Not SistemaEstaLigado() Then
+        MsgBox "O Optimize precisa estar aberto nesta maquina para esta macro rodar." & _
+               vbCrLf & vbCrLf & "Abra o programa e tente de novo.", _
+               vbExclamation, "Optimize nao encontrado"
+        Exit Sub
+    End If
+    PainelOptimize.Show
+End Sub
+
+Public Sub NomesENumeros()
+    Dim lista As String
+
+    If Not SistemaEstaLigado() Then
+        MsgBox "O Optimize precisa estar aberto nesta maquina para esta macro rodar." & _
+               vbCrLf & vbCrLf & "Abra o programa e tente de novo.", _
+               vbExclamation, "Optimize nao encontrado"
+        Exit Sub
+    End If
+
+    lista = InputBox("Cole a lista, uma linha por jogador:" & vbCrLf & vbCrLf & _
+                     "GABRIEL;10" & vbCrLf & "SA;7" & vbCrLf & "GONCALVES;23", _
+                     "Nomes e numeros")
+    If Len(Trim(lista)) = 0 Then Exit Sub
+
+    MsgBox MontarCamisas(lista, FONTE_NOME, ALTURA_NOME_CM, ALTURA_NUMERO_CM, _
+                         LARGURA_MAX_NOME_CM, ESPACO_ENTRE_CM, CENTRO_X_CM, BASE_Y_CM), _
+           vbInformation, "Optimize"
 End Sub
