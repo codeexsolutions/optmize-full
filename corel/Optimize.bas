@@ -43,7 +43,23 @@ Private Const ALTURA_NOME_CM As Double = 6#
 Private Const ALTURA_NUMERO_CM As Double = 22#
 
 ' A largura maxima que o nome pode ocupar. Passando disso, ele condensa.
-Private Const LARGURA_MAX_NOME_CM As Double = 30#
+'
+' 38 cm, e o numero saiu de medir no proprio Corel, nao de palpite. Arial Black
+' a 6 cm de altura desenha assim:
+'
+'   BRUNO         5 letras   31,8 cm     cabe inteiro
+'   GABRIEL       7 letras   39,5 cm     96% da largura
+'   GONCALVES     9 letras   55,2 cm     69%
+'   NASCIMENTO   10 letras   59,9 cm     63%
+'   VASCONCELOS  11 letras   67,5 cm     56%
+'
+' O primeiro valor que eu tinha posto aqui era 30, e ele reprovava GONCALVES
+' (54%, abaixo do piso) - um sobrenome comum disparando aviso a toa. Com 38, o
+' pior caso de onze letras ainda passa raspando, e nome maior que isso avisa,
+' que e o comportamento certo: doze letras numa camisa realmente e problema.
+'
+' Se a sua camisa tem outra largura util, meca a sua e troque aqui.
+Private Const LARGURA_MAX_NOME_CM As Double = 38#
 
 ' O espaco entre a base do nome e o topo do numero.
 Private Const ESPACO_ENTRE_CM As Double = 2#
@@ -51,6 +67,9 @@ Private Const ESPACO_ENTRE_CM As Double = 2#
 ' Ate onde o nome pode ser esmagado. 0.55 quer dizer "pode chegar a 55% da
 ' largura natural". Abaixo disso a letra vira risco vertical e ninguem le da
 ' arquibancada, entao a macro avisa em vez de entregar calada.
+'
+' O par (38 cm, 55%) foi escolhido junto: ele aceita ate onze letras e reclama
+' da decima segunda. Mexer num sem olhar o outro tira o sentido dos dois.
 Private Const CONDENSA_MINIMA As Double = 0.55
 
 ' Onde o bloco fica na pagina, medido do canto de baixo a esquerda.
