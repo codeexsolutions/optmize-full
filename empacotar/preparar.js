@@ -38,6 +38,12 @@ const LEVAR = [
   "encaixe-memoria.js",
   "cor-api.js",
   "cor-icc.js",
+  "macros-api.js",
+  // A pasta das macros do Corel. Vai inteira porque não é só o `.cs` que a
+  // tela entrega: o `instalar-no-corel.ps1` é chamado pelo `macros-api.js` em
+  // tempo de execução, e um `require` não o menciona — o guard de dependências
+  // abaixo não teria como enxergá-lo.
+  "corel",
   "package.json",
   "public",     // a tela antiga
   "dist",       // a tela nova, compilada pelo Vite
