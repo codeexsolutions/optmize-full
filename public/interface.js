@@ -35,6 +35,7 @@
     encaixe: ["Encaixe", "Aproveitamento do tecido", "Otimize o uso do tecido e prepare arquivos para impressão.", "icones.svg#blocks"],
     cor: ["Cor", "Arte na cor certa", "Converta arte em CMYK para a cor certa antes de mandar ao encaixe.", "icones.svg#palette"],
     vetor: ["Vetor", "Traço a partir da imagem", "Transforme uma imagem em desenho vetorial para corte e impressão.", "icones.svg#spline"],
+    imagem: ["Imagem", "Resolução para imprimir", "Aumenta a resolução da arte com rede neural, para imprimir grande sem borrar.", "icones.svg#image"],
     macros: ["Macros", "Ferramentas no CorelDRAW", "Baixe e instale as macros que rodam dentro do Corel e falam com este sistema.", "icones.svg#puzzle"]
   };
 

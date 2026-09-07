@@ -29,3 +29,11 @@ wasm/target/
 # não o número de uma máquina num dia.
 bancada/*.json
 bancada/.saida-*.txt
+
+# IA da tela de Imagem: o runtime do onnxruntime-web, 25 MB de WebAssembly.
+# Vem do node_modules por `npm run ia` (que o `npm run front` já chama), então
+# versionar seria guardar no git uma cópia do que o npm já entrega.
+#
+# O MODELO fica versionado, ao contrário: ele não vem de pacote nenhum, e sem
+# ele a tela não existe.
+estatico/ia/ort*

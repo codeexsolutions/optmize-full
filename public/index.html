@@ -44,6 +44,10 @@
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#spline" /></svg>
           <span>Vetor</span>
         </button>
+        <button class="nav-btn" data-page="imagem" data-title="Imagem">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#image" /></svg>
+          <span>Imagem</span>
+        </button>
         <button class="nav-btn" data-page="macros" data-title="Macros">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#puzzle" /></svg>
           <span>Macros</span>
@@ -981,6 +985,63 @@
           </section>
         </div>
 
+        <!--
+          ============ IMAGEM ============
+          Resolucao para o que vai ser impresso. Fica depois do Vetor no menu
+          porque para arte chapada o Vetor e a resposta melhor - esta tela
+          inclusive diz isso quando reconhece o caso.
+        -->
+        <div class="page" data-page="imagem">
+          <section class="card">
+            <div class="card-head">
+              <div class="card-head-copy">
+                <h2>Melhorar imagem</h2>
+                <p class="hint">Aumenta a resolu&ccedil;&atilde;o da arte com rede neural, para imprimir grande sem borrar.</p>
+              </div>
+              <label class="btn primary btn-sm cursor-pointer">
+                + Escolher imagem
+                <input type="file" id="imagem-arquivo" accept="image/*" multiple hidden>
+              </label>
+            </div>
+
+            <details class="ajuda">
+              <summary>O que a rede faz de verdade &mdash; e quando ela n&atilde;o &eacute; a resposta</summary>
+              <div class="ajuda-corpo">
+                <p>
+                  Aumentar pixel n&atilde;o cria detalhe. Esticar uma imagem pequena, por melhor que seja a
+                  conta, s&oacute; deixa a amplia&ccedil;&atilde;o limpa em vez de borrada &mdash; o que n&atilde;o foi
+                  fotografado n&atilde;o aparece.
+                </p>
+                <p>
+                  A rede daqui faz outra coisa: ela <strong>inventa</strong>. O detalhe que surge n&atilde;o
+                  estava no arquivo, &eacute; o que ela aprendeu que costuma existir naquele lugar. Em textura
+                  &mdash; pele, tecido, folhagem, fundo &mdash; isso &eacute; exatamente o que se quer. Em
+                  <strong>rosto conhecido e em letra pequena</strong>, o que ela inventa pode n&atilde;o ser o
+                  que estava l&aacute;. Por isso o antes e o depois ficam lado a lado: para conferir, e n&atilde;o
+                  para enfeitar.
+                </p>
+                <p>
+                  E antes de qualquer coisa vem a pergunta que resolve a maioria dos casos:
+                  <strong>essa imagem precisa melhorar?</strong> Uma foto de 1000 px impressa a 10 cm sai a
+                  254 dpi e est&aacute; &oacute;tima; a mesma foto a 1,20 m sai a 21 dpi e nenhum algoritmo salva.
+                  Por isso a tela pergunta a largura de impress&atilde;o antes de oferecer os bot&otilde;es.
+                </p>
+                <p>
+                  Tudo acontece <strong>nesta m&aacute;quina</strong>, dentro do navegador. A arte do cliente
+                  n&atilde;o sobe para servidor nenhum.
+                </p>
+              </div>
+            </details>
+
+            <div id="imagem-solta" class="vetor-solta">
+              <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#image" /></svg>
+              <span>Arraste as imagens aqui</span>
+            </div>
+
+            <div id="imagem-lista" class="grid gap-2"></div>
+          </section>
+        </div>
+
         <div class="page" data-page="macros">
           <section class="card">
             <div class="card-head">
@@ -1055,6 +1116,7 @@
   <script src="projetos.js"></script>
   <script src="cor.js"></script>
   <script src="vetor.js"></script>
+  <script src="imagem.js"></script>
   <script src="macros.js"></script>
   <script src="vetor-tela.js"></script>
 </body>
