@@ -80,15 +80,27 @@
  */
 
 const CAMINHO_ORT = "/ia/ort.webgpu.bundle.min.mjs";
-const CAMINHO_MODELO = "/ia/realesr-general-x4v3.onnx";
 
-/** Quanto o modelo amplia. Sai do próprio arquivo; a constante é só o nome. */
+/**
+ * Os dois modelos, e o que cada um exige.
+ *
+ * Os dois ampliam 4x e foram exportados com entrada FIXA — não dá para
+ * escolher o tamanho do pedaço, cada um só aceita o dele. A margem é
+ * proporcional: é a borda de cada ladrilho que se joga fora depois de servir
+ * de contexto para a conta.
+ */
+const MODELOS = {
+  rapido: { arquivo: "realesr-general-x4v3.onnx", lado: 128, margem: 8 },
+  capricho: { arquivo: "realplksr-x4.onnx", lado: 256, margem: 16 },
+};
+
+/** Quanto os modelos ampliam. Sai dos próprios arquivos; a constante é o nome. */
 const ESCALA = 4;
 
-/** Entrada exigida pelo modelo, e a margem que se descarta de cada lado. */
-const LADO = 128;
-const MARGEM = 8;
-const PASSO = LADO - MARGEM * 2;   // 112: o que cada ladrilho realmente entrega
+let modeloAtual = "rapido";
+let LADO = MODELOS.rapido.lado;
+let MARGEM = MODELOS.rapido.margem;
+let PASSO = LADO - MARGEM * 2;
 
 /** Um canvas com esses pixels dentro, para o `drawImage` poder redimensionar. */
 function telaCom(pixels, largura, altura) {
@@ -120,13 +132,25 @@ let cancelado = false;
  * medido nesta máquina, 366 ms por ladrilho na GPU contra 2222 ms na CPU — a
  * mesma imagem em um minuto ou em seis.
  */
-async function ligar(avisar) {
-  if (sessao) return;
+async function ligar(avisar, qual) {
+  const escolhido = MODELOS[qual] ? qual : "rapido";
+  if (sessao && escolhido === modeloAtual) return;
 
-  avisar({ etapa: "runtime" });
-  ort = await import(CAMINHO_ORT);
-  ort.env.wasm.wasmPaths = "/ia/";
-  ort.env.logLevel = "error";
+  if (sessao) {                     // trocou de modelo: a sessão antiga não serve
+    try { await sessao.release(); } catch (erro) { /* já foi */ }
+    sessao = null;
+  }
+  modeloAtual = escolhido;
+  LADO = MODELOS[escolhido].lado;
+  MARGEM = MODELOS[escolhido].margem;
+  PASSO = LADO - MARGEM * 2;
+
+  if (!ort) {
+    avisar({ etapa: "runtime" });
+    ort = await import(CAMINHO_ORT);
+    ort.env.wasm.wasmPaths = "/ia/";
+    ort.env.logLevel = "error";
+  }
 
   const tentativas = [];
   if (typeof navigator !== "undefined" && navigator.gpu) tentativas.push("webgpu");
@@ -136,7 +160,7 @@ async function ligar(avisar) {
   for (const provedor of tentativas) {
     try {
       avisar({ etapa: "modelo", provedor });
-      sessao = await ort.InferenceSession.create(CAMINHO_MODELO, {
+      sessao = await ort.InferenceSession.create("/ia/" + MODELOS[escolhido].arquivo, {
         executionProviders: [provedor],
         graphOptimizationLevel: "all",
       });
@@ -240,8 +264,8 @@ function reporAlfa(destino, largura, altura, origem, larguraOrigem, alturaOrigem
  * acontece no desenho de cada pedaço, e por isso a memória segue o tamanho
  * final e não o de 4x.
  */
-async function ampliar(pixels, largura, altura, escala, avisar) {
-  await ligar(avisar);
+async function ampliar(pixels, largura, altura, escala, avisar, modelo) {
+  await ligar(avisar, modelo);
 
   const saidaLargura = Math.max(1, Math.round(largura * escala));
   const saidaAltura = Math.max(1, Math.round(altura * escala));
@@ -351,11 +375,12 @@ async function ampliar(pixels, largura, altura, escala, avisar) {
     largura: saidaLargura,
     altura: saidaAltura,
     ondeRodou,
+    modelo: modeloAtual,
   };
 }
 
 self.onmessage = async (evento) => {
-  const { id, tipo, pixels, largura, altura, escala } = evento.data;
+  const { id, tipo, pixels, largura, altura, escala, modelo } = evento.data;
 
   if (tipo === "cancelar") { cancelado = true; return; }
 
@@ -364,7 +389,7 @@ self.onmessage = async (evento) => {
 
   try {
     const r = await ampliar(new Uint8ClampedArray(pixels), largura, altura,
-                            Math.min(ESCALA, Math.max(1, escala || ESCALA)), avisar);
+                            Math.min(ESCALA, Math.max(1, escala || ESCALA)), avisar, modelo);
     self.postMessage({ id, resultado: r }, [r.pixels.buffer, r.limpo.buffer]);
   } catch (erro) {
     const mensagem = String((erro && erro.message) || erro);

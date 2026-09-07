@@ -41,8 +41,14 @@ const LEVAR = [
   "ort-wasm-simd-threaded.asyncify.wasm", // o runtime em si
 ];
 
-/** O que tem que estar lá e não vem daqui. */
-const MODELO = "realesr-general-x4v3.onnx";
+/**
+ * Os modelos. Não vêm daqui: são versionados, porque não saem de pacote nenhum.
+ *
+ * São dois porque a bancada mediu que vale ter dois: o compact resolve quase
+ * tudo em segundos, e o RealPLKSR rende 0,83 dB a mais na mesma imagem, ao
+ * custo de 8,7x o tempo. Ver `REDES` em public/imagem.js.
+ */
+const MODELOS = ["realesr-general-x4v3.onnx", "realplksr-x4.onnx"];
 
 if (!fs.existsSync(DE)) {
   console.error(
@@ -69,18 +75,20 @@ for (const nome of LEVAR) {
   total += fs.statSync(origem).size;
 }
 
-// O modelo não é copiado — é conferido. Se ele sumiu do git, a tela abriria e
-// só falharia na hora de melhorar a imagem, que é o pior momento para
-// descobrir.
-const modelo = path.join(PARA, MODELO);
-if (!fs.existsSync(modelo)) {
-  console.error(
-    `ia: falta o modelo em estatico/ia/${MODELO}.\n`
-    + "Ele é versionado no git; um `git checkout` do arquivo resolve.",
-  );
-  process.exit(1);
+// Os modelos não são copiados — são conferidos. Se um sumiu do git, a tela
+// abriria e só falharia na hora de melhorar a imagem, que é o pior momento
+// para descobrir.
+for (const nome of MODELOS) {
+  const modelo = path.join(PARA, nome);
+  if (!fs.existsSync(modelo)) {
+    console.error(
+      `ia: falta o modelo em estatico/ia/${nome}.`
+      + "\nEle é versionado no git; um `git checkout` do arquivo resolve.",
+    );
+    process.exit(1);
+  }
+  total += fs.statSync(modelo).size;
 }
-total += fs.statSync(modelo).size;
 
-console.log(`ia: ${LEVAR.length} arquivos + o modelo em estatico/ia`
+console.log(`ia: ${LEVAR.length} arquivos + ${MODELOS.length} modelos em estatico/ia`
   + ` (${(total / 1048576).toFixed(1)} MB)`);
