@@ -1,6 +1,6 @@
 {
   "name": "optimize",
-  "version": "1.0.18",
+  "version": "1.0.19",
   "description": "Optimize: biblioteca de moldes, encaixe de peças no tecido e vetorização de imagem.",
   "main": "server.js",
   "type": "commonjs",

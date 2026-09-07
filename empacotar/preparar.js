@@ -233,6 +233,28 @@ for (const item of LEVAR) {
   copiar(path.join(RAIZ, item), para);
 }
 
+/**
+ * Cada pacote de `dependencies` sobreviveu à poda?
+ *
+ * O `conferirRequires` cuida dos `require("./...")`, que são arquivos nossos.
+ * Este cuida do outro lado: os pacotes do npm. A poda decide o que é "só de
+ * desenvolver" pelo `package-lock.json`, e o lock é escrito pelo `npm`. Editar
+ * o `package.json` na mão move o pacote para produção lá e não move no lock —
+ * e a poda, corretamente, apaga.
+ *
+ * ISSO JÁ ACONTECEU, e do jeito pior: o `bytenode` sumiu do instalável 1.0.19
+ * e o programa não subia. Pior ainda, o teste feito NA PASTA DO PROJETO
+ * passava, porque o `require` sobe os diretórios e achava o pacote no
+ * `node_modules` do próprio projeto, um nível acima. Só extraindo o instalador
+ * para outro lugar o erro aparecia.
+ */
+function conferirDependencias(pasta) {
+  const declaradas = Object.keys(
+    JSON.parse(fs.readFileSync(path.join(RAIZ, "package.json"), "utf-8")).dependencies || {},
+  );
+  return declaradas.filter((nome) => !fs.existsSync(path.join(pasta, "node_modules", nome)));
+}
+
 // Antes de seguir: o que foi copiado se sustenta sozinho? Ver `conferirRequires`.
 const faltando = conferirRequires(DESTINO);
 if (faltando.length > 0) {
@@ -263,6 +285,16 @@ if (refeito) {
   }
   podarPrebuilds(path.join(DESTINO, "node_modules"));
   podarDesenvolvimento(path.join(DESTINO, "node_modules"));
+}
+
+// A poda tirou algum pacote que o programa precisa em execução?
+const podados = conferirDependencias(DESTINO);
+if (podados.length > 0) {
+  console.error("preparar: a poda levou pacotes que estão em `dependencies`:");
+  podados.forEach((nome) => console.error("  " + nome));
+  console.error("O `package-lock.json` provavelmente ainda os marca como `dev`.");
+  console.error("Rode `npm install` para o lock acompanhar o package.json.");
+  process.exit(1);
 }
 
 console.log(`servidor preparado em src-tauri/servidor (${mb(tamanho(DESTINO))})`);
