@@ -55,10 +55,39 @@ quantas linhas diferem do original:
 | `nucleo/encaixeMascara.js` | 452 | **6** |
 | `nucleo/imagemWorker.js` | 423 | **5** |
 | `nucleo/diagnosticoDaImagem.js` | 197 | só os `export` |
+| `nucleo/encaixeMotor.js` | 3.014 | 74 `export`/`import`, o resto é o cabeçalho novo |
+| `nucleo/encaixeWasm.js` | 365 | 11 `export`/`import` |
+| `nucleo/encaixeRede.js` | 331 | 21 `export` |
+| `nucleo/encaixeGiro.js` | 30 | 3 `export` |
 
 Os tipos entram depois, arquivo por arquivo, quando alguém tiver motivo para
 mexer lá dentro. Quem chama declara o contrato do seu lado enquanto isso — ver
 `OpcoesDoVetor`, em `src/telas/Vetor.tsx`.
+
+### O motor tem uma prova própria, e ela pegou um erro na primeira corrida
+
+"Só acrescentei `export`" é uma afirmação sobre o TEXTO, não sobre o
+comportamento. Um ciclo de importação que se resolve diferente, uma variável de
+módulo que deixa de ser compartilhada, uma função que sai içada de outro jeito
+— nada disso aparece num diff de linhas.
+
+Por isso o `npm run bancada:porte`: ele sobe as duas instâncias do motor — a de
+`public/` e a de `src/nucleo/` — monta as mesmas peças, roda a mesma ordem
+embaralhada com a mesma semente em cada combinação de heurística, salto,
+agrupamento e bancada, e exige resultado idêntico peça por peça. São 637 casos,
+com o WASM ligado dos dois lados.
+
+**Ele falhou na primeira execução**, e o que ele achou é instrutivo: o
+`encaixe-motor` usa `rotacoesDe` e `podeDeitar`, que moram no `encaixe-giro` —
+e o levantamento de dependências não os tinha visto, porque são
+`const nome = (x) => …` e o levantamento só procurava `function nome`. O
+arquivo portado ficou sem o `import`, e em ESM isso é `ReferenceError` na
+primeira chamada. Em `<script>` global teria funcionado, porque lá tudo dividia
+o mesmo escopo.
+
+**A lição, para a Etapa C:** levantamento de dependência que só procura
+`function` perde metade do que existe num arquivo moderno. E a prova de um
+porte não é o diff — é rodar os dois lado a lado.
 
 ### A cópia dupla é transitória, e tem regra
 
@@ -67,8 +96,10 @@ existem **nos dois lados**: a cópia de `public/` é a que a tela antiga carrega
 por `<script>`, a que os workers carregam por `importScripts`, e — no caso da
 máscara — a que a BANCADA lê como texto para medir o motor.
 
-**Mexeu numa conta de um lado, mexe no outro, e rode `npm run bancada` antes e
-depois.** As duas somem numa quando a Etapa C terminar.
+**Mexeu numa conta de um lado, mexe no outro, e rode `npm run bancada:porte`** —
+ele acusa a divergência em segundos, o que a bancada de consumo (que leva sete
+minutos e tem ruído de sorteio) não faria. As duas cópias somem numa quando a
+Etapa C terminar.
 
 ## As pastas
 
@@ -179,7 +210,7 @@ Então a ordem passou a ser ditada pelas dependências:
 | Etapa | O que | Estado |
 |---|---|---|
 | **A** | **Vetor**, **Imagem** e **Macros** — não conversam com ninguém | ✅ feita |
-| **B** | O **motor de encaixe** vira módulo, sem tocar na lógica | a fazer |
+| **B** | O **motor de encaixe** vira módulo, sem tocar na lógica | ✅ feita |
 | **C** | **Encaixe + Moldes + Projetos + Cor** juntos — as entregas viram estado React | a fazer |
 | **D** | Apagar o `public/`, `base` do Vite vira `/` | a fazer |
 
