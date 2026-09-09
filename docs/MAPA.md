@@ -4,9 +4,15 @@ Este é o documento para responder rápido a uma pergunta só: **"onde eu mexo
 para mudar X?"**. Cada arquivo tem no topo dele a explicação do próprio
 funcionamento; aqui fica a visão de cima, e as regras que atravessam tudo.
 
+O sistema tem duas metades que quase não se falam. A primeira **prepara o que
+vai para a máquina** — moldes, projetos, encaixe, vetor. A segunda
+**acompanha o que já foi** — a central das impressoras. Elas dividem o
+servidor, o `dados.db` e a casca da tela, e mais nada: nenhuma função de uma
+é chamada pela outra.
+
 ---
 
-## As quatro telas
+## As quatro telas que preparam o trabalho
 
 | Tela | O que faz | Arquivos |
 |---|---|---|
@@ -19,6 +25,75 @@ funcionamento; aqui fica a visão de cima, e as regras que atravessam tudo.
 cometer neste código. Molde guarda geometria (para aplicar arte depois);
 projeto guarda arte pronta (não há passo seguinte). Modelar um como o outro
 quebra os dois.
+
+---
+
+## As cinco telas da central das impressoras
+
+| Tela | O que faz | Arquivos |
+|---|---|---|
+| **Impressoras** | O painel: o que está imprimindo agora, o dia e o período. | `src/telas/Impressoras.tsx` |
+| **Histórico** | Todos os trabalhos já impressos, em lista ou em cartões com a arte. | `src/telas/Historico.tsx` |
+| **Pedidos** | A fila da calandra: a lista de produção e o que já passou por lá. | `src/telas/Pedidos.tsx`, `src/impressoras/LancarPedido.tsx`, `impressoras/routes/pedidos.js` |
+| **Máquinas** | Acha as impressoras na rede e cadastra. | `src/telas/Maquinas.tsx`, `impressoras/services/discovery.js` |
+| **Reposição** | Quanto tecido foi gasto refazendo trabalho, por semana. | `src/telas/Reposicao.tsx` |
+| **WhatsApp** | Avisa num grupo quando uma impressão começa e termina. | `src/telas/Whatsapp.tsx`, `impressoras/whatsapp/` |
+
+O servidor delas está em `impressoras/`, montado por `impressoras-api.js` em
+`/api/impressoras`.
+
+**Não existe impressora escrita no código.** Nem em código, nem em arquivo de
+configuração. Uma máquina entra porque a varredura da rede a encontrou e
+alguém deu um nome a ela; daí em diante ela mora na tabela `imp_machines`. É a
+diferença deliberada em relação ao sistema de onde este módulo foi portado, que
+nascia com quatro máquinas escritas num `machines.json` — caminho de rede
+escrito à mão só está certo na instalação de quem o escreveu, e quando deixa de
+estar, a impressora apenas "fica offline" sem dizer por quê.
+
+**A tela nunca lê a impressora.** Ela lê o `dados.db`. Quem conversa com as
+máquinas são o `sync` (na subida) e os três leitores ao vivo (`realtime`,
+`liveLog`, `printer2Live`). Isso não é otimização prematura: era exatamente o
+contrário — uma consulta por acesso indo ao compartilhamento SMB de cada
+máquina — que travava o painel quando várias pessoas olhavam ao mesmo tempo.
+O efeito colateral bom é que dia antigo continua consultável com a máquina
+desligada.
+
+**O tipo da máquina decide o leitor, não o nome dela.** São três formatos de
+histórico (`csv`, `xml`, `at-binary`), e a varredura reconhece qual é pelo que
+a impressora deixa no compartilhamento. Os arquivos chamados `printer2*` são
+os do tipo `csv` — o nome ficou do sistema de origem, onde só havia uma
+máquina desse tipo; eles operam sobre **todas** as máquinas CSV cadastradas.
+
+**Quem fecha o ciclo da calandra não é a tela.** O `calandraStatus` de cada
+item de pedido (pendente / ok / erro) é marcado pelo aparelho da calandra, que
+lê o QR da folha impressa e chama
+`POST /pedidos/:id/items/:itemId/result`. A tela de Pedidos **mostra** o que
+ele marcou, e de propósito não oferece um botão de "marcar como ok": inventar
+um faria a fila divergir do que aconteceu na máquina, que é exatamente o que o
+QR existe para evitar.
+
+**Cliente e tecido saem do nome do arquivo.** Não são campos: são lidos de
+"CLIENTE - TECIDO.prt" (`impressoras/services/matching.js`). É o que permite
+avisar "isso já foi rodado antes" sem ninguém digitar nada — e também o motivo
+de o palpite errar às vezes, daí o aviso ser aviso e não impedimento.
+
+**A Ordem de Serviço saiu da tela, e não do servidor.** A OS era o pedido de
+produção preenchido à mão, com as imagens de referência que o aparelho da
+calandra mostrava ao operador. A tela dela foi retirada; o servidor continua
+inteiro (`impressoras/routes/serviceOrders.js`, `db/serviceOrders.js`,
+`services/orderPdf.js`) e as tabelas `imp_service_orders` e
+`imp_service_order_images` continuam sendo criadas.
+
+Isto é dívida consciente, não esquecimento. Está assim porque a decisão foi
+tirar a tela sem fechar a porta: o `imp_pedido_items.osId` continua existindo e
+o servidor continua sabendo preenchê-lo, então voltar com a OS é escrever uma
+tela — não uma migração de banco com dado já gravado no meio. **Quem decidir
+que ela não volta**: são quatro arquivos de servidor, duas tabelas, a coluna
+`osId`, o ramo `"O"` de `/api/scan/:code` e o `findMatchingOrder` do matching.
+
+**Número de tinta do AT ainda é experimental.** Os registros vêm marcados com
+`inkExperimental`, e a tela mostra um `?` ao lado. Tirar a marca exige conferir
+contra a tela da própria máquina, não contra a nossa conta.
 
 ---
 
@@ -155,18 +230,28 @@ funciona igual, só começa do zero. Toda conversa com ela passa por
 
 ---
 
+### 8. Impressora offline não derruba o painel
+O estado online/offline de cada máquina fica em memória
+(`impressoras/services/machineStatus.js`), atualizado pelo mesmo laço que lê os
+arquivos. Uma impressora desligada não segura a resposta das outras, e o
+histórico dela continua saindo do banco.
+
+---
+
 ## O servidor
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `server.js` | Express: serve o painel e monta as rotas da API |
+| `server.js` | Express + socket.io: serve o painel, monta as rotas e escuta em `0.0.0.0` |
 | `db.js` | SQLite: cria as tabelas e migra colunas novas |
 | `moldes-api.js` | Rotas de `/api/moldes` |
 | `projetos-api.js` | Rotas de `/api/projetos` |
 | `encaixe-memoria.js` | O que o Encaixe aprendeu: recordes e placar de receitas |
 | `encaixe-pdf.js` | O PDF do encaixe em tamanho real |
 | `uploads-arquivos.js` | Comum a moldes e projetos: tipo do arquivo, nome sem colisão, faxina do disco |
-| `caminhos.js` | Onde ficam o banco e os uploads: pasta do projeto, ou a do usuário no app instalado |
+| `caminhos.js` | Onde ficam o banco, os uploads e a configuração: pasta do projeto, ou a do usuário no app instalado |
+| `impressoras-api.js` | Monta a central das impressoras em `/api/impressoras` e levanta os leitores |
+| `impressoras/` | A central: varredura da rede, leitores, OS, pedidos, WhatsApp |
 | `src-tauri/src/main.rs` | A casca de janela: sobe o servidor, abre a janela nele, mata o servidor na saída |
 
 **Dado de usuário nunca fica ao lado do programa.** Todo caminho de gravação
@@ -226,6 +311,59 @@ tabelas do módulo comercial que saiu. `CREATE TABLE IF NOT EXISTS clientes` nã
 criaria nada — o código passaria a ler a tabela velha, com as colunas erradas.
 Por isso as tabelas novas se chamam `projeto_clientes`, `projetos`,
 `projeto_pecas`.
+
+**Listagem e registro aberto não devolvem a mesma coisa.** `GET
+/service-orders` manda `imageCount` e `coverImageId`; só `GET
+/service-orders/:id` traz o array `images`. A tela tinha um tipo só para os
+dois e lia `images[0]` na listagem — o que dava tela branca em qualquer
+instalação que tivesse uma OS, e passou despercebido justamente porque o banco
+de teste estava vazio. Hoje são dois tipos com nomes diferentes
+(`OrdemNaLista` e `OrdemAberta`, em `src/impressoras/tipos.ts`), o que torna a
+confusão um erro de compilação. **Tela nova com dado real antes de dar por
+pronta**: lista vazia não exercita o caminho que quebra.
+
+**PUT não é PATCH.** A tela de Máquinas mandava `PUT` numa rota declarada só
+como `router.patch`, e o Express respondia 404 — o botão "Reativar" não fazia
+nada além de um recado de "máquina não encontrada", que parecia problema de
+dado. O `api` de `src/api/cliente.ts` tem os dois verbos; rota que aceita
+alteração parcial pede PATCH.
+
+**Sem preflight, `<button>` é um controle do Windows.** O reset do Tailwind
+está fora de propósito (senão apagaria a tela antiga inteira), e a consequência
+demorou a aparecer: um `<button>` sem `bg-*` escrito continua com o estilo que
+o SISTEMA dá a botão — fundo cinza-claro e borda `outset`. O menu lateral
+inteiro ficou com botões brancos sobre o painel preto, e só o item ativo
+parecia certo, porque era o único com um fundo declarado. O conserto não é
+`bg-transparent` em cada botão (o próximo que alguém escrever nasce branco de
+novo): é um reset mínimo em `@layer base`, dentro de `#raiz`, no
+`estilo/entrada.css`. Ele fica preso ao `#raiz` porque a tela antiga não tem
+esse id — e em camada porque o CSS à mão das folhas antigas está fora de
+camada, e fora de camada ganha de camada.
+
+**Lista de máquinas escrita à mão.** O sistema de origem trazia quatro
+impressoras num `config/machines.json`, com os caminhos UNC digitados. Aquilo
+funcionava numa instalação: a de quem escreveu o arquivo. Renomear um
+computador, trocar o PC de uma máquina ou instalar em outra loja quebrava tudo
+— e quebrava **calado**, porque uma rota morta só faz a impressora aparecer
+offline, que é o mesmo que ela aparece quando está de fato desligada. Por isso
+aqui a única entrada é a varredura (`impressoras/services/discovery.js`), e a
+lista mora no banco. Se alguém sentir falta de "só configurar o caminho", o
+caminho certo é acrescentar uma assinatura nova ao reconhecedor, não um
+arquivo.
+
+**Estado global indexado sem o dono.** O controle da varredura de cancelamento
+das máquinas CSV era indexado só pelo nome da pasta de sessão do log. No
+sistema de origem havia uma máquina CSV e nunca deu problema; aqui a varredura
+pode cadastrar várias, e duas com uma sessão de mesmo nome dividiriam o mesmo
+controle — uma marcaria como já lida a sessão que a outra ainda não leu. A
+chave passou a levar o `machine.id` junto. Vale a pergunta geral: todo estado
+que nasceu numa instalação de uma máquina só precisa ser revisto quando passam
+a ser várias.
+
+**Um `preserveAspectRatio="none"` num gráfico.** Ele estica X e Y por fatores
+diferentes, e o que se vê é o texto do eixo espremido, como fonte condensada.
+Gráfico responsivo se faz medindo a largura de verdade (`ResizeObserver`) e
+desenhando em pixel, não deformando um `viewBox`.
 
 **Contas duplicadas.** `areaComSinal` existia duas vezes com nomes diferentes,
 em arquivos diferentes, letra por letra igual. Duas cópias de uma conta são

@@ -48,6 +48,10 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:8000",
       "/uploads": "http://localhost:8000",
+      // O painel das impressoras é atualizado por evento. `ws: true` é o que
+      // faz o WebSocket atravessar o proxy — sem isso ele cai para polling em
+      // desenvolvimento e o progresso da varredura chega aos trancos.
+      "/socket.io": { target: "http://localhost:8000", ws: true },
     },
   },
 });

@@ -4,11 +4,16 @@
  * No computador ele fica fixo à esquerda. No celular vira gaveta: sai da tela
  * até alguém tocar no botão do cabeçalho, e fecha ao escolher uma tela, ao
  * clicar fora ou no Esc.
+ *
+ * As telas vêm separadas por grupo (Produção, Impressão, Relatórios). Quem
+ * decide o grupo de cada uma é `src/rotas.ts`, como sempre foi com o resto:
+ * este arquivo continua sem saber o que é molde, encaixe ou impressora — só
+ * desenha a tabela que recebe.
  */
 
 import { useEffect } from "react";
 import { Icone } from "./Icone";
-import { TELAS, type NomeDeTela } from "../rotas";
+import { GRUPOS, telasDoGrupo, type NomeDeTela } from "../rotas";
 
 interface Props {
   atual: NomeDeTela;
@@ -38,7 +43,7 @@ export function Menu({ atual, aberto, aoEscolher, aoFechar }: Props) {
 
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-80 flex w-[244px] flex-col gap-[18px] overflow-y-auto border-r border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-4 pt-[22px] pb-[17px] transition-transform duration-200",
+          "fixed inset-y-0 left-0 z-80 flex w-[244px] flex-col overflow-y-auto border-r border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-4 pt-[22px] pb-[17px] transition-transform duration-200",
           aberto ? "translate-x-0" : "-translate-x-[105%]",
           "tela:translate-x-0",
         ].join(" ")}
@@ -56,35 +61,56 @@ export function Menu({ atual, aberto, aoEscolher, aoFechar }: Props) {
           </span>
         </div>
 
-        <nav className="flex flex-col gap-[3px]">
-          {TELAS.map((tela) => {
-            const ativa = tela.nome === atual;
+        {/*
+          Um <nav> por grupo, cada um rotulado pelo próprio título. É o que faz
+          um leitor de tela anunciar "navegação Produção" em vez de despejar dez
+          itens seguidos sem dizer onde um assunto acaba e o outro começa.
+        */}
+        <div className="flex flex-col gap-[18px]">
+          {GRUPOS.map((grupo) => {
+            const telas = telasDoGrupo(grupo.nome);
+            if (!telas.length) return null;
+
             return (
-              <button
-                key={tela.nome}
-                type="button"
-                aria-current={ativa ? "page" : undefined}
-                onClick={() => { aoEscolher(tela.nome); aoFechar(); }}
-                className={[
-                  "flex items-center gap-[11px] rounded-[11px] px-3 py-[7px] text-left transition-colors",
-                  ativa ? "bg-painel-suave text-tinta" : "text-tinta-fraca hover:bg-painel-suave hover:text-tinta",
-                ].join(" ")}
-              >
-                <Icone
-                  referencia={tela.icone}
-                  className={[
-                    "size-[30px] shrink-0 rounded-lg border p-1.5",
-                    ativa ? "border-[var(--accent-line)] bg-[var(--accent-soft)] text-ambar" : "border-linha",
-                  ].join(" ")}
-                />
-                <span className="grid min-w-0 gap-0.5">
-                  <strong className="truncate text-[0.9rem] font-semibold">{tela.rotulo}</strong>
-                  <small className="truncate text-[0.68rem] text-tinta-apagada">{tela.apoioMenu}</small>
-                </span>
-              </button>
+              <nav key={grupo.nome} aria-labelledby={`grupo-${grupo.nome}`} className="flex flex-col gap-[3px]">
+                <h2
+                  id={`grupo-${grupo.nome}`}
+                  className="mt-0 mb-1 px-3 text-[0.64rem] font-semibold tracking-[0.12em] text-tinta-apagada uppercase"
+                >
+                  {grupo.rotulo}
+                </h2>
+
+                {telas.map((tela) => {
+                  const ativa = tela.nome === atual;
+                  return (
+                    <button
+                      key={tela.nome}
+                      type="button"
+                      aria-current={ativa ? "page" : undefined}
+                      onClick={() => { aoEscolher(tela.nome); aoFechar(); }}
+                      className={[
+                        "flex items-center gap-[11px] rounded-[11px] px-3 py-[7px] text-left transition-colors",
+                        ativa ? "bg-painel-suave text-tinta" : "text-tinta-fraca hover:bg-painel-suave hover:text-tinta",
+                      ].join(" ")}
+                    >
+                      <Icone
+                        referencia={tela.icone}
+                        className={[
+                          "size-[30px] shrink-0 rounded-lg border p-1.5",
+                          ativa ? "border-[var(--accent-line)] bg-[var(--accent-soft)] text-ambar" : "border-linha",
+                        ].join(" ")}
+                      />
+                      <span className="grid min-w-0 gap-0.5">
+                        <strong className="truncate text-[0.9rem] font-semibold">{tela.rotulo}</strong>
+                        <small className="truncate text-[0.68rem] text-tinta-apagada">{tela.apoioMenu}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
             );
           })}
-        </nav>
+        </div>
       </aside>
     </>
   );

@@ -14,6 +14,52 @@ O sistema fica dividido em código do servidor, painel web e arquivos gerados em
 - `uploads-arquivos.js`: o que moldes e projetos têm em comum ao guardar imagem em disco.
 - `projetos-api.js`: projetos de cliente — a pasta, o projeto e as peças já prontas.
 - `encaixe-memoria.js` e `encaixe-pdf.js`: cálculo, memória e documento do encaixe.
+- `impressoras-api.js`: monta a central das impressoras em `/api/impressoras` e levanta os leitores das máquinas.
+
+## A central das impressoras
+
+`impressoras/` acompanha o que já saiu das máquinas: acha as impressoras na
+rede, lê o histórico de cada uma e guarda no mesmo `dados.db`. Foi **portada**
+de um sistema que já rodava na produção, e por isso é a única parte do projeto
+com nomes em inglês por dentro (`machineId`, `printLength`): portar é
+acrescentar o que falta, não reescrever o que funciona.
+
+- `impressoras/config.js`: de onde saem as máquinas. **De lugar nenhum escrito
+  à mão** — só da varredura da rede.
+- `impressoras/services/discovery.js`: a varredura. Procura quem responde em
+  SMB, resolve o nome do computador e reconhece o tipo da impressora pelo que
+  ela deixa no compartilhamento.
+- `impressoras/sources/`: os três leitores de histórico — `csvHistory`,
+  `xmlHistory` e `atBinary`. Um por formato de arquivo de impressora.
+- `impressoras/services/sync.js`: a importação da subida, que enche o banco.
+- `impressoras/services/realtime.js`, `liveLog.js`, `printer2Live.js`: os
+  leitores ao vivo. São os únicos que conversam com as máquinas depois da
+  subida.
+- `impressoras/services/printer2Cancel.js`: descobre cancelamento nas máquinas
+  CSV, cujo software não registra cancelamento em lugar nenhum.
+- `impressoras/db/`: as tabelas `imp_*` do `dados.db`.
+- `impressoras/routes/`: as rotas de máquinas, pedidos e WhatsApp — e as de
+  Ordem de Serviço, que continuam de pé sem tela que as chame (ver MAPA.md).
+- `impressoras/services/matching.js`: lê "CLIENTE - TECIDO" do nome do arquivo.
+  É o que sustenta o aviso de "já rodado antes" ao lançar um pedido.
+- `impressoras/services/qrcode.js`: o QR da folha de produção, desenhado em SVG
+  no próprio servidor — sem serviço de fora e sem imagem carregada da internet.
+- `impressoras/whatsapp/`: o bot de avisos. `navegador.js` decide qual Chrome
+  usar — ver abaixo.
+
+**As tabelas levam prefixo `imp_`.** `machines`, `records` e `pedidos` são
+nomes genéricos demais para um banco que também guarda moldes e projetos, e um
+`CREATE TABLE IF NOT EXISTS` sobre um nome que já existe não cria nada e não
+reclama: o código passa a ler a tabela errada, calado. É a mesma armadilha que
+já custou caro aqui uma vez.
+
+**O bot não embute Chrome.** O sistema de origem levava o Chrome do Puppeteer
+no instalador: 409 MB, mais do que o resto do programa inteiro. Aqui
+`impressoras/whatsapp/navegador.js` procura, nesta ordem, a variável
+`OPTIMIZE_CHROME`, o Chrome do Puppeteer (que existe na máquina de quem
+desenvolve), o Google Chrome instalado e o Microsoft Edge — que vem com o
+Windows. Não achando nenhum, a tela diz o que instalar, em vez de estourar um
+erro do Puppeteer que não significa nada para quem está olhando.
 
 ## Painel web
 
@@ -111,7 +157,13 @@ Por isso o projeto guarda também os ajustes do encaixe (largura do tecido, folg
 
 ## Arquivos que não são código-fonte
 
-`node_modules/`, `dados.db*`, `uploads/` e as pastas de backup são dados locais ou arquivos gerados. Eles continuam preservados, mas ficam fora do controle de versão pelo `.gitignore`.
+`node_modules/`, `dados.db*`, `uploads/`, `config/`, `exportado/`,
+`whatsapp-sessao/` e as pastas de backup são dados locais ou arquivos gerados.
+Eles continuam preservados, mas ficam fora do controle de versão pelo
+`.gitignore`.
+
+**`whatsapp-sessao/` é uma credencial**: quem copiar a pasta entra no WhatsApp
+do bot. Não versione nem compartilhe.
 
 As tabelas de Projetos se chamam `projeto_clientes`, `projetos` e `projeto_pecas`. O nome não é `clientes` de propósito: um `dados.db` antigo ainda tem a tabela `clientes` do módulo comercial que saiu, e um `CREATE TABLE IF NOT EXISTS clientes` não criaria nada — o código passaria a ler a tabela velha, com as colunas erradas.
 

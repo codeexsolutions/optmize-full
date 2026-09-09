@@ -114,19 +114,53 @@ módulo em `src/nucleo/` com `export`.
 - **React e Vite são `devDependencies`.** Eles viram `dist/` no build e não são
   carregados pelo Node em execução — por isso não entram no instalador.
 - **A rota mora no `#`.** Sem rota-curinga no Express, e recarregar a página em
-  qualquer tela funciona.
+  qualquer tela funciona. **O grupo do menu não entra no endereço**: a rota
+  continua sendo só o nome da tela (`#/historico`), então mudar uma tela de
+  grupo não quebra link guardado nem favorito.
+- **Botão em `/app` precisa do reset de `#raiz`.** Sem o preflight do Tailwind,
+  o navegador estiliza `<button>` como controle do sistema. O reset mínimo está
+  em `estilo/entrada.css`, em `@layer base` e preso ao `#raiz`.
+
+## A central das impressoras entrou já em React
+
+A parte que acompanha as impressoras da produção não passou pela tela antiga:
+ela nasceu direto em `/app`, nas cinco telas de `src/telas/` (Impressoras,
+Histórico, Ordens de Serviço, Máquinas e WhatsApp). Não havia motivo para
+escrevê-la em `public/` — seria escrever, no mesmo mês, código para a pasta que
+este documento diz que vai ser apagada.
+
+Isso muda uma coisa no desenho: `/app` deixou de ser só o destino da migração e
+passou a ter função própria. Quem quer acompanhar impressora abre `/app` hoje.
+
+Duas peças novas apareceram por causa dela:
+
+- **`src/impressoras/`** — o que as cinco telas dividem: os tipos das respostas
+  do servidor, a formatação de metragem/tempo/tinta e o cliente do socket. Não
+  é `nucleo/`: `nucleo/` é domínio puro que roda em worker, e isto conversa com
+  o servidor.
+- **socket.io** — as impressoras são a única parte do Optimize que muda
+  sozinha. Moldes e projetos só mudam quando alguém mexe; uma impressão começa
+  e termina sem ninguém tocar na tela. Há **uma** conexão para o app inteiro
+  (`src/impressoras/socket.ts`), e cada tela diz que eventos lhe interessam.
+
+E uma regra que veio junto: **falha de socket não derruba a tela**. É a mesma
+que já valia para a memória do Encaixe — sem o servidor de eventos, tudo
+continua funcionando, a tela só deixa de se atualizar sozinha.
 
 ## O que já está de pé
 
 - Vite + React + TypeScript (`strict`, com `noUncheckedIndexedAccess`).
-- A casca inteira em React: menu lateral (com gaveta no celular), cabeçalho com
-  selo por aba, relógio, rota por `#`.
+- A casca inteira em React: menu lateral em três grupos (Produção, Impressão,
+  Relatórios), com gaveta no celular, cabeçalho com selo por aba, relógio e
+  rota por `#`.
 - `api/cliente.ts` e `api/useDados.ts` — toda chamada num lugar só, com erro do
   servidor virando mensagem na tela.
 - `casca/Cartao.tsx` — a caixa padrão das telas.
 - Tela de Projetos lendo a estante de clientes da API de verdade.
 - `nucleo/geometria.ts` portado, como referência da receita.
 - Servidor e empacotador servindo e levando as duas telas.
+- A central das impressoras inteira, em React: painel, histórico, ordens de
+  serviço, varredura da rede e o bot do WhatsApp.
 
 ## Dívidas conhecidas
 
@@ -134,6 +168,10 @@ módulo em `src/nucleo/` com `export`.
   telas. O programa instalado roda sem internet, então hoje ele cai para a
   fonte do sistema quando está offline. As fontes precisam ir para `estatico/`.
 - **`npm run css` existe só para a tela antiga.** Some com ela.
+- **A varredura da rede é do Windows.** `nbtstat`, `net view` e `ping -a` são
+  chamados como processo. É onde o sistema roda, e o UNC do resto do módulo já
+  seria de todo jeito específico do Windows — mas está escrito aqui para não
+  ser descoberto no dia em que alguém tentar rodar isto em outro sistema.
 - **O leitor de SVG do `moldes.js` precisa do DOM de verdade** (mede texto e
   caminho no documento). Quando ele for para o núcleo, vai marcado: roda na
   thread principal, não em worker.

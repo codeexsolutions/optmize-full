@@ -39,6 +39,11 @@ const LEVAR = [
   "cor-api.js",
   "cor-icc.js",
   "macros-api.js",
+  "impressoras-api.js",
+  // A central das impressoras: 39 arquivos de servidor numa pasta só. Vai
+  // inteira, e é justamente por causa dela que o guard de `require` abaixo
+  // passou a descer nas subpastas.
+  "impressoras",
   // A pasta das macros do Corel. Vai inteira porque não é só o `.cs` que a
   // tela entrega: o `instalar-no-corel.ps1` é chamado pelo `macros-api.js` em
   // tempo de execução, e um `require` não o menciona — o guard de dependências
@@ -187,23 +192,39 @@ function copiarNode(destino) {
  * instalador. Se algum não resolve, o empacotamento para aqui, com o nome do
  * arquivo que falta — e não lá na frente, no computador de quem comprou.
  *
- * Só a raiz é varrida, que é onde mora o servidor. `public/` é código de
- * navegador (entra por `<script>` e `importScripts`, não por `require`) e
- * `node_modules` resolve sozinho.
+ * A varredura desce nas subpastas do servidor, e não só na raiz. Ela nasceu
+ * olhando apenas a raiz, quando todo o servidor cabia em dez arquivos soltos;
+ * a central das impressoras trouxe uma pasta com 39 arquivos que se exigem
+ * entre si, e um guard que não entrasse nela conferiria menos de um quarto
+ * dos `require` do programa.
+ *
+ * O que fica de fora: `public/` e `dist/` são código de navegador (entram por
+ * `<script>` e `importScripts`, não por `require`), `node_modules` resolve
+ * sozinho, e `estatico/` não tem código nenhum.
  */
-function conferirRequires(pasta) {
+const FORA_DA_CONFERENCIA = new Set(["node_modules", "public", "dist", "estatico", "corel"]);
+
+function conferirRequires(pasta, raiz = pasta) {
   const faltando = [];
   const resolve = (alvo) =>
     fs.existsSync(alvo) || fs.existsSync(`${alvo}.js`)
       || fs.existsSync(path.join(alvo, "index.js"));
 
-  for (const arquivo of fs.readdirSync(pasta)) {
-    if (!arquivo.endsWith(".js")) continue;
-    const texto = fs.readFileSync(path.join(pasta, arquivo), "utf-8");
+  for (const item of fs.readdirSync(pasta, { withFileTypes: true })) {
+    const caminho = path.join(pasta, item.name);
+
+    if (item.isDirectory()) {
+      if (!FORA_DA_CONFERENCIA.has(item.name)) faltando.push(...conferirRequires(caminho, raiz));
+      continue;
+    }
+    if (!item.name.endsWith(".js")) continue;
+
+    const texto = fs.readFileSync(caminho, "utf-8");
     for (const achado of texto.matchAll(/require\(\s*["'](\.[^"']+)["']\s*\)/g)) {
       const pedido = achado[1];
       if (!resolve(path.resolve(pasta, pedido))) {
-        faltando.push(`  ${arquivo} pede "${pedido}", que não foi para o instalador`);
+        const onde = path.relative(raiz, caminho).replace(/\\/g, "/");
+        faltando.push(`  ${onde} pede "${pedido}", que não foi para o instalador`);
       }
     }
   }

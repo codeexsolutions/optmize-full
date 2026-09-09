@@ -37,6 +37,70 @@
 @source "../src/**/*.{ts,tsx}";
 @source "../index.html";
 
+/*
+ * ===========================================================================
+ * O RESET QUE FALTAVA — só para a tela nova
+ * ===========================================================================
+ *
+ * O preflight do Tailwind está fora (ver a explicação lá em cima), e isso tem
+ * um efeito que passou despercebido: sem ele, um `<button>` continua com o
+ * estilo que o SISTEMA dá a botão. No Windows isso é fundo cinza-claro e borda
+ * `outset` — foi assim que o menu lateral inteiro ficou com botões brancos
+ * sobre o painel preto, e só o item ativo parecia certo, porque era o único
+ * com um `bg-*` escrito.
+ *
+ * Não dá para consertar botão a botão: são dezenas, e o próximo que alguém
+ * escrever nasce branco de novo. Também não dá para trazer o preflight, que
+ * apagaria a tela antiga inteira. Então o reset é o mínimo necessário, e vive
+ * dentro de `#raiz` — o `<div>` em que o React monta. A tela antiga não tem
+ * esse id, então nada aqui a alcança.
+ *
+ * Fica em `@layer base` por dois motivos: os utilitários (camada `utilities`)
+ * ganham dele, que é o que se quer; e o CSS à mão das folhas antigas está FORA
+ * de camada, e fora de camada ganha de qualquer camada — de novo, a tela
+ * antiga fica intacta.
+ */
+@layer base {
+  /*
+   * Borda começa em zero e sólida, como o preflight faria. Sem isto, um
+   * `border-linha` (que só define cor e largura) herda o `border-style:
+   * outset` do sistema e desenha um relevo de janela dos anos 90.
+   */
+  #raiz *,
+  #raiz *::before,
+  #raiz *::after {
+    border: 0 solid;
+  }
+
+  /*
+   * O conserto do menu branco. Fundo transparente para o painel aparecer, cor
+   * e fonte herdadas para o botão parecer o que ele é na tela — texto que se
+   * clica —, e não um controle do sistema operacional.
+   */
+  #raiz button {
+    background-color: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  #raiz button:disabled {
+    cursor: default;
+  }
+
+  /*
+   * Campos herdam a tipografia da tela. O fundo NÃO é mexido aqui de
+   * propósito: cada campo já escreve o seu, e caixa de marcar e botão de rádio
+   * dependem do fundo que o sistema dá para desenhar a marca.
+   */
+  #raiz input,
+  #raiz select,
+  #raiz textarea {
+    font: inherit;
+    color: inherit;
+  }
+}
+
 @theme {
   /*
    * O app troca para o layout de celular em 800px (é onde o menu lateral vira
