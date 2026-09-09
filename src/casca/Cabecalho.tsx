@@ -1,18 +1,19 @@
 /**
- * O cabeçalho da página: selo da aba, título, linha de apoio e relógio.
+ * O cabeçalho da página: selo da aba, título e linha de apoio.
  *
  * Ele não sabe qual tela está aberta — recebe a linha da tabela de rotas e
  * desenha. Trocar de aba troca o ícone, o rótulo e o texto porque trocou o
  * `tela`, e não porque alguém saiu escrevendo no DOM.
+ *
+ * O relógio esteve aqui e foi para o pé do menu, onde ele já estava na casca
+ * antiga. O motivo é de lá: este cabeçalho some na tela de encaixe — que é
+ * onde a pessoa passa a tarde — e levava o relógio junto.
  */
 
 import { Icone } from "./Icone";
-import { useRelogio } from "./useRelogio";
 import type { Tela } from "../rotas";
 
 export function Cabecalho({ tela, aoAbrirMenu }: { tela: Tela; aoAbrirMenu: () => void }) {
-  const relogio = useRelogio();
-
   return (
     <header className="relative flex shrink-0 items-center gap-3 border-b border-linha bg-topo px-3 py-2 backdrop-blur-[18px] tela:gap-3.5 tela:px-[30px] tela:py-2.5">
       {/* Brilho âmbar vindo do canto superior direito: o único ornamento. */}
@@ -45,13 +46,6 @@ export function Cabecalho({ tela, aoAbrirMenu }: { tela: Tela; aoAbrirMenu: () =
         </h1>
         <span aria-hidden="true" className="hidden size-[3px] shrink-0 rounded-full bg-[var(--accent-line)] tela:block" />
         <p className="m-0 hidden min-w-0 truncate text-[12.5px] text-tinta-fraca tela:block">{tela.apoioTopo}</p>
-      </div>
-
-      <div className="relative hidden shrink-0 items-center gap-2.5 rounded-[9px] border border-linha bg-painel px-2.5 py-1.5 tela:flex">
-        <Icone referencia="icones.svg#clock" className="size-3.5 shrink-0 text-ambar" />
-        <span className="text-[11px] text-tinta-fraca capitalize">{relogio.data}</span>
-        <span aria-hidden="true" className="h-3.5 w-px bg-linha" />
-        <strong className="font-mono text-xs font-semibold text-tinta">{relogio.hora}</strong>
       </div>
 
       {/* Fio âmbar que fecha o topo, apagando nas duas pontas. */}

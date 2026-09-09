@@ -32,7 +32,7 @@ export function App() {
         rolagem é do outlet — assim uma tela que precise da altura toda pede
         `h-full` em vez de descontar o topo numa conta de viewport.
       */}
-      <main className="flex h-screen flex-col overflow-hidden tela:ml-[244px]">
+      <main className="flex h-screen flex-col overflow-hidden tela:ml-[244px] tela:max-[1100px]:ml-[78px]">
         <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 tela:px-[30px]">

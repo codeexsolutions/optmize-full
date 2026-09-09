@@ -104,6 +104,54 @@ body.optimize-shell {
   gap: 3px;
 }
 
+/*
+ * O título de um grupo do menu. Recessivo de propósito: ele separa, não
+ * compete com os itens.
+ */
+.nav-grupo {
+  margin: 0 0 4px;
+  padding: 0 12px;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Um grupo depois do outro respira; dentro do grupo, os itens ficam juntos. */
+.side-nav + .side-nav {
+  margin-top: 16px;
+}
+
+/*
+ * Os itens que levam para a tela nova (/app) são <a>, não <button>. Herdam
+ * tudo de .nav-btn; aqui só some o sublinhado e a seta discreta avisa que o
+ * clique troca de tela de verdade — não é a mesma casca.
+ */
+/*
+ * `.nav-btn.nav-externa` e não `.nav-externa` sozinho: a regra do `.nav-btn`
+ * está mais abaixo neste arquivo e, com a mesma especificidade, ganharia por
+ * ordem — a terceira coluna sumia e a seta caía para uma linha nova embaixo
+ * do item.
+ */
+.nav-btn.nav-externa {
+  grid-template-columns: 30px minmax(0, 1fr) 12px;
+  text-decoration: none;
+}
+
+/*
+ * A seta é um caractere, e não o ícone do sprite: `mask: url(...#nome)` com
+ * fragmento de sprite não desenha de forma confiável entre navegadores, e uma
+ * seta que às vezes some é pior do que seta nenhuma.
+ */
+.nav-btn.nav-externa::after {
+  content: "92";
+  justify-self: end;
+  opacity: .4;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .nav-btn {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
@@ -1239,6 +1287,33 @@ tbody tr:hover td {
 
   .nav-btn.active {
     box-shadow: inset 0 -2px var(--accent);
+  }
+
+  /*
+   * Os itens que levam para a tela nova têm uma terceira coluna para a seta.
+   * Sem isto ela sobrevive à barra estreita, o ícone sai do centro e a seta
+   * fica boiando meio cortada.
+   */
+  .nav-btn.nav-externa {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-btn.nav-externa::after {
+    display: none;
+  }
+
+  /* O título do grupo não cabe em 58px: cortado, vira "PRODUÇÃ". */
+  .nav-grupo {
+    display: none;
+  }
+
+  /* Idem o relógio: a data quebra em quatro linhas. Fica só o ícone. */
+  .side-rodape {
+    justify-content: center;
+  }
+
+  .side-rodape-texto {
+    display: none;
   }
 
   .main {

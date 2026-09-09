@@ -328,17 +328,41 @@ nada além de um recado de "máquina não encontrada", que parecia problema de
 dado. O `api` de `src/api/cliente.ts` tem os dois verbos; rota que aceita
 alteração parcial pede PATCH.
 
-**Sem preflight, `<button>` é um controle do Windows.** O reset do Tailwind
-está fora de propósito (senão apagaria a tela antiga inteira), e a consequência
-demorou a aparecer: um `<button>` sem `bg-*` escrito continua com o estilo que
-o SISTEMA dá a botão — fundo cinza-claro e borda `outset`. O menu lateral
-inteiro ficou com botões brancos sobre o painel preto, e só o item ativo
-parecia certo, porque era o único com um fundo declarado. O conserto não é
-`bg-transparent` em cada botão (o próximo que alguém escrever nasce branco de
-novo): é um reset mínimo em `@layer base`, dentro de `#raiz`, no
-`estilo/entrada.css`. Ele fica preso ao `#raiz` porque a tela antiga não tem
-esse id — e em camada porque o CSS à mão das folhas antigas está fora de
-camada, e fora de camada ganha de camada.
+**O PREFLIGHT DESLIGADO COBRA CARO, E SEMPRE DO MESMO JEITO.** O reset do
+Tailwind está fora de propósito — ligá-lo apagaria a tela antiga inteira, que é
+estilizada à mão (ver `estilo/entrada.css`). O preço é que a tela nova nasce
+com os padrões CRUS do navegador, e cada um deles já apareceu aqui como um
+defeito diferente, relatado sempre como "está feio" e nunca como erro:
+
+| O que faltava | Como apareceu |
+|---|---|
+| `box-sizing: border-box` | `size-[30px]` com recuo e borda desenhava **44px**. Os ícones do menu 1/3 maiores, a barra 21px mais larga que a antiga, e todo `w-full` com recuo estourando o pai. |
+| `margin: 0` no `body` | Uma **moldura branca de 8px** em volta do app — branca porque nem `html` nem `body` tinham fundo, e quem pinta o preto é a `<div>` do app, que não alcança a margem. Os 8px somados aos `100vh` ainda faziam nascer uma barra de rolagem sem nada para rolar. |
+| Estilo da rolagem | A barra do navegador, larga e clara, encostada no painel preto. O `interface.css` estiliza a dele desde sempre; a tela nova não herdava nada. |
+| `color-scheme: dark` | O que o navegador desenha sozinho saía claro: o calendário do campo de data, a seta do `<select>`. |
+| `border: 0 solid` | `<button>` mantinha o estilo do SISTEMA — fundo cinza-claro e borda `outset`. O menu inteiro ficou branco sobre o painel preto, e só o item ativo parecia certo, porque era o único com fundo declarado. |
+
+O conserto de todos está no mesmo `@layer base` do `estilo/entrada.css`,
+preso a `#raiz` (e a `body:has(#raiz)`, para o `body`) — a tela antiga não tem
+esse id, então nada disso a alcança. Em camada porque o CSS à mão das folhas
+antigas está FORA de camada, e fora de camada ganha de camada.
+
+**A regra que sai disto: medida ou padrão de navegador que a tela nova supõe
+tem que estar escrito ali.** Não confie em ver quebrar — nenhum destes
+quebrou. Todos só ficaram um pouco errados, calados, por semanas.
+
+**Duas cascas, dois pontos de quebra.** A tela antiga encolhe a barra lateral
+para 78px entre 801 e 1100px de largura; a nova não encolhia. Na mesma janela
+de 1080px — a largura de um notebook comum —, um clique que trocava de casca
+trocava também a largura do menu, e parecia outro programa. Enquanto as duas
+convivem, **regra de aparência é escrita duas vezes**: no `@media` do
+`interface.css` e nas variantes `tela:max-[1100px]:` do `Menu.tsx`.
+
+**Dois arquivos declaram `.sidebar`.** O `style.css` diz 252px e o
+`interface.css` diz 244px; carrega depois, ganha o segundo. Copiei do primeiro
+ao igualar as cascas e deixei a nova 8px mais larga do que devia. Antes de
+copiar medida da tela antiga, confira qual das duas folhas está valendo — ou
+meça na página, que não mente.
 
 **Lista de máquinas escrita à mão.** O sistema de origem trazia quatro
 impressoras num `config/machines.json`, com os caminhos UNC digitados. Aquilo
@@ -359,6 +383,13 @@ controle — uma marcaria como já lida a sessão que a outra ainda não leu. A
 chave passou a levar o `machine.id` junto. Vale a pergunta geral: todo estado
 que nasceu numa instalação de uma máquina só precisa ser revisto quando passam
 a ser várias.
+
+**Duas cascas, dois pontos de quebra.** A tela antiga encolhe a barra lateral
+para 78px entre 801 e 1100px de largura; a nova não encolhia. Na mesma janela
+de 1080px — a largura de um notebook comum —, um clique que trocava de casca
+trocava também a largura do menu, e parecia outro programa. Enquanto as duas
+convivem, **regra de aparência é escrita duas vezes**: no `@media` do
+`interface.css` e nas variantes `tela:max-[1100px]:` do `Menu.tsx`.
 
 **Um `preserveAspectRatio="none"` num gráfico.** Ele estica X e Y por fatores
 diferentes, e o que se vê é o texto do eixo espremido, como fonte condensada.
