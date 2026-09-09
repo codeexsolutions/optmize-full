@@ -184,6 +184,58 @@ export function telasDoGrupo(grupo: NomeDeGrupo): Tela[] {
   return TELAS.filter((tela) => tela.grupo === grupo);
 }
 
+/**
+ * As telas que existem, mas moram na casca antiga (`/`).
+ *
+ * Cor, Imagem e Macros nunca vieram para o React, e enquanto não vierem elas
+ * são inalcançáveis a partir daqui — quem entra por uma tela de impressora
+ * fica preso numa metade do sistema. Aparecem no menu como link, e o clique
+ * sai desta página.
+ *
+ * Não entram em `TELAS` de propósito: elas não têm componente, não têm rota
+ * no `#` daqui, e tratá-las como tela obrigaria todo o resto do código a
+ * lembrar da exceção. Aqui a exceção é um tipo à parte, e quem a ignora
+ * continua correto.
+ *
+ * Some quando as três migrarem — junto com o `public/`.
+ */
+export interface TelaDaCascaAntiga {
+  grupo: NomeDeGrupo;
+  rotulo: string;
+  apoioMenu: string;
+  icone: string;
+  /** O endereço na casca antiga. */
+  endereco: string;
+}
+
+export const TELAS_DA_CASCA_ANTIGA: readonly TelaDaCascaAntiga[] = [
+  {
+    grupo: "producao",
+    rotulo: "Cor",
+    apoioMenu: "Arte na cor certa",
+    icone: "icones.svg#palette",
+    endereco: "/#/cor",
+  },
+  {
+    grupo: "producao",
+    rotulo: "Imagem",
+    apoioMenu: "Resolução para imprimir",
+    icone: "icones.svg#image",
+    endereco: "/#/imagem",
+  },
+  {
+    grupo: "producao",
+    rotulo: "Macros",
+    apoioMenu: "Ferramentas no CorelDRAW",
+    icone: "icones.svg#puzzle",
+    endereco: "/#/macros",
+  },
+];
+
+export function externasDoGrupo(grupo: NomeDeGrupo): TelaDaCascaAntiga[] {
+  return TELAS_DA_CASCA_ANTIGA.filter((tela) => tela.grupo === grupo);
+}
+
 export const TELA_PADRAO: NomeDeTela = "moldes";
 
 export function acharTela(nome: string | null | undefined): Tela {

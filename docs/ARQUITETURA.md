@@ -83,6 +83,47 @@ provisório-eterno — é o que permite parar no meio de uma tela sem deixar o
 sistema quebrado, e ter sempre a versão antiga do lado para comparar
 comportamento.
 
+### As duas telas têm o MESMO menu
+
+Isto custou caro para ser aprendido: o programa instalado abre `/`, e quem o
+abriu não tinha como adivinhar que metade do sistema morava noutro endereço.
+A central das impressoras existia, funcionava, e era invisível.
+
+Então os dois menus listam as treze telas. O que muda é o tipo do item:
+
+- tela desta casca é botão;
+- tela da outra casca é `<a>`, com uma seta discreta avisando que o clique sai
+  da página. Na antiga são as seis de impressora; na nova são Cor, Imagem e
+  Macros.
+
+**Uma porta só.** Abre-se `localhost:8000` e tudo está no menu. O pulo entre
+as cascas acontece no clique, não no conhecimento de quem usa.
+
+### E as duas cascas são IGUAIS por fora
+
+Listar tudo nos dois menus não bastou: clicar num item de impressora levava a
+uma casca visivelmente diferente — outra largura de barra, outra marca, outro
+jeito de marcar o item aberto, o relógio noutro canto. Parecia ter trocado de
+programa, não de tela.
+
+A casca nova nasceu como um REDESENHO da antiga, e enquanto as duas convivem
+isso é defeito, não melhoria. Então `src/casca/Menu.tsx` e `Cabecalho.tsx`
+copiam as medidas de `public/style.css` e `public/interface.css`: largura de
+252px, os recuos, o `logo.png` (que passou a morar em `estatico/`, servido
+pelas duas), o ativo com borda âmbar e a barrinha de 3px, e o relógio no pé do
+menu — onde a casca antiga já o tinha posto, e pelo motivo dela: o cabeçalho
+some na tela de encaixe e levava o relógio junto.
+
+Até a ORDEM dos itens é a mesma, e foi a antiga que cedeu: Cor saiu do meio da
+lista para junto de Imagem e Macros, no fim de Produção.
+
+**A regra, enquanto durar a migração: mexeu na aparência de uma casca, mexe na
+outra.** É trabalho dobrado, é temporário, e acaba junto com o `public/`.
+
+Os links moram em `public/index.html` (mão) e em `TELAS_DA_CASCA_ANTIGA`, no
+`src/rotas.ts`. **Tela que migra sai de um lado e vira botão do outro** — e
+quando a última migrar, os dois blocos somem junto com o `public/`.
+
 **A ordem, do mais fácil para o mais arriscado:**
 
 1. **Projetos** (574 linhas de tela) — CRUD contra a API, sem geometria e sem
@@ -99,8 +140,9 @@ comportamento.
 saiu do `public/` e do `index.html` antigo, e o domínio que ela usava virou
 módulo em `src/nucleo/` com `export`.
 
-**No fim:** `base` do Vite vira `"/"`, o `public/` inteiro é apagado, e o
-`npm run css` (que existe só para a tela antiga) some junto.
+**No fim:** `base` do Vite vira `"/"`, o `public/` inteiro é apagado, o
+`npm run css` (que existe só para a tela antiga) some junto, e os links entre
+as cascas deixam de existir porque só há uma.
 
 ## Regras
 

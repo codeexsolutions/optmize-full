@@ -44,16 +44,19 @@ npm install
 npm start
 ```
 
-Abra **http://localhost:8000** no navegador (a tela antiga) ou
-**http://localhost:8000/app** (a nova, em React). Ao subir, o servidor imprime
-também o endereço pela rede, que é por onde os outros computadores entram.
+Abra **http://localhost:8000**. Ao subir, o servidor imprime também o endereço
+pela rede, que é por onde os outros computadores entram.
 
-A tela antiga tem quatro áreas: **Moldes**, **Projetos**, **Encaixe** e
-**Vetor**. A nova tem dez, separadas no menu por momento do trabalho:
+O sistema está no meio de uma mudança de interface, e por isso são duas cascas
+ao mesmo tempo: a antiga em `/` e a nova em `/app`. **Não é preciso saber
+disso**: as duas listam as mesmas treze telas no menu, e clicar numa que mora
+do outro lado leva você até lá. O endereço de entrada é sempre o `/`.
+
+São treze telas, separadas no menu por momento do trabalho:
 
 | Grupo | Telas |
 | --- | --- |
-| **Produção** — antes de imprimir | Moldes, Projetos, Encaixe, Vetor |
+| **Produção** — antes de imprimir | Moldes, Projetos, Encaixe, Cor, Vetor, Imagem, Macros |
 | **Impressão** — enquanto imprime | Impressoras, Pedidos, Máquinas, WhatsApp |
 | **Relatórios** — depois, para conferir | Histórico, Reposição |
 

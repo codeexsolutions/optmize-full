@@ -23,7 +23,35 @@
         <span class="brand-copy"><span class="brand-name">Optimize</span><small>Moldes &amp; encaixe</small></span>
       </div>
 
-      <nav class="side-nav">
+      <!--
+        O MENU, EM TRÊS GRUPOS
+        ======================
+
+        Eram sete botões seguidos e cabia. Com a central das impressoras
+        dentro do sistema são treze telas, e treze itens sem separação
+        obrigam a ler o menu inteiro toda vez para achar um.
+
+        A divisão é por momento do trabalho: Produção é o que se faz ANTES
+        de imprimir, Impressão é o que acontece ENQUANTO se imprime, e
+        Relatórios é o que se olha DEPOIS. É a mesma divisão da tela nova.
+
+        POR QUE ALGUNS ITENS SÃO LINK E NÃO BOTÃO
+        -----------------------------------------
+
+        O sistema está no meio da mudança para React (ver docs/ARQUITETURA.md):
+        esta tela e a nova, em /app, rodam ao mesmo tempo. As telas de
+        impressora nasceram já na nova e nunca existiram aqui.
+
+        Elas aparecem neste menu assim mesmo, como <a> apontando para /app,
+        porque o problema que isso resolve é real: quem abre o programa não
+        tem como adivinhar que existe um segundo endereço. Uma porta só, com
+        tudo listado, e o pulo acontece no clique.
+
+        Quando aquelas telas migrarem para cá — ou estas para lá — os links
+        viram botões e este comentário sai junto.
+      -->
+      <nav class="side-nav" aria-label="Preparar o trabalho">
+        <p class="nav-grupo">Produção</p>
         <button class="nav-btn active" data-page="moldes" data-title="Moldes">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#shapes" /></svg>
           <span>Moldes</span>
@@ -36,13 +64,13 @@
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#blocks" /></svg>
           <span>Encaixe</span>
         </button>
-        <button class="nav-btn" data-page="cor" data-title="Cor">
-          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#palette" /></svg>
-          <span></span>
-        </button>
         <button class="nav-btn" data-page="vetor" data-title="Vetor">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#spline" /></svg>
           <span>Vetor</span>
+        </button>
+        <button class="nav-btn" data-page="cor" data-title="Cor">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#palette" /></svg>
+          <span></span>
         </button>
         <button class="nav-btn" data-page="imagem" data-title="Imagem">
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#image" /></svg>
@@ -52,6 +80,38 @@
           <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#puzzle" /></svg>
           <span>Macros</span>
         </button>
+      </nav>
+
+      <nav class="side-nav" aria-label="Acompanhar a impressão">
+        <p class="nav-grupo">Impressão</p>
+        <a class="nav-btn nav-externa" href="/app/#/impressoras">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#printer" /></svg>
+          <span class="nav-copy"><strong>Impressoras</strong><small>O que está saindo agora</small></span>
+        </a>
+        <a class="nav-btn nav-externa" href="/app/#/pedidos">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#list-checks" /></svg>
+          <span class="nav-copy"><strong>Pedidos</strong><small>A fila da calandra</small></span>
+        </a>
+        <a class="nav-btn nav-externa" href="/app/#/maquinas">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#radar" /></svg>
+          <span class="nav-copy"><strong>Máquinas</strong><small>Achar na rede</small></span>
+        </a>
+        <a class="nav-btn nav-externa" href="/app/#/whatsapp">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#message-circle" /></svg>
+          <span class="nav-copy"><strong>WhatsApp</strong><small>Avisos automáticos</small></span>
+        </a>
+      </nav>
+
+      <nav class="side-nav" aria-label="Conferir depois">
+        <p class="nav-grupo">Relatórios</p>
+        <a class="nav-btn nav-externa" href="/app/#/historico">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#history" /></svg>
+          <span class="nav-copy"><strong>Histórico</strong><small>Tudo que já foi impresso</small></span>
+        </a>
+        <a class="nav-btn nav-externa" href="/app/#/reposicao">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#rotate-ccw" /></svg>
+          <span class="nav-copy"><strong>Reposição</strong><small>Quanto foi refeito</small></span>
+        </a>
       </nav>
 
       <!--

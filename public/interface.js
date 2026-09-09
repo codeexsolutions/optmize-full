@@ -13,6 +13,12 @@
  *
  * Não sabe o que é molde, encaixe ou vetor — só quais botões existem. Tela
  * nova entra em `navMeta` e mais nada precisa mudar aqui.
+ *
+ * O menu tem também itens que NÃO são tela desta casca: os de impressora, que
+ * moram na tela nova em `/app`. Eles são `<a>` comuns, sem `data-page`, e este
+ * arquivo os ignora de propósito — quem os trata é o navegador, saindo da
+ * página. Ver o comentário do menu em `index.html` para o porquê de eles
+ * aparecerem aqui.
  */
 
 (() => {
@@ -39,7 +45,11 @@
     macros: ["Macros", "Ferramentas no CorelDRAW", "Baixe e instale as macros que rodam dentro do Corel e falam com este sistema.", "icones.svg#puzzle"]
   };
 
-  const navButtons = document.querySelectorAll(".nav-btn");
+  // `[data-page]` e não `.nav-btn` solto: o menu agora tem também os itens que
+  // levam para a tela nova (/app), e eles são <a> comuns. Sem o filtro, o
+  // clique num deles chamaria `abrirPagina(undefined)` e apagaria a tela antes
+  // de o navegador sair da página.
+  const navButtons = document.querySelectorAll(".nav-btn[data-page]");
   const pages = document.querySelectorAll(".page");
 
   navButtons.forEach(button => {

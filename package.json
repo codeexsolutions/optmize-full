@@ -1,6 +1,6 @@
 {
   "name": "optimize",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "description": "Optimize: biblioteca de moldes, encaixe de peças no tecido, vetorização de imagem e a central das impressoras da produção.",
   "main": "server.js",
   "type": "commonjs",
