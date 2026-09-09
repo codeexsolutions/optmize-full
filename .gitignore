@@ -9,6 +9,15 @@ dados.db
 dados.db-wal
 dados.db-shm
 uploads/
+
+# Central das impressoras: o que ela grava ao lado do banco.
+#
+# `whatsapp-sessao/` E UMA CREDENCIAL: quem copiar a pasta entra no WhatsApp
+# do bot. Nao versione nem compartilhe.
+config/
+exportado/
+whatsapp-sessao/
+impressoras-cancelamento-csv.json
 .backup-*/
 .front-backup-*/
 .tmp-migracao/

@@ -13,12 +13,21 @@
  * banco é o arquivo `dados.db` e as imagens ficam em `uploads/` (ver
  * `caminhos.js` para onde exatamente).
  *
+ * Além do painel, este servidor é a central das impressoras da produção:
+ * acha as máquinas na rede sozinho, lê o histórico de cada uma e guarda no
+ * mesmo `dados.db` (ver `impressoras-api.js`). Como esse painel é para a
+ * fábrica olhar, e não só quem está nesta mesa, a escuta é em `0.0.0.0` — de
+ * outra máquina, abre-se pelo IP deste PC.
+ *
  * Abra http://localhost:8000 depois de rodar `npm start`. Instalado, quem
  * sobe este mesmo arquivo é o app do Tauri, numa porta livre qualquer.
  */
 
+const os = require("os");
 const path = require("path");
+const http = require("http");
 const express = require("express");
+const { Server: ServidorDeSocket } = require("socket.io");
 
 const { RAIZ_DE_UPLOADS } = require("./caminhos");
 require("./db"); // garante que o banco SQLite e as tabelas existem antes de tudo
@@ -28,8 +37,15 @@ const encaixeMemoriaRouter = require("./encaixe-memoria");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
 const corRouter = require("./cor-api");
+const { criarRotasDeImpressoras, iniciarImpressoras } = require("./impressoras-api");
 
 const app = express();
+
+// O socket precisa do servidor HTTP nu, não do Express. É por ele que a tela
+// das impressoras fica sabendo de trabalho novo, do progresso da varredura da
+// rede e do andamento de uma impressão — sem ficar perguntando.
+const servidor = http.createServer(app);
+const io = new ServidorDeSocket(servidor);
 
 // O PDF do encaixe carrega as artes em tamanho de impressão, então precisa de
 // um limite bem maior que o resto da API. Vem antes do express.json geral
@@ -61,8 +77,37 @@ app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
 app.use("/api/macros", macrosRouter);
 app.use("/api/moldes", moldesRouter);
 app.use("/api/projetos", projetosRouter);
+// As impressoras da produção: varredura da rede, histórico, ordens de
+// serviço, lista da calandra e os avisos no WhatsApp.
+app.use("/api/impressoras", criarRotasDeImpressoras(io));
 
 const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
+
+io.on("connection", (socket) => {
+  socket.emit("connected", { ok: true });
+});
+
+// Os leitores das impressoras sobem antes da escuta: o backfill do histórico
+// roda solto e pode levar um minuto, e não há motivo para o painel esperar
+// por ele.
+iniciarImpressoras(io);
+
+/** Os IPs desta máquina na rede local, para dizer por onde os outros entram. */
+function enderecosDaRede() {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter((rede) => rede && rede.family === "IPv4" && !rede.internal)
+    .map((rede) => rede.address);
+}
+
+// "0.0.0.0" e não localhost: o painel das impressoras é para a fábrica inteira
+// olhar. Quem roda o Optimize só para moldes e encaixe não perde nada — o
+// endereço local continua sendo o mesmo de sempre.
+servidor.listen(PORT, "0.0.0.0", () => {
+  console.log("");
+  console.log(`Optimize rodando em http://localhost:${PORT}`);
+  for (const endereco of enderecosDaRede()) {
+    console.log(`Na rede:              http://${endereco}:${PORT}`);
+  }
+  console.log("");
 });

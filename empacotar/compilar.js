@@ -61,8 +61,25 @@ const ENTRADA = "server.js";
 const DO_SERVIDOR = [
   "server.js", "caminhos.js", "db.js", "moldes-api.js", "projetos-api.js",
   "uploads-arquivos.js", "encaixe-pdf.js", "encaixe-memoria.js",
-  "cor-api.js", "cor-icc.js", "macros-api.js",
+  "cor-api.js", "cor-icc.js", "macros-api.js", "impressoras-api.js",
 ];
+
+/**
+ * Pastas do servidor que somem inteiras.
+ *
+ * A central das impressoras são 39 arquivos numa árvore, e todos entram no
+ * bundle: os `require` dela são literais, então o esbuild os segue a partir do
+ * `impressoras-api.js`. Nenhum deles é lido do disco em execução — o que a
+ * central lê são os arquivos DAS IMPRESSORAS, pela rede, e a configuração do
+ * WhatsApp, que mora na pasta de dados. Então depois do bundle a árvore é peso
+ * morto legível, e sai.
+ *
+ * Isto ficou de fora na primeira vez que a central entrou no projeto, e o
+ * instalável teria saído com ela inteira em texto — comentada, que é
+ * justamente o que este arquivo existe para evitar. Pasta nova de servidor
+ * entra aqui.
+ */
+const PASTAS_DO_SERVIDOR = ["impressoras"];
 
 /**
  * O que fica de fora e continua texto, de propósito:
@@ -74,6 +91,17 @@ const DO_SERVIDOR = [
 
 function tamanho(caminho) {
   try { return fs.statSync(caminho).size; } catch (erro) { return 0; }
+}
+
+function tamanhoDaPasta(alvo) {
+  let total = 0;
+  let itens;
+  try { itens = fs.readdirSync(alvo, { withFileTypes: true }); } catch { return 0; }
+  for (const item of itens) {
+    const caminho = path.join(alvo, item.name);
+    total += item.isDirectory() ? tamanhoDaPasta(caminho) : tamanho(caminho);
+  }
+  return total;
 }
 
 function bytesEmMb(n) { return (n / 1048576).toFixed(2) + " MB"; }
@@ -88,7 +116,9 @@ async function compilarServidor() {
     process.exit(1);
   }
 
-  const antes = DO_SERVIDOR.reduce((soma, n) => soma + tamanho(path.join(DESTINO, n)), 0);
+  const antes =
+    DO_SERVIDOR.reduce((soma, n) => soma + tamanho(path.join(DESTINO, n)), 0) +
+    PASTAS_DO_SERVIDOR.reduce((soma, n) => soma + tamanhoDaPasta(path.join(DESTINO, n)), 0);
 
   // O bytecode anterior sai primeiro, e não é arrumação.
   //
@@ -134,6 +164,9 @@ async function compilarServidor() {
   for (const nome of DO_SERVIDOR) {
     if (nome === ENTRADA) continue;
     fs.rmSync(path.join(DESTINO, nome), { force: true });
+  }
+  for (const pasta of PASTAS_DO_SERVIDOR) {
+    fs.rmSync(path.join(DESTINO, pasta), { recursive: true, force: true });
   }
 
   return { antes, depois: tamanho(jsc) };
@@ -226,8 +259,7 @@ function conferirNode() {
 
 /** Sobrou algum fonte do servidor na pasta? */
 function conferirLimpeza() {
-  const sobrou = DO_SERVIDOR
-    .filter((n) => n !== ENTRADA)
+  const sobrou = [...DO_SERVIDOR.filter((n) => n !== ENTRADA), ...PASTAS_DO_SERVIDOR]
     .filter((n) => fs.existsSync(path.join(DESTINO, n)));
   if (sobrou.length > 0) {
     console.error("compilar: estes fontes do servidor continuam na pasta:");

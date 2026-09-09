@@ -198,6 +198,145 @@ db.exec(`
     exemplos INTEGER NOT NULL DEFAULT 0,
     atualizado_em TEXT NOT NULL
   );
+
+  -- ==================== IMPRESSORAS ====================
+  --
+  -- O histórico das impressoras da produção, lido dos compartilhamentos de
+  -- rede delas e guardado aqui (ver impressoras/ e impressoras-api.js).
+  --
+  -- Por que tudo isto tem prefixo 'imp_': os nomes naturais destas tabelas
+  -- ('machines', 'records', 'pedidos', 'app_meta') são genéricos demais para
+  -- um banco que também guarda moldes e projetos. É a mesma armadilha que já
+  -- custou caro aqui uma vez — 'CREATE TABLE IF NOT EXISTS' não cria nada
+  -- quando o nome já existe, e o código passa a ler a tabela errada calado.
+  -- O prefixo torna a colisão impossível e diz de quem é a tabela.
+  --
+  -- E por que elas são em inglês por dentro: o código que as lê foi PORTADO,
+  -- não reescrito. Traduzir 'machineId' e 'printLength' em quarenta arquivos
+  -- seria reescrever um domínio que já funciona, com o único ganho de agradar
+  -- a vista. As colunas acompanham o código que as usa.
+
+  -- Uma impressora achada na rede. Não existe lista de máquinas no código nem
+  -- em arquivo: quem cadastra é a varredura (impressoras/services/discovery.js),
+  -- e as rotas UNC guardadas aqui são a única fonte da verdade.
+  --
+  -- 'host' é o nome NetBIOS do computador, nunca o IP: o IP muda no próximo
+  -- reinício do roteador e levaria a máquina junto.
+  CREATE TABLE IF NOT EXISTS imp_machines (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    host TEXT,
+    ip TEXT,
+    historyPath TEXT,
+    previewDir TEXT,
+    liveLogDir TEXT,
+    liveLogFile TEXT,
+    statusLogDir TEXT,
+    jobListPath TEXT,
+    inkStatsPath TEXT,
+    origin TEXT NOT NULL DEFAULT 'manual',
+    position INTEGER NOT NULL DEFAULT 0,
+    discoveredAt INTEGER,
+    updatedAt INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_imp_machines_host ON imp_machines(host);
+
+  -- Cada trabalho impresso. É o cache central: a tela nunca mais lê o
+  -- compartilhamento de rede da impressora a cada acesso — era isso que
+  -- travava o painel com várias pessoas olhando ao mesmo tempo.
+  CREATE TABLE IF NOT EXISTS imp_records (
+    id TEXT PRIMARY KEY,
+    machineId TEXT NOT NULL,
+    machineName TEXT,
+    sourceType TEXT,
+    dateTime TEXT NOT NULL,
+    date TEXT NOT NULL,
+    time TEXT,
+    task TEXT,
+    pass INTEGER,
+    status TEXT,
+    cancelled INTEGER DEFAULT 0,
+    error INTEGER DEFAULT 0,
+    printArea REAL DEFAULT 0,
+    printLength REAL DEFAULT 0,
+    metricEstimated INTEGER DEFAULT 0,
+    finish REAL,
+    total REAL,
+    timeSeconds INTEGER DEFAULT 0,
+    inkMl REAL DEFAULT 0,
+    inkExperimental INTEGER DEFAULT 0,
+    inkChannels TEXT,
+    previewRef TEXT,
+    progressPercent REAL,
+    progressState TEXT,
+    timeHours REAL,
+    isClipOrTile INTEGER DEFAULT 0,
+    updatedAt INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_imp_records_machine_date ON imp_records(machineId, date);
+  CREATE INDEX IF NOT EXISTS idx_imp_records_date ON imp_records(date);
+
+  -- Ordem de Serviço: o pedido de produção preenchido à mão por quem monta o
+  -- trabalho. Não vem das máquinas.
+  CREATE TABLE IF NOT EXISTS imp_service_orders (
+    id TEXT PRIMARY KEY,
+    clientName TEXT NOT NULL,
+    fabric TEXT,
+    printSize TEXT,
+    meters REAL,
+    printerOperator TEXT,
+    machine TEXT,
+    date TEXT NOT NULL,
+    observation TEXT,
+    createdAt INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_imp_service_orders_date ON imp_service_orders(date);
+
+  -- As imagens de referência da OS vão como BLOB no banco, não em disco: são
+  -- poucas por OS e assim o backup do dados.db leva a OS inteira junto.
+  CREATE TABLE IF NOT EXISTS imp_service_order_images (
+    id TEXT PRIMARY KEY,
+    orderId TEXT NOT NULL REFERENCES imp_service_orders(id) ON DELETE CASCADE,
+    fileName TEXT,
+    mimeType TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    isBlouse INTEGER DEFAULT 0,
+    quantity INTEGER,
+    data BLOB NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_imp_service_order_images_order ON imp_service_order_images(orderId);
+
+  -- A lista de produção montada a partir dos trabalhos impressos, na ordem em
+  -- que vão para a calandra.
+  CREATE TABLE IF NOT EXISTS imp_pedidos (
+    id TEXT PRIMARY KEY,
+    createdAt INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'aberto',
+    note TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS imp_pedido_items (
+    id TEXT PRIMARY KEY,
+    pedidoId TEXT NOT NULL REFERENCES imp_pedidos(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    recordId TEXT NOT NULL,
+    clientName TEXT,
+    fabric TEXT,
+    task TEXT,
+    machineId TEXT,
+    machineName TEXT,
+    printLength REAL,
+    date TEXT,
+    osId TEXT REFERENCES imp_service_orders(id) ON DELETE SET NULL,
+    calandraStatus TEXT NOT NULL DEFAULT 'pendente',
+    calandraReason TEXT,
+    calandraCustomReason TEXT,
+    calandraAt INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_imp_pedido_items_pedido ON imp_pedido_items(pedidoId, position);
+  CREATE INDEX IF NOT EXISTS idx_imp_pedido_items_record ON imp_pedido_items(recordId);
 `);
 
 /**
