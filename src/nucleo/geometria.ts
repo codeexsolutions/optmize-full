@@ -29,6 +29,16 @@
 /** Abaixo disso, dois pontos são o mesmo ponto. */
 const GEO_EPSILON = 1e-9;
 
+/**
+ * Uma casa decimal. É a precisão em que o sistema trabalha medida de peça e de
+ * tecido: milímetro. Mora aqui porque a tela e o preparo da grade do encaixe
+ * (`grade`, em `encaixeMascara.js`) arredondam do mesmo jeito, e duas cópias de
+ * uma conta são dois lugares para consertar quando ela estiver errada.
+ */
+export function arredondar(valor: number): number {
+  return Math.round(valor * 10) / 10;
+}
+
 export interface Ponto {
   x: number;
   y: number;
