@@ -63,14 +63,25 @@ erro do Puppeteer que não significa nada para quem está olhando.
 
 ## Painel web
 
-- `public/index.html`: estrutura das telas e modais.
-- `public/style.css`: estrutura funcional de cada recurso — grade, tabelas, formulários.
-- `public/interface.css`: a identidade Optimize. **Toda cor da interface sai dos tokens declarados aqui**; escrever um hex em qualquer outro arquivo quebra o tema.
-- `public/geometria.js`: as contas de contorno (área, caixa, simplificação) que Moldes, Vetor e Encaixe dividem.
-- `public/interface.js`: menu lateral, troca de tela e relógio.
-- `public/ui.js`: a caixa de diálogo do sistema (`uiAlert`, `uiConfirm`, `uiPergunta`) e o `escapeHtml` que todas as telas usam.
-- `public/projetos.js`: tela de Projetos — a estante por cliente e o editor.
-- demais arquivos de `public/`: telas especializadas de moldes, encaixe e vetor.
+É um só, servido na raiz: o `dist/`, que o Vite compila de `src/`. (Houve uma
+pasta `public/`, com a tela antiga em `<script>` soltos; ela foi apagada, e
+`/app` — o endereço do painel durante a migração — responde hoje com um
+redirecionamento que carrega o `#` adiante.)
+
+- `src/main.tsx` e `src/App.tsx`: a montagem e a casca — menu, cabeçalho, a
+  tela da vez.
+- `src/rotas.ts`: a tabela das telas. **Uma linha por aba, e mais nada** — quem
+  acrescenta uma tela mexe aqui e no arquivo dela.
+- `src/casca/`: o que toda tela usa — `Menu`, `Cabecalho`, `Cartao`, `Icone`, os
+  formatadores de número.
+- `src/telas/`: uma por aba.
+- `src/nucleo/`: o domínio — sem React e sem a tela. Ver a regra em
+  `ARQUITETURA.md`.
+- `estilo/tokens.css`: a paleta. **O único arquivo com hex no projeto**;
+  escrever cor em qualquer outro lugar quebra o tema.
+- `src/producao/`: a integração de compatibilidade de Moldes, Projetos e
+  Encaixe, que ainda são dirigidos por um controlador imperativo. Ver
+  `INTEGRACAO-REACT.md`. A tela de Cor já saiu de lá.
 
 ## A bancada do encaixe
 
@@ -91,17 +102,19 @@ a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
 - `bancada/conferir.js`: `npm run bancada:conferir`. O motor em WebAssembly tem
   que dar exatamente o mesmo resultado do motor em JavaScript, e é este arquivo
   que prova.
-- `bancada/conferir-porte.js`: `npm run bancada:porte`. **Temporário.** Enquanto
-  o motor existe em dois lugares — `public/encaixe-motor.js`, que a tela antiga
-  carrega, e `src/nucleo/encaixeMotor.js`, que a tela nova carrega —, este
-  arquivo prova que os dois são o MESMO: sobe as duas instâncias, roda a mesma
-  ordem embaralhada com a mesma semente em cada combinação, e exige resultado
-  idêntico peça por peça. Some junto com `public/`.
-- `bancada/motor-nucleo.js`: sobe o motor portado fora do navegador. O
-  `motor.js` concatena o texto dos `<script>` de `public/`; aqui não dá, porque
-  os de `src/nucleo/` são módulos ESM e um deles é TypeScript. O esbuild — o
-  mesmo que o Vite usa — junta a árvore num arquivo só, então o que se mede é o
-  que o navegador roda.
+- `bancada/nucleo.js`: sobe módulos de `src/nucleo/` fora do navegador. O
+  esbuild — o MESMO que o Vite usa — junta a árvore num arquivo só, então o que
+  a bancada mede é o que o navegador roda, e não uma aproximação. Usam-no o
+  `motor.js` e o `conferir-arte.js`.
+- `bancada/conferir-gravacao.js`: `npm run bancada:gravacao`. Sobe as rotas de
+  molde, estampa e projeto em processo, numa pasta de dados descartável, e
+  confere que a **geometria volta igual** — contorno, furo, medida, folga zero.
+  Não é um teste de "respondeu 200": um contorno que perde casa decimal não
+  quebra nada e não avisa, só sai um pouco errado no tecido.
+- `bancada/conferir-cor.js`: `npm run bancada:cor`. Ida e volta
+  sRGB → CMYK → sRGB pelo perfil SWOP do Windows. O `cor-icc.js` caminha na LUT
+  do perfil à mão, e um erro ali não parece erro: o arquivo abre, as cores só
+  ficam diferentes.
 - `bancada/conferir-sobreposicao.js`: `npm run bancada:sobreposicao`. Repinta
   cada peça posicionada na grade do rolo e acusa célula ocupada duas vezes.
   Nasceu para achar a causa de "peça saindo sobreposta" no encaixe por NFP —
@@ -140,7 +153,7 @@ livre, e aponta a janela para ela.
   "abrindo", navega para o sistema quando a porta atende e mata o `node.exe` na
   saída.
 - `src-tauri/tauri.conf.json`: o que entra no instalador, o ícone e o nome.
-- `empacotar/preparar.js`: copia servidor, `public/`, `node_modules` e o
+- `empacotar/preparar.js`: copia servidor, `dist/`, `node_modules` e o
   `node.exe` para `src-tauri/servidor` antes de cada build.
 - `empacotar/janela/`: as duas únicas telas que não vêm do servidor — a de
   "abrindo" e a de erro. São as únicas com cor escrita à mão no projeto, porque
@@ -182,4 +195,13 @@ O `dados.db` de instalações antigas ainda guarda as tabelas do módulo comerci
 
 ## Regra para novas telas
 
-O HTML permanece em `public/index.html`. A regra da tela deve entrar no arquivo JavaScript do recurso correspondente. Mudanças puramente visuais devem ficar em `public/interface.css`, evitando misturar aparência com banco ou integrações.
+Uma tela nova é um arquivo em `src/telas/` e **uma linha em `src/rotas.ts`** —
+mais nada. O `App.tsx` não muda.
+
+Dentro dela: o que é conta vai para `src/nucleo/`, o que é chamada de servidor
+vai para `src/api/`, e o que sobra — o estado e o desenho — fica na tela. Cor
+não se escreve à mão em lugar nenhum: sai dos tokens de `estilo/tokens.css`,
+que é o único arquivo com hex no projeto.
+
+`src/telas/Cor.tsx` é o exemplo a seguir; `src/producao/` é o que ainda não
+seguiu.

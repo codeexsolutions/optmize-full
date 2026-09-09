@@ -1,4 +1,137 @@
 /**
+ * Integração dos editores existentes ao ciclo de vida React.
+ * Domínio importado de src/nucleo; estado privado por montagem, sem scripts globais.
+ * As listas e o canvas são ilhas imperativas: não devem receber children dinâmicos React.
+ */
+import { arredondar } from "../nucleo/geometria";
+import { moldeParaImagem, ehArquivoDeMolde, FORMATOS_DE_MOLDE, lerMoldeVetorial } from "../nucleo/moldes";
+import { COR_SEGURA, diagnosticoDeCorDoArquivo } from "../nucleo/corDoArquivo";
+import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../nucleo/encaixeRede";
+import { encaixar, posicoesDasColocacoes, assinaturaDoTrabalho, buscarMelhorEncaixe } from "../nucleo/encaixeMotor";
+import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../nucleo/encaixeParalelo";
+import { prepararUnidadesNoWasm } from "../nucleo/encaixeWasm";
+import { grade, gradeDaPeca, tirarFundoDosPixels, silhuetaDeDados, mascarasDeSilhueta } from "../nucleo/encaixeMascara";
+import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../nucleo/encaixePrepara";
+import { AJUSTE_PADRAO, MODOS_DE_ARTE, TIPOS_DE_ARTE, ajusteNovo, tamanhoDoRapport, ppcmDaArte, desenharArteNoMolde } from "../nucleo/arteMolde";
+import { formatarNumero, formatarMetros, formatarCm, formatarSegundos, formatarPorcento, formatarM2 } from "../casca/numero";
+import { jpegSeguroParaPdf } from "../nucleo/jpegParaPdf";
+import { criarEscopo } from "./escopo";
+export function montarProducao(raiz, irPara) {
+const escopo = criarEscopo(raiz);
+try {
+const { document, window, setTimeout, clearTimeout, setInterval, clearInterval, requestAnimationFrame, URL, fetch } = escopo;
+const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+/**
+ * ===========================================================================
+ * UI — a caixa de diálogo do sistema
+ * ===========================================================================
+ *
+ * Mais `escapeHtml`, no fim do arquivo: o que toda tela usa antes de jogar
+ * texto de fora dentro de um `innerHTML`.
+ *
+ * Substitui `alert`, `confirm` e `prompt` do navegador por uma caixa que
+ * combina com o resto da tela. Três portas:
+ *
+ *   `uiAlert(texto)`     avisa e espera o "Entendi";
+ *   `uiConfirm(texto)`   pergunta sim/não e devolve `true`/`false`;
+ *   `uiPergunta({...})`  pede um texto e devolve o que foi escrito, ou `null`.
+ *
+ * As três devolvem promessa, então quem chama escreve `await` e lê o resultado
+ * na linha seguinte, sem callback.
+ *
+ * Existe um motivo além do visual: as caixas nativas **travam a página
+ * inteira** enquanto estão abertas, o que atrapalha qualquer coisa rodando em
+ * segundo plano — e o Encaixe passa minutos calculando.
+ */
+
+
+  const backdrop = document.getElementById("ui-dialog");
+  const dialog = backdrop.querySelector(".ui-dialog");
+  const title = document.getElementById("ui-dialog-title");
+  const message = document.getElementById("ui-dialog-message");
+  const kicker = document.getElementById("ui-dialog-kicker");
+  const icon = document.getElementById("ui-dialog-icon");
+  const cancel = document.getElementById("ui-dialog-cancel");
+  const confirm = document.getElementById("ui-dialog-confirm");
+  const campo = document.getElementById("ui-dialog-input");
+  let finish = null;
+
+  function close(result) {
+    backdrop.classList.add("closing");
+    setTimeout(() => {
+      backdrop.classList.add("hidden");
+      backdrop.classList.remove("closing");
+      document.body.classList.remove("dialog-open");
+      if (finish) finish(result);
+      finish = null;
+    }, 140);
+  }
+
+  function open(options) {
+    if (finish) finish(false);
+    // O campo de texto só aparece quando a caixa está perguntando alguma coisa.
+    campo.classList.toggle("hidden", !options.campo);
+    campo.value = options.valor || "";
+    campo.placeholder = options.exemplo || "";
+    title.textContent = options.title;
+    message.textContent = options.message;
+    kicker.textContent = options.kicker;
+    icon.textContent = options.danger ? "!" : "✓";
+    dialog.classList.toggle("danger-dialog", !!options.danger);
+    cancel.classList.toggle("hidden", !options.cancel);
+    confirm.textContent = options.confirmText || "Entendi";
+    confirm.className = `btn ${options.danger ? "danger" : "primary"}`;
+    backdrop.classList.remove("hidden");
+    document.body.classList.add("dialog-open");
+    requestAnimationFrame(() => (options.campo ? campo.select() : confirm.focus()));
+    return new Promise((resolve) => { finish = resolve; });
+  }
+
+  const uiConfirm = (text, options = {}) => open({
+    title: options.title || "Confirmar ação",
+    message: text,
+    kicker: options.kicker || "CONFIRMAÇÃO",
+    confirmText: options.confirmText || "Confirmar",
+    cancel: true,
+    danger: options.danger !== false
+  });
+  const uiAlert = (text, options = {}) => open({
+    title: options.title || "Atenção",
+    message: text,
+    kicker: options.kicker || "AVISO DO SISTEMA",
+    confirmText: "Entendi",
+    cancel: false,
+    danger: !!options.danger
+  });
+
+  /**
+   * Pergunta que espera um texto de volta: devolve o que foi escrito, ou null
+   * se a pessoa desistir.
+   */
+  const uiPergunta = (options = {}) => open({
+    title: options.titulo || "Digite",
+    message: options.texto || "",
+    kicker: options.kicker || "",
+    confirmText: options.confirmar || "Confirmar",
+    cancel: options.cancelavel !== false,
+    danger: false,
+    campo: true,
+    valor: options.valor,
+    exemplo: options.exemplo,
+  }).then((ok) => (ok ? campo.value.trim() : null));
+
+  escopo.ouvir(cancel, "click", () => close(false));
+  escopo.ouvir(confirm, "click", () => close(true));
+  // Enter no campo vale como clicar em confirmar.
+  escopo.ouvir(campo, "keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); close(true); }
+  });
+  escopo.ouvir(backdrop, "click", (event) => { if (event.target === backdrop && !cancel.classList.contains("hidden")) close(false); });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !backdrop.classList.contains("hidden") && !cancel.classList.contains("hidden")) close(false);
+  });
+
+/**
  * Tela de Encaixe: recebe as imagens das peças, a largura do rolo de tecido e
  * monta o encaixe automaticamente, calculando consumo em metros e
  * aproveitamento — a mesma ideia do Audaces Encaixe / eCut.
@@ -96,12 +229,12 @@ let ultimoResultado = null;
 // dela: parar de sugerir sozinho, senão trocar de tamanho de lote no meio do
 // ajuste manual apagaria o que ela acabou de escrever.
 let tempoAjustadoPeloUsuario = false;
-encaixeTempoInput.addEventListener("input", () => { tempoAjustadoPeloUsuario = true; });
+escopo.ouvir(encaixeTempoInput, "input", () => { tempoAjustadoPeloUsuario = true; });
 
 // Paleta usada para diferenciar as peças no desenho (uma cor por imagem).
 const CORES_PECA = [
-  "#2bd672", "#4aa8ff", "#f5a623", "#f0555b", "#b78bff",
-  "#33d6c4", "#ff8fb1", "#c8d94a", "#7f9cff", "#ffb066",
+  getComputedStyle(raiz).getPropertyValue("--peca-1").trim(), getComputedStyle(raiz).getPropertyValue("--peca-2").trim(), getComputedStyle(raiz).getPropertyValue("--peca-3").trim(), getComputedStyle(raiz).getPropertyValue("--peca-4").trim(), getComputedStyle(raiz).getPropertyValue("--peca-5").trim(),
+  getComputedStyle(raiz).getPropertyValue("--peca-6").trim(), getComputedStyle(raiz).getPropertyValue("--peca-7").trim(), getComputedStyle(raiz).getPropertyValue("--peca-8").trim(), getComputedStyle(raiz).getPropertyValue("--peca-9").trim(), getComputedStyle(raiz).getPropertyValue("--peca-10").trim(),
 ];
 
 // ==================== ERROS ====================
@@ -854,7 +987,7 @@ async function adicionarArquivos(files) {
           // está vivo: a miniatura sai dele, sem decodificar nada de novo.
           const peca = await montarPecaDaImagem(cru, null, cru.img);
           // O que o navegador vai fazer com a cor desta arte. Só lê o cabeçalho
-          // do arquivo (ver public/cor-do-arquivo.js) — não decodifica nada, e
+          // do arquivo (ver src/nucleo/corDoArquivo.js) — não decodifica nada, e
           // por isso não pesa na leitura.
           peca.cor = await diagnosticoDeCorDoArquivo(file);
           prontas[indice] = [peca];
@@ -904,13 +1037,13 @@ async function adicionarArquivos(files) {
   }
 }
 
-encaixeFilesInput.addEventListener("change", async () => {
+escopo.ouvir(encaixeFilesInput, "change", async () => {
   const files = Array.from(encaixeFilesInput.files || []);
   if (files.length > 0) await adicionarArquivos(files);
   encaixeFilesInput.value = ""; // permite reenviar o mesmo arquivo depois
 });
 
-btnLimparPecas.addEventListener("click", () => {
+escopo.ouvir(btnLimparPecas, "click", () => {
   pecasEncaixe = [];
   ultimoResultado = null;
   encaixeResultado.classList.add("hidden");
@@ -921,19 +1054,19 @@ btnLimparPecas.addEventListener("click", () => {
 // Arrastar as imagens direto para a tabela também adiciona as peças.
 const encaixePage = document.querySelector('.page[data-page="encaixe"]');
 ["dragenter", "dragover"].forEach((evt) => {
-  encaixePage.addEventListener(evt, (e) => {
+  escopo.ouvir(encaixePage, evt, (e) => {
     if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
     e.preventDefault();
     encaixePage.classList.add("arrastando");
   });
 });
 ["dragleave", "drop"].forEach((evt) => {
-  encaixePage.addEventListener(evt, (e) => {
+  escopo.ouvir(encaixePage, evt, (e) => {
     if (evt === "dragleave" && e.relatedTarget && encaixePage.contains(e.relatedTarget)) return;
     encaixePage.classList.remove("arrastando");
   });
 });
-encaixePage.addEventListener("drop", async (e) => {
+escopo.ouvir(encaixePage, "drop", async (e) => {
   const files = Array.from((e.dataTransfer && e.dataTransfer.files) || [])
     .filter((f) => f.type.startsWith("image/") || ehMoldeVetorial(f));
   if (files.length === 0) return;
@@ -1058,7 +1191,7 @@ function grupoMudou(recado) {
   encaixeAndamento.classList.remove("hidden");
 }
 
-btnEncaixeCriarGrupo.addEventListener("click", () => {
+escopo.ouvir(btnEncaixeCriarGrupo, "click", () => {
   const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id));
   if (marcadas.length < 2) return;
   // Marcou peças de um grupo que já existe? Então é para juntar NELE, e não
@@ -1072,7 +1205,7 @@ btnEncaixeCriarGrupo.addEventListener("click", () => {
     + `Faça o encaixe de novo para elas saírem juntas no rolo.`);
 });
 
-btnEncaixeTirarGrupo.addEventListener("click", () => {
+escopo.ouvir(btnEncaixeTirarGrupo, "click", () => {
   const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id) && p.grupo);
   if (marcadas.length === 0) return;
   marcadas.forEach((p) => { p.grupo = null; });
@@ -1080,7 +1213,7 @@ btnEncaixeTirarGrupo.addEventListener("click", () => {
   grupoMudou(`${marcadas.length} peça(s) saíram do grupo. Faça o encaixe de novo.`);
 });
 
-btnEncaixeLimparSelecao.addEventListener("click", () => {
+escopo.ouvir(btnEncaixeLimparSelecao, "click", () => {
   selecionadas.clear();
   renderPecasEncaixe();
 });
@@ -1098,7 +1231,7 @@ const CAMPO_MINI =
  * O programa carrega toda arte por canvas, e canvas só existe em RGB. Arte em
  * CMYK, ou em RGB sem dizer em que espaço está, é convertida pelo navegador de
  * um jeito que não é o do Photoshop — o desenho sai certo e a COR não. Metade
- * das artes desta loja está num desses dois casos (ver public/cor-do-arquivo.js).
+ * das artes desta loja está num desses dois casos (ver src/nucleo/corDoArquivo.js).
  *
  * O aviso mostra a MINIATURA junto: dizer "uma arte está em CMYK" no meio de 25
  * arquivos não ajuda ninguém a achar qual é. Com a imagem, quem conhece o
@@ -1281,7 +1414,7 @@ function atualizarPainelDoTrabalho() {
  * Mexer na largura ajusta a altura (e vice-versa) mantendo a proporção da
  * imagem: distorcer a arte para forçar o encaixe estragaria a estampa.
  */
-encaixePecasBody.addEventListener("input", (e) => {
+escopo.ouvir(encaixePecasBody, "input", (e) => {
   const campo = e.target.dataset.campo;
   if (!campo) return;
   const peca = pecasEncaixe.find((p) => p.id === Number(e.target.dataset.id));
@@ -1306,7 +1439,7 @@ encaixePecasBody.addEventListener("input", (e) => {
   }
 });
 
-encaixePecasBody.addEventListener("change", (e) => {
+escopo.ouvir(encaixePecasBody, "change", (e) => {
   const marcar = e.target.dataset.selPeca;
   if (marcar) {
     const id = Number(marcar);
@@ -1410,7 +1543,7 @@ async function tirarFundoAForca(peca) {
   renderPecasEncaixe();
 }
 
-encaixePecasBody.addEventListener("click", (e) => {
+escopo.ouvir(encaixePecasBody, "click", (e) => {
   const abrir = e.target.closest("[data-abrir-peca]");
   if (abrir) {
     const gaveta = encaixePecasBody.querySelector(`[data-detalhes="${abrir.dataset.abrirPeca}"]`);
@@ -1454,7 +1587,7 @@ encaixePecasBody.addEventListener("click", (e) => {
   renderPecasEncaixe();
 });
 
-encaixeGiroTodasSelect.addEventListener("change", () => {
+escopo.ouvir(encaixeGiroTodasSelect, "change", () => {
   // Aplica no lote inteiro, inclusive no que já estava em "livre": quem mexe
   // aqui está dizendo como a produção toda vai girar, e uma peça sobrando com
   // o valor antigo seria justamente a surpresa que este controle evita.
@@ -1730,7 +1863,7 @@ function mostrarOfertaDoGuardado(guardado, consumoAgora) {
   botao.type = "button";
   botao.className = "btn secondary btn-sm";
   botao.textContent = "Usar o melhor de antes";
-  botao.addEventListener("click", async () => {
+  escopo.ouvir(botao, "click", async () => {
     botao.disabled = true;
     const deu = await usarEncaixeGuardado(guardado);
     if (!deu) {
@@ -1773,8 +1906,8 @@ let resultadoGeradoNesteCarregamento = false;
 let tipoDoCarregamento = "encaixe";
 
 function definirPrioridadeDoProcessamento(ativa, calculando = false) {
-  window.encaixeEmProcessamento = ativa;
-  window.encaixeEmCalculo = ativa && calculando;
+  raiz.dataset.processando = String(ativa);
+  raiz.dataset.calculando = String(ativa && calculando);
   window.dispatchEvent(new CustomEvent("encaixe-prioridade-mudou", {
     detail: { ativa, fase: calculando ? "calculo" : "arquivos" },
   }));
@@ -1901,7 +2034,7 @@ const respirarNaTela = () => new Promise((continuar) => {
   canalDaTela.port2.postMessage(0);
 });
 
-btnPararBusca.addEventListener("click", () => {
+escopo.ouvir(btnPararBusca, "click", () => {
   pararBusca = true;
   btnPararBusca.disabled = true;
   btnPararBusca.textContent = "Encerrando…";
@@ -2073,7 +2206,7 @@ async function optmizar() {
     const assinatura = assinaturaDoTrabalho(pecasEncaixe, larguraTecido);
     // O mesmo formato que vira a assinatura, mas sem arredondar para caber
     // num texto de balde — é o que a rede das receitas usa para generalizar
-    // (ver public/encaixe-rede.js e a nota em cima de `buscarMelhorEncaixe`).
+    // (ver src/nucleo/encaixeRede.mjs e a nota em cima de `buscarMelhorEncaixe`).
     const vetorTrabalho = vetorDoTrabalho(pecasEncaixe, larguraTecido);
     const chave = chaveDoTrabalho(pecasEncaixe, larguraTecido, espaco, comprimentoBancada);
     atualizarCarregamento({
@@ -2183,7 +2316,7 @@ async function optmizar() {
       // `chaveDoTrabalho`). É o único número que a busca de agora tem obrigação
       // de alcançar, e o servidor só o substitui quando vem coisa melhor.
       alvo: guardadoAntes ? guardadoAntes.consumo : null,
-      // A rede das receitas (public/encaixe-rede.js): pontua cada receita
+      // A rede das receitas (src/nucleo/encaixeRede.mjs): pontua cada receita
       // candidata pela chance dela ganhar ESTE trabalho, generalizando a
       // partir do formato das peças em vez de só do balde exato da
       // assinatura. `redeMadura` só fica true depois de um bocado de
@@ -2269,7 +2402,7 @@ async function optmizar() {
       aproveitamento,
       tentativas: ultimoResultado.tentativas,
       // O dado de treino da rede das receitas — ver a nota lá em cima de
-      // `vetorTrabalho` e o cabeçalho de public/encaixe-rede.js.
+      // `vetorTrabalho` e o cabeçalho de src/nucleo/encaixeRede.mjs.
       features: vetorTrabalho,
       // Em qual versão do vetor estas features foram calculadas. Vai daqui, de
       // quem calculou, e não do servidor: uma aba aberta desde antes de uma
@@ -2946,7 +3079,7 @@ function escreverNome(ctx, p, x, y, w, h) {
   ctx.restore();
 }
 
-btnBaixarEncaixe.addEventListener("click", () => {
+escopo.ouvir(btnBaixarEncaixe, "click", () => {
   if (!ultimoResultado) return;
   // 4 px por cm dá um PNG legível para levar para a mesa de corte.
   const temp = document.createElement("canvas");
@@ -3106,81 +3239,7 @@ const paraBlob = (canvas, tipo, qualidade) =>
  * deixa ler. Reprovar custa uma recodificação. Deixar passar custa o rolo.
  */
 
-/** Lê a orientação do EXIF. 1 = normal, 0 = não tem, -1 = não deu para ler. */
-function orientacaoExif(d, inicio, fim) {
-  // "Exif\0\0" e, logo atrás, um TIFF inteirinho dentro do segmento.
-  if (fim - inicio < 14) return -1;
-  if (!(d[inicio] === 0x45 && d[inicio + 1] === 0x78 && d[inicio + 2] === 0x69
-    && d[inicio + 3] === 0x66 && d[inicio + 4] === 0 && d[inicio + 5] === 0)) return 0;
 
-  const tiff = inicio + 6;
-  const ordem = (d[tiff] << 8) | d[tiff + 1];
-  if (ordem !== 0x4949 && ordem !== 0x4d4d) return -1;
-  const invertido = ordem === 0x4949; // "II": byte menos significativo primeiro
-  const u16 = (i) => (i + 1 >= fim ? -1
-    : (invertido ? d[i] | (d[i + 1] << 8) : (d[i] << 8) | d[i + 1]));
-  const u32 = (i) => (i + 3 >= fim ? -1
-    : (invertido ? (d[i] | (d[i + 1] << 8) | (d[i + 2] << 16) | (d[i + 3] << 24)) >>> 0
-      : ((d[i] << 24) | (d[i + 1] << 16) | (d[i + 2] << 8) | d[i + 3]) >>> 0));
-
-  if (u16(tiff + 2) !== 42) return -1;
-  const ifd = tiff + u32(tiff + 4);
-  if (ifd < tiff || ifd + 2 > fim) return -1;
-
-  const quantas = u16(ifd);
-  if (quantas < 0 || ifd + 2 + quantas * 12 > fim) return -1;
-  for (let e = 0; e < quantas; e++) {
-    const campo = ifd + 2 + e * 12;
-    if (u16(campo) === 0x0112) {            // Orientation
-      if (u16(campo + 2) !== 3) return -1;  // tem que ser SHORT
-      return u16(campo + 8);
-    }
-  }
-  return 1; // tem EXIF e não fala de orientação: o mesmo que normal
-}
-
-/** Este JPEG pode entrar no PDF do jeito que está? Ver o bloco acima. */
-function jpegSeguroParaPdf(d) {
-  if (!d || d.length < 4 || d[0] !== 0xff || d[1] !== 0xd8) return false;
-
-  let i = 2;
-  let viuSof = false;
-  while (i + 3 < d.length) {
-    if (d[i] !== 0xff) return false;        // fora de sincronia: não arrisca
-    let marcador = d[i + 1];
-    while (marcador === 0xff) { i++; marcador = d[i + 1]; } // preenchimento
-    if (marcador === 0xd9) break;           // EOI
-    if (marcador === 0x01 || (marcador >= 0xd0 && marcador <= 0xd7)) { i += 2; continue; }
-
-    const tamanho = (d[i + 2] << 8) | d[i + 3];
-    if (tamanho < 2 || i + 2 + tamanho > d.length) return false; // truncado
-    const carga = i + 4;
-    const fimDaCarga = i + 2 + tamanho;
-
-    if (marcador === 0xda) break;           // começo do dado: o cabeçalho acabou
-
-    if (marcador === 0xe1) {                // APP1: onde mora o EXIF
-      const orientacao = orientacaoExif(d, carga, fimDaCarga);
-      if (orientacao !== 0 && orientacao !== 1) return false;
-    }
-
-    // SOF0 e SOF1 são os sequenciais de Huffman. Todo outro SOF reprova por não
-    // estar nesta lista; DHT (C4), JPG (C8) e DAC (CC) não são SOF nenhum.
-    if (marcador === 0xc0 || marcador === 0xc1) {
-      if (fimDaCarga - carga < 6) return false;
-      if (d[carga] !== 8) return false;                       // precisão
-      const componentes = d[carga + 5];
-      if (componentes !== 1 && componentes !== 3) return false;
-      viuSof = true;
-    } else if (marcador >= 0xc0 && marcador <= 0xcf
-      && marcador !== 0xc4 && marcador !== 0xc8 && marcador !== 0xcc) {
-      return false;
-    }
-
-    i = fimDaCarga;
-  }
-  return viuSof;
-}
 
 /**
  * A arte original, quando ela puder entrar no PDF sem ser tocada.
@@ -3357,9 +3416,9 @@ async function baixarEncaixeEmPdf() {
   }
 }
 
-btnEncaixePdf.addEventListener("click", baixarEncaixeEmPdf);
+escopo.ouvir(btnEncaixePdf, "click", baixarEncaixeEmPdf);
 
-btnImprimirEncaixe.addEventListener("click", () => {
+escopo.ouvir(btnImprimirEncaixe, "click", () => {
   if (!ultimoResultado) return;
   window.print();
 });
@@ -3412,19 +3471,19 @@ function andarNoMenuExportar(passo) {
   itensDoExportar[alvo].focus();
 }
 
-btnExportar.addEventListener("click", () => {
+escopo.ouvir(btnExportar, "click", () => {
   if (menuExportarAberto()) fecharMenuExportar();
   else abrirMenuExportar();
 });
 
-btnExportar.addEventListener("keydown", (e) => {
+escopo.ouvir(btnExportar, "keydown", (e) => {
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   e.preventDefault();
   if (!menuExportarAberto()) abrirMenuExportar();
   andarNoMenuExportar(e.key === "ArrowDown" ? 1 : -1);
 });
 
-menuExportarPainel.addEventListener("keydown", (e) => {
+escopo.ouvir(menuExportarPainel, "keydown", (e) => {
   if (e.key === "ArrowDown") { e.preventDefault(); andarNoMenuExportar(1); }
   else if (e.key === "ArrowUp") { e.preventDefault(); andarNoMenuExportar(-1); }
   else if (e.key === "Tab") fecharMenuExportar();
@@ -3432,7 +3491,7 @@ menuExportarPainel.addEventListener("keydown", (e) => {
 
 // Escolher fecha o menu; o que a escolha FAZ continua sendo do botão de cada
 // item, que é onde o PDF, o PNG e a impressão já moravam.
-menuExportarPainel.addEventListener("click", () => fecharMenuExportar());
+escopo.ouvir(menuExportarPainel, "click", () => fecharMenuExportar());
 
 /* `pointerdown` e não `click`: quem clica em outro botão da barra espera que o
    menu já esteja fora do caminho quando o clique chegar lá. */
@@ -3546,7 +3605,7 @@ function pecasNaArea(area) {
   return escolhidas;
 }
 
-encaixeCanvas.addEventListener("pointerdown", (evento) => {
+escopo.ouvir(encaixeCanvas, "pointerdown", (evento) => {
   if (evento.button !== 0 || !ultimoResultado || !vistaDoRisco) return;
 
   const caixaDoRisco = encaixeCanvas.getBoundingClientRect();
@@ -3635,7 +3694,7 @@ encaixeCanvas.addEventListener("pointerdown", (evento) => {
  * Shift continua fazendo o que o navegador faz por padrão, e o gesto de duas
  * dedos do trackpad (que já manda deltaX) passa direto.
  */
-encaixeCanvas.parentElement.addEventListener("wheel", (evento) => {
+escopo.ouvir(encaixeCanvas.parentElement, "wheel", (evento) => {
   // Ctrl + roda é zoom em todo editor de desenho; aqui também.
   if (evento.ctrlKey) {
     mexerNoZoom(evento.deltaY < 0 ? ZOOM_PASSO : 1 / ZOOM_PASSO);
@@ -3653,10 +3712,10 @@ encaixeCanvas.parentElement.addEventListener("wheel", (evento) => {
   evento.preventDefault();
 }, { passive: false });
 
-if (btnZoomMenos) btnZoomMenos.addEventListener("click", () => mexerNoZoom(1 / ZOOM_PASSO));
-if (btnZoomMais) btnZoomMais.addEventListener("click", () => mexerNoZoom(ZOOM_PASSO));
+if (btnZoomMenos) escopo.ouvir(btnZoomMenos, "click", () => mexerNoZoom(1 / ZOOM_PASSO));
+if (btnZoomMais) escopo.ouvir(btnZoomMais, "click", () => mexerNoZoom(ZOOM_PASSO));
 if (btnZoomAjustar) {
-  btnZoomAjustar.addEventListener("click", () => {
+  escopo.ouvir(btnZoomAjustar, "click", () => {
     if (zoomDoRisco === 1) return;
     zoomDoRisco = 1;
     mostrarZoom();
@@ -3664,10 +3723,10 @@ if (btnZoomAjustar) {
   });
 }
 
-if (btnSelecaoLimpar) btnSelecaoLimpar.addEventListener("click", () => limparSelecaoDoRisco());
+if (btnSelecaoLimpar) escopo.ouvir(btnSelecaoLimpar, "click", () => limparSelecaoDoRisco());
 
 if (btnSelecaoAplicar) {
-  btnSelecaoAplicar.addEventListener("click", () => {
+  escopo.ouvir(btnSelecaoAplicar, "click", () => {
     if (selecaoNoRisco.size === 0) return;
     const giro = selecaoGiro ? selecaoGiro.value : "180";
 
@@ -3759,7 +3818,7 @@ function atualizarContagemDosAjustes() {
  * abrir um modal de tecido para depois dizer "não há peças" é fazer a
  * pessoa atravessar uma porta para ouvir que a sala está fechada.
  */
-btnEncaixar.addEventListener("click", () => {
+escopo.ouvir(btnEncaixar, "click", () => {
   limparErroEncaixe();
   // Lista vazia não é erro: é o começo do trabalho. Acusar "adicione pelo
   // menos uma peça" é dizer à pessoa o que ela já sabe e deixá-la procurar
@@ -3775,17 +3834,17 @@ btnEncaixar.addEventListener("click", () => {
 
 // Daqui sai o serviço. Fecha antes de começar: a busca segura a tela por
 // minutos, e um modal parado por cima dela pareceria travamento.
-btnAjustesOptmizar.addEventListener("click", () => {
+escopo.ouvir(btnAjustesOptmizar, "click", () => {
   fecharAjustes();
   optmizar();
 });
 
-btnFecharAjustes.addEventListener("click", () => fecharAjustes(true));
-btnAjustesCancelar.addEventListener("click", () => fecharAjustes(true));
+escopo.ouvir(btnFecharAjustes, "click", () => fecharAjustes(true));
+escopo.ouvir(btnAjustesCancelar, "click", () => fecharAjustes(true));
 
 // Clique no véu fecha; clique DENTRO da caixa não. O teste é o alvo ser o
 // próprio fundo — qualquer coisa dentro da caixa tem outro alvo.
-modalAjustes.addEventListener("click", (e) => {
+escopo.ouvir(modalAjustes, "click", (e) => {
   if (e.target === modalAjustes) fecharAjustes(true);
 });
 
@@ -3812,7 +3871,7 @@ function marcarGiro() {
 }
 
 for (const op of giroOpcoes) {
-  op.addEventListener("click", () => {
+  escopo.ouvir(op, "click", () => {
     if (encaixeGiroTodasSelect.value === op.dataset.giro) return;
     encaixeGiroTodasSelect.value = op.dataset.giro;
     encaixeGiroTodasSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -3846,9 +3905,2017 @@ function avisarEixo() {
   ajustesAvisoEixo.classList.remove("hidden");
 }
 
-encaixeEspacoInput.addEventListener("input", avisarEixo);
-encaixeEspacoYInput.addEventListener("input", avisarEixo);
-encaixeGiroTodasSelect.addEventListener("change", marcarGiro);
+escopo.ouvir(encaixeEspacoInput, "input", avisarEixo);
+escopo.ouvir(encaixeEspacoYInput, "input", avisarEixo);
+escopo.ouvir(encaixeGiroTodasSelect, "change", marcarGiro);
 
 avisarEixo();
 marcarGiro();
+
+/**
+ * Tela de Moldes: a estante de moldes da produção.
+ *
+ * Criar um molde é um passo a passo, para não pedir tudo de uma vez:
+ *   1. o que é (camisa, regata, short, banner, ou outra coisa);
+ *   2. quantos pedaços tem, o nome e o tamanho;
+ *   3. um espaço por pedaço, para dizer o que é aquela parte e mandar o arquivo.
+ *
+ * O desenho vem pronto de fora, em DXF, PLT, SVG ou PDF. O que fica guardado é
+ * o contorno em centímetros, não uma figura — é isso que faz o molde continuar
+ * exato: ele volta na tela, vai para o encaixe e sai em PDF sempre na medida.
+ */
+
+// ==================== ELEMENTOS ====================
+
+const moldeModal = document.getElementById("molde-modal");
+const moldeModalTitulo = document.getElementById("molde-modal-titulo");
+const btnMoldeNovo = document.getElementById("btn-molde-novo");
+const btnMoldeModalFechar = document.getElementById("btn-molde-modal-fechar");
+const btnMoldeAvancar = document.getElementById("btn-molde-avancar");
+const btnMoldeVoltar = document.getElementById("btn-molde-voltar");
+const moldePassoConta = document.getElementById("molde-passo-conta");
+
+const moldeTipos = document.getElementById("molde-tipos");
+const moldeTipoOutroCampo = document.getElementById("molde-tipo-outro-campo");
+const moldeTipoOutro = document.getElementById("molde-tipo-outro");
+
+const moldePedacos = document.getElementById("molde-pedacos");
+const moldeNomeInput = document.getElementById("molde-nome");
+const moldeTamanhosEntrada = document.getElementById("molde-tamanhos");
+const moldeAbas = document.getElementById("molde-abas");
+const moldeAbaNova = document.getElementById("molde-aba-nova");
+const btnMoldeAbaNova = document.getElementById("btn-molde-aba-nova");
+const moldeAbaRecado = document.getElementById("molde-aba-recado");
+const moldeUnidadeSelect = document.getElementById("molde-unidade");
+const moldeModoVetorSelect = document.getElementById("molde-modo-vetor");
+const moldeObservacoesInput = document.getElementById("molde-observacoes");
+const moldePasso2Pergunta = document.getElementById("molde-passo2-pergunta");
+
+const moldePartes = document.getElementById("molde-partes");
+const moldePasso3Pergunta = document.getElementById("molde-passo3-pergunta");
+const btnMoldeMaisParte = document.getElementById("btn-molde-mais-parte");
+
+const moldeErro = document.getElementById("molde-erro");
+const moldesBody = document.getElementById("moldes-body");
+
+const moldeEnvio = document.getElementById("molde-envio");
+const moldeEnvioNome = document.getElementById("molde-envio-nome");
+const moldeEnvioTamanho = document.getElementById("molde-envio-tamanho");
+const moldeEnvioUnidades = document.getElementById("molde-envio-unidades");
+const moldeEnvioResumo = document.getElementById("molde-envio-resumo");
+const moldeEnvioPartes = document.getElementById("molde-envio-partes");
+const moldeEnvioDpi = document.getElementById("molde-envio-dpi");
+const moldeEnvioQualidade = document.getElementById("molde-envio-qualidade");
+const moldeEnvioErro = document.getElementById("molde-envio-erro");
+const moldeEstampas = document.getElementById("molde-estampas");
+const moldeArteNome = document.getElementById("molde-arte-nome");
+const moldeArteTitulo = document.getElementById("molde-arte-titulo");
+const btnArteNova = document.getElementById("btn-arte-nova");
+const btnArteSalvar = document.getElementById("btn-arte-salvar");
+const btnMoldeEnviar = document.getElementById("btn-molde-enviar");
+const btnMoldeEnvioFechar = document.getElementById("btn-molde-envio-fechar");
+
+// ==================== O QUE DÁ PARA CRIAR ====================
+
+/**
+ * Cada tipo já vem com os pedaços que costuma ter. É só um chute bom: a pessoa
+ * muda o número e troca o nome de qualquer parte na hora.
+ */
+const TIPOS_DE_MOLDE = [
+  { id: "camisa", nome: "Camisa", risco: "👕",
+    partes: ["frente", "costas", "manga direita", "manga esquerda", "gola"] },
+  { id: "regata", nome: "Regata", risco: "🎽",
+    partes: ["frente", "costas", "vista"] },
+  { id: "short", nome: "Short", risco: "🩳",
+    partes: ["frente", "costas", "cós"] },
+  { id: "banner", nome: "Banner", risco: "🖼️", partes: ["outro"] },
+  { id: "outro", nome: "Outra coisa", risco: "✏️", partes: ["outro", "outro"] },
+];
+
+const PAPEIS_DE_PECA = [
+  "frente", "costas", "manga direita", "manga esquerda", "manga",
+  "gola", "punho", "cós", "bolso", "vista", "forro", "outro",
+];
+
+let tipoEscolhido = null;   // um item de TIPOS_DE_MOLDE
+let nomeDoTipoOutro = "";   // o que a pessoa escreveu quando é "outra coisa"
+let passoAtual = 1;
+
+let partesDoMolde = [];     // as partes do tamanho que está aberto na aba
+let partesPorTamanho = {};  // tamanho -> partes; cada tamanho tem os arquivos dele
+let tamanhoAberto = "único";
+let proximaParteId = 1;
+let moldeEmEdicao = null;   // id, quando está reeditando um molde salvo
+let moldesGuardados = [];
+let moldeParaEnviar = null;
+
+// ==================== AVISOS ====================
+
+function mostrarErroMolde(msg) {
+  moldeErro.textContent = msg;
+  moldeErro.classList.remove("hidden");
+}
+function limparErroMolde() {
+  moldeErro.textContent = "";
+  moldeErro.classList.add("hidden");
+}
+
+// ==================== O PASSO A PASSO ====================
+
+function parteVazia(papel) {
+  return {
+    id: proximaParteId++,
+    papel: papel || "outro",
+    papelEscrito: "",
+    quantidade: 1,
+    tamanho: null,     // preenchido na hora de salvar, com o tamanho do passo 2
+    nome: null, largura: 0, altura: 0, contorno: null, furos: [], origem: null,
+  };
+}
+
+/** Como a parte se chama de verdade: o papel da lista, ou o que foi escrito. */
+function nomeDaParte(parte) {
+  if (parte.papel !== "outro") return parte.papel;
+  return String(parte.papelEscrito || "").trim() || "outro";
+}
+
+function abrirModalDeMolde() {
+  moldeModal.classList.remove("hidden");
+  document.body.classList.add("modal-aberto");
+}
+
+function fecharModalDeMolde() {
+  moldeModal.classList.add("hidden");
+  document.body.classList.remove("modal-aberto");
+}
+
+/** "a camisa" / "o short": só para a pergunta não sair torta. */
+function ehFeminina(palavra) {
+  return /a$/i.test(String(palavra || "peça").trim().split(" ")[0]);
+}
+function umArtigo(palavra) {
+  const p = String(palavra || "").trim() || "peça";
+  return `${ehFeminina(p) ? "a" : "o"} ${p}`;
+}
+function deArtigo(palavra) {
+  const p = String(palavra || "").trim() || "peça";
+  return `${ehFeminina(p) ? "da" : "do"} ${p}`;
+}
+
+/** No meio da frase, "Almofada" vira "almofada" — mas "PVC" continua "PVC". */
+function comoNaFrase(palavra) {
+  const p = String(palavra || "").trim();
+  if (!p || p === p.toUpperCase()) return p;
+  return p[0].toLowerCase() + p.slice(1);
+}
+
+function tituloDoTipo() {
+  if (!tipoEscolhido) return "peça";
+  if (tipoEscolhido.id === "outro") return comoNaFrase(nomeDoTipoOutro) || "peça";
+  return tipoEscolhido.nome.toLowerCase();
+}
+
+function irParaPasso(n) {
+  passoAtual = n;
+  moldeModal.querySelectorAll(".modal-passo").forEach((s) => {
+    s.classList.toggle("hidden", Number(s.dataset.passo) !== n);
+  });
+  moldePassoConta.textContent = `Passo ${n} de 3`;
+  btnMoldeVoltar.classList.toggle("hidden", n === 1);
+  btnMoldeAvancar.textContent = n === 3 ? "Salvar molde" : "Continuar";
+  limparErroMolde();
+
+  if (n === 2) {
+    moldePasso2Pergunta.textContent = `Quantos pedaços tem ${umArtigo(tituloDoTipo())}?`;
+  }
+  if (n === 3) {
+    moldePasso3Pergunta.textContent =
+      `Diga o que é cada parte ${deArtigo(tituloDoTipo())} e mande o arquivo, tamanho por tamanho.`;
+    renderAbas();
+    renderPartes();
+  }
+}
+
+// ---- passo 1 ----
+
+function renderTipos() {
+  moldeTipos.innerHTML = "";
+  TIPOS_DE_MOLDE.forEach((tipo) => {
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = `escolha${tipoEscolhido && tipoEscolhido.id === tipo.id ? " escolhida" : ""}`;
+    botao.dataset.tipo = tipo.id;
+    botao.innerHTML = `<span class="escolha-risco">${tipo.risco}</span>
+      <span class="escolha-nome">${tipo.nome}</span>`;
+    moldeTipos.appendChild(botao);
+  });
+}
+
+escopo.ouvir(moldeTipos, "click", (e) => {
+  const botao = e.target.closest("[data-tipo]");
+  if (!botao) return;
+  tipoEscolhido = TIPOS_DE_MOLDE.find((t) => t.id === botao.dataset.tipo);
+  renderTipos();
+  moldeTipoOutroCampo.classList.toggle("hidden", tipoEscolhido.id !== "outro");
+  if (tipoEscolhido.id === "outro") moldeTipoOutro.focus();
+  // O número de pedaços acompanha o tipo escolhido.
+  moldePedacos.value = String(tipoEscolhido.partes.length);
+  limparErroMolde();
+});
+
+// ==================== AS ABAS DE TAMANHO ====================
+
+/**
+ * Cada tamanho tem o seu arquivo: o molde do P não é o do G. Por isso o passo
+ * 3 é dividido em abas — uma por tamanho — e o que está na tela é sempre o
+ * tamanho aberto. Guardar por tamanho, e não tudo numa lista só, é o que deixa
+ * mandar a grade inteira sem misturar peça de um tamanho com a do outro.
+ */
+
+/** Lê "P, M, G GG" e devolve ["P","M","G","GG"], sem repetir. */
+function lerTamanhos(texto) {
+  const lista = String(texto || "").split(/[,;/]+|\s+/)
+    .map((t) => t.trim()).filter(Boolean);
+  const vistos = new Set();
+  const limpos = [];
+  lista.forEach((t) => {
+    const chave = t.toLowerCase();
+    if (vistos.has(chave)) return;
+    vistos.add(chave);
+    limpos.push(t);
+  });
+  return limpos.length > 0 ? limpos : ["único"];
+}
+
+const tamanhosDoMolde = () => Object.keys(partesPorTamanho);
+
+/** Guarda na mão o que está na tela, antes de trocar de aba. */
+function guardarTamanhoAberto() {
+  if (tamanhoAberto) partesPorTamanho[tamanhoAberto] = partesDoMolde;
+}
+
+/**
+ * As partes de um tamanho novo nascem iguais às do primeiro tamanho — mesmos
+ * papéis e mesmas quantidades, só sem arquivo. É quase sempre o que se quer:
+ * a camiseta G tem as mesmas cinco peças da M.
+ */
+function partesNovasDoModelo(quantos) {
+  const primeiro = partesPorTamanho[tamanhosDoMolde()[0]];
+  if (primeiro && primeiro.length > 0) {
+    return primeiro.map((p) => ({
+      ...parteVazia(p.papel), papelEscrito: p.papelEscrito, quantidade: p.quantidade,
+    }));
+  }
+  const sugeridas = (tipoEscolhido && tipoEscolhido.partes) || [];
+  return Array.from({ length: Math.max(1, quantos) },
+    (_, i) => parteVazia(sugeridas[i] || "outro"));
+}
+
+function abrirTamanho(tamanho) {
+  if (!partesPorTamanho[tamanho]) return;
+  guardarTamanhoAberto();
+  tamanhoAberto = tamanho;
+  partesDoMolde = partesPorTamanho[tamanho];
+  moldePedacos.value = String(partesDoMolde.length);
+  renderAbas();
+  renderPartes();
+}
+
+/** Monta as abas a partir dos tamanhos escritos no passo 2. */
+function prepararTamanhos(lista, quantos) {
+  const antigo = partesPorTamanho;
+  partesPorTamanho = {};
+  lista.forEach((t) => {
+    partesPorTamanho[t] = antigo[t] || null;
+  });
+  // primeiro os que já existiam, para o modelo sair do que já foi preenchido
+  lista.forEach((t) => {
+    if (!partesPorTamanho[t]) partesPorTamanho[t] = partesNovasDoModelo(quantos);
+  });
+  tamanhoAberto = lista.includes(tamanhoAberto) ? tamanhoAberto : lista[0];
+  partesDoMolde = partesPorTamanho[tamanhoAberto];
+  ajustarQuantidadeDePartes(quantos);
+  partesPorTamanho[tamanhoAberto] = partesDoMolde;
+}
+
+function renderAbas() {
+  moldeAbas.innerHTML = "";
+  tamanhosDoMolde().forEach((tamanho) => {
+    const partes = partesPorTamanho[tamanho] || [];
+    const prontas = partes.filter((p) => p.contorno).length;
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = `aba${tamanho === tamanhoAberto ? " aberta" : ""}`
+      + `${prontas === partes.length && partes.length > 0 ? " completa" : ""}`;
+    botao.dataset.aba = tamanho;
+    botao.innerHTML = `<span class="aba-nome">${escapeHtml(tamanho)}</span>
+      <span class="aba-conta">${prontas}/${partes.length}</span>
+      ${tamanhosDoMolde().length > 1
+        ? `<span class="aba-x" data-aba-tirar="${escapeHtml(tamanho)}" title="Tirar este tamanho">&times;</span>`
+        : ""}`;
+    moldeAbas.appendChild(botao);
+  });
+
+  const faltando = tamanhosDoMolde()
+    .filter((t) => (partesPorTamanho[t] || []).some((p) => !p.contorno));
+  moldeAbaRecado.textContent = faltando.length === 0
+    ? "Todos os tamanhos estão com os arquivos completos."
+    : `Ainda falta arquivo em: ${faltando.join(", ")}.`;
+}
+
+escopo.ouvir(moldeAbas, "click", async (e) => {
+  const tirar = e.target.dataset.abaTirar;
+  if (tirar) {
+    const partes = partesPorTamanho[tirar] || [];
+    const comArquivo = partes.filter((p) => p.contorno).length;
+    if (comArquivo > 0 &&
+        !await uiConfirm(`O tamanho "${tirar}" será removido junto com ${comArquivo} peça(s) já enviada(s).`, { title: "Remover tamanho", confirmText: "Remover" })) return;
+    delete partesPorTamanho[tirar];
+    const sobraram = tamanhosDoMolde();
+    if (tamanhoAberto === tirar) {
+      tamanhoAberto = sobraram[0];
+      partesDoMolde = partesPorTamanho[tamanhoAberto];
+    }
+    moldeTamanhosEntrada.value = sobraram.join(" ");
+    renderAbas();
+    renderPartes();
+    return;
+  }
+
+  const aba = e.target.closest("[data-aba]");
+  if (aba) abrirTamanho(aba.dataset.aba);
+});
+
+function acrescentarTamanho() {
+  const nome = String(moldeAbaNova.value || "").trim();
+  if (!nome) return mostrarErroMolde("Escreva o nome do tamanho para acrescentar.");
+  if (tamanhosDoMolde().some((t) => t.toLowerCase() === nome.toLowerCase())) {
+    return mostrarErroMolde(`O tamanho "${nome}" já está aí.`);
+  }
+  limparErroMolde();
+  guardarTamanhoAberto();
+  partesPorTamanho[nome] = partesNovasDoModelo(Number(moldePedacos.value) || 1);
+  moldeAbaNova.value = "";
+  moldeTamanhosEntrada.value = tamanhosDoMolde().join(" ");
+  abrirTamanho(nome);
+}
+
+escopo.ouvir(btnMoldeAbaNova, "click", acrescentarTamanho);
+escopo.ouvir(moldeAbaNova, "keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); acrescentarTamanho(); }
+});
+
+// ---- passo 3: um espaço por pedaço ----
+
+/** Miniatura do contorno, para dar para reconhecer a peça de relance. */
+function miniaturaDaParte(parte, cor) {
+  return moldeParaImagem(
+    { contorno: parte.contorno, furos: parte.furos, largura: parte.largura, altura: parte.altura },
+    cor).src;
+}
+
+function renderPartes() {
+  moldePartes.innerHTML = "";
+  const titulo = document.createElement("p");
+  titulo.className = "hint partes-de-que-tamanho";
+  titulo.innerHTML = `Peças do tamanho <strong>${escapeHtml(tamanhoAberto)}</strong>` +
+    (tamanhosDoMolde().length > 1
+      ? ` — os outros tamanhos ficam nas abas aí em cima, cada um com o arquivo dele.` : "");
+  moldePartes.appendChild(titulo);
+
+  partesDoMolde.forEach((parte, i) => {
+    const cor = CORES_PECA[i % CORES_PECA.length];
+    const div = document.createElement("div");
+    div.className = `parte-molde${parte.contorno ? " parte-pronta" : ""}`;
+    div.innerHTML = `
+      <span class="peca-thumb" style="border-color: ${cor};">
+        ${parte.contorno
+          ? `<img src="${miniaturaDaParte(parte, cor)}" alt="" />`
+          : `<span class="peca-vazia">${i + 1}</span>`}
+      </span>
+      <div class="parte-campos">
+        <label>O que é esta parte
+          <select data-parte-campo="papel" data-id="${parte.id}">
+            ${PAPEIS_DE_PECA.map((p) =>
+              `<option value="${p}"${p === parte.papel ? " selected" : ""}>${p}</option>`).join("")}
+          </select>
+        </label>
+        <label class="${parte.papel === "outro" ? "" : "hidden"}" style="flex: 1 1 150px;">Escreva o que é
+          <input type="text" value="${escapeHtml(parte.papelEscrito)}"
+                 placeholder="Ex: bolso de trás" data-parte-campo="papelEscrito" data-id="${parte.id}" />
+        </label>
+        <label style="flex: 0 0 90px;">Quantas
+          <input type="number" min="1" step="1" value="${parte.quantidade}"
+                 data-parte-campo="quantidade" data-id="${parte.id}" />
+        </label>
+      </div>
+      <div class="parte-arquivo">
+        <label class="btn secondary btn-sm file-label">
+          ${parte.contorno ? "Trocar arquivo" : "Enviar arquivo"}
+          <input type="file" accept=".dxf,.plt,.hpgl,.svg,.pdf" class="hidden"
+                 data-parte-arquivo="${parte.id}" />
+        </label>
+        <span class="hint">${parte.contorno
+          ? `${parte.largura} × ${parte.altura} cm · ${escapeHtml(parte.origem)}`
+          : `falta o arquivo (${FORMATOS_DE_MOLDE})`}</span>
+      </div>
+      <button type="button" class="btn danger btn-sm" data-parte-del="${parte.id}"
+              title="Tirar esta parte">&times;</button>
+    `;
+    moldePartes.appendChild(div);
+  });
+}
+
+escopo.ouvir(moldePartes, "input", (e) => {
+  const campo = e.target.dataset.parteCampo;
+  if (!campo) return;
+  const parte = partesDoMolde.find((p) => p.id === Number(e.target.dataset.id));
+  if (!parte) return;
+  if (campo === "quantidade") parte.quantidade = Math.max(1, Math.floor(Number(e.target.value) || 1));
+  else parte[campo] = e.target.value;
+});
+
+escopo.ouvir(moldePartes, "click", (e) => {
+  const id = e.target.dataset.parteDel;
+  if (!id) return;
+  partesDoMolde = partesDoMolde.filter((p) => p.id !== Number(id));
+  partesPorTamanho[tamanhoAberto] = partesDoMolde;
+  moldePedacos.value = String(partesDoMolde.length || 1);
+  renderAbas();
+  renderPartes();
+});
+
+escopo.ouvir(btnMoldeMaisParte, "click", () => {
+  partesDoMolde.push(parteVazia("outro"));
+  moldePedacos.value = String(partesDoMolde.length);
+  renderAbas();
+  renderPartes();
+});
+
+// ==================== LER O ARQUIVO DE UMA PARTE ====================
+
+/**
+ * Adivinha o papel da peça pelo nome que veio no arquivo. Acerta a maioria e
+ * poupa a pessoa de escolher peça por peça; o que errar, é um clique.
+ */
+function adivinharPapel(nome) {
+  const limpo = String(nome || "").toLowerCase();
+  if (/manga.*(dir|d\b)|(dir|d)\b.*manga/.test(limpo)) return "manga direita";
+  if (/manga.*(esq|e\b)|(esq|e)\b.*manga/.test(limpo)) return "manga esquerda";
+  if (/manga/.test(limpo)) return "manga";
+  if (/frente|front/.test(limpo)) return "frente";
+  if (/costa|back/.test(limpo)) return "costas";
+  if (/gola|colar/.test(limpo)) return "gola";
+  if (/punho/.test(limpo)) return "punho";
+  if (/c[óo]s\b/.test(limpo)) return "cós";
+  if (/bolso|pocket/.test(limpo)) return "bolso";
+  if (/vista/.test(limpo)) return "vista";
+  if (/forro/.test(limpo)) return "forro";
+  return "outro";
+}
+
+/** Guarda o desenho lido dentro da parte, sem apagar o que a pessoa escreveu. */
+function encaixarDesenhoNaParte(parte, molde, formato, unidade, jaEscolhido) {
+  const doNome = lerQuantidadeDoNome(molde.nome);
+  parte.nome = doNome.nome;
+  parte.largura = Math.round(molde.largura * 10) / 10;
+  parte.altura = Math.round(molde.altura * 10) / 10;
+  parte.contorno = molde.contorno;
+  parte.furos = molde.furos || [];
+  parte.origem = `${formato} · ${unidade}`;
+  if (doNome.qtd > 1) parte.quantidade = doNome.qtd;
+  // Só palpita no papel se a pessoa ainda não tinha dito o que era.
+  if (!jaEscolhido) {
+    const palpite = adivinharPapel(molde.nome);
+    if (palpite !== "outro") parte.papel = palpite;
+  }
+}
+
+/**
+ * Um arquivo pode trazer só aquela parte — o normal aqui — ou o marcador
+ * inteiro. Se vier mais de uma peça fechada, as sobrantes caem nos espaços
+ * seguintes que ainda estão vazios, e o que faltar de espaço é criado.
+ */
+async function mandarArquivoParaParte(parteId, file) {
+  limparErroMolde();
+  const parte = partesDoMolde.find((p) => p.id === parteId);
+  if (!parte) return;
+
+  if (!ehArquivoDeMolde(file)) {
+    return mostrarErroMolde(`"${file.name}": só leio molde em ${FORMATOS_DE_MOLDE}.`);
+  }
+
+  let lido;
+  try {
+    lido = await lerMoldeVetorial(file, moldeUnidadeSelect.value || null,
+      moldeModoVetorSelect.value || "marcador");
+  } catch (err) {
+    return mostrarErroMolde(`"${file.name}": ${err.message}`);
+  }
+  if (lido.erro) return mostrarErroMolde(`"${file.name}": ${lido.erro}`);
+  if (!lido.moldes || lido.moldes.length === 0) {
+    return mostrarErroMolde(`"${file.name}": não achei nenhuma peça fechada aí dentro.`);
+  }
+
+  // Um arquivo com várias peças é o marcador inteiro, não "o arquivo desta
+  // parte": aí quem manda são os nomes que vieram no desenho, inclusive nesta
+  // primeira vaga. Com uma peça só, o que a pessoa escolheu continua valendo.
+  const jaEscolhido = lido.moldes.length === 1
+    && (parte.papel !== "outro" || String(parte.papelEscrito || "").trim() !== "");
+  encaixarDesenhoNaParte(parte, lido.moldes[0], lido.formato, lido.unidade, jaEscolhido);
+
+  // as demais peças que vieram no mesmo arquivo
+  const sobrando = lido.moldes.slice(1);
+  if (sobrando.length > 0) {
+    let daqui = partesDoMolde.indexOf(parte) + 1;
+    sobrando.forEach((m) => {
+      while (daqui < partesDoMolde.length && partesDoMolde[daqui].contorno) daqui++;
+      if (daqui >= partesDoMolde.length) partesDoMolde.push(parteVazia("outro"));
+      encaixarDesenhoNaParte(partesDoMolde[daqui], m, lido.formato, lido.unidade, false);
+      daqui++;
+    });
+    moldePedacos.value = String(partesDoMolde.length);
+    mostrarErroMolde(`"${file.name}" trouxe ${lido.moldes.length} peças; ` +
+      `usei todas e completei os espaços. Confira o que é cada uma.`);
+  }
+
+  const avisos = lido.avisos || [];
+  if (avisos.length > 0) mostrarErroMolde(`"${file.name}": ${avisos.join(" ")}`);
+  partesPorTamanho[tamanhoAberto] = partesDoMolde;
+  renderAbas();
+  renderPartes();
+}
+
+escopo.ouvir(moldePartes, "change", async (e) => {
+  const arquivo = e.target.dataset.parteArquivo;
+  if (arquivo) {
+    const file = (e.target.files || [])[0];
+    e.target.value = "";
+    if (file) await mandarArquivoParaParte(Number(arquivo), file);
+    return;
+  }
+  if (e.target.dataset.parteCampo === "papel") {
+    const parte = partesDoMolde.find((p) => p.id === Number(e.target.dataset.id));
+    if (!parte) return;
+    parte.papel = e.target.value;
+    renderPartes();
+  }
+});
+
+// ==================== ANDAR E GRAVAR ====================
+
+escopo.ouvir(btnMoldeVoltar, "click", () => irParaPasso(Math.max(1, passoAtual - 1)));
+
+escopo.ouvir(btnMoldeAvancar, "click", async () => {
+  if (passoAtual === 1) {
+    if (!tipoEscolhido) return mostrarErroMolde("Escolha primeiro o que você vai criar.");
+    if (tipoEscolhido.id === "outro") {
+      nomeDoTipoOutro = String(moldeTipoOutro.value || "").trim();
+      if (!nomeDoTipoOutro) return mostrarErroMolde("Escreva o que é, para eu saber como chamar.");
+    }
+    if (!moldeNomeInput.value.trim()) {
+      moldeNomeInput.value = nomeDoTipoOutro || tipoEscolhido.nome;
+    }
+    return irParaPasso(2);
+  }
+
+  if (passoAtual === 2) {
+    const quantos = Math.max(1, Math.min(60, Math.floor(Number(moldePedacos.value) || 0)));
+    if (!moldeNomeInput.value.trim()) return mostrarErroMolde("Dê um nome ao molde.");
+    moldePedacos.value = String(quantos);
+    const tamanhos = lerTamanhos(moldeTamanhosEntrada.value);
+    moldeTamanhosEntrada.value = tamanhos.join(" ");
+    prepararTamanhos(tamanhos, quantos);
+    return irParaPasso(3);
+  }
+
+  await salvarMolde();
+});
+
+/** Cresce ou encolhe a lista de partes, aproveitando o que já foi preenchido. */
+function ajustarQuantidadeDePartes(quantos) {
+  const sugeridas = (tipoEscolhido && tipoEscolhido.partes) || [];
+  while (partesDoMolde.length < quantos) {
+    partesDoMolde.push(parteVazia(sugeridas[partesDoMolde.length] || "outro"));
+  }
+  // Ao encolher, some primeiro com os espaços que ainda estão vazios.
+  while (partesDoMolde.length > quantos) {
+    const vazia = [...partesDoMolde].reverse().find((p) => !p.contorno);
+    if (!vazia) { partesDoMolde = partesDoMolde.slice(0, quantos); break; }
+    partesDoMolde = partesDoMolde.filter((p) => p !== vazia);
+  }
+}
+
+async function salvarMolde() {
+  limparErroMolde();
+  const nome = String(moldeNomeInput.value || "").trim();
+  if (!nome) { irParaPasso(2); return mostrarErroMolde("Dê um nome ao molde antes de salvar."); }
+
+  // O molde é salvo com todos os tamanhos de uma vez: o que está aberto na aba
+  // e os que ficaram nas outras.
+  guardarTamanhoAberto();
+  const todas = [];
+  let faltando = 0;
+  const semArquivo = [];
+  tamanhosDoMolde().forEach((tamanho) => {
+    const partes = partesPorTamanho[tamanho] || [];
+    const prontasAqui = partes.filter((p) => p.contorno);
+    if (prontasAqui.length < partes.length) {
+      faltando += partes.length - prontasAqui.length;
+      if (prontasAqui.length === 0) semArquivo.push(tamanho);
+    }
+    prontasAqui.forEach((p) => todas.push({ ...p, tamanho }));
+  });
+
+  if (todas.length === 0) {
+    return mostrarErroMolde("Nenhuma parte tem arquivo ainda. Mande pelo menos um.");
+  }
+
+  const corpo = {
+    nome,
+    observacoes: moldeObservacoesInput.value,
+    pecas: todas.map((p, ordem) => ({
+      tamanho: p.tamanho,
+      papel: nomeDaParte(p),
+      nome: nomeDaParte(p) === "outro" ? (p.nome || "peça") : nomeDaParte(p),
+      quantidade: p.quantidade,
+      largura: p.largura, altura: p.altura,
+      contorno: p.contorno, furos: p.furos,
+      origem: p.origem, ordem,
+    })),
+  };
+
+  btnMoldeAvancar.disabled = true;
+  try {
+    const endereco = moldeEmEdicao ? `/api/moldes/${moldeEmEdicao}` : "/api/moldes";
+    const resposta = await fetch(endereco, {
+      method: moldeEmEdicao ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
+    if (!resposta.ok) {
+      const erro = await resposta.json().catch(() => ({}));
+      return mostrarErroMolde(erro.error || "Não deu para salvar o molde.");
+    }
+    const quantas = todas.length;
+    const tamanhos = [...new Set(todas.map((p) => p.tamanho))];
+    fecharModalDeMolde();
+    limparFormularioDeMolde();
+    await carregarMoldes();
+    if (faltando > 0) {
+      mostrarErroMolde(`Molde salvo com ${quantas} peça(s) em ${tamanhos.length} tamanho(s). `
+        + `${faltando} espaço(s) ficaram sem arquivo e não entraram`
+        + (semArquivo.length > 0 ? ` — ${semArquivo.join(", ")} ficou de fora inteiro.` : "."));
+    }
+  } catch (err) {
+    mostrarErroMolde(`Não deu para salvar: ${err.message}`);
+  } finally {
+    btnMoldeAvancar.disabled = false;
+  }
+}
+
+function limparFormularioDeMolde() {
+  moldeEmEdicao = null;
+  tipoEscolhido = null;
+  nomeDoTipoOutro = "";
+  partesDoMolde = [];
+  partesPorTamanho = {};
+  tamanhoAberto = "único";
+  moldeNomeInput.value = "";
+  moldeObservacoesInput.value = "";
+  moldeTamanhosEntrada.value = "único";
+  moldeAbaNova.value = "";
+  moldeTipoOutro.value = "";
+  moldeTipoOutroCampo.classList.add("hidden");
+  moldePedacos.value = "5";
+  moldeModalTitulo.textContent = "Novo molde";
+  renderTipos();
+  irParaPasso(1);
+}
+
+escopo.ouvir(btnMoldeNovo, "click", () => {
+  limparFormularioDeMolde();
+  abrirModalDeMolde();
+});
+
+escopo.ouvir(btnMoldeModalFechar, "click", fecharModalDeMolde);
+escopo.ouvir(moldeModal, "click", (e) => {
+  if (e.target === moldeModal) fecharModalDeMolde();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !moldeModal.classList.contains("hidden")) fecharModalDeMolde();
+});
+
+// ==================== A ESTANTE ====================
+
+async function carregarMoldes() {
+  try {
+    const resposta = await fetch("/api/moldes");
+    moldesGuardados = resposta.ok ? await resposta.json() : [];
+  } catch (err) {
+    moldesGuardados = [];
+  }
+  renderMoldes();
+}
+
+/**
+ * Cada molde é um cartão, não uma linha de tabela.
+ *
+ * Numa tabela o nome do molde disputava peso com o resto da linha; aqui ele
+ * manda no cartão e o resto vira apoio embaixo. "Encaixar" é o que se faz
+ * quase sempre, então é o único botão cheio — os outros dois ficam discretos.
+ */
+function renderMoldes() {
+  moldesBody.innerHTML = "";
+  if (moldesGuardados.length === 0) {
+    moldesBody.innerHTML = `
+      <div class="lista-vazia">
+        <strong>Nenhum molde guardado ainda</strong>
+        <p>Mande o desenho em DXF, PLT, SVG ou PDF e o molde fica pronto para encaixar.</p>
+      </div>`;
+    return;
+  }
+
+  moldesGuardados.forEach((m) => {
+    const cartao = document.createElement("article");
+    cartao.className = "molde-linha";
+    cartao.innerHTML = `
+      <div class="molde-identidade">
+        <h3 class="molde-nome">${escapeHtml(m.nome)}</h3>
+        ${m.observacoes ? `<p class="molde-obs">${escapeHtml(m.observacoes)}</p>` : ""}
+        <div class="molde-tamanhos">
+          ${m.tamanhos.map((t) => `<span class="etiqueta-tamanho">${escapeHtml(t)}</span>`).join("")}
+        </div>
+      </div>
+      <dl class="molde-numeros">
+        <div><dt>Peças no molde</dt><dd>${m.totalPecas}</dd></div>
+        <div><dt>Por peça pronta</dt><dd>${m.pecasPorUnidade}</dd></div>
+      </dl>
+      <div class="molde-acoes">
+        <button type="button" class="btn primary btn-sm" data-molde-enviar="${m.id}">Encaixar</button>
+        <button type="button" class="btn secondary btn-sm" data-molde-abrir="${m.id}">Editar</button>
+        <button type="button" class="btn ghost-danger btn-sm" data-molde-excluir="${m.id}">Excluir</button>
+      </div>
+    `;
+    moldesBody.appendChild(cartao);
+  });
+}
+
+/** Reeditar pula direto para o passo 3: o molde já sabe o que é e quantos são. */
+function abrirMoldeParaEditar(molde) {
+  limparFormularioDeMolde();
+  moldeEmEdicao = molde.id;
+  moldeNomeInput.value = molde.nome;
+  moldeObservacoesInput.value = molde.observacoes || "";
+  // As peças voltam separadas por tamanho, cada tamanho na sua aba — do mesmo
+  // jeito que foram mandadas.
+  partesPorTamanho = {};
+  molde.pecas.forEach((p) => {
+    const tamanho = p.tamanho || "único";
+    if (!partesPorTamanho[tamanho]) partesPorTamanho[tamanho] = [];
+    partesPorTamanho[tamanho].push({
+      id: proximaParteId++,
+      papel: PAPEIS_DE_PECA.includes(p.papel) ? p.papel : "outro",
+      papelEscrito: PAPEIS_DE_PECA.includes(p.papel) ? "" : p.papel,
+      quantidade: p.quantidade,
+      tamanho,
+      nome: p.nome, largura: p.largura, altura: p.altura,
+      contorno: p.contorno, furos: p.furos || [], origem: p.origem || "guardado",
+    });
+  });
+  if (Object.keys(partesPorTamanho).length === 0) partesPorTamanho = { "único": [] };
+
+  tamanhoAberto = Object.keys(partesPorTamanho)[0];
+  partesDoMolde = partesPorTamanho[tamanhoAberto];
+  moldePedacos.value = String(partesDoMolde.length);
+  moldeTamanhosEntrada.value = Object.keys(partesPorTamanho).join(" ");
+  moldeModalTitulo.textContent = `Editando: ${molde.nome}`;
+  abrirModalDeMolde();
+  irParaPasso(3);
+}
+
+escopo.ouvir(moldesBody, "click", async (e) => {
+  const abrir = e.target.dataset.moldeAbrir;
+  const excluir = e.target.dataset.moldeExcluir;
+  const enviar = e.target.dataset.moldeEnviar;
+
+  if (abrir) {
+    const resposta = await fetch(`/api/moldes/${abrir}`);
+    if (!resposta.ok) return mostrarErroMolde("Não achei esse molde.");
+    abrirMoldeParaEditar(await resposta.json());
+    return;
+  }
+
+  if (excluir) {
+    const molde = moldesGuardados.find((m) => m.id === Number(excluir));
+    if (!await uiConfirm(`O molde "${molde ? molde.nome : ""}" e suas peças serão excluídos.`, { title: "Excluir molde", confirmText: "Excluir molde" })) return;
+    await fetch(`/api/moldes/${excluir}`, { method: "DELETE" });
+    if (moldeEmEdicao === Number(excluir)) { fecharModalDeMolde(); limparFormularioDeMolde(); }
+    await carregarMoldes();
+    return;
+  }
+
+  if (enviar) {
+    const resposta = await fetch(`/api/moldes/${enviar}`);
+    if (!resposta.ok) return mostrarErroMolde("Não achei esse molde.");
+    moldeParaEnviar = await resposta.json();
+    abrirEnvioParaEncaixe();
+  }
+});
+
+// ==================== ARTE, PRÉVIA E ENCAIXE ====================
+
+/**
+ * A arte fica guardada pelo papel da peça — frente, costas, manga direita... —
+ * e não pela peça de um tamanho. É isso que faz a mesma arte servir para P, M
+ * e G: ao trocar o tamanho, o contorno muda e a arte se ajusta ao contorno novo
+ * sem ninguém precisar mandar tudo de novo.
+ *
+ * Um jogo dessas artes é uma **estampa**, e ela é guardada junto com o molde.
+ * Assim a mesma camiseta tem a estampa da caveira, a da flor e a lisa, e dá
+ * para mandar mais de uma no mesmo encaixe, cada uma com a sua quantidade.
+ */
+let artesPorPapel = {};     // papel -> { nome, img, ajuste, file?, arquivo? }
+let moldeDaArte = null;     // de qual molde são as artes que estão na mão
+let estampasDoMolde = [];   // as estampas guardadas, com a quantidade pedida
+let estampaEmEdicao = null; // id da estampa que está aberta no painel de baixo
+
+const ehArquivoDeArte = (file) =>
+  /^image\//.test(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name);
+
+/** O tamanho de verdade do azulejo, para a tela mostrar em centímetros. */
+function medidaDoRapport(arte, ajuste) {
+  const t = tamanhoDoRapport(arte.img, ajuste);
+  return `${emCm(t.largura)} × ${emCm(t.altura)} cm`;
+}
+
+function pecasDoTamanho() {
+  if (!moldeParaEnviar) return [];
+  return moldeParaEnviar.pecas.filter((p) => p.tamanho === moldeEnvioTamanho.value);
+}
+
+function abrirEnvioParaEncaixe() {
+  const tamanhos = [...new Set(moldeParaEnviar.pecas.map((p) => p.tamanho))];
+  moldeEnvioNome.textContent = `Arte e encaixe — ${moldeParaEnviar.nome}`;
+  moldeEnvioTamanho.innerHTML = tamanhos
+    .map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+
+  // Reabrindo o mesmo molde, a arte continua onde estava: é comum mandar o M
+  // para o encaixe e voltar para mandar o G com a mesma estampa.
+  if (moldeDaArte !== moldeParaEnviar.id) {
+    artesPorPapel = {};
+    estampaEmEdicao = null;
+    moldeDaArte = moldeParaEnviar.id;
+  }
+  estampasDoMolde = (moldeParaEnviar.artes || []).map((a) => ({ ...a, unidades: 0 }));
+
+  limparErroEnvio();
+  moldeEnvio.classList.remove("hidden");
+  document.body.classList.add("modal-aberto");
+  renderEstampas();
+  renderPartesDoEnvio();
+}
+
+function fecharEnvio() {
+  moldeEnvio.classList.add("hidden");
+  document.body.classList.remove("modal-aberto");
+}
+
+// Sair da tela fecha os modais dela. Sem isto, o `overflow: hidden` que o modal
+// põe no body continuava valendo na tela seguinte — e a de Encaixe, que é uma
+// página longa, simplesmente não rolava. O modal também reaparecia por cima ao
+// voltar para Moldes, como se nunca tivesse sido deixado para trás.
+document.addEventListener("optimize:trocou-de-tela", () => {
+  fecharEnvio();
+  fecharModalDeMolde();
+});
+
+function mostrarErroEnvio(msg) {
+  moldeEnvioErro.textContent = msg;
+  moldeEnvioErro.classList.remove("hidden");
+}
+function limparErroEnvio() {
+  moldeEnvioErro.textContent = "";
+  moldeEnvioErro.classList.add("hidden");
+}
+
+/** Medida para ler na tela: milímetro basta, e sem casa decimal sobrando. */
+const emCm = (v) => String(Math.round(Number(v) * 10) / 10);
+
+// ==================== AS ESTAMPAS GUARDADAS ====================
+
+function renderEstampas() {
+  moldeEstampas.innerHTML = "";
+  if (estampasDoMolde.length === 0) {
+    moldeEstampas.innerHTML =
+      `<p class="hint">Nenhuma estampa guardada ainda. Monte a arte aqui embaixo e clique em "Salvar no molde".</p>`;
+    return;
+  }
+
+  estampasDoMolde.forEach((estampa) => {
+    const emEdicao = estampaEmEdicao === estampa.id;
+    const div = document.createElement("div");
+    div.className = `estampa${emEdicao ? " em-edicao" : ""}`;
+    div.innerHTML = `
+      <span class="estampa-nome">${escapeHtml(estampa.nome)}</span>
+      <span class="hint">${estampa.pecas.map((p) => escapeHtml(p.papel)).join(", ")}</span>
+      ${emEdicao
+        ? `<span class="etiqueta-tamanho">em edição — usa a quantidade lá de cima</span>`
+        : `<label class="estampa-qtd">Peças prontas
+             <input type="number" min="0" step="1" value="${estampa.unidades}"
+                    data-estampa-unidades="${estampa.id}" />
+           </label>`}
+      <span class="estampa-botoes">
+        <button type="button" class="btn secondary btn-sm" data-estampa-abrir="${estampa.id}">Abrir</button>
+        <button type="button" class="btn danger btn-sm" data-estampa-excluir="${estampa.id}">Excluir</button>
+      </span>
+    `;
+    moldeEstampas.appendChild(div);
+  });
+}
+
+escopo.ouvir(moldeEstampas, "input", (e) => {
+  const id = e.target.dataset.estampaUnidades;
+  if (!id) return;
+  const estampa = estampasDoMolde.find((x) => x.id === Number(id));
+  if (estampa) estampa.unidades = Math.max(0, Math.floor(Number(e.target.value) || 0));
+  atualizarResumoDoEnvio();
+});
+
+escopo.ouvir(moldeEstampas, "click", async (e) => {
+  const abrir = e.target.dataset.estampaAbrir;
+  const excluir = e.target.dataset.estampaExcluir;
+
+  if (abrir) {
+    const estampa = estampasDoMolde.find((x) => x.id === Number(abrir));
+    if (!estampa) return;
+    e.target.disabled = true;
+    try {
+      await carregarEstampa(estampa);
+    } catch (err) {
+      mostrarErroEnvio(`Não consegui abrir a estampa: ${err.message}`);
+    } finally {
+      e.target.disabled = false;
+    }
+    return;
+  }
+
+  if (excluir) {
+    const estampa = estampasDoMolde.find((x) => x.id === Number(excluir));
+    if (!estampa) return;
+    if (!await uiConfirm(`A estampa "${estampa.nome}" será excluída deste molde.`, { title: "Excluir estampa", confirmText: "Excluir estampa" })) return;
+    const resposta = await fetch(`/api/moldes/${moldeParaEnviar.id}/artes/${estampa.id}`, { method: "DELETE" });
+    if (!resposta.ok) return mostrarErroEnvio("Não deu para excluir essa estampa.");
+    estampasDoMolde = estampasDoMolde.filter((x) => x.id !== estampa.id);
+    if (estampaEmEdicao === estampa.id) estampaEmEdicao = null;
+    renderEstampas();
+    atualizarResumoDoEnvio();
+  }
+});
+
+/** Traz a estampa guardada para o painel de baixo, imagem e ajuste. */
+async function carregarEstampa(estampa) {
+  const artes = {};
+  for (const peca of estampa.pecas) {
+    artes[peca.papel] = {
+      nome: peca.nomeOriginal || peca.arquivo,
+      img: await carregarImagem(peca.url),
+      ajuste: { ...AJUSTE_PADRAO, ...peca.ajuste },
+      arquivo: peca.arquivo,
+    };
+  }
+  artesPorPapel = artes;
+  estampaEmEdicao = estampa.id;
+  moldeArteNome.value = estampa.nome;
+  moldeArteTitulo.textContent = `Editando a estampa: ${estampa.nome}`;
+  renderEstampas();
+  renderPartesDoEnvio();
+}
+
+escopo.ouvir(btnArteNova, "click", () => {
+  artesPorPapel = {};
+  estampaEmEdicao = null;
+  moldeArteNome.value = "";
+  moldeArteTitulo.textContent = "Estampa nova";
+  renderEstampas();
+  renderPartesDoEnvio();
+});
+
+escopo.ouvir(btnArteSalvar, "click", async () => {
+  limparErroEnvio();
+  const nome = String(moldeArteNome.value || "").trim();
+  if (!nome) return mostrarErroEnvio("Dê um nome à estampa antes de salvar.");
+  const papeis = Object.keys(artesPorPapel);
+  if (papeis.length === 0) return mostrarErroEnvio("Mande a arte de pelo menos uma parte.");
+
+  btnArteSalvar.disabled = true;
+  const dizia = btnArteSalvar.textContent;
+  try {
+    // Cada arte nova sobe uma vez; a que veio de uma estampa guardada já tem
+    // arquivo no servidor e é só reaproveitada.
+    let subiu = 0;
+    for (const papel of papeis) {
+      const arte = artesPorPapel[papel];
+      if (arte.arquivo || !arte.file) continue;
+      subiu++;
+      btnArteSalvar.textContent = `Subindo arte (${subiu})…`;
+      const endereco = `/api/moldes/${moldeParaEnviar.id}/artes/imagem`
+        + `?papel=${encodeURIComponent(papel)}`;
+      const resposta = await fetch(endereco, {
+        method: "POST",
+        headers: { "Content-Type": arte.file.type || "application/octet-stream" },
+        body: arte.file,
+      });
+      if (!resposta.ok) {
+        const erro = await resposta.json().catch(() => ({}));
+        throw new Error(erro.error || "o servidor não aceitou a imagem");
+      }
+      arte.arquivo = (await resposta.json()).arquivo;
+    }
+
+    btnArteSalvar.textContent = "Salvando…";
+    const resposta = await fetch(`/api/moldes/${moldeParaEnviar.id}/artes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: estampaEmEdicao,
+        nome,
+        pecas: papeis.map((papel) => ({
+          papel,
+          arquivo: artesPorPapel[papel].arquivo,
+          nomeOriginal: artesPorPapel[papel].nome,
+          ajuste: artesPorPapel[papel].ajuste,
+        })),
+      }),
+    });
+    if (!resposta.ok) {
+      const erro = await resposta.json().catch(() => ({}));
+      throw new Error(erro.error || "não deu para salvar");
+    }
+
+    // recarrega o molde para a lista vir do servidor, já com a estampa nova
+    const idSalva = (await resposta.json()).id;
+    const quantidades = Object.fromEntries(estampasDoMolde.map((x) => [x.id, x.unidades]));
+    moldeParaEnviar = await (await fetch(`/api/moldes/${moldeParaEnviar.id}`)).json();
+    estampasDoMolde = (moldeParaEnviar.artes || [])
+      .map((a) => ({ ...a, unidades: quantidades[a.id] || 0 }));
+    estampaEmEdicao = idSalva;
+    moldeArteTitulo.textContent = `Editando a estampa: ${nome}`;
+    renderEstampas();
+    atualizarResumoDoEnvio();
+  } catch (err) {
+    mostrarErroEnvio(`Não deu para salvar a estampa: ${err.message}`);
+  } finally {
+    btnArteSalvar.disabled = false;
+    btnArteSalvar.textContent = dizia;
+  }
+});
+
+// ==================== O PAINEL DE AJUSTE ====================
+
+/** A prévia é pequena de propósito: serve para conferir, não para imprimir. */
+const LADO_DA_PREVIA = 260; // pixels
+
+function desenharPrevia(peca) {
+  const arte = artesPorPapel[peca.papel];
+  const molde = {
+    contorno: peca.contorno, furos: peca.furos || [],
+    largura: peca.largura, altura: peca.altura,
+  };
+  const ppcm = LADO_DA_PREVIA / Math.max(peca.largura, peca.altura, 1);
+  return desenharArteNoMolde(molde, arte ? arte.img : null, arte ? arte.ajuste : null, ppcm, {
+    fundo: arte ? null : "rgba(140, 152, 158, 0.22)",
+    linha: "rgba(226, 236, 240, 0.9)",
+    linhaGrossura: 1,
+  }).src;
+}
+
+function renderPartesDoEnvio() {
+  const pecas = pecasDoTamanho();
+  moldeEnvioPartes.innerHTML = "";
+
+  if (pecas.length === 0) {
+    moldeEnvioPartes.innerHTML = `<p class="hint">Esse tamanho não tem peça nenhuma.</p>`;
+    atualizarResumoDoEnvio();
+    return;
+  }
+
+  pecas.forEach((peca) => {
+    const arte = artesPorPapel[peca.papel];
+    const ajuste = arte ? arte.ajuste : AJUSTE_PADRAO;
+    const papel = escapeHtml(peca.papel);
+    const div = document.createElement("div");
+    div.className = `parte-arte${arte ? " com-arte" : ""}`;
+    div.innerHTML = `
+      <div class="parte-arte-previa">
+        <img src="${desenharPrevia(peca)}" alt="${papel}" />
+      </div>
+      <div class="parte-arte-lado">
+        <span class="peca-nome">${papel}</span>
+        <span class="hint">${emCm(peca.largura)} × ${emCm(peca.altura)} cm · ${peca.quantidade} por peça pronta</span>
+        <label class="btn secondary btn-sm file-label">
+          ${arte ? "Trocar arte" : "Enviar arte"}
+          <input type="file" accept="image/*" class="hidden" data-arte-papel="${papel}" />
+        </label>
+        ${arte ? `
+          <span class="hint">${escapeHtml(arte.nome)} · ${arte.img.width} × ${arte.img.height} px${
+            ajuste.tipo === "rapport" ? ` · azulejo de ${medidaDoRapport(arte, ajuste)}` : ""}</span>
+          <div class="tipo-de-arte">
+            ${TIPOS_DE_ARTE.map((t) => `
+              <button type="button"
+                      class="btn btn-sm ${t.id === ajuste.tipo ? "" : "secondary"}"
+                      data-arte-tipo="${t.id}" data-papel="${papel}"
+                      title="${escapeHtml(t.dica)}">${t.nome}</button>`).join("")}
+          </div>
+          ${ajuste.tipo === "rapport" && !(ajuste.ppcmArquivo > 0) ? `
+            <span class="hint aviso">Esse arquivo não traz a resolução gravada. Estou usando
+            300 dpi, o que dá o azulejo acima — se a medida não bater com a estampa de verdade,
+            corrija no "Tamanho %" ou salve o arquivo com o dpi certo.</span>` : ""}
+          <div class="ajustes-arte">
+            ${ajuste.tipo === "rapport" ? "" : `
+            <label>Como entra
+              <select data-ajuste="modo" data-papel="${papel}">
+                ${MODOS_DE_ARTE.map((m) =>
+                  `<option value="${m.id}"${m.id === ajuste.modo ? " selected" : ""}>${m.nome}</option>`).join("")}
+              </select>
+            </label>`}
+            <label>Tamanho %
+              <input type="number" min="10" max="400" step="5" value="${ajuste.escala}"
+                     data-ajuste="escala" data-papel="${papel}" />
+            </label>
+            <label>Girar
+              <select data-ajuste="giro" data-papel="${papel}">
+                ${[0, 90, 180, 270].map((g) =>
+                  `<option value="${g}"${g === ajuste.giro ? " selected" : ""}>${g}°</option>`).join("")}
+              </select>
+            </label>
+            <label>${ajuste.tipo === "rapport" ? "Onde começa (esq./dir.)" : "Esquerda / direita"}
+              <input type="number" step="0.5" value="${ajuste.x}" data-ajuste="x" data-papel="${papel}" />
+            </label>
+            <label>${ajuste.tipo === "rapport" ? "Onde começa (cima/baixo)" : "Cima / baixo"}
+              <input type="number" step="0.5" value="${ajuste.y}" data-ajuste="y" data-papel="${papel}" />
+            </label>
+            <span class="ajustes-botoes">
+              <button type="button" class="btn secondary btn-sm" data-arte-centralizar="${papel}">${
+                ajuste.tipo === "rapport" ? "Voltar ao começo" : "Centralizar"}</button>
+              <button type="button" class="btn danger btn-sm" data-arte-tirar="${papel}">Tirar arte</button>
+            </span>
+          </div>` : `<span class="hint">Sem arte, vai só o contorno da peça.</span>`}
+      </div>
+    `;
+    moldeEnvioPartes.appendChild(div);
+  });
+
+  atualizarResumoDoEnvio();
+}
+
+/** Redesenha só as prévias, sem refazer os campos — assim não perde o foco. */
+function atualizarPrevias(papel) {
+  pecasDoTamanho().forEach((peca, i) => {
+    if (papel && peca.papel !== papel) return;
+    const alvo = moldeEnvioPartes.children[i];
+    const img = alvo && alvo.querySelector(".parte-arte-previa img");
+    if (img) img.src = desenharPrevia(peca);
+  });
+}
+
+function mexerNoAjuste(campo, refazerCampos) {
+  const arte = artesPorPapel[campo.dataset.papel];
+  if (!arte) return;
+  const qual = campo.dataset.ajuste;
+  arte.ajuste[qual] = qual === "modo" ? campo.value : Number(campo.value) || 0;
+  if (refazerCampos) renderPartesDoEnvio(); else atualizarPrevias(campo.dataset.papel);
+}
+
+async function mandarArteParaPapel(papel, file) {
+  limparErroEnvio();
+  if (!ehArquivoDeArte(file)) {
+    return mostrarErroEnvio(`"${file.name}": a arte precisa ser uma imagem (PNG, JPG ou WEBP).`);
+  }
+  try {
+    // O dpi gravado no arquivo é o que diz o tamanho de verdade da imagem, e
+    // sem ele não existe rapport: um azulejo de 3000 px pode ser 25 cm ou 1 m.
+    // É o mesmo leitor que a tela de Encaixe usa (`pixelsPorCmDoArquivo`).
+    const ppcmArquivo = pixelsPorCmDoArquivo(new Uint8Array(await file.arrayBuffer()));
+    const img = await carregarImagem(await lerComoDataURL(file));
+    // Guarda o arquivo original: é ele que sobe para o servidor quando a
+    // estampa for salva, sem passar por conversão nenhuma no meio.
+    artesPorPapel[papel] = {
+      nome: file.name, img, file,
+      ajuste: { ...ajusteNovo(), ppcmArquivo: ppcmArquivo || null },
+    };
+    renderPartesDoEnvio();
+  } catch (err) {
+    // Ver o comentário igual em vetor-tela.js: a mensagem amigável não pode ser
+    // o único destino do erro, senão bug de código vira "imagem ruim".
+    console.error("mandarArteParaPapel:", err);
+    mostrarErroEnvio(`"${file.name}": não consegui abrir essa imagem.`);
+  }
+}
+
+escopo.ouvir(moldeEnvioPartes, "change", async (e) => {
+  const papelDoArquivo = e.target.dataset.artePapel;
+  if (papelDoArquivo) {
+    const file = (e.target.files || [])[0];
+    e.target.value = "";
+    if (file) await mandarArteParaPapel(papelDoArquivo, file);
+    return;
+  }
+  if (e.target.dataset.ajuste) mexerNoAjuste(e.target, true);
+});
+
+escopo.ouvir(moldeEnvioPartes, "input", (e) => {
+  if (e.target.dataset.ajuste) mexerNoAjuste(e.target, false);
+});
+
+escopo.ouvir(moldeEnvioPartes, "click", (e) => {
+  const tipo = e.target.dataset.arteTipo;
+  if (tipo) {
+    const arte = artesPorPapel[e.target.dataset.papel];
+    if (arte && arte.ajuste.tipo !== tipo) {
+      arte.ajuste.tipo = tipo;
+      // Trocar de jeito zera o deslocamento: em arte ele é a partir do centro
+      // da peça, em rapport é onde a repetição começa. Manter o número velho
+      // jogaria a estampa para um canto sem explicação nenhuma.
+      arte.ajuste.x = 0;
+      arte.ajuste.y = 0;
+      renderPartesDoEnvio();
+    }
+    return;
+  }
+  const tirar = e.target.dataset.arteTirar;
+  if (tirar) {
+    delete artesPorPapel[tirar];
+    renderPartesDoEnvio();
+    return;
+  }
+  const centralizar = e.target.dataset.arteCentralizar;
+  if (centralizar && artesPorPapel[centralizar]) {
+    artesPorPapel[centralizar].ajuste.x = 0;
+    artesPorPapel[centralizar].ajuste.y = 0;
+    renderPartesDoEnvio();
+  }
+});
+
+// ==================== O QUE VAI PARA O ENCAIXE ====================
+
+/**
+ * Cada "trabalho" é uma estampa com a quantidade dela: a que está aberta no
+ * painel usa a quantidade de cima, e cada estampa guardada usa a sua. É o que
+ * deixa mandar 20 camisetas da caveira e 12 da flor no mesmo tecido.
+ */
+function trabalhosDoEnvio() {
+  const trabalhos = [];
+  const unidades = Math.max(0, Math.floor(Number(moldeEnvioUnidades.value) || 0));
+  if (unidades > 0) {
+    trabalhos.push({
+      nome: estampaEmEdicao
+        ? (estampasDoMolde.find((x) => x.id === estampaEmEdicao) || {}).nome
+        : (Object.keys(artesPorPapel).length > 0 ? String(moldeArteNome.value || "").trim() : ""),
+      artes: artesPorPapel,
+      unidades,
+    });
+  }
+  estampasDoMolde.forEach((estampa) => {
+    if (estampa.unidades > 0 && estampa.id !== estampaEmEdicao) {
+      trabalhos.push({ nome: estampa.nome, estampa, unidades: estampa.unidades });
+    }
+  });
+  return trabalhos;
+}
+
+function atualizarResumoDoEnvio() {
+  if (!moldeParaEnviar) return;
+  const pecas = pecasDoTamanho();
+  const trabalhos = trabalhosDoEnvio();
+  const porUnidade = pecas.reduce((soma, p) => soma + p.quantidade, 0);
+  const total = trabalhos.reduce((soma, t) => soma + porUnidade * t.unidades, 0);
+
+  if (pecas.length === 0) {
+    moldeEnvioResumo.textContent = "Esse tamanho não tem peça nenhuma.";
+  } else if (trabalhos.length === 0) {
+    moldeEnvioResumo.textContent = "Nenhuma quantidade pedida ainda.";
+  } else {
+    const conta = trabalhos
+      .map((t) => `${t.unidades} ${t.nome ? `de "${t.nome}"` : "sem estampa"}`).join(" + ");
+    moldeEnvioResumo.textContent =
+      `${conta} = ${trabalhos.reduce((s, t) => s + t.unidades, 0)} peça(s) pronta(s) × `
+      + `${porUnidade} corte(s) cada = ${total} peça(s) para encaixar.`;
+  }
+
+  // quanto a arte vai pesar de verdade, no dpi escolhido
+  const dpi = Number(moldeEnvioDpi.value) || 150;
+  let pontos = 0, ppcmMenor = Infinity, comArte = 0;
+  trabalhos.forEach((t) => {
+    pecas.forEach((p) => {
+      const temArte = t.artes
+        ? !!t.artes[p.papel]
+        : t.estampa.pecas.some((x) => x.papel === p.papel);
+      if (!temArte) return;
+      comArte++;
+      const ppcm = ppcmDaArte(p.largura, p.altura, dpi);
+      ppcmMenor = Math.min(ppcmMenor, ppcm);
+      pontos += p.largura * ppcm * p.altura * ppcm;
+    });
+  });
+  if (comArte === 0) {
+    moldeEnvioQualidade.textContent = "";
+    return;
+  }
+  const dpiReal = Math.round(ppcmMenor * 2.54);
+  moldeEnvioQualidade.textContent =
+    `${comArte} peça(s) com arte a ${dpiReal} dpi (${formatarNumero(pontos / 1e6, 0)} milhões de pontos)`
+    + (dpiReal < dpi - 1 ? " — abaixei o dpi para caber na memória." : "");
+}
+
+escopo.ouvir(moldeEnvioTamanho, "change", renderPartesDoEnvio);
+escopo.ouvir(moldeEnvioUnidades, "input", atualizarResumoDoEnvio);
+escopo.ouvir(moldeEnvioDpi, "change", atualizarResumoDoEnvio);
+escopo.ouvir(btnMoldeEnvioFechar, "click", fecharEnvio);
+escopo.ouvir(moldeEnvio, "click", (e) => { if (e.target === moldeEnvio) fecharEnvio(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !moldeEnvio.classList.contains("hidden")) fecharEnvio();
+});
+
+escopo.ouvir(btnMoldeEnviar, "click", async () => {
+  if (!moldeParaEnviar) return;
+  limparErroEnvio();
+  const tamanho = moldeEnvioTamanho.value;
+  const dpi = Number(moldeEnvioDpi.value) || 150;
+  const pecas = pecasDoTamanho();
+  if (pecas.length === 0) return mostrarErroEnvio("Esse tamanho não tem peça nenhuma.");
+
+  const trabalhos = trabalhosDoEnvio();
+  if (trabalhos.length === 0) {
+    return mostrarErroEnvio("Diga quantas peças prontas você quer, aqui em cima ou numa estampa guardada.");
+  }
+
+  btnMoldeEnviar.disabled = true;
+  const dizia = btnMoldeEnviar.textContent;
+  try {
+    for (const trabalho of trabalhos) {
+      btnMoldeEnviar.textContent = trabalho.nome
+        ? `Montando "${trabalho.nome}"…` : "Montando a arte…";
+
+      // Estampa guardada: as imagens só são carregadas aqui, na hora de usar.
+      let artes = trabalho.artes;
+      if (!artes) {
+        artes = {};
+        for (const peca of trabalho.estampa.pecas) {
+          artes[peca.papel] = {
+            nome: peca.nomeOriginal || peca.arquivo,
+            img: await carregarImagem(peca.url),
+            ajuste: { ...AJUSTE_PADRAO, ...peca.ajuste },
+          };
+        }
+      }
+
+      // A arte grande só é desenhada agora, na hora de mandar: durante o ajuste,
+      // a prévia pequena já mostrava o resultado e custava quase nada.
+      const comArte = pecas.map((peca) => {
+        const arte = artes[peca.papel];
+        if (!arte) return { ...peca, estampa: trabalho.nome };
+        const ppcm = ppcmDaArte(peca.largura, peca.altura, dpi);
+        const desenho = desenharArteNoMolde(
+          { contorno: peca.contorno, furos: peca.furos || [], largura: peca.largura, altura: peca.altura },
+          arte.img, arte.ajuste, ppcm, { margem: 0 });
+        return { ...peca, desenho, arte: arte.nome, estampa: trabalho.nome };
+      });
+
+      await mandarMoldeParaOEncaixe(moldeParaEnviar.nome, tamanho, comArte, trabalho.unidades);
+    }
+
+    fecharEnvio();
+    irPara("encaixe");
+  } catch (err) {
+    mostrarErroEnvio(`Não deu para mandar ao encaixe: ${err.message}`);
+  } finally {
+    btnMoldeEnviar.disabled = false;
+    btnMoldeEnviar.textContent = dizia;
+  }
+});
+
+renderTipos();
+carregarMoldes();
+
+/**
+ * Tela de Projetos: a estante do trabalho que se repete.
+ *
+ * A navegação é a de uma gaveta: a lista começa nos clientes e entra num deles
+ * para ver as pastas de projeto. Abrir um projeto abre o editor, onde ficam as
+ * peças (a arte já finalizada, com a medida real) e os ajustes do encaixe.
+ *
+ * O que esta tela NÃO faz, de propósito: aplicar estampa em molde. Isso é a
+ * tela de Moldes, e o fluxo é outro — lá a arte é colocada dentro de um
+ * contorno; aqui ela já chega colocada.
+ */
+
+(() => {
+  const lista = document.getElementById("projetos-lista");
+  const titulo = document.getElementById("projetos-titulo");
+  const subtitulo = document.getElementById("projetos-subtitulo");
+  const btnVoltar = document.getElementById("btn-projeto-voltar");
+  const btnClienteNovo = document.getElementById("btn-cliente-novo");
+  const btnProjetoNovo = document.getElementById("btn-projeto-novo");
+
+  const editor = document.getElementById("projeto-editor");
+  const editorTitulo = document.getElementById("projeto-editor-titulo");
+  const editorCliente = document.getElementById("projeto-editor-cliente");
+  const campoNome = document.getElementById("projeto-nome");
+  const campoObs = document.getElementById("projeto-observacoes");
+  const campoLargura = document.getElementById("projeto-largura-tecido");
+  const campoEspaco = document.getElementById("projeto-espaco");
+  const campoComprimento = document.getElementById("projeto-comprimento");
+  const campoGiro = document.getElementById("projeto-giro");
+  const campoUnidades = document.getElementById("projeto-unidades");
+  const conta = document.getElementById("projeto-conta");
+  const caixaPecas = document.getElementById("projeto-pecas");
+  const entradaArquivos = document.getElementById("projeto-arquivos");
+  const envioStatus = document.getElementById("projeto-envio-status");
+  const erro = document.getElementById("projeto-erro");
+
+  // Só existe se a página tiver a tela (o arquivo carrega sempre).
+  if (!lista) return;
+
+  /** null = estamos na lista de clientes; um id = dentro da pasta dele. */
+  let clienteAberto = null;
+  let projetoAberto = null;
+  let pecas = [];
+
+  const escapar = (t) => String(t == null ? "" : t)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  async function pedir(caminho, opcoes) {
+    const resposta = await fetch(`/api/projetos${caminho}`, opcoes);
+    const corpo = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(corpo.error || "Não deu certo.");
+    return corpo;
+  }
+
+  // ==================== A ESTANTE ====================
+
+  async function mostrarClientes() {
+    clienteAberto = null;
+    titulo.textContent = "Clientes";
+    subtitulo.textContent = "Cada cliente tem a sua pasta; dentro dela, uma pasta por projeto.";
+    btnVoltar.classList.add("hidden");
+    btnClienteNovo.classList.remove("hidden");
+    btnProjetoNovo.classList.add("hidden");
+
+    const clientes = await pedir("/clientes");
+    if (clientes.length === 0) {
+      lista.innerHTML = `
+        <div class="lista-vazia">
+          <strong>Nenhum cliente ainda</strong>
+          <p>Crie a pasta de um cliente para começar a guardar os projetos dele.</p>
+        </div>`;
+      return;
+    }
+    lista.innerHTML = clientes.map((c) => `
+      <article class="projeto-pasta" data-cliente="${c.id}" tabindex="0" role="button">
+        <span class="pasta-icone" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5a2 2 0 012-2h4l1.8 2H19a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+        </span>
+        <div class="pasta-copy">
+          <h3 class="pasta-nome">${escapar(c.nome)}</h3>
+          ${c.observacoes ? `<p class="pasta-obs">${escapar(c.observacoes)}</p>` : ""}
+          <p class="pasta-conta">${c.projetos} projeto${c.projetos === 1 ? "" : "s"}</p>
+        </div>
+        <div class="pasta-acoes">
+          <button type="button" class="btn secondary btn-sm" data-cliente-editar="${c.id}">Renomear</button>
+          <button type="button" class="btn ghost-danger btn-sm" data-cliente-excluir="${c.id}">Excluir</button>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  async function abrirCliente(id) {
+    const { cliente, projetos } = await pedir(`/clientes/${id}/projetos`);
+    clienteAberto = cliente;
+    titulo.textContent = cliente.nome;
+    subtitulo.textContent = "Os projetos deste cliente. Abrir um deles leva às peças e aos ajustes.";
+    btnVoltar.classList.remove("hidden");
+    btnClienteNovo.classList.add("hidden");
+    btnProjetoNovo.classList.remove("hidden");
+
+    if (projetos.length === 0) {
+      lista.innerHTML = `
+        <div class="lista-vazia">
+          <strong>Nenhum projeto nesta pasta</strong>
+          <p>Crie um projeto e mande para dentro dele a arte já finalizada.</p>
+        </div>`;
+      return;
+    }
+    lista.innerHTML = projetos.map((p) => `
+      <article class="projeto-pasta" data-projeto="${p.id}" tabindex="0" role="button">
+        <span class="pasta-capa" aria-hidden="true">
+${p.capa ? `<img src="${p.capa}" alt="" />` : `<span class="pasta-sem-capa">sem prévia</span>`}
+        </span>
+        <div class="pasta-copy">
+          <h3 class="pasta-nome">${escapar(p.nome)}</h3>
+          ${p.observacoes ? `<p class="pasta-obs">${escapar(p.observacoes)}</p>` : ""}
+          <p class="pasta-conta">
+            ${p.pecas} arte${p.pecas === 1 ? "" : "s"}
+            · ${p.pecasPorUnidade} peça${p.pecasPorUnidade === 1 ? "" : "s"} por unidade
+            ${p.largura_tecido ? ` · tecido ${p.largura_tecido} cm` : ""}
+          </p>
+        </div>
+        <div class="pasta-acoes">
+          <button type="button" class="btn primary btn-sm" data-projeto-abrir="${p.id}">Abrir</button>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  // ==================== O EDITOR DO PROJETO ====================
+
+  async function abrirProjeto(id) {
+    const p = await pedir(`/${id}`);
+    projetoAberto = p;
+    pecas = p.pecas.map((x) => ({
+      id: x.id,
+      nome: x.nome, arquivo: x.arquivo, url: x.url, miniatura: x.miniatura,
+      largura: x.largura, altura: x.altura, quantidade: x.quantidade,
+    }));
+
+    editorCliente.textContent = (p.cliente ? p.cliente.nome : "CLIENTE").toUpperCase();
+    editorTitulo.textContent = p.nome;
+    campoNome.value = p.nome;
+    campoObs.value = p.observacoes || "";
+    campoLargura.value = p.largura_tecido == null ? "" : p.largura_tecido;
+    campoEspaco.value = p.espaco == null ? "" : p.espaco;
+    campoComprimento.value = p.comprimento_bancada == null ? "" : p.comprimento_bancada;
+    campoGiro.value = p.giro || "180";
+    campoUnidades.value = 1;
+    esconderErro();
+    envioStatus.textContent = "";
+    renderPecas();
+    editor.classList.remove("hidden");
+    document.body.classList.add("dialog-open");
+    campoNome.focus();
+    completarMiniaturas();
+  }
+
+  /**
+   * Peça guardada antes da miniatura existir mostra o arquivo inteiro no
+   * quadradinho — o que trava a página. Aqui ela ganha a sua, sem bloquear:
+   * `createImageBitmap` decodifica fora da thread da tela. Fica só na memória
+   * até a pessoa salvar, porque salvar sozinho seria mexer no projeto dela sem
+   * ela pedir.
+   */
+  async function completarMiniaturas() {
+    const faltando = pecas.filter((p) => !p.miniatura && p.url);
+    if (faltando.length === 0) return;
+    for (const peca of faltando) {
+      try {
+        const blob = await fetch(peca.url).then((r) => r.blob());
+        // Decodifica JÁ no tamanho da miniatura: o navegador faz a redução
+        // fora da thread da tela, e o canvas só copia 240 px. Abrir e desenhar
+        // a arte inteira para depois encolher custava quase 1 s de página
+        // parada, mesmo com o resultado sendo o mesmo quadradinho.
+        // As medidas saem do cabeçalho do arquivo (`medidasDoArquivo`, do
+        // encaixe.js) para a redução manter a proporção — passar 240x240 fixo
+        // esticaria a arte.
+        const medidas = typeof medidasDoArquivo === "function"
+          ? medidasDoArquivo(new Uint8Array(await blob.arrayBuffer()))
+          : null;
+        let opcoes;
+        if (medidas && medidas.largura > 0 && medidas.altura > 0) {
+          const fator = Math.min(1, LADO_DA_MINIATURA / Math.max(medidas.largura, medidas.altura));
+          opcoes = {
+            resizeWidth: Math.max(1, Math.round(medidas.largura * fator)),
+            resizeHeight: Math.max(1, Math.round(medidas.altura * fator)),
+            resizeQuality: "medium",
+          };
+        }
+        const bmp = await createImageBitmap(blob, opcoes);
+        const canvas = document.createElement("canvas");
+        canvas.width = bmp.width;
+        canvas.height = bmp.height;
+        canvas.getContext("2d").drawImage(bmp, 0, 0);
+        peca.miniatura = canvas.toDataURL("image/png");
+        bmp.close();
+      } catch (e) {
+        // sem miniatura: a linha continua mostrando o arquivo, como antes
+      }
+    }
+    if (!editor.classList.contains("hidden")) renderPecas();
+
+    // Guarda as prévias recém-feitas, para a próxima abertura ser instantânea.
+    // Falhar aqui não é problema: a tela continua funcionando e tenta de novo
+    // na próxima vez.
+    const paraGuardar = faltando
+      .filter((x) => x.miniatura && x.id)
+      .map((x) => ({ id: x.id, miniatura: x.miniatura }));
+    if (paraGuardar.length > 0 && projetoAberto) {
+      pedir(`/${projetoAberto.id}/miniaturas`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ miniaturas: paraGuardar }),
+      }).catch(() => {});
+    }
+  }
+
+  function fecharProjeto() {
+    editor.classList.add("hidden");
+    document.body.classList.remove("dialog-open");
+    projetoAberto = null;
+    pecas = [];
+  }
+
+  // Mesmo motivo do moldes-tela.js: sair da tela tem de fechar o editor. Aqui
+  // importa ainda mais que seja esta função, e não um "esconde tudo" genérico
+  // lá na casca — `fecharProjeto` também zera o projeto aberto e a lista de
+  // peças, e deixar esse estado para trás faria o editor reabrir sujo.
+  document.addEventListener("optimize:trocou-de-tela", fecharProjeto);
+
+  function renderPecas() {
+    if (pecas.length === 0) {
+      caixaPecas.innerHTML = `
+        <div class="lista-vazia">
+          <strong>Nenhuma arte no projeto</strong>
+          <p>Clique em "Adicionar arte" e mande a estampa já aplicada na peça.</p>
+        </div>`;
+    } else {
+      caixaPecas.innerHTML = pecas.map((p, i) => `
+        <article class="projeto-peca">
+          <span class="peca-capa">${p.miniatura
+            ? `<img src="${p.miniatura}" alt="" />`
+            : `<span class="peca-capa-vazia" aria-label="preparando a prévia">…</span>`}</span>
+          <label class="peca-campo peca-campo-nome">Nome
+            <input type="text" value="${escapar(p.nome)}" data-campo="nome" data-i="${i}" maxlength="120" />
+          </label>
+          <label class="peca-campo">Largura (cm)
+            <input type="number" min="0.1" step="0.1" value="${p.largura}" data-campo="largura" data-i="${i}" />
+          </label>
+          <label class="peca-campo">Altura (cm)
+            <input type="number" min="0.1" step="0.1" value="${p.altura}" data-campo="altura" data-i="${i}" />
+          </label>
+          <label class="peca-campo">Qtd por unidade
+            <input type="number" min="1" step="1" value="${p.quantidade}" data-campo="quantidade" data-i="${i}" />
+          </label>
+          <button type="button" class="btn ghost-danger btn-sm" data-peca-remover="${i}" aria-label="Tirar esta arte">&times;</button>
+        </article>
+      `).join("");
+    }
+    atualizarConta();
+  }
+
+  /** A conta que a pessoa faria de cabeça: quantas peças vão para o encaixe. */
+  function atualizarConta() {
+    const porUnidade = pecas.reduce((s, p) => s + (Number(p.quantidade) || 0), 0);
+    const unidades = Math.max(1, Math.floor(Number(campoUnidades.value) || 1));
+    conta.textContent = pecas.length === 0
+      ? ""
+      : `${porUnidade} peça${porUnidade === 1 ? "" : "s"} por unidade × ${unidades} = `
+        + `${porUnidade * unidades} peça${porUnidade * unidades === 1 ? "" : "s"} no encaixe`;
+  }
+
+  const mostrarErro = (t) => { erro.textContent = t; erro.classList.remove("hidden"); };
+  const esconderErro = () => erro.classList.add("hidden");
+
+  // ==================== MANDAR A ARTE ====================
+
+  /**
+   * A medida sai do dpi gravado no arquivo, exatamente como no Encaixe — é a
+   * única fonte confiável do tamanho real. Sem dpi, vale 300 (o padrão de arte
+   * para impressão) e o número fica editável na linha.
+   */
+  async function mandarArquivos(arquivos) {
+    if (!projetoAberto) return;
+    esconderErro();
+    let enviados = 0;
+    for (const file of arquivos) {
+      envioStatus.textContent = `Enviando ${file.name}…`;
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const ppcm = (typeof pixelsPorCmDoArquivo === "function" && pixelsPorCmDoArquivo(bytes))
+          || (typeof PPCM_PADRAO === "number" ? PPCM_PADRAO : 300 / 2.54);
+
+        const resposta = await fetch(`/api/projetos/${projetoAberto.id}/imagem`, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: bytes,
+        });
+        const corpo = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) throw new Error(corpo.error || "falhou o envio");
+
+        const img = await carregarImagemLocal(corpo.url);
+        pecas.push({
+          nome: file.name.replace(/\.[^.]+$/, "").slice(0, 120) || "peça",
+          arquivo: corpo.arquivo,
+          url: corpo.url,
+          miniatura: miniaturaDe(img),
+          largura: Math.round((img.naturalWidth / ppcm) * 10) / 10,
+          altura: Math.round((img.naturalHeight / ppcm) * 10) / 10,
+          quantidade: 1,
+        });
+        enviados++;
+      } catch (e) {
+        mostrarErro(`"${file.name}": ${e.message}`);
+      }
+    }
+    envioStatus.textContent = enviados > 0 ? `${enviados} arte(s) adicionada(s).` : "";
+    renderPecas();
+  }
+
+  /**
+   * A arte reduzida para caber na tela, em data URL.
+   *
+   * A lista e o editor mostram a peça num quadrado de ~57 px. Apontar o <img>
+   * para o arquivo de impressão faz o navegador decodificar dezenas de
+   * megapixels para pintar isso — medido em 526 ms ao abrir o editor e 1,8 s ao
+   * trocar de aba. A miniatura é gerada uma vez, no envio, e fica guardada.
+   */
+  const LADO_DA_MINIATURA = 240;
+
+  function miniaturaDe(img) {
+    try {
+      const fator = Math.min(1, LADO_DA_MINIATURA
+        / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round((img.naturalWidth || img.width) * fator));
+      canvas.height = Math.max(1, Math.round((img.naturalHeight || img.height) * fator));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/png");
+    } catch (e) {
+      return null;
+    }
+  }
+
+  const carregarImagemLocal = (src) => new Promise((ok, falhou) => {
+    const img = new Image();
+    img.onload = () => ok(img);
+    img.onerror = () => falhou(new Error("não deu para abrir a imagem"));
+    img.src = src;
+  });
+
+  // ==================== SALVAR E REPETIR ====================
+
+  function corpoDoProjeto() {
+    return {
+      nome: campoNome.value.trim(),
+      observacoes: campoObs.value.trim(),
+      larguraTecido: campoLargura.value === "" ? null : Number(campoLargura.value),
+      espaco: campoEspaco.value === "" ? null : Number(campoEspaco.value),
+      comprimentoBancada: campoComprimento.value === "" ? null : Number(campoComprimento.value),
+      giro: campoGiro.value,
+      pecas: pecas.map((p) => ({
+        nome: p.nome, arquivo: p.arquivo, miniatura: p.miniatura,
+        largura: Number(p.largura), altura: Number(p.altura),
+        quantidade: Math.max(1, Math.floor(Number(p.quantidade) || 1)),
+      })),
+    };
+  }
+
+  async function salvar() {
+    if (!campoNome.value.trim()) { mostrarErro("Dê um nome ao projeto."); return false; }
+    const ruim = pecas.find((p) => !(Number(p.largura) > 0) || !(Number(p.altura) > 0));
+    if (ruim) { mostrarErro(`"${ruim.nome}" está sem medida. Preencha largura e altura em centímetros.`); return false; }
+    try {
+      await pedir(`/${projetoAberto.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(corpoDoProjeto()),
+      });
+      esconderErro();
+      return true;
+    } catch (e) {
+      mostrarErro(e.message);
+      return false;
+    }
+  }
+
+  /**
+   * A repetição: salva, aplica os ajustes guardados nos campos do Encaixe e
+   * manda as peças. Os ajustes vão antes das peças de propósito — o giro de
+   * cada peça é lido do seletor geral na hora em que ela entra.
+   */
+  async function mandarParaOEncaixe() {
+    if (pecas.length === 0) { mostrarErro("O projeto não tem nenhuma arte para encaixar."); return; }
+    if (!await salvar()) return;
+    const unidades = Math.max(1, Math.floor(Number(campoUnidades.value) || 1));
+    // Lidos agora: `fecharProjeto` limpa o estado antes do envio começar.
+    const nome = campoNome.value.trim();
+    const pecasParaEnviar = pecas.slice();
+
+    const ajuste = (id, valor) => {
+      if (valor === null || valor === "" || !Number.isFinite(Number(valor))) return;
+      const campo = document.getElementById(id);
+      if (campo) campo.value = valor;
+    };
+    ajuste("encaixe-largura", campoLargura.value);
+    // O projeto guarda a folga em MILÍMETRO (é o que o campo desta tela
+    // pergunta) e o Encaixe passou a perguntar em CENTÍMETRO. A conversão é
+    // aqui, na passagem, e não no que está gravado: mexer na unidade do banco
+    // reinterpretaria todo projeto já salvo — 5 viraria 5 cm, dez vezes a
+    // folga, e o tecido a mais só apareceria depois de imprimir.
+    const espacoCm = campoEspaco.value === "" ? "" : Number(campoEspaco.value) / 10;
+    ajuste("encaixe-espaco", espacoCm);
+    ajuste("encaixe-espaco-y", espacoCm);
+    ajuste("encaixe-comprimento", campoComprimento.value);
+    const seletorGiro = document.getElementById("encaixe-giro-todas");
+    if (seletorGiro) seletorGiro.value = campoGiro.value;
+
+    // A troca de aba vem ANTES do trabalho, e não depois. O painel de
+    // andamento do Encaixe mora dentro daquela página; com a aba de Projetos
+    // ainda na frente ele ficava escondido, e a pessoa via só a tela parada.
+    fecharProjeto();
+    irPara("encaixe");
+    // Uma pausa curta para a aba nova aparecer antes do trabalho pesado
+    // começar. É `setTimeout`, e NÃO `requestAnimationFrame`: rAF só dispara
+    // quando a página está sendo pintada, então numa aba em segundo plano (ou
+    // com a janela minimizada) a espera nunca terminava e o envio ficava
+    // pendurado para sempre, sem erro nenhum na tela.
+    await new Promise((r) => setTimeout(r, 60));
+
+    try {
+      await mandarProjetoParaOEncaixe(nome, pecasParaEnviar, unidades);
+    } catch (e) {
+      mostrarErroEncaixe(`Não deu para mandar o projeto ao encaixe: ${e.message}`);
+    }
+  }
+
+  // ==================== LIGAÇÕES ====================
+
+  escopo.ouvir(lista, "click", async (e) => {
+    const alvo = (attr) => e.target.closest(`[${attr}]`)?.getAttribute(attr);
+
+    const excluirCliente = alvo("data-cliente-excluir");
+    if (excluirCliente) {
+      e.stopPropagation();
+      if (!await uiConfirm("Apagar este cliente apaga todos os projetos e as artes dentro dele. Não tem volta.",
+        { title: "Excluir cliente", confirmText: "Excluir" })) return;
+      await pedir(`/clientes/${excluirCliente}`, { method: "DELETE" });
+      await mostrarClientes();
+      return;
+    }
+
+    const editarCliente = alvo("data-cliente-editar");
+    if (editarCliente) {
+      e.stopPropagation();
+      const atual = e.target.closest("[data-cliente]").querySelector(".pasta-nome").textContent;
+      const nome = await uiPergunta({
+        titulo: "Renomear cliente", kicker: "PASTA DO CLIENTE", valor: atual, confirmar: "Salvar",
+      });
+      if (!nome) return;
+      await pedir(`/clientes/${editarCliente}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome }),
+      });
+      await mostrarClientes();
+      return;
+    }
+
+    const projeto = alvo("data-projeto-abrir") || alvo("data-projeto");
+    if (projeto) { await abrirProjeto(projeto); return; }
+
+    const cliente = alvo("data-cliente");
+    if (cliente) await abrirCliente(cliente);
+  });
+
+  // Teclado: a pasta é clicável, então tem que abrir no Enter também.
+  escopo.ouvir(lista, "keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const pasta = e.target.closest(".projeto-pasta");
+    if (!pasta) return;
+    e.preventDefault();
+    pasta.click();
+  });
+
+  escopo.ouvir(btnVoltar, "click", mostrarClientes);
+
+  escopo.ouvir(btnClienteNovo, "click", async () => {
+    const nome = await uiPergunta({
+      titulo: "Novo cliente", kicker: "PASTA DO CLIENTE",
+      texto: "O nome da pasta onde os projetos dele vão ficar.",
+      exemplo: "Time Azul", confirmar: "Criar",
+    });
+    if (!nome) return;
+    await pedir("/clientes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome }),
+    });
+    await mostrarClientes();
+  });
+
+  escopo.ouvir(btnProjetoNovo, "click", async () => {
+    if (!clienteAberto) return;
+    const nome = await uiPergunta({
+      titulo: "Novo projeto", kicker: `PASTA DE ${clienteAberto.nome.toUpperCase()}`,
+      texto: "O nome deste trabalho, do jeito que você o chama.",
+      exemplo: "Camisa Time Azul 2026", confirmar: "Criar",
+    });
+    if (!nome) return;
+    const novo = await pedir("/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clienteId: clienteAberto.id, nome }),
+    });
+    await abrirCliente(clienteAberto.id);
+    await abrirProjeto(novo.id);
+  });
+
+  escopo.ouvir(document.getElementById("btn-projeto-fechar"), "click", fecharProjeto);
+  escopo.ouvir(document.getElementById("btn-projeto-salvar"), "click", async () => {
+    if (await salvar()) {
+      envioStatus.textContent = "Projeto salvo.";
+      if (clienteAberto) await abrirCliente(clienteAberto.id);
+    }
+  });
+  escopo.ouvir(document.getElementById("btn-projeto-encaixar"), "click", mandarParaOEncaixe);
+  escopo.ouvir(document.getElementById("btn-projeto-excluir"), "click", async () => {
+    if (!projetoAberto) return;
+    if (!await uiConfirm("Apagar este projeto apaga as artes dentro dele. Não tem volta.",
+      { title: "Excluir projeto", confirmText: "Excluir" })) return;
+    const cliente = clienteAberto;
+    await pedir(`/${projetoAberto.id}`, { method: "DELETE" });
+    fecharProjeto();
+    if (cliente) await abrirCliente(cliente.id);
+  });
+
+  escopo.ouvir(entradaArquivos, "change", async () => {
+    const arquivos = [...entradaArquivos.files];
+    entradaArquivos.value = "";
+    if (arquivos.length > 0) await mandarArquivos(arquivos);
+  });
+
+  escopo.ouvir(caixaPecas, "input", (e) => {
+    const campo = e.target.dataset.campo;
+    if (!campo) return;
+    const peca = pecas[Number(e.target.dataset.i)];
+    if (!peca) return;
+    peca[campo] = campo === "nome" ? e.target.value : Number(e.target.value);
+    if (campo === "quantidade") atualizarConta();
+  });
+
+  escopo.ouvir(caixaPecas, "click", (e) => {
+    const i = e.target.closest("[data-peca-remover]")?.getAttribute("data-peca-remover");
+    if (i === null || i === undefined) return;
+    pecas.splice(Number(i), 1);
+    renderPecas();
+  });
+
+  escopo.ouvir(campoUnidades, "input", atualizarConta);
+
+  escopo.ouvir(editor, "click", (e) => { if (e.target === editor) fecharProjeto(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !editor.classList.contains("hidden")) fecharProjeto();
+  });
+
+  // A estante é montada quando a tela é aberta pela primeira vez: carregar na
+  // partida gastaria requisição em quem nunca entra aqui.
+  //
+  // Escuta a TROCA DE TELA, e não o clique no menu. Desde que as telas
+  // ganharam endereço (`#/projetos`), há três jeitos de chegar aqui sem
+  // clicar em nada: recarregar já nesta tela, voltar no navegador e abrir um
+  // link direto. No clique, esses três abriam a estante vazia.
+  let jaMontou = false;
+  document.addEventListener("optimize:trocou-de-tela", (e) => {
+    if (e.detail.pagina !== "projetos" || jaMontou) return;
+    jaMontou = true;
+    mostrarClientes().catch((erro) => {
+      lista.innerHTML = `<p class="hint error">Não deu para carregar: ${escapar(erro.message)}</p>`;
+    });
+  });
+
+  // Outras telas precisam recarregar a estante depois de mexer no banco.
+  const carregarProjetos = () => (clienteAberto ? abrirCliente(clienteAberto.id) : mostrarClientes());
+})();
+
+/*
+ * Aqui morava a TELA DE COR, em 352 linhas imperativas. Ela foi para o React:
+ * `src/telas/Cor.tsx` tem o estado, e `src/nucleo/miniaturaDaArte.js` e
+ * `src/api/cor.ts` têm o que era domínio e chamada de servidor.
+ *
+ * O que ficou deste lado é só a ponte: o `adicionarArquivos` sai no objeto de
+ * controle lá embaixo, e é por ele que a Cor entrega as artes ao Encaixe.
+ */
+
+return {
+ /*
+  * A ponte com a tela de Cor, que é React.
+  *
+  * Ela recebe as artes, conserta a cor e entrega o trabalho todo ao Encaixe —
+  * inclusive o que já estava certo, porque quem chegou lá trouxe o trabalho
+  * inteiro e mandar a pessoa arrastar de novo o que não precisava de conserto
+  * seria devolver o trabalho que aquela tela existe para poupar.
+  *
+  * É a única função deste controlador que alguém de fora chama. Vai pelo
+  * objeto de controle, e não por um evento, porque quem entrega precisa saber
+  * QUANDO terminou: as artes são grandes, a leitura é assíncrona, e a Cor só
+  * limpa a própria lista depois que o Encaixe aceitou tudo.
+  */
+ adicionarArquivos,
+ navegar(pagina) {
+   document.dispatchEvent(new CustomEvent("optimize:trocou-de-tela", { detail: { pagina } }));
+   raiz.dataset.tela = pagina;
+   raiz.querySelectorAll(".page[data-page]").forEach(el => el.classList.toggle("active", el.dataset.page === pagina));
+   if (pagina === "encaixe") requestAnimationFrame(() => { if (ultimoResultado) renderResultado(); });
+ },
+ destruir() { pararBusca = true; escopo.destruir(); derrubarPool(); derrubarPoolPrepara(); for (const p of pecasEncaixe) p.img?.close?.(); }
+};
+} catch (erro) { escopo.destruir(); throw erro; }
+}

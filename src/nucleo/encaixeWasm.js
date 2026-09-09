@@ -76,8 +76,21 @@ export function temMotorWasm() {
  * Falhar aqui não é erro fatal: o encaixe continua pelo caminho em JavaScript.
  * É o que acontece num navegador sem WebAssembly, ou se o arquivo não estiver
  * onde deveria.
+ *
+ * **O ENDEREÇO PADRÃO MUDOU NO PORTE, E TINHA QUE MUDAR.** Na casca antiga a
+ * página era servida em `/`, e `/encaixe.wasm` achava o arquivo. A casca nova
+ * é servida em `/app/`, e o mesmo endereço absoluto sairia da pasta: o
+ * `fetch` traria a página de índice em vez do módulo, o `instantiate`
+ * falharia, e — como a queda para o JavaScript é SILENCIOSA por desenho — o
+ * encaixe passaria a rodar 3,9x mais devagar sem uma linha de erro. É o mesmo
+ * defeito que o `/ia/` do `imagemWorker.js` teve na etapa anterior.
+ *
+ * `import.meta.env.BASE_URL` é quem sabe onde a tela está montada, e termina
+ * em barra nos dois casos (`/` e `/app/`).
  */
-export async function carregarMotorWasm(deOndeVem = "/encaixe.wasm") {
+export async function carregarMotorWasm(
+  deOndeVem = `${import.meta.env.BASE_URL}encaixe.wasm`,
+) {
   if (motorWasm || motorWasmFalhou) return temMotorWasm();
   try {
     // Aceita o endereço (é o que o worker usa) ou os bytes já lidos, que é

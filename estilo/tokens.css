@@ -54,3 +54,17 @@
   --font-body: "Inter", "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", Consolas, monospace;
 }
+
+/* Identificação das peças no risco, preservada da tela original. */
+:root {
+  --peca-1: #2bd672;
+  --peca-2: #4aa8ff;
+  --peca-3: #f5a623;
+  --peca-4: #f0555b;
+  --peca-5: #b78bff;
+  --peca-6: #33d6c4;
+  --peca-7: #ff8fb1;
+  --peca-8: #c8d94a;
+  --peca-9: #7f9cff;
+  --peca-10: #ffb066;
+}

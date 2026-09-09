@@ -59,6 +59,15 @@ quantas linhas diferem do original:
 | `nucleo/encaixeWasm.js` | 365 | 11 `export`/`import` |
 | `nucleo/encaixeRede.js` | 331 | 21 `export` |
 | `nucleo/encaixeGiro.js` | 30 | 3 `export` |
+| `nucleo/moldes.js` | 2.029 | 76 `export`, mais o `import` do `caixaDeContorno` |
+| `nucleo/encaixeParalelo.js` | 441 | 19 `export`, mais o `new Worker` |
+| `nucleo/encaixePrepara.js` | 319 | 8 `export`, mais o `new Worker` |
+| `nucleo/arteMolde.js` | 270 | só os `export` |
+| `nucleo/corDoArquivo.js` | 237 | só os `export` |
+| `nucleo/encaixeWorker.js` | 139 | o `importScripts` virou `import` |
+| `nucleo/preparaWorker.js` | 121 | o `importScripts` virou `import` |
+| `nucleo/pecaNaGrade.js` | 158 | recortado do `encaixe.js` — ver abaixo |
+| `nucleo/respirar.js` | 25 | recortado do `encaixe.js` — ver abaixo |
 
 Os tipos entram depois, arquivo por arquivo, quando alguém tiver motivo para
 mexer lá dentro. Quem chama declara o contrato do seu lado enquanto isso — ver
@@ -89,6 +98,57 @@ o mesmo escopo.
 `function` perde metade do que existe num arquivo moderno. E a prova de um
 porte não é o diff — é rodar os dois lado a lado.
 
+### O domínio da Etapa C desceu antes das telas, e trouxe duas surpresas
+
+As 3.739 linhas de domínio que o Encaixe usa já estão em `src/nucleo/`. Duas
+coisas apareceram no caminho, e as duas eram invisíveis enquanto tudo era
+`<script>` global:
+
+**1. Dois módulos de domínio dependiam da TELA.** O `encaixe-prepara.js` usava
+seis funções que moravam no `encaixe.js` (`pixelsDaImagem`,
+`removerFundoDaImagem`, `pixelsDaArteNaGrade`, `chaveDasMascaras`,
+`mascarasDaPeca`, `respirarNaTela`), e o `arte-molde.js` usava o `PPCM_PADRAO`.
+Como módulo isso seria o domínio importando da tela — justamente a parte que
+vai ser reescrita. Então o que o domínio usa desceu antes, em
+`nucleo/pecaNaGrade.js` (o lado do canvas do preparo) e `nucleo/respirar.js`.
+
+**2. O endereço do WASM estava absoluto.** `carregarMotorWasm` tinha
+`"/encaixe.wasm"` como padrão. Na casca antiga, servida em `/`, isso achava o
+arquivo; na casca nova, servida em `/app/`, não acharia — e a queda para o
+JavaScript é **silenciosa por desenho**, então o encaixe passaria a rodar 3,9x
+mais devagar sem uma linha de erro. Agora é
+`` `${import.meta.env.BASE_URL}encaixe.wasm` ``. É o mesmo defeito que o `/ia/`
+do `imagemWorker.js` teve na Etapa A — e o terceiro caminho absoluto a
+aparecer, o que sugere procurar por eles de propósito na Etapa D.
+
+### A cópia dupla acabou
+
+Enquanto a casca antiga existiu, o domínio morou em dois lugares — `public/` e
+`src/nucleo/` — e a regra era "mexeu numa conta de um lado, mexe no outro". Isso
+acabou: o `public/` foi apagado, com **22.608 linhas**, e sobrou uma cópia só.
+
+Quatro coisas ainda apontavam para lá, e cada uma exigiu uma decisão:
+
+| quem | o que fazia | como ficou |
+|---|---|---|
+| `encaixe-memoria.js` | o SERVIDOR dava `require("./public/encaixe-rede.js")` | passou a carregar `src/nucleo/encaixeRede.mjs` |
+| `bancada/motor.js` | lia 6 arquivos de `public/` e concatenava o TEXTO | empacota `src/nucleo/` com esbuild (`bancada/nucleo.js`) |
+| `bancada/conferir-arte.js` | RECORTAVA duas funções do texto de `encaixe.js` | importa `src/nucleo/jpegParaPdf.js` |
+| `npm run css` | gerava `public/tailwind.css` | saiu; o CSS vem do Vite |
+
+**Por que o `encaixeRede` é `.mjs`.** O projeto é CommonJS, então um `.js` com
+`export` seria lido como CJS pelo Node e quebraria no primeiro `export`. A
+extensão explícita deixa o Node dar `require()` no módulo ESM. O Vite continua
+resolvendo `./encaixeRede` sem extensão porque `.mjs` vem antes de `.js` na
+ordem dele — **mas o esbuild cru não**, e foi isso que quebrou a bancada e o
+`conferir-react` até os dois ganharem `resolveExtensions`.
+
+**O recorte por texto era pior do que parecia.** O `conferir-arte.js` achava
+`function jpegSeguroParaPdf(` e contava chaves até fechar. Funcionava — e
+renomear a função, ou transformá-la numa arrow, quebraria a conferência sem
+quebrar o programa. Conferência quebrada é pior que nenhuma, porque some sem
+avisar.
+
 ### A cópia dupla é transitória, e tem regra
 
 Enquanto o Encaixe não migrar, `encaixe-mascara`, `geometria` e o leitor de dpi
@@ -111,7 +171,7 @@ src/                     A tela nova (React + TypeScript)
 ├── casca/               o que toda tela usa: Menu, Cabecalho, Cartao, Icone
 ├── telas/               uma pasta por aba, quando ela migrar
 ├── api/                 cliente.ts (o fetch) e useDados.ts (os 3 estados)
-└── nucleo/              DOMÍNIO PURO — sem DOM, sem React, roda em worker
+└── nucleo/              DOMÍNIO — sem React e sem a tela (ver a regra abaixo)
 
 estilo/
 ├── tokens.css           a paleta. O ÚNICO arquivo com hex no projeto
@@ -211,8 +271,8 @@ Então a ordem passou a ser ditada pelas dependências:
 |---|---|---|
 | **A** | **Vetor**, **Imagem** e **Macros** — não conversam com ninguém | ✅ feita |
 | **B** | O **motor de encaixe** vira módulo, sem tocar na lógica | ✅ feita |
-| **C** | **Encaixe + Moldes + Projetos + Cor** juntos — as entregas viram estado React | a fazer |
-| **D** | Apagar o `public/`, `base` do Vite vira `/` | a fazer |
+| **C** | **Encaixe + Moldes + Projetos + Cor** juntos — as entregas viram estado React | domínio portado; **Cor** declarativa; faltam Encaixe, Moldes e Projetos |
+| **D** | Apagar o `public/`, `base` do Vite vira `/` | ✅ feita |
 
 ### O grafo do domínio, que é raso
 
@@ -252,7 +312,15 @@ as cascas deixam de existir porque só há uma.
 - **Um hex só no projeto**, em `estilo/tokens.css`. As duas telas leem os
   mesmos tokens: o React pelos utilitários do Tailwind, a antiga pelo
   `var(--accent)` do CSS à mão.
-- **Nada de DOM, React ou fetch em `src/nucleo/`.** É o que deixa esse código
+- **Nada de React, de tela ou de `fetch` em `src/nucleo/`.** O que vale é não
+  depender da PÁGINA: nada de `getElementById`, de ler o valor de um campo, de
+  mexer no que está montado. Usar a **plataforma** é permitido e às vezes
+  necessário — `document.createElement("canvas")` para rasterizar
+  (`pecaNaGrade`, `arteMolde`), um palco fora da vista para o navegador medir
+  SVG (`moldes`, porque `getTotalLength` só funciona em elemento vivo, e ele
+  sai no `finally`), `new Worker` para repartir trabalho (`encaixePrepara`,
+  `encaixeParalelo`). A linha é essa: **um módulo do núcleo funciona numa
+  página em branco**. É o que deixa esse código
   rodar dentro de um Web Worker e ser testado sem navegador.
 - **Ícone é referência entre aspas** (`"icones.svg#shapes"`), nunca string
   montada em pedaços: o gerador do sprite lê o código para saber o que incluir.

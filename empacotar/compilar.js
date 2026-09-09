@@ -172,60 +172,12 @@ async function compilarServidor() {
   return { antes, depois: tamanho(jsc) };
 }
 
-// ==================== AS TELAS ====================
-
-/**
- * Tira comentário e espaço das telas, e SÓ isso.
- *
- * `minifyIdentifiers` fica desligado de propósito. Os arquivos de `public`
- * são scripts clássicos, carregados um atrás do outro por `<script src>`, e
- * conversam entre si por variáveis no escopo global: o `encaixe.js` chama
- * função que o `encaixe-motor.js` declarou. Renomear essas variáveis quebraria
- * cada uma dessas pontes, porque cada arquivo é minificado sozinho e não sabe
- * dos outros.
- *
- * O que se ganha mesmo assim é o que mais importa: os comentários vão embora.
+/*
+ * Aqui morava o `compilarTelas()`, que tirava comentário e espaço dos arquivos
+ * de `public/`. Ele saiu junto com a pasta: o painel de hoje é o pacote do
+ * Vite, que já vem minificado do `npm run front`.
  */
-async function compilarTelas() {
-  const pasta = path.join(DESTINO, "public");
-  if (!fs.existsSync(pasta)) return { antes: 0, depois: 0, arquivos: 0 };
 
-  let antes = 0;
-  let depois = 0;
-  let arquivos = 0;
-
-  for (const nome of fs.readdirSync(pasta)) {
-    const caminho = path.join(pasta, nome);
-    if (!fs.statSync(caminho).isFile()) continue;
-
-    if (nome.endsWith(".js")) {
-      const fonte = fs.readFileSync(caminho, "utf-8");
-      antes += Buffer.byteLength(fonte);
-      const r = await esbuild.transform(fonte, {
-        minifyWhitespace: true,
-        minifySyntax: true,
-        minifyIdentifiers: false,
-        legalComments: "none",
-        target: "es2022",
-      });
-      fs.writeFileSync(caminho, r.code);
-      depois += Buffer.byteLength(r.code);
-      arquivos++;
-    } else if (nome.endsWith(".html")) {
-      // O HTML também é comentado, e os comentários dele explicam a tela
-      // inteira. A marcação em si tem que continuar de pé, então só os
-      // comentários saem.
-      const fonte = fs.readFileSync(caminho, "utf-8");
-      antes += Buffer.byteLength(fonte);
-      const limpo = fonte.replace(/<!--[\s\S]*?-->/g, "");
-      fs.writeFileSync(caminho, limpo);
-      depois += Buffer.byteLength(limpo);
-      arquivos++;
-    }
-  }
-
-  return { antes, depois, arquivos };
-}
 
 // ==================== A CONFERÊNCIA ====================
 
@@ -283,13 +235,10 @@ function conferirLimpeza() {
 async function principal() {
   const v8 = conferirNode();
   const servidor = await compilarServidor();
-  const telas = await compilarTelas();
   conferirLimpeza();
 
   console.log(`compilar: servidor em bytecode (V8 ${v8}) —`
     + ` ${bytesEmMb(servidor.antes)} de fonte viraram ${bytesEmMb(servidor.depois)} de .jsc`);
-  console.log(`compilar: ${telas.arquivos} arquivos de tela sem comentário —`
-    + ` ${bytesEmMb(telas.antes)} viraram ${bytesEmMb(telas.depois)}`);
 }
 
 principal().catch((erro) => {

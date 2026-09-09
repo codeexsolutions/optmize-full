@@ -1,4 +1,15 @@
 /**
+ * ===========================================================================
+ * WORKER DE ENCAIXE — a busca inteira fora da thread da tela
+ * ===========================================================================
+ *
+ * O PORTE: o `importScripts` virou `import`. Era ele que trazia geometria,
+ * giro, rede, wasm e motor para dentro do escopo do worker; agora quem resolve
+ * a árvore é o empacotador, e só o que este arquivo CHAMA aparece na lista.
+ * O resto vem junto porque o motor importa.
+ */
+
+/**
  * Um trabalhador de encaixe: roda a busca inteira fora da thread da tela.
  *
  * A ideia é a mesma do servidor de encaixe do Audaces (o "Supera"): o ganho
@@ -11,11 +22,12 @@
  * prontas da página, porque montar máscara precisa de canvas.
  */
 
+import { buscarMelhorEncaixe } from "./encaixeMotor";
+import { carregarMotorWasm, temMotorWasm } from "./encaixeWasm";
+
 // Só o que a BUSCA precisa. O encaixe-mascara.js não está aqui de propósito:
 // máscara é feita na página (e no prepara-worker.js), e aqui dentro ela chega
 // pronta. Ele já esteve nesta lista por causa do nfp.js, que saiu.
-importScripts("geometria.js", "encaixe-giro.js", "encaixe-rede.js",
-  "encaixe-wasm.js", "encaixe-motor.js");
 
 // O motor em WebAssembly é carregado uma vez, quando o worker nasce. Se não
 // der, `encaixarContornoWasm` devolve null e tudo segue em JavaScript.

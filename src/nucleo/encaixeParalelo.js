@@ -1,4 +1,14 @@
 /**
+ * ===========================================================================
+ * BUSCA EM PARALELO — uma fatia do portfólio por núcleo
+ * ===========================================================================
+ *
+ * O ganho não vem de um encaixador mais esperto: vem de rodar mais variações ao
+ * mesmo tempo. Cada worker recebe uma fatia das receitas e devolve o melhor que
+ * conseguiu; aqui os resultados são comparados.
+ */
+
+/**
  * Busca em paralelo: o mesmo encaixe, espalhado pelos núcleos da máquina.
  *
  * Por que isto existe
@@ -21,18 +31,22 @@
  * e o resultado são iguais aos de `buscarMelhorEncaixe`.
  */
 
+import {
+  buscarMelhorEncaixe, fatiaDoPortfolio, melhorQue, motoresDaFatia, papelDaFatia,
+} from "./encaixeMotor";
+
 // Um núcleo fica de fora para a tela continuar respondendo (é ela que desenha
 // a barra de progresso e escuta o botão de parar). O teto de 8 é para não
 // abrir worker demais numa máquina grande: o portfólio de receitas é finito, e
 // fatia pequena demais só multiplica a passada base sem cobrir mais nada.
-const ENCAIXE_MAX_WORKERS = 8;
+export const ENCAIXE_MAX_WORKERS = 8;
 
-function quantosWorkers() {
+export function quantosWorkers() {
   const nucleos = (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 4;
   return Math.max(1, Math.min(ENCAIXE_MAX_WORKERS, nucleos - 1));
 }
 
-function podeUsarWorkers() {
+export function podeUsarWorkers() {
   return typeof Worker !== "undefined";
 }
 
@@ -67,9 +81,9 @@ function podeUsarWorkers() {
  * São 0,20% — pouco, mas sem contrapartida: a repartição nova não perdeu em
  * nenhum dos 8 casos. Varrer tudo exato já é demais, e aí a conta se inverte.
  */
-const ENCAIXE_PULO_PADRAO = 3;
-const FATIAS_EXATAS = 2;
-const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : ENCAIXE_PULO_PADRAO);
+export const ENCAIXE_PULO_PADRAO = 3;
+export const FATIAS_EXATAS = 2;
+export const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : ENCAIXE_PULO_PADRAO);
 
 /**
  * A semente do sorteio de cada fatia.
@@ -103,9 +117,9 @@ const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : ENCAIXE_PULO_PADRAO);
  * vezes. Isso acontece com um encaixador de portfólio curto, ou com
  * `maxReceitasBase` apertado em lote grande.
  */
-const SEMENTE_PADRAO = 20260824;
-const PASSO_DA_SEMENTE = 104729;
-const sementeDaFatia = (semente, k) => (semente || SEMENTE_PADRAO) + k * PASSO_DA_SEMENTE;
+export const SEMENTE_PADRAO = 20260824;
+export const PASSO_DA_SEMENTE = 104729;
+export const sementeDaFatia = (semente, k) => (semente || SEMENTE_PADRAO) + k * PASSO_DA_SEMENTE;
 
 /*
  * Cada fatia usa os mesmos encaixadores: quem escolhe o encaixador é a tela, e
@@ -130,17 +144,17 @@ const sementeDaFatia = (semente, k) => (semente || SEMENTE_PADRAO) + k * PASSO_D
 // O pool sobrevive entre encaixes: abrir worker custa (cada um recarrega o
 // motor inteiro), e a pessoa costuma apertar "Fazer encaixe"
 // várias vezes seguidas mexendo na largura ou na folga.
-let poolEncaixe = [];
+export let poolEncaixe = [];
 
-function pegarPool(quantidade) {
+export function pegarPool(quantidade) {
   if (poolEncaixe.length === quantidade) return poolEncaixe;
   derrubarPool();
-  for (let k = 0; k < quantidade; k++) poolEncaixe.push(new Worker("/encaixe-worker.js"));
+  for (let k = 0; k < quantidade; k++) poolEncaixe.push(new Worker(new URL("./encaixeWorker.js", import.meta.url), { type: "module" }));
   return poolEncaixe;
 }
 
 /** Descarta o pool inteiro. Usado quando algum worker quebra. */
-function derrubarPool() {
+export function derrubarPool() {
   poolEncaixe.forEach((w) => { try { w.terminate(); } catch (erro) { /* já estava morto */ } });
   poolEncaixe = [];
 }
@@ -156,7 +170,7 @@ function derrubarPool() {
  * apontam para o mesmo. O postMessage preserva esse compartilhamento, então
  * uma peça com 40 cópias manda as máscaras **uma vez**, não quarenta.
  */
-function pecaParaWorker(item) {
+export function pecaParaWorker(item) {
   return {
     indice: item.indice, copia: item.copia,
     nome: item.nome, qtd: item.qtd, giro: item.giro,
@@ -182,9 +196,9 @@ function pecaParaWorker(item) {
 // peça apontam para a mesma máscara, então a versão enxuta é montada uma vez
 // só — e é o MESMO objeto nas quarenta, que é o que faz o postMessage mandar
 // os dados uma vez só em vez de quarenta.
-const enxutas = new WeakMap();
+export const enxutas = new WeakMap();
 
-function mascarasParaBusca(mascaras) {
+export function mascarasParaBusca(mascaras) {
   if (!mascaras) return mascaras;
   const pronta = enxutas.get(mascaras);
   if (pronta) return pronta;
@@ -202,7 +216,7 @@ function mascarasParaBusca(mascaras) {
 }
 
 /** Tira do config o que não atravessa: as funções de retorno para a tela. */
-function configParaWorker(config) {
+export function configParaWorker(config) {
   const copia = { ...config };
   delete copia.deveParar;
   delete copia.aoProgredir;
@@ -220,7 +234,7 @@ function configParaWorker(config) {
  * "tentativas" é o total de todas as fatias, e o melhor de cada motor é o
  * melhor entre as fatias que rodaram aquele motor.
  */
-function juntarResultados(resultados) {
+export function juntarResultados(resultados) {
   let campeao = null;
   for (const r of resultados) if (melhorQue(r, campeao)) campeao = r;
   if (!campeao) return null;
@@ -250,7 +264,7 @@ function juntarResultados(resultados) {
  * não atravessa. A tela precisa do objeto original de volta: é dele que sai a
  * imagem para desenhar, o nome da etiqueta e a área real da silhueta.
  */
-function devolverAsPecas(resultado, itens) {
+export function devolverAsPecas(resultado, itens) {
   const porEndereco = new Map();
   itens.forEach((item) => porEndereco.set(`${item.indice}#${item.copia}`, item));
   const achar = (ref) => porEndereco.get(`${ref.indice}#${ref.copia}`) || ref;
@@ -276,7 +290,7 @@ function devolverAsPecas(resultado, itens) {
  * Mesma assinatura e mesmo resultado de `buscarMelhorEncaixe`, só que usando
  * todos os núcleos. Cai na versão de uma thread sozinha se algo der errado.
  */
-async function buscarMelhorEncaixeEmParalelo(itens, config) {
+export async function buscarMelhorEncaixeEmParalelo(itens, config) {
   const n = quantosWorkers();
   if (!podeUsarWorkers() || n < 2) return buscarMelhorEncaixe(itens, config);
 

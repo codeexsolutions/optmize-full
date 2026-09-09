@@ -13,7 +13,21 @@
 
 const express = require("express");
 const db = require("./db");
-const rede = require("./public/encaixe-rede.js");
+/*
+ * A MESMA rede que a tela usa — não uma cópia dela.
+ *
+ * Enquanto a casca antiga existiu, este `require` apontava para
+ * `public/encaixe-rede.js`, e havia duas cópias do arquivo: uma para o
+ * navegador e outra para o Node. Duas cópias de um vocabulário que precisa
+ * combinar exatamente é o pior lugar possível para uma divergência — mexer num
+ * lado e esquecer o outro não dá erro, dá palpite sem sentido.
+ *
+ * O `.mjs` não é enfeite: o projeto é CommonJS, então um `.js` seria lido como
+ * CJS e o `export` quebraria. Com a extensão explícita, o Node carrega o
+ * módulo ESM direto, e o Vite continua resolvendo `./encaixeRede` sem extensão
+ * porque `.mjs` vem antes de `.js` na lista dele.
+ */
+const rede = require("./src/nucleo/encaixeRede.mjs");
 
 const router = express.Router();
 

@@ -1,4 +1,15 @@
 /**
+ * ===========================================================================
+ * WORKER DE PREPARO — tirar fundo e montar máscara, por peça
+ * ===========================================================================
+ *
+ * O PORTE: o `importScripts` virou `import`. O comentário abaixo explica por
+ * que o `geometria.js` ia junto mesmo sem ser chamado aqui — em ESM esse
+ * cuidado deixa de ser necessário, porque quem precisa dele o importa, e o
+ * empacotador garante a ordem. O comentário fica pelo que ele ensina.
+ */
+
+/**
  * Preparo da peça fora da thread da tela.
  *
  * São dois trabalhos, os dois pesados e os dois por peça — ou seja, os dois se
@@ -23,12 +34,15 @@
  * trabalho, que é o preço de estar certo.
  */
 
+import {
+  mascarasDeSilhueta, silhuetaDeDados, tirarFundoDosPixels,
+} from "./encaixeMascara";
+
 // O geometria.js vai junto porque o encaixe-mascara.js usa o `arredondar` dele
 // (em `grade`). Este worker não chama `grade`, mas carregar um arquivo com uma
 // referência que não existe é uma armadilha esperando a próxima função ser
 // usada aqui: quem carrega o encaixe-mascara.js carrega o geometria.js antes,
 // e é assim nos três lugares (página, encaixe-worker e aqui).
-importScripts("geometria.js", "encaixe-mascara.js");
 
 /**
  * Os buffers que devem atravessar de volta sem cópia.
