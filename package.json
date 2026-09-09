@@ -51,5 +51,8 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
   }
 }

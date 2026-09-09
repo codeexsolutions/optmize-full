@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Optimize — Ativação</title>
+  <style>
+    :root {
+      --bg: #0b0b0c;
+      --card-bg: #141416;
+      --card-bg-soft: #1a1a1d;
+      --border: #2a2a2f;
+      --text: #f4f2ef;
+      --text-dim: #a09a93;
+      --accent: #f97316;
+      --accent-dark: #ea6a0a;
+      --accent-ink: #180c02;
+      --danger: #f26d6d;
+      --success: #4ed18a;
+      --radius: 12px;
+      --font-body: "Inter", "Segoe UI", sans-serif;
+      --font-mono: "IBM Plex Mono", Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+    }
+    .cartao {
+      width: 100%;
+      max-width: 440px;
+      margin: 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45), 0 26px 60px -30px rgba(0, 0, 0, 0.95);
+    }
+    h1 {
+      font-size: 1.4rem;
+      margin: 0 0 6px;
+    }
+    p.sub {
+      color: var(--text-dim);
+      font-size: 0.88rem;
+      line-height: 1.5;
+      margin: 0 0 22px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 84px;
+      resize: vertical;
+      background: var(--card-bg-soft);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.92rem;
+      padding: 12px;
+    }
+    textarea:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    button {
+      width: 100%;
+      margin-top: 14px;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-weight: 700;
+      font-size: 0.94rem;
+      cursor: pointer;
+    }
+    button:hover { background: var(--accent-dark); }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .msg {
+      margin-top: 16px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 0.86rem;
+      line-height: 1.4;
+      display: none;
+    }
+    .msg.erro { display: block; background: rgba(242, 109, 109, 0.12); color: var(--danger); border: 1px solid rgba(242, 109, 109, 0.3); }
+    .msg.ok { display: block; background: rgba(78, 209, 138, 0.12); color: var(--success); border: 1px solid rgba(78, 209, 138, 0.3); }
+  </style>
+</head>
+<body>
+  <div class="cartao">
+    <h1>Ativação necessária</h1>
+    <p class="sub" id="explicacao">Informe o código de licença que você recebeu pra continuar usando o Optimize.</p>
+    <textarea id="codigo" placeholder="Cole aqui o código de licença" autofocus></textarea>
+    <button id="botao">Ativar</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <script>
+    const situacaoParaTexto = {
+      expirada: (validoAte) => `Sua licença venceu${validoAte ? " em " + new Date(validoAte).toLocaleDateString("pt-BR") : ""}. Informe um código novo pra continuar usando.`,
+      "relogio-suspeito": () => "O relógio deste computador parece ter voltado no tempo — por segurança, informe o código de novo pra continuar.",
+      revogada: () => "Este código foi revogado. Entre em contato pra receber um novo.",
+    };
+
+    async function carregarEstado() {
+      try {
+        const resposta = await fetch("/api/licenca/estado");
+        const estado = await resposta.json();
+        const texto = situacaoParaTexto[estado.situacao];
+        if (texto) document.getElementById("explicacao").textContent = texto(estado.validoAte);
+      } catch {
+        /* segue com o texto padrão */
+      }
+    }
+
+    async function ativar() {
+      const campo = document.getElementById("codigo");
+      const botao = document.getElementById("botao");
+      const msg = document.getElementById("msg");
+      const codigo = campo.value.trim();
+
+      if (!codigo) {
+        msg.className = "msg erro";
+        msg.textContent = "Digite o código de licença recebido.";
+        return;
+      }
+
+      botao.disabled = true;
+      try {
+        const resposta = await fetch("/api/licenca/ativar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigo }),
+        });
+        const resultado = await resposta.json();
+        msg.className = "msg " + (resultado.sucesso ? "ok" : "erro");
+        msg.textContent = resultado.mensagem;
+
+        if (resultado.sucesso) {
+          setTimeout(() => window.location.assign("/"), 700);
+        }
+      } catch (erro) {
+        msg.className = "msg erro";
+        msg.textContent = "Não deu pra falar com o servidor: " + erro.message;
+      } finally {
+        botao.disabled = false;
+      }
+    }
+
+    document.getElementById("botao").addEventListener("click", ativar);
+    document.getElementById("codigo").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ativar();
+    });
+
+    carregarEstado();
+  </script>
+</body>
+</html>

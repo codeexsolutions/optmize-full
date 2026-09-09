@@ -28,8 +28,34 @@ const encaixeMemoriaRouter = require("./encaixe-memoria");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
 const corRouter = require("./cor-api");
+const licenca = require("./licenca");
+const licencaRouter = require("./licenca-api");
 
 const app = express();
+
+// Trava de acesso (§ "licenciamento", ver licenca.js) — fica antes de QUALQUER
+// outra rota/arquivo estático. Sem licença válida, toda requisição (menos a
+// própria tela/API de ativação) volta a tela de ativação em vez do painel.
+app.use("/api/licenca", express.json(), licencaRouter);
+app.use((req, res, next) => {
+  if (req.path === "/licenca" || req.path.startsWith("/api/licenca")) return next();
+
+  const estado = licenca.obterEstado();
+  if (estado.liberado) return next();
+
+  if (req.path.startsWith("/api/")) {
+    return res.status(403).json({ erro: "licenca", situacao: estado.situacao });
+  }
+  return res.redirect("/licenca");
+});
+
+// Confere revogação online em segundo plano (nunca bloqueia o startup nem o
+// primeiro acesso — ver o comentário "fail-open" em licenca.js).
+licenca.conferirRevogacaoOnline().catch(() => {});
+
+app.get("/licenca", (req, res) => {
+  res.sendFile(path.join(__dirname, "estatico", "licenca.html"));
+});
 
 // O PDF do encaixe carrega as artes em tamanho de impressão, então precisa de
 // um limite bem maior que o resto da API. Vem antes do express.json geral
