@@ -50,8 +50,7 @@ const LEVAR = [
   // abaixo não teria como enxergá-lo.
   "corel",
   "package.json",
-  "public",     // a tela antiga
-  "dist",       // a tela nova, compilada pelo Vite
+  "dist",       // o painel, compilado pelo Vite
   "estatico",   // o sprite de ícones, o wasm do encaixe e a IA da tela de Imagem
   "node_modules",
 ];
@@ -198,11 +197,11 @@ function copiarNode(destino) {
  * entre si, e um guard que não entrasse nela conferiria menos de um quarto
  * dos `require` do programa.
  *
- * O que fica de fora: `public/` e `dist/` são código de navegador (entram por
+ * O que fica de fora: `dist/` é código de navegador (entra por
  * `<script>` e `importScripts`, não por `require`), `node_modules` resolve
  * sozinho, e `estatico/` não tem código nenhum.
  */
-const FORA_DA_CONFERENCIA = new Set(["node_modules", "public", "dist", "estatico", "corel"]);
+const FORA_DA_CONFERENCIA = new Set(["node_modules", "dist", "estatico", "corel"]);
 
 function conferirRequires(pasta, raiz = pasta) {
   const faltando = [];

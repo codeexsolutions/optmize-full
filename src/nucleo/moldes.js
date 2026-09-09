@@ -1,4 +1,14 @@
 /**
+ * ===========================================================================
+ * MOLDES — ler um molde de verdade e transformá-lo em peça
+ * ===========================================================================
+ *
+ * Duas mil linhas que abrem os formatos que a confecção usa e devolvem
+ * contornos em centímetros. É o arquivo que faz o Optimize aceitar o molde que
+ * a pessoa já tem, em vez de exigir que ela redesenhe.
+ */
+
+/**
  * Leitura de molde vetorial para a tela de Encaixe: hoje DXF e PLT/HP-GL.
  *
  * Os dois formatos guardam a mesma coisa de jeitos diferentes — o DXF em pares
@@ -14,8 +24,10 @@
  * daí pra frente é o mesmo caminho de sempre.
  */
 
+import { caixaDeContorno } from "./geometria";
+
 // $INSUNITS do cabeçalho: quanto vale 1 unidade do arquivo em centímetros.
-const DXF_UNIDADES = {
+export const DXF_UNIDADES = {
   1: { fator: 2.54, nome: "polegada" },
   2: { fator: 30.48, nome: "pé" },
   4: { fator: 0.1, nome: "mm" },
@@ -23,11 +35,11 @@ const DXF_UNIDADES = {
   6: { fator: 100, nome: "m" },
 };
 
-const DXF_TOLERANCIA_MIN = 1e-6;
+export const DXF_TOLERANCIA_MIN = 1e-6;
 
 // ==================== LEITURA DOS PARES ====================
 
-function paresDXF(texto) {
+export function paresDXF(texto) {
   const linhas = texto.split(/\r?\n/);
   const pares = [];
   for (let i = 0; i + 1 < linhas.length; i += 2) {
@@ -43,7 +55,7 @@ function paresDXF(texto) {
  * guardado com nome, que o INSERT depois posiciona — muito usado para repetir
  * o mesmo molde em tamanhos diferentes.
  */
-function estruturaDXF(pares) {
+export function estruturaDXF(pares) {
   const cabecalho = {};
   const entidades = [];
   const blocos = {};
@@ -105,21 +117,21 @@ function estruturaDXF(pares) {
   return { cabecalho, entidades, blocos };
 }
 
-function valorDe(entidade, codigo, padrao) {
+export function valorDe(entidade, codigo, padrao) {
   const achado = entidade.dados.find(([c]) => c === codigo);
   return achado ? achado[1] : padrao;
 }
-function numeroDe(entidade, codigo, padrao = 0) {
+export function numeroDe(entidade, codigo, padrao = 0) {
   const v = Number(valorDe(entidade, codigo));
   return Number.isFinite(v) ? v : padrao;
 }
 
 // ==================== GEOMETRIA ====================
 
-const grausParaRad = (g) => (g * Math.PI) / 180;
+export const grausParaRad = (g) => (g * Math.PI) / 180;
 
 /** Quebra um arco em trechos retos: ~9° por trecho dá curva lisa o bastante. */
-function pontosDeArco(cx, cy, raio, angIni, angFim, sentidoHorario = false) {
+export function pontosDeArco(cx, cy, raio, angIni, angFim, sentidoHorario = false) {
   let total = angFim - angIni;
   if (!sentidoHorario) { while (total < 0) total += Math.PI * 2; }
   else { while (total > 0) total -= Math.PI * 2; }
@@ -137,7 +149,7 @@ function pontosDeArco(cx, cy, raio, angIni, angFim, sentidoHorario = false) {
  * "Bulge" é como a polilinha do DXF guarda um arco entre dois vértices:
  * bulge = tan(ângulo/4), positivo no sentido anti-horário.
  */
-function pontosDeBulge(p1, p2, bulge) {
+export function pontosDeBulge(p1, p2, bulge) {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
   const corda = Math.hypot(dx, dy);
@@ -165,7 +177,7 @@ function pontosDeBulge(p1, p2, bulge) {
  * curvas suaves do molde (cava, gola, decote), então ler só os pontos de
  * controle deixaria a peça com o formato errado.
  */
-function pontoBSpline(u, grau, nos, controle) {
+export function pontoBSpline(u, grau, nos, controle) {
   let k = grau;
   while (k < controle.length - 1 && nos[k + 1] <= u) k++;
 
@@ -188,7 +200,7 @@ function pontoBSpline(u, grau, nos, controle) {
   return d[grau];
 }
 
-function pontosDeSpline(entidade) {
+export function pontosDeSpline(entidade) {
   const grau = numeroDe(entidade, 71, 3);
   const nos = [];
   const controle = [];
@@ -224,7 +236,7 @@ function pontosDeSpline(entidade) {
 }
 
 /** Lê os vértices de LWPOLYLINE / VERTEX na ordem, respeitando os bulges. */
-function verticesSequenciais(dados) {
+export function verticesSequenciais(dados) {
   const vertices = [];
   let atual = null;
   dados.forEach(([codigo, valor]) => {
@@ -239,7 +251,7 @@ function verticesSequenciais(dados) {
   return vertices;
 }
 
-function polilinhaDeVertices(vertices, fechada) {
+export function polilinhaDeVertices(vertices, fechada) {
   const pontos = [];
   vertices.forEach((v, i) => {
     if (i === 0) pontos.push({ x: v.x, y: v.y });
@@ -255,7 +267,7 @@ function polilinhaDeVertices(vertices, fechada) {
  * Converte uma entidade em linhas de pontos. INSERT entra aqui de novo, para
  * o bloco ser desenhado já na posição, escala e rotação pedidas.
  */
-function linhasDaEntidade(entidade, blocos, profundidade = 0) {
+export function linhasDaEntidade(entidade, blocos, profundidade = 0) {
   const tipo = entidade.tipo;
 
   if (tipo === "LINE") {
@@ -357,7 +369,7 @@ function linhasDaEntidade(entidade, blocos, profundidade = 0) {
 
 // ==================== CONTORNOS ====================
 
-function areaDoLaco(pontos) {
+export function areaDoLaco(pontos) {
   let soma = 0;
   for (let i = 0, j = pontos.length - 1; i < pontos.length; j = i++) {
     soma += (pontos[j].x + pontos[i].x) * (pontos[j].y - pontos[i].y);
@@ -366,7 +378,7 @@ function areaDoLaco(pontos) {
 }
 
 
-function pontoDentro(p, pontos) {
+export function pontoDentro(p, pontos) {
   let dentro = false;
   for (let i = 0, j = pontos.length - 1; i < pontos.length; j = i++) {
     const cruza = pontos[i].y > p.y !== pontos[j].y > p.y;
@@ -382,7 +394,7 @@ function pontoDentro(p, pontos) {
  * quebrado em vários pedaços (reta, curva, reta...), então a gente segue
  * emendando pela ponta mais próxima até fechar a volta.
  */
-function montarLacos(linhas, tolerancia) {
+export function montarLacos(linhas, tolerancia) {
   const lacos = [];
   const soltas = [];
 
@@ -428,9 +440,9 @@ function montarLacos(linhas, tolerancia) {
   return lacos;
 }
 
-const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+export const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-function limparRepetidos(pontos, tolerancia) {
+export function limparRepetidos(pontos, tolerancia) {
   const saida = [];
   pontos.forEach((p) => {
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
@@ -454,12 +466,12 @@ function limparRepetidos(pontos, tolerancia) {
  *    outra para contornar) chegava como duas peças iguais, uma em cima da
  *    outra.
  */
-function ehQuaseAMesmaCaixa(a, b, folga) {
+export function ehQuaseAMesmaCaixa(a, b, folga) {
   return Math.abs(a.minX - b.minX) <= folga && Math.abs(a.minY - b.minY) <= folga
     && Math.abs(a.maxX - b.maxX) <= folga && Math.abs(a.maxY - b.maxY) <= folga;
 }
 
-function tirarRepetidos(info, folga) {
+export function tirarRepetidos(info, folga) {
   const ficam = [];
   info.forEach((laco) => {
     const igual = ficam.find((f) => ehQuaseAMesmaCaixa(f.caixa, laco.caixa, folga)
@@ -478,10 +490,10 @@ function tirarRepetidos(info, folga) {
  * de "furo dentro" é o tamanho: um piquete é um confete perto da peça; uma
  * peça dentro da folha ocupa um pedaço de verdade dela.
  */
-const FOLHA_COBERTURA = 0.9;   // quanto do desenho o laço precisa cobrir
-const FOLHA_CONTEUDO = 0.15;   // quanto da folha o que está dentro precisa ocupar
+export const FOLHA_COBERTURA = 0.9;   // quanto do desenho o laço precisa cobrir
+export const FOLHA_CONTEUDO = 0.15;   // quanto da folha o que está dentro precisa ocupar
 
-function ehAFolha(laco, caixaGeral, info) {
+export function ehAFolha(laco, caixaGeral, info) {
   const areaGeral = Math.max(1e-9, caixaGeral.largura * caixaGeral.altura);
   const cobertura = (laco.caixa.largura * laco.caixa.altura) / areaGeral;
   if (cobertura < FOLHA_COBERTURA) return false;
@@ -493,7 +505,7 @@ function ehAFolha(laco, caixaGeral, info) {
   return maiorDentro >= laco.area * FOLHA_CONTEUDO;
 }
 
-function separarPecasEFuros(lacos, areaMinimaPeca, caixaGeral) {
+export function separarPecasEFuros(lacos, areaMinimaPeca, caixaGeral) {
   let info = lacos.map((pontos) => ({
     pontos,
     area: Math.abs(areaDoLaco(pontos)),
@@ -540,11 +552,11 @@ function separarPecasEFuros(lacos, areaMinimaPeca, caixaGeral) {
  */
 
 
-const INTEIRO_CELULAS = 420;      // resolução da grade no lado maior
-const INTEIRO_SIMPLIFICA = 0.6;   // em células: quanto o contorno pode ser aliviado
+export const INTEIRO_CELULAS = 420;      // resolução da grade no lado maior
+export const INTEIRO_SIMPLIFICA = 0.6;   // em células: quanto o contorno pode ser aliviado
 
 /** Pinta um laço na grade, linha por linha (regra do par-ímpar). */
-function pintarLaco(mascara, cols, rows, pontos, paraCelula) {
+export function pintarLaco(mascara, cols, rows, pontos, paraCelula) {
   const celulas = pontos.map(paraCelula);
   let minY = Infinity, maxY = -Infinity;
   celulas.forEach((p) => { if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; });
@@ -575,7 +587,7 @@ function pintarLaco(mascara, cols, rows, pontos, paraCelula) {
  * inclinada anda na diagonal e a mancha fica cheia de furinhos — o contorno
  * então enxergava dezenas de pedaços soltos onde havia um risco só.
  */
-function pintarTraco(mascara, cols, rows, pontos, paraCelula) {
+export function pintarTraco(mascara, cols, rows, pontos, paraCelula) {
   const celulas = pontos.map(paraCelula);
   const marcar = (x, y) => {
     if (x >= 0 && y >= 0 && x < cols && y < rows) mascara[y * cols + x] = 1;
@@ -598,7 +610,7 @@ function pintarTraco(mascara, cols, rows, pontos, paraCelula) {
  * pelo meio, o contorno sai encolhido meia célula para dentro e a peça fica
  * menor do que é de verdade.
  */
-function contornoDaMancha(mascara, cols, rows) {
+export function contornoDaMancha(mascara, cols, rows) {
   const cheia = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows && mascara[y * cols + x] === 1;
 
   let inicio = null;
@@ -654,7 +666,7 @@ function contornoDaMancha(mascara, cols, rows) {
 }
 
 /** Douglas–Peucker: tira ponto que quase não muda a linha. */
-function aliviarContorno(pontos, tolerancia) {
+export function aliviarContorno(pontos, tolerancia) {
   if (pontos.length < 3) return pontos;
   const distanciaDaReta = (p, a, b) => {
     const dx = b.x - a.x, dy = b.y - a.y;
@@ -682,7 +694,7 @@ function aliviarContorno(pontos, tolerancia) {
  * Contorna cada mancha separada da grade. Duas formas que se tocam são uma
  * mancha só; duas soltas, duas manchas.
  */
-function contornosDasManchas(mascara, cols, rows) {
+export function contornosDasManchas(mascara, cols, rows) {
   const visto = new Uint8Array(cols * rows);
   const contornos = [];
 
@@ -716,7 +728,7 @@ function contornosDasManchas(mascara, cols, rows) {
 }
 
 /** Casco convexo (monotone chain): a volta mais apertada em torno de tudo. */
-function cascoDeTodos(pontos) {
+export function cascoDeTodos(pontos) {
   if (pontos.length < 3) return pontos;
   const ordem = [...pontos].sort((a, b) => (a.x - b.x) || (a.y - b.y));
   const cruz = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
@@ -740,7 +752,7 @@ function cascoDeTodos(pontos) {
  * Lê o arquivo inteiro como uma peça só: pinta tudo numa grade e devolve o
  * contorno de fora da mancha, já em centímetros.
  */
-function moldeDoArquivoInteiro(linhas, textos, unidade, avisos, formato, inverterY) {
+export function moldeDoArquivoInteiro(linhas, textos, unidade, avisos, formato, inverterY) {
   const caixa = caixaDeContorno(linhas.flatMap((l) => l.pontos));
   const maiorLado = Math.max(caixa.largura, caixa.altura);
   if (!(maiorLado > 0)) {
@@ -804,7 +816,7 @@ function moldeDoArquivoInteiro(linhas, textos, unidade, avisos, formato, inverte
  * `linhas` (listas de pontos) e `textos` (para nomear as peças), e daqui pra
  * frente o tratamento é idêntico.
  */
-function montarMoldes(linhas, textos, unidade, avisos, formato, inverterY = true, modo = "marcador") {
+export function montarMoldes(linhas, textos, unidade, avisos, formato, inverterY = true, modo = "marcador") {
   if (modo === "inteiro") {
     return moldeDoArquivoInteiro(linhas, textos, unidade, avisos, formato, inverterY);
   }
@@ -853,7 +865,7 @@ function montarMoldes(linhas, textos, unidade, avisos, formato, inverterY = true
  * `unidadeForcada` ("mm", "cm", "polegada", "m") manda no arquivo quando o
  * cabeçalho não diz a unidade ou diz errado.
  */
-function lerMoldesDXF(texto, unidadeForcada, modo) {
+export function lerMoldesDXF(texto, unidadeForcada, modo) {
   const pares = paresDXF(texto);
   if (!pares || pares.length === 0) {
     return { erro: "Não consegui ler esse DXF. Ele precisa estar em formato ASCII (DXF binário não serve)." };
@@ -894,7 +906,7 @@ function lerMoldesDXF(texto, unidadeForcada, modo) {
 }
 
 /** POLYLINE guarda os vértices em entidades VERTEX separadas, até o SEQEND. */
-function amarrarVertices(entidades) {
+export function amarrarVertices(entidades) {
   let atual = null;
   entidades.forEach((ent) => {
     if (ent.tipo === "POLYLINE") { atual = ent; atual.vertices = []; }
@@ -909,7 +921,7 @@ function amarrarVertices(entidades) {
  * centímetros, então um desenho com centenas de unidades quase certamente
  * está em milímetro.
  */
-function chutarUnidadeDXF(caixa) {
+export function chutarUnidadeDXF(caixa) {
   const maior = Math.max(caixa.largura, caixa.altura);
   if (maior > 300) return DXF_UNIDADES[4];   // mm
   if (maior > 12) return DXF_UNIDADES[5];    // cm
@@ -940,7 +952,7 @@ function chutarUnidadeDXF(caixa) {
 
 // 1 unidade de plotter = 1/1016 de polegada. É o padrão do HP-GL e o que quase
 // todo PLT usa, já que o formato não tem cabeçalho dizendo a unidade.
-const PLT_UNIDADES = {
+export const PLT_UNIDADES = {
   plu: { fator: 2.54 / 1016, nome: "unidade de plotter" },
   mil: { fator: 2.54 / 1000, nome: "1000 por polegada" },
   mm: { fator: 0.1, nome: "mm" },
@@ -948,7 +960,7 @@ const PLT_UNIDADES = {
 };
 
 /** Quebra o arquivo em comandos de duas letras com seus parâmetros. */
-function comandosPLT(texto) {
+export function comandosPLT(texto) {
   const comandos = [];
   let i = 0;
   let terminadorLabel = String.fromCharCode(3); // ETX, o padrão do HP-GL
@@ -1001,7 +1013,7 @@ function comandosPLT(texto) {
  * caractere; o último caractere do número vem de uma faixa diferente, e é
  * assim que se sabe onde ele acaba.
  */
-function numeroPE(texto, i, base32) {
+export function numeroPE(texto, i, base32) {
   let valor = 0;
   let deslocamento = 0;
 
@@ -1021,7 +1033,7 @@ function numeroPE(texto, i, base32) {
 }
 
 /** O bit mais baixo guarda o sinal; o resto é o número, dividido pela fração. */
-function valorPEParaNumero(valor, fracao) {
+export function valorPEParaNumero(valor, fracao) {
   const inteiro = valor % 2 === 1 ? -(valor - 1) / 2 : valor / 2;
   return fracao > 0 ? inteiro / Math.pow(2, fracao) : inteiro;
 }
@@ -1033,7 +1045,7 @@ function valorPEParaNumero(valor, fracao) {
  * `unidadeForcada` ("unidade de plotter", "1000 por polegada", "mm", "cm")
  * manda no arquivo quando o chute automático sair errado.
  */
-function lerMoldesPLT(texto, unidadeForcada, modo) {
+export function lerMoldesPLT(texto, unidadeForcada, modo) {
   const comandos = comandosPLT(texto);
   if (comandos.length === 0) {
     return { erro: "Não consegui ler esse PLT: não achei nenhum comando de plotter no arquivo." };
@@ -1158,7 +1170,7 @@ function lerMoldesPLT(texto, unidadeForcada, modo) {
 }
 
 /** Percorre o conteúdo de um PE montando os traços. */
-function lerPE(bruto, estado) {
+export function lerPE(bruto, estado) {
   let x = estado.x, y = estado.y;
   let canetaAbaixada = estado.canetaAbaixada;
   let base32 = false;
@@ -1229,7 +1241,7 @@ function lerPE(bruto, estado) {
  * que vale — a não ser que o molde saia com um tamanho impossível, e aí o
  * tamanho do desenho denuncia qual era a unidade de verdade.
  */
-function chutarUnidadePLT(caixa) {
+export function chutarUnidadePLT(caixa) {
   const bruto = Math.max(caixa.largura, caixa.altura);
   const plausivel = (fator) => {
     const cm = bruto * fator;
@@ -1254,18 +1266,18 @@ function chutarUnidadePLT(caixa) {
  * canto fora da tela enquanto é medido, e tirado logo depois.
  */
 
-const SVG_PASSO_CM = 0.05; // de quanto em quanto o traço é amostrado
-const SVG_MAX_AMOSTRAS = 40000; // teto por desenho, para arquivo doido não travar a tela
-const PX_POR_POLEGADA_CSS = 96; // o que o SVG usa quando a medida vem sem unidade
+export const SVG_PASSO_CM = 0.05; // de quanto em quanto o traço é amostrado
+export const SVG_MAX_AMOSTRAS = 40000; // teto por desenho, para arquivo doido não travar a tela
+export const PX_POR_POLEGADA_CSS = 96; // o que o SVG usa quando a medida vem sem unidade
 
-const SVG_FORMAS = "path, rect, circle, ellipse, line, polyline, polygon";
+export const SVG_FORMAS = "path, rect, circle, ellipse, line, polyline, polygon";
 
 /**
  * Lê o SVG e devolve os moldes já em centímetros.
  * `unidadeForcada` ("mm", "cm", "polegada", "m") diz o que vale uma unidade do
  * desenho, para quando o arquivo não trouxer medida de verdade.
  */
-function lerMoldesSVG(texto, unidadeForcada, modo) {
+export function lerMoldesSVG(texto, unidadeForcada, modo) {
   const documento = new DOMParser().parseFromString(texto, "image/svg+xml");
   if (documento.querySelector("parsererror") || !documento.documentElement ||
       documento.documentElement.nodeName.toLowerCase() !== "svg") {
@@ -1287,7 +1299,7 @@ function lerMoldesSVG(texto, unidadeForcada, modo) {
   }
 }
 
-function moldesDoSvgNoPalco(raiz, unidadeForcada, modo) {
+export function moldesDoSvgNoPalco(raiz, unidadeForcada, modo) {
   const caixaDeVisao = raiz.viewBox && raiz.viewBox.baseVal;
   const temCaixaDeVisao = !!(caixaDeVisao && caixaDeVisao.width > 0 && caixaDeVisao.height > 0);
 
@@ -1360,7 +1372,7 @@ function moldesDoSvgNoPalco(raiz, unidadeForcada, modo) {
  * molde — e o que era lido era o original escondido no `<defs>`, no lugar
  * errado. Aqui cada `<use>` vira o desenho que ele repete, no lugar dele.
  */
-function abrirOsUse(raiz, profundidade = 0) {
+export function abrirOsUse(raiz, profundidade = 0) {
   if (profundidade > 4) return; // <use> apontando para <use>: não entra em laço
   const copias = [...raiz.querySelectorAll("use")];
   if (copias.length === 0) return;
@@ -1383,7 +1395,7 @@ function abrirOsUse(raiz, profundidade = 0) {
 }
 
 /** Converte um ponto do espaço da forma para centímetros no desenho todo. */
-function pontoNoDesenho(forma, x, y, cmPorPx) {
+export function pontoNoDesenho(forma, x, y, cmPorPx) {
   const matriz = forma.getCTM();
   if (!matriz) return null;
   return {
@@ -1400,7 +1412,7 @@ function pontoNoDesenho(forma, x, y, cmPorPx) {
  * nenhum, então aparece como um pulo grande entre duas amostras seguidas — é
  * assim que os pedaços são separados, sem precisar interpretar o atributo `d`.
  */
-function trechosDaForma(forma, cmPorPx, passoCm) {
+export function trechosDaForma(forma, cmPorPx, passoCm) {
   const matriz = forma.getCTM();
   if (!matriz) return [];
 
@@ -1456,7 +1468,7 @@ function trechosDaForma(forma, cmPorPx, passoCm) {
  * verdade (mm, cm, polegada...): "800" sozinho é pixel e não diz tamanho
  * nenhum de peça.
  */
-function medidaDeclaradaEmCm(raiz) {
+export function medidaDeclaradaEmCm(raiz) {
   const escrito = (raiz.getAttribute("width") || "").trim();
   const unidade = /[a-z%]+$/i.exec(escrito);
   if (!unidade || unidade[0].toLowerCase() === "px" || unidade[0] === "%") return null;
@@ -1493,11 +1505,11 @@ function medidaDeclaradaEmCm(raiz) {
  * PDF protegido por senha é recusado com aviso — sem a senha não há o que ler.
  */
 
-const PDF_PT_POR_CM = 72 / 2.54; // o PDF mede em pontos: 1 ponto = 1/72 de polegada
-const PDF_PASSO_CM = 0.05; // de quanto em quanto uma curva é quebrada em retas
+export const PDF_PT_POR_CM = 72 / 2.54; // o PDF mede em pontos: 1 ponto = 1/72 de polegada
+export const PDF_PASSO_CM = 0.05; // de quanto em quanto uma curva é quebrada em retas
 
 /** Só os pedaços de dicionário que interessam; nada de parser completo. */
-function valorNoDicionario(dicionario, chave) {
+export function valorNoDicionario(dicionario, chave) {
   const achado = new RegExp(`/${chave}\\s*(<<|\\[|/[^\\s/<>\\[\\]()]+|\\d+\\s+\\d+\\s+R|[-+.\\d]+|\\([^)]*\\))`)
     .exec(dicionario);
   if (!achado) return null;
@@ -1507,7 +1519,7 @@ function valorNoDicionario(dicionario, chave) {
   return achado[1];
 }
 
-function trechoBalanceado(texto, inicio, abre, fecha) {
+export function trechoBalanceado(texto, inicio, abre, fecha) {
   let profundidade = 0;
   let i = inicio;
   while (i < texto.length) {
@@ -1523,15 +1535,15 @@ function trechoBalanceado(texto, inicio, abre, fecha) {
   return texto.slice(inicio);
 }
 
-const numerosDe = (texto) => (String(texto || "").match(/-?\d+(\.\d+)?/g) || []).map(Number);
+export const numerosDe = (texto) => (String(texto || "").match(/-?\d+(\.\d+)?/g) || []).map(Number);
 
 /** "12 0 R" -> "12 0"; qualquer outra coisa -> null */
-function referenciaDe(valor) {
+export function referenciaDe(valor) {
   const achado = /^(\d+)\s+(\d+)\s+R$/.exec(String(valor || "").trim());
   return achado ? `${achado[1]} ${achado[2]}` : null;
 }
 
-async function inflar(bytes) {
+export async function inflar(bytes) {
   const tentar = async (formato) => {
     const fluxo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(formato));
     return new Uint8Array(await new Response(fluxo).arrayBuffer());
@@ -1553,7 +1565,7 @@ async function inflar(bytes) {
  * linha vem como a diferença para a linha de cima, e sem desfazer isso os
  * números saem todos errados.
  */
-function desfazerPreditorPNG(dados, colunas, cores) {
+export function desfazerPreditorPNG(dados, colunas, cores) {
   const largura = colunas * cores;
   const linhas = Math.floor(dados.length / (largura + 1));
   const saida = new Uint8Array(linhas * largura);
@@ -1584,7 +1596,7 @@ function desfazerPreditorPNG(dados, colunas, cores) {
   return saida;
 }
 
-async function abrirFluxo(objeto) {
+export async function abrirFluxo(objeto) {
   if (!objeto || !objeto.bruto) return null;
   const filtro = valorNoDicionario(objeto.dicionario, "Filter") || "";
   if (!/Fl(ate)?Decode/.test(filtro)) {
@@ -1608,7 +1620,7 @@ async function abrirFluxo(objeto) {
 }
 
 /** Varre o arquivo inteiro montando o mapa de objetos. */
-function varrerObjetos(texto, bytes) {
+export function varrerObjetos(texto, bytes) {
   const objetos = new Map();
   const marca = /(\d+)\s+(\d+)\s+obj\b/g;
   let achado;
@@ -1642,7 +1654,7 @@ function varrerObjetos(texto, bytes) {
 }
 
 /** Abre os ObjStm, que guardam vários objetos pequenos dentro de um fluxo. */
-async function expandirObjetosEmFluxo(objetos) {
+export async function expandirObjetosEmFluxo(objetos) {
   for (const objeto of [...objetos.values()]) {
     if (!/\/Type\s*\/ObjStm/.test(objeto.dicionario)) continue;
     const dados = await abrirFluxo(objeto);
@@ -1669,7 +1681,7 @@ async function expandirObjetosEmFluxo(objetos) {
 
 // ==================== COMANDOS DE DESENHO ====================
 
-const multiplicarMatriz = (m, base) => [
+export const multiplicarMatriz = (m, base) => [
   m[0] * base[0] + m[1] * base[2],
   m[0] * base[1] + m[1] * base[3],
   m[2] * base[0] + m[3] * base[2],
@@ -1678,13 +1690,13 @@ const multiplicarMatriz = (m, base) => [
   m[4] * base[1] + m[5] * base[3] + base[5],
 ];
 
-const aplicarMatriz = (m, x, y) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] });
+export const aplicarMatriz = (m, x, y) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] });
 
 /**
  * Executa o fluxo de comandos de uma página (ou de um formulário) e junta os
  * traços. `linhas` e `textos` são preenchidos no caminho.
  */
-async function executarConteudoPDF(conteudo, ctmInicial, recursos, objetos, saida, profundidade = 0) {
+export async function executarConteudoPDF(conteudo, ctmInicial, recursos, objetos, saida, profundidade = 0) {
   const fichas = conteudo.match(/<[0-9A-Fa-f\s]*>|\([^)]*\)|\/[^\s/<>\[\]()]+|[-+.\d]+|[A-Za-z'"*]+|\[|\]/g);
   if (!fichas) return;
 
@@ -1844,7 +1856,7 @@ async function executarConteudoPDF(conteudo, ctmInicial, recursos, objetos, said
 }
 
 /** Texto de um literal "(...)" ou de um hexadecimal "<...>". */
-function textoDeFicha(ficha) {
+export function textoDeFicha(ficha) {
   if (ficha.startsWith("<")) {
     const hex = ficha.slice(1, -1).replace(/\s+/g, "");
     let saida = "";
@@ -1859,7 +1871,7 @@ function textoDeFicha(ficha) {
     });
 }
 
-async function acharXObject(nome, recursos, objetos) {
+export async function acharXObject(nome, recursos, objetos) {
   if (!nome || !recursos) return null;
   const mapa = valorNoDicionario(recursos, "XObject");
   if (!mapa) return null;
@@ -1880,7 +1892,7 @@ async function acharXObject(nome, recursos, objetos) {
  * `unidadeForcada` diz o que vale uma unidade do arquivo, para quando o
  * desenho tiver sido salvo numa escala diferente da real.
  */
-async function lerMoldesPDF(bytes, unidadeForcada, modo) {
+export async function lerMoldesPDF(bytes, unidadeForcada, modo) {
   const texto = new TextDecoder("latin1").decode(bytes);
   if (!texto.startsWith("%PDF")) {
     return { erro: "Não consegui ler esse PDF: o arquivo não começa como um PDF." };
@@ -1946,7 +1958,7 @@ async function lerMoldesPDF(bytes, unidadeForcada, modo) {
  * usar o mesmo caminho do PNG: daí em diante o encaixe não sabe (nem precisa
  * saber) se a peça veio de arquivo de CAD ou de uma arte.
  */
-function moldeParaImagem(molde, cor) {
+export function moldeParaImagem(molde, cor) {
   const maiorLado = Math.max(molde.largura, molde.altura);
   const escala = Math.max(3, Math.min(14, 900 / maiorLado)); // pixels por cm
   const margem = 2;
@@ -1985,15 +1997,15 @@ function moldeParaImagem(molde, cor) {
 
 // ==================== PORTA DE ENTRADA ====================
 
-const ehArquivoDeMolde = (file) => /\.(dxf|plt|hpgl|svg|pdf)$/i.test(file.name);
-const FORMATOS_DE_MOLDE = "DXF, PLT, SVG e PDF";
+export const ehArquivoDeMolde = (file) => /\.(dxf|plt|hpgl|svg|pdf)$/i.test(file.name);
+export const FORMATOS_DE_MOLDE = "DXF, PLT, SVG e PDF";
 
 /**
  * Lê um arquivo de molde, seja qual for o formato, e devolve as peças em
  * centímetros. É a porta única por onde as telas de Encaixe e de Moldes leem
  * arquivo — assim as duas enxergam exatamente a mesma coisa.
  */
-async function lerMoldeVetorial(file, unidadeForcada, modo = "marcador") {
+export async function lerMoldeVetorial(file, unidadeForcada, modo = "marcador") {
   const nome = file.name.toLowerCase();
 
   if (nome.endsWith(".pdf")) {

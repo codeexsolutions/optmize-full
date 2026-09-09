@@ -27,13 +27,13 @@
  *
  * Veio de `public/encaixe-motor.js` por transformação MECÂNICA: entraram os
  * `import` do que vinha do escopo global e o `export` das declarações de topo.
- * **Nenhuma conta mudou** — e isso não é promessa, é conferido: o
- * `npm run bancada:porte` roda os dois motores lado a lado, com a mesma
- * semente, e exige resultado idêntico peça por peça.
+ * **Nenhuma conta mudou** — e isso não foi promessa, foi conferido: enquanto
+ * as duas cópias existiram, o `npm run bancada:porte` rodava os dois motores
+ * lado a lado, com a mesma semente, e exigia resultado idêntico peça por peça.
+ * Foram 637 casos, e ele foi apagado junto com a cópia que conferia.
  *
- * A cópia em `public/` continua sendo a que a tela antiga e os workers dela
- * carregam, e a que a bancada lê como texto. As duas viram uma quando o
- * Encaixe migrar.
+ * Hoje este é o único motor. Quem o mede é o `npm run bancada`, e quem
+ * confere que o WASM bate com o JavaScript é o `npm run bancada:conferir`.
  */
 
 /**

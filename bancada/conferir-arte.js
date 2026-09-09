@@ -2,7 +2,7 @@
  * Confere o validador de marcador do JPEG — o portão do passa-direto.
  *
  * O PDF do encaixe pode mandar a arte original para a máquina sem redesenhar
- * nada (ver "O PASSA-DIRETO", em public/encaixe.js). É o único caminho sem
+ * nada (ver "O PASSA-DIRETO", no controlador da produção). É o único caminho sem
  * perda que existe ali, e é também o único em que um arquivo malformado chega
  * até a RIP do jeito que veio. O que separa um do outro é `jpegSeguroParaPdf`.
  *
@@ -10,34 +10,28 @@
  * O caso que mais assusta é a ORIENTAÇÃO EXIF — o navegador aplica, o PDF não,
  * e a arte sairia deitada com a peça encaixada em pé. Por isso ele tem teste.
  *
- * As funções são lidas do próprio encaixe.js e avaliadas aqui. Ele é código de
- * navegador (usa `document`, `fetch`, `canvas`) e não dá para carregar inteiro
- * no Node; extrair as duas funções puras mantém o teste medindo o texto que
- * roda de verdade, em vez de uma cópia que envelhece sozinha.
+ * As duas funções vêm de `src/nucleo/jpegParaPdf.js`, importadas de verdade.
+ * Elas já moraram no meio da tela, e esta conferência as RECORTAVA do texto do
+ * arquivo — procurando `function jpegSeguroParaPdf(` e contando chaves até
+ * fechar. Funcionava, e era frágil do pior jeito: renomear a função, ou
+ * transformá-la numa arrow, quebrava a conferência sem quebrar o programa. E
+ * conferência quebrada é pior que nenhuma, porque some sem avisar.
  */
 
-const fs = require("fs");
-const path = require("path");
 const jpeg = require("jpeg-js");
 
-const RAIZ = path.join(__dirname, "..");
-const fonte = fs.readFileSync(path.join(RAIZ, "public/encaixe.js"), "utf8");
+const { carregarDoNucleo } = require("./nucleo");
 
-/** O texto de uma função de topo, do `function` até a chave que fecha. */
-function extrair(nome) {
-  const inicio = fonte.indexOf(`function ${nome}(`);
-  if (inicio < 0) throw new Error(`não achei a função ${nome} em public/encaixe.js`);
-  let nivel = 0;
-  for (let i = fonte.indexOf("{", inicio); i < fonte.length; i++) {
-    if (fonte[i] === "{") nivel++;
-    else if (fonte[i] === "}" && --nivel === 0) return fonte.slice(inicio, i + 1);
-  }
-  throw new Error(`a função ${nome} não fecha`);
-}
-
-// eslint-disable-next-line no-new-func
-const jpegSeguroParaPdf = new Function(
-  `${extrair("orientacaoExif")}\n${extrair("jpegSeguroParaPdf")}\nreturn jpegSeguroParaPdf;`)();
+/*
+ * As duas funções vêm importadas do núcleo.
+ *
+ * Antes elas eram RECORTADAS do texto de `public/encaixe.js`: procurava-se
+ * `function jpegSeguroParaPdf(` e contavam-se chaves até fechar. Aquilo
+ * funcionava e era frágil do pior jeito — renomear a função, ou transformá-la
+ * numa arrow, quebrava a conferência sem quebrar o programa, e conferência
+ * quebrada é pior que nenhuma, porque some sem avisar.
+ */
+let jpegSeguroParaPdf;
 
 // ==================== AS ARTES DE TESTE ====================
 
@@ -124,20 +118,26 @@ const CASOS = [
   ["vazio", Buffer.alloc(0), false],
 ];
 
-let erros = 0;
-CASOS.forEach(([nome, dados, esperado]) => {
-  const deu = jpegSeguroParaPdf(new Uint8Array(dados));
-  if (deu !== esperado) {
-    erros++;
-    console.log(`  ERRO  ${nome.padEnd(36)} ${deu ? "passou" : "reprovou"}, `
-      + `e devia ${esperado ? "passar" : "reprovar"}`);
-  } else {
-    console.log(`  ok    ${nome.padEnd(36)} ${deu ? "passa" : "reprova"}`);
-  }
-});
+async function principal() {
+  ({ jpegSeguroParaPdf } = await carregarDoNucleo(["jpegParaPdf.js"]));
 
-if (erros > 0) {
-  console.error(`\nFALHOU — ${erros} de ${CASOS.length} casos.`);
-  process.exit(1);
+  let erros = 0;
+  CASOS.forEach(([nome, dados, esperado]) => {
+    const deu = jpegSeguroParaPdf(new Uint8Array(dados));
+    if (deu !== esperado) {
+      erros++;
+      console.log(`  ERRO  ${nome.padEnd(36)} ${deu ? "passou" : "reprovou"}, `
+        + `e devia ${esperado ? "passar" : "reprovar"}`);
+    } else {
+      console.log(`  ok    ${nome.padEnd(36)} ${deu ? "passa" : "reprova"}`);
+    }
+  });
+
+  if (erros > 0) {
+    console.error(`\nFALHOU — ${erros} de ${CASOS.length} casos.`);
+    process.exit(1);
+  }
+  console.log(`\nOK — ${CASOS.length} casos, o validador de marcador acertou todos.`);
 }
-console.log(`\nOK — ${CASOS.length} casos, o validador de marcador acertou todos.`);
+
+principal().catch((erro) => { console.error(erro); process.exit(1); });

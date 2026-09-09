@@ -17,17 +17,18 @@
  * endereço. Some quando as três migrarem.
  *
  * ---------------------------------------------------------------------------
- * AS MEDIDAS SÃO AS DA CASCA ANTIGA, E ISSO É DE PROPÓSITO
+ * AS MEDIDAS VIERAM DA CASCA ANTIGA, E ISSO FOI DE PROPÓSITO
  * ---------------------------------------------------------------------------
  *
  * Largura, recuos, a marca, o estado do item ativo e o relógio no pé: tudo
- * aqui copia `public/style.css` e `public/interface.css`. Enquanto as duas
- * cascas convivem, um clique que troca de casca não pode parecer um clique que
- * trocou de programa — e era o que parecia, porque esta nasceu como um
- * redesenho e não como uma cópia.
+ * aqui foi copiado de `public/style.css` e `public/interface.css`, que era o
+ * menu da tela antiga. Enquanto as duas cascas conviveram, um clique que
+ * trocava de casca não podia parecer um clique que trocou de programa — e era
+ * o que parecia, porque esta nasceu como um redesenho e não como uma cópia.
  *
- * Então: mexeu na aparência do menu antigo, mexe aqui também. É trabalho
- * dobrado por um tempo, e acaba junto com o `public/`.
+ * O `public/` já foi apagado e não há mais o que manter em dois lugares. As
+ * medidas ficam como estão porque são as que a fábrica já conhece; mexer nelas
+ * agora é decisão de desenho, não mais uma obrigação de casar com a outra.
  *
  * Inclusive a FAIXA ESTREITA: entre 801 e 1100px a casca antiga encolhe a
  * barra para 78px e deixa só os ícones. Esta não encolhia, e o resultado era o
@@ -40,7 +41,7 @@
 import { useEffect } from "react";
 import { Icone } from "./Icone";
 import { useRelogio } from "./useRelogio";
-import { GRUPOS, externasDoGrupo, telasDoGrupo, type NomeDeTela } from "../rotas";
+import { GRUPOS, telasDoGrupo, type NomeDeTela } from "../rotas";
 
 interface Props {
   atual: NomeDeTela;
@@ -133,8 +134,7 @@ export function Menu({ atual, aberto, aoEscolher, aoFechar }: Props) {
         <div className="flex flex-col gap-4">
           {GRUPOS.map((grupo) => {
             const telas = telasDoGrupo(grupo.nome);
-            const externas = externasDoGrupo(grupo.nome);
-            if (!telas.length && !externas.length) return null;
+            if (!telas.length) return null;
 
             return (
               <nav key={grupo.nome} aria-labelledby={`grupo-${grupo.nome}`} className="flex flex-col gap-[3px]">
@@ -167,28 +167,6 @@ export function Menu({ atual, aberto, aoEscolher, aoFechar }: Props) {
                   );
                 })}
 
-                {externas.map((tela) => (
-                  <a
-                    key={tela.endereco}
-                    href={tela.endereco}
-                    className={[ITEM, ITEM_PARADO, "grid-cols-[30px_minmax(0,1fr)_12px] no-underline",
-                      "tela:max-[1100px]:grid-cols-[1fr]"].join(" ")}
-                  >
-                    <Icone referencia={tela.icone} className={[ICONE, ICONE_PARADO].join(" ")} />
-                    <span className={TEXTO_DO_ITEM}>
-                      <strong className={ROTULO}>{tela.rotulo}</strong>
-                      <small className={APOIO}>{tela.apoioMenu}</small>
-                    </span>
-                    {/*
-                      A seta avisa que o clique sai desta casca. É caractere e
-                      não ícone do sprite: um desenho a mais para uma seta que o
-                      texto já desenha.
-                    */}
-                    <span aria-hidden="true" className="justify-self-end text-[13px] leading-none text-tinta-apagada opacity-40 tela:max-[1100px]:hidden">
-                      →
-                    </span>
-                  </a>
-                ))}
               </nav>
             );
           })}

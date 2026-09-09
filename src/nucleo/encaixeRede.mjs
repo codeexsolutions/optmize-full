@@ -1,4 +1,32 @@
 /**
+ * ===========================================================================
+ * REDE DAS RECEITAS — o que o Encaixe aprendeu
+ * ===========================================================================
+ *
+ * A rede que pontua receitas de encaixe a partir do histórico. É o único
+ * arquivo do domínio que roda em TRÊS lugares: a página, o worker e o
+ * SERVIDOR — o `encaixe-memoria.js` o carrega por `require()` para treinar a
+ * rede a partir do que ficou guardado.
+ *
+ * **É POR ISSO QUE ELE É `.mjs`.** O projeto é CommonJS, então um `.js` seria
+ * lido como CJS pelo Node e o primeiro `export` quebraria. A extensão
+ * explícita deixa o Node carregar o módulo ESM direto, e o Vite continua
+ * resolvendo `./encaixeRede` sem extensão, porque `.mjs` vem antes de `.js` na
+ * ordem dele.
+ *
+ * Antes havia duas cópias: esta e `public/encaixe-rede.js`, que era a que o
+ * Node carregava. Duas cópias de um vocabulário que precisa combinar
+ * exatamente é o pior lugar para uma divergência — mexer num lado e esquecer o
+ * outro não dá erro, dá palpite sem sentido. Agora é uma só.
+ *
+ * VOCABULÁRIO DA REDE É MIGRAÇÃO: acrescentar um nome a `REDE_MOTORES`,
+ * `REDE_AGRUPAMENTOS`, `REDE_ORDENS` ou `REDE_HEURISTICAS` alarga a entrada, e
+ * os pesos que já estão no banco passam a esperar um vetor mais curto.
+ * Alimentar a rede antiga com o vetor novo não dá erro: dá palpite sem
+ * sentido. Rede de tamanho diferente é tratada como rede que não existe.
+ */
+
+/**
  * Rede neural das receitas: prevê, para um trabalho e uma receita (motor,
  * agrupamento, ordem e critério de posição), a chance dela ganhar a busca.
  *
@@ -41,7 +69,7 @@
  * Mínimo e máximo não levam peso: o extremo é extremo com uma cópia ou com
  * mil.
  */
-function estatisticasPesadas(valores, pesos) {
+export function estatisticasPesadas(valores, pesos) {
   if (valores.length === 0) return { media: 0, desvio: 0, min: 0, max: 0 };
   const total = pesos.reduce((s, q) => s + q, 0) || 1;
   const media = valores.reduce((s, v, i) => s + v * pesos[i], 0) / total;
@@ -57,7 +85,7 @@ function estatisticasPesadas(valores, pesos) {
 // `assinaturaDoTrabalho` (encaixe-motor.js), só que sem arredondar para caber
 // num texto de balde — é o que deixa a rede diferenciar trabalhos que a
 // assinatura trataria como iguais.
-const REDE_DIM_TRABALHO = 12;
+export const REDE_DIM_TRABALHO = 12;
 
 /**
  * A VERSÃO DAS FEATURES.
@@ -81,13 +109,13 @@ const REDE_DIM_TRABALHO = 12;
  * sobe o número aqui — e o histórico velho para de contaminar o treino sozinho,
  * sem migração e sem apagar nada.
  */
-const REDE_VERSAO_FEATURES = 2;
+export const REDE_VERSAO_FEATURES = 2;
 
 /**
  * `pecas` são as LINHAS da tabela (uma por formato), cada uma com o `qtd` dela.
  * Tudo aqui dentro é contado por CÓPIA, que é o que vai para o rolo.
  */
-function vetorDoTrabalho(pecas, larguraTecido) {
+export function vetorDoTrabalho(pecas, larguraTecido) {
   const usadas = pecas.filter((p) => (p.qtd == null ? 1 : Number(p.qtd)) > 0);
   const pesos = usadas.map((p) => (p.qtd == null ? 1 : Number(p.qtd)));
   const total = pesos.reduce((s, q) => s + q, 0) || 1;
@@ -121,8 +149,8 @@ function vetorDoTrabalho(pecas, larguraTecido) {
 // do encaixe por faixas) fica de fora do vocabulário — é um número contínuo
 // por trabalho, não uma categoria, e o de faixas já perde na maioria dos
 // trabalhos medidos, então não vale a complexidade de representar.
-const REDE_MOTORES = ["contorno", "retangulo", "faixas", "vaos"];
-const REDE_AGRUPAMENTOS = ["solta", "dupla", "trio", "quarteto", "cruzada", "deitada", "empe"];
+export const REDE_MOTORES = ["contorno", "retangulo", "faixas", "vaos"];
+export const REDE_AGRUPAMENTOS = ["solta", "dupla", "trio", "quarteto", "cruzada", "deitada", "empe"];
 // "familia" é a ordem que entra com um formato de peça de cada vez, em bloco
 // (ver ORDENS_CONTORNO em encaixe-motor.js).
 //
@@ -133,19 +161,19 @@ const REDE_AGRUPAMENTOS = ["solta", "dupla", "trio", "quarteto", "cruzada", "dei
 // diferente é ignorada e treinada de novo, em vez de ser alimentada com um
 // vetor maior do que ela conhece — o que sairia como palpite sem sentido, e
 // não como erro.
-const REDE_ORDENS = ["area", "altura", "lado", "largura", "familia"];
-const REDE_HEURISTICAS = ["fundo", "vazio", "bl", "bssf", "blsf", "baf", "encosta"];
+export const REDE_ORDENS = ["area", "altura", "lado", "largura", "familia"];
+export const REDE_HEURISTICAS = ["fundo", "vazio", "bl", "bssf", "blsf", "baf", "encosta"];
 
-const REDE_DIM_RECEITA =
+export const REDE_DIM_RECEITA =
   REDE_MOTORES.length + REDE_AGRUPAMENTOS.length + REDE_ORDENS.length + REDE_HEURISTICAS.length;
-const REDE_DIM_ENTRADA = REDE_DIM_TRABALHO + REDE_DIM_RECEITA;
+export const REDE_DIM_ENTRADA = REDE_DIM_TRABALHO + REDE_DIM_RECEITA;
 
-function umQuente(valor, vocabulario) {
+export function umQuente(valor, vocabulario) {
   return vocabulario.map((v) => (v === valor ? 1 : 0));
 }
 
 /** Aceita a chave inteira ("contorno/dupla/area/fundo/") ou já os quatro campos soltos. */
-function vetorDaReceita(chaveOuMotor, agrupamento, ordem, heuristica) {
+export function vetorDaReceita(chaveOuMotor, agrupamento, ordem, heuristica) {
   let motor = chaveOuMotor;
   if (agrupamento === undefined) {
     [motor, agrupamento, ordem, heuristica] = String(chaveOuMotor).split("/");
@@ -166,7 +194,7 @@ function vetorDaReceita(chaveOuMotor, agrupamento, ordem, heuristica) {
  * aleatórios (a escala de Xavier: menos chance de saturar tanh/sigmoide logo
  * de cara), viés começando em zero.
  */
-function criarRede(tamanhos) {
+export function criarRede(tamanhos) {
   const camadas = [];
   for (let i = 0; i < tamanhos.length - 1; i++) {
     const entrada = tamanhos[i], saida = tamanhos[i + 1];
@@ -178,7 +206,7 @@ function criarRede(tamanhos) {
   return { tamanhos, camadas };
 }
 
-const sigmoide = (x) => 1 / (1 + Math.exp(-x));
+export const sigmoide = (x) => 1 / (1 + Math.exp(-x));
 
 /**
  * O passe para frente, guardando a ativação de cada camada — é o que o
@@ -186,7 +214,7 @@ const sigmoide = (x) => 1 / (1 + Math.exp(-x));
  * Todas as camadas escondidas usam tanh; a última usa sigmoide, porque a
  * saída é uma chance (0 a 1).
  */
-function passeParaFrente(rede, entrada) {
+export function passeParaFrente(rede, entrada) {
   const ativacoes = [entrada];
   rede.camadas.forEach((camada, i) => {
     const ehUltima = i === rede.camadas.length - 1;
@@ -202,7 +230,7 @@ function passeParaFrente(rede, entrada) {
 }
 
 /** A previsão: a chance (0 a 1) desta receita ganhar este trabalho, segundo a rede. */
-function prever(rede, entrada) {
+export function prever(rede, entrada) {
   const ativacoes = passeParaFrente(rede, entrada);
   return ativacoes[ativacoes.length - 1][0];
 }
@@ -217,7 +245,7 @@ function prever(rede, entrada) {
  * da saída simplifica para `saída - alvo` — é a conta clássica, não um atalho
  * arriscado.
  */
-function passoDeTreino(rede, entrada, alvo, taxa) {
+export function passoDeTreino(rede, entrada, alvo, taxa) {
   const ativacoes = passeParaFrente(rede, entrada);
   const nCamadas = rede.camadas.length;
   let delta = [ativacoes[nCamadas][0] - alvo];
@@ -250,7 +278,7 @@ function passoDeTreino(rede, entrada, alvo, taxa) {
  * a ordem a cada época — sem isso ela aprenderia um pouco a ordem dos dados,
  * não só o padrão deles.
  */
-function treinarRede(rede, exemplos, opcoes = {}) {
+export function treinarRede(rede, exemplos, opcoes = {}) {
   const epocas = opcoes.epocas || 150;
   const taxa = opcoes.taxa || 0.05;
   const sortear = opcoes.sortear || Math.random;
@@ -267,7 +295,7 @@ function treinarRede(rede, exemplos, opcoes = {}) {
 }
 
 /** Pontua um lote de receitas (pelas chaves) de uma vez, para a busca usar. */
-function pontuarReceitas(rede, vetorTrabalho, chaves) {
+export function pontuarReceitas(rede, vetorTrabalho, chaves) {
   // Rede treinada com um vocabulário de receita diferente do de agora. Ela não
   // é atualizável — os pesos da primeira camada esperam outra largura de
   // entrada —, então o certo é não ter opinião nenhuma até o servidor treinar
@@ -292,14 +320,14 @@ function pontuarReceitas(rede, vetorTrabalho, chaves) {
 // A versão das features vai junto com os pesos, e não ao lado deles: os pesos
 // só querem dizer alguma coisa em cima do vetor que os treinou. Guardados
 // juntos, não tem como um chegar sem o outro.
-function pesosParaJSON(rede) {
+export function pesosParaJSON(rede) {
   return JSON.stringify({
     tamanhos: rede.tamanhos, camadas: rede.camadas,
     versaoFeatures: REDE_VERSAO_FEATURES,
   });
 }
 
-function redeDoJSON(texto) {
+export function redeDoJSON(texto) {
   const dados = JSON.parse(texto);
   // Pesos gravados antes da versão existir são, por definição, da versão 1.
   return {
@@ -308,12 +336,3 @@ function redeDoJSON(texto) {
   };
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    REDE_DIM_TRABALHO, REDE_DIM_RECEITA, REDE_DIM_ENTRADA, REDE_VERSAO_FEATURES,
-    REDE_MOTORES, REDE_AGRUPAMENTOS, REDE_ORDENS, REDE_HEURISTICAS,
-    vetorDoTrabalho, vetorDaReceita,
-    criarRede, prever, treinarRede, pontuarReceitas,
-    pesosParaJSON, redeDoJSON,
-  };
-}

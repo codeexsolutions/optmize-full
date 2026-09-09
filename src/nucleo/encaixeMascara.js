@@ -8,12 +8,9 @@
  * fora. Nenhuma conta foi tocada — ver o cabeçalho de `vetor.js` para por que
  * o domínio grande atravessa como `.js` e não como `.ts`.
  *
- * Enquanto o Encaixe não migrar, existe uma cópia deste arquivo em
- * `public/encaixe-mascara.js`: ela é a que a tela antiga carrega por
- * `<script>`, a que o `encaixe-worker.js` carrega por `importScripts`, e a que
- * a BANCADA lê como texto para medir o motor. **Mexeu numa conta aqui, mexe
- * lá** — e rode `npm run bancada` antes e depois. As duas somem numa quando o
- * Encaixe vier para o React.
+ * Houve uma cópia deste arquivo em `public/encaixe-mascara.js`, que era a que
+ * a tela antiga carregava. Ela morreu com o `public/`: hoje este é o único, e
+ * quem o usa — a tela, o `preparaWorker` e a bancada — importa daqui.
  */
 
 import { arredondar } from "./geometria";

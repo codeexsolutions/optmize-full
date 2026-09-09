@@ -1,4 +1,15 @@
 /**
+ * ===========================================================================
+ * ARTE NO MOLDE — encaixar a estampa dentro da peça
+ * ===========================================================================
+ *
+ * O rapport, a escala e o deslocamento da arte dentro de um molde. Independente:
+ * desenha num canvas que quem chama entrega.
+ */
+
+import { PPCM_PADRAO } from "./pecaNaGrade";
+
+/**
  * Arte dentro do molde.
  *
  * A arte é desenhada fora daqui, num retângulo — é assim que ela sai do
@@ -30,7 +41,7 @@
  */
 
 /** Como a arte entra na peça, antes de a pessoa mexer em alguma coisa. */
-const AJUSTE_PADRAO = {
+export const AJUSTE_PADRAO = {
   tipo: "arte", modo: "cobrir", escala: 100, x: 0, y: 0, giro: 0,
   // Pixels por centímetro do arquivo, lidos do dpi gravado nele. Fica salvo no
   // ajuste porque o rapport depende do tamanho real do azulejo, e ao reabrir
@@ -38,25 +49,25 @@ const AJUSTE_PADRAO = {
   ppcmArquivo: null,
 };
 
-const MODOS_DE_ARTE = [
+export const MODOS_DE_ARTE = [
   { id: "cobrir", nome: "Cobrir a peça inteira" },
   { id: "caber", nome: "Caber por dentro" },
   { id: "esticar", nome: "Esticar até as bordas" },
 ];
 
-const TIPOS_DE_ARTE = [
+export const TIPOS_DE_ARTE = [
   { id: "arte", nome: "Só a arte", dica: "Um desenho que entra uma vez e se ajusta à peça" },
   { id: "rapport", nome: "Rapport", dica: "Um azulejo que se repete no tamanho real, sem emenda" },
 ];
 
-const ajusteNovo = () => ({ ...AJUSTE_PADRAO });
+export const ajusteNovo = () => ({ ...AJUSTE_PADRAO });
 
 /** Quantos pixels da imagem valem 1 cm, com o padrão de quando o arquivo não diz. */
-const ppcmDoAjuste = (ajuste) =>
+export const ppcmDoAjuste = (ajuste) =>
   (ajuste && ajuste.ppcmArquivo > 0) ? ajuste.ppcmArquivo : (typeof PPCM_PADRAO === "number" ? PPCM_PADRAO : 300 / 2.54);
 
 /** O tamanho de verdade do azulejo, em centímetros, já com o giro e a escala. */
-function tamanhoDoRapport(arte, ajuste) {
+export function tamanhoDoRapport(arte, ajuste) {
   const a = { ...AJUSTE_PADRAO, ...(ajuste || {}) };
   const ppcmArquivo = ppcmDoAjuste(a);
   const escala = Math.max(1, Number(a.escala) || 100) / 100;
@@ -78,7 +89,7 @@ function tamanhoDoRapport(arte, ajuste) {
  * A escala e o deslocamento entram depois, para a pessoa ajustar olhando a
  * prévia. O deslocamento é em centímetros, medido do centro da peça.
  */
-function encaixeDaArte(arteW, arteH, alvoW, alvoH, ajuste) {
+export function encaixeDaArte(arteW, arteH, alvoW, alvoH, ajuste) {
   const a = { ...AJUSTE_PADRAO, ...(ajuste || {}) };
   const giro = ((Math.round(a.giro / 90) * 90) % 360 + 360) % 360;
   const deitada = giro === 90 || giro === 270;
@@ -120,9 +131,9 @@ function encaixeDaArte(arteW, arteH, alvoW, alvoH, ajuste) {
  * de pontos — e são várias peças numa tela só. Quando passa do teto, o dpi cai
  * junto para todas, e a tela avisa qual foi o dpi usado de verdade.
  */
-const MPX_MAXIMO_POR_PECA = 26;
+export const MPX_MAXIMO_POR_PECA = 26;
 
-function ppcmDaArte(larguraCm, alturaCm, dpi) {
+export function ppcmDaArte(larguraCm, alturaCm, dpi) {
   const ppcmPedido = Math.max(4, (Number(dpi) || 150) / 2.54);
   const area = Math.max(1, larguraCm * alturaCm);
   const ppcmTeto = Math.sqrt((MPX_MAXIMO_POR_PECA * 1e6) / area);
@@ -146,7 +157,7 @@ function ppcmDaArte(larguraCm, alturaCm, dpi) {
  * ladrilho é simplesmente pintado por cima de tudo: o que passar da peça é
  * descartado pelo recorte, e a peça sai estampada de ponta a ponta.
  */
-function desenharRapport(ctx, arte, ajuste, ppcm, margem, largura, altura) {
+export function desenharRapport(ctx, arte, ajuste, ppcm, margem, largura, altura) {
   const padrao = ctx.createPattern(arte, "repeat");
   if (!padrao) return;
 
@@ -193,7 +204,7 @@ function desenharRapport(ctx, arte, ajuste, ppcm, margem, largura, altura) {
  * Fora do contorno fica transparente: é assim que o encaixe reconhece a
  * silhueta de verdade e que o PDF sai sem moldura branca em volta.
  */
-function desenharArteNoMolde(peca, arte, ajuste, ppcm, opcoes = {}) {
+export function desenharArteNoMolde(peca, arte, ajuste, ppcm, opcoes = {}) {
   const margem = opcoes.margem === undefined ? 1 : opcoes.margem; // em pixels
   const largura = Math.max(4, Math.ceil(peca.largura * ppcm) + margem * 2);
   const altura = Math.max(4, Math.ceil(peca.altura * ppcm) + margem * 2);

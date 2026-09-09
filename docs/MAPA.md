@@ -364,6 +364,25 @@ ao igualar as cascas e deixei a nova 8px mais larga do que devia. Antes de
 copiar medida da tela antiga, confira qual das duas folhas está valendo — ou
 meça na página, que não mente.
 
+**Confiar numa varredura de dependência que casa nomes soltos.** Depois da
+lição do `rotacoesDe` a varredura passou a enxergar `const` e `window.X =` — e
+mesmo assim mentiu nos dois sentidos. Ela **acusou** dependências que não
+existem (o `encaixe.js` "usando" `itens` e `miniatura` do `cor.js`, quando os
+dois só declaram o mesmo nome; o `projetos.js` "usando" o `LADO_DA_MINIATURA`
+do `encaixe.js`, quando ele tem o seu, com outro valor) e **escondeu** as que
+existem (as seis funções que o `encaixe-prepara.js` puxava do `encaixe.js`, e o
+`PPCM_PADRAO` do `arte-molde.js`, porque o `encaixe.js` não estava na lista de
+origens daquela rodada).
+
+O que funciona é virar a pergunta do avesso: em vez de "quem usa o quê", **quais
+nomes este arquivo usa e não declara?** Aí não existe lista de origens para
+esquecer. É preciso descontar comentário, string, literal de regex (uma classe
+de escapes vira um "nome" colado — os cinco escapes de espaço em branco viram
+`nrtbf` — e o `/\/Type/` de um PDF vira `Type`), declaração múltipla
+(`const a = 1, b = 2` declara os dois) e parâmetro. O que sobra é curto o
+bastante para ler à mão: no domínio inteiro da Etapa C foram sete nomes, e os
+sete eram defeito de verdade.
+
 **Levantar dependência procurando só `function`.** Ao portar o motor de
 encaixe, o mapa de "quem usa o quê" foi montado com uma varredura que procurava
 `function nome`. Ela perdeu `rotacoesDe` e `podeDeitar`, que são

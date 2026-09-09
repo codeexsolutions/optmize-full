@@ -11,15 +11,14 @@
  *
  * Três decisões que este arquivo carrega:
  *
- * - `base: "/app/"` — a tela nova mora numa rota separada enquanto a antiga
- *   continua de pé em `/`. É o que permite migrar tela por tela sem deixar o
- *   sistema quebrado no meio do caminho. No dia em que a última tela migrar,
- *   isto vira `"/"` e o `public/` inteiro é apagado; como todo caminho é
- *   montado a partir de `import.meta.env.BASE_URL`, nada mais precisa mudar.
- *
- * - `publicDir: "estatico"` — o `public/` é a tela ANTIGA, não a pasta de
- *   arquivos crus do Vite. Os arquivos que as duas telas servem como estão
- *   (o sprite de ícones e o `encaixe.wasm`) moram em `estatico/`.
+ * - `base: "/"` — o painel é servido na raiz. Durante a migração ele morou em
+ *   `/app`, para conviver com a tela antiga em `/`; quando o `public/` saiu, a
+ *   raiz voltou a ser dele. O `server.js` ainda responde a `/app`, com um
+ *   redirecionamento, por causa dos links antigos.
+ * - `publicDir: "estatico"` — e não o `public/` que o Vite usaria por padrão,
+ *   porque durante a migração esse nome já era da tela antiga. O nome ficou:
+ *   os arquivos servidos como estão (o sprite de ícones, o `encaixe.wasm`, o
+ *   `logo.png` e as redes da IA) moram em `estatico/`.
  *
  * A extensão é `.mts` e não `.ts` de propósito: o `package.json` declara o
  * projeto como CommonJS, porque o servidor Express é CommonJS e continua
@@ -36,7 +35,7 @@ import react from "@vitejs/plugin-react";
 import tailwind from "@tailwindcss/vite";
 
 export default defineConfig({
-  base: "/app/",
+  base: "/",
   publicDir: "estatico",
   plugins: [react(), tailwind()],
   build: {

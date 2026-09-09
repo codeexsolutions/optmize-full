@@ -4,14 +4,13 @@
  * Roda um servidor local (Express) que serve o painel web e as rotas de dados
  * de moldes, projetos e encaixe.
  *
- * O painel está no meio de uma mudança de arquitetura, e por isso são duas
- * telas ao mesmo tempo: a antiga em `/` (`public/`, scripts soltos) e a nova
- * em `/app` (`dist/`, React compilado pelo Vite). Quem serve as duas é este
- * mesmo arquivo, e é por isso que o Tauri não precisou mudar nada: ele sobe
- * este servidor exatamente como sempre subiu. Quando a última tela migrar,
- * `/app` vira `/` e o `public/` some. Tudo fica nesta máquina: o
- * banco é o arquivo `dados.db` e as imagens ficam em `uploads/` (ver
- * `caminhos.js` para onde exatamente).
+ * O painel é UM só, servido na raiz: o `dist/`, que o Vite compila a partir de
+ * `src/`. Durante a migração houve duas telas ao mesmo tempo — a antiga em `/`
+ * (a pasta `public/`, de scripts soltos) e a nova em `/app` — e o Tauri nunca
+ * precisou saber disso, porque ele sempre abriu a raiz. Quando o `public/`
+ * saiu, a raiz passou a ser o React sem uma linha de mudança do lado do
+ * desktop. Tudo fica nesta máquina: o banco é o arquivo `dados.db` e as
+ * imagens ficam em `uploads/` (ver `caminhos.js` para onde exatamente).
  *
  * Além do painel, este servidor é a central das impressoras da produção:
  * acha as máquinas na rede sozinho, lê o histórico de cada uma e guarda no
@@ -65,12 +64,24 @@ app.use(express.json({ limit: "15mb" })); // dá folga para o contorno de um mol
 // do encaixe. Vêm primeiro porque as duas os pedem pelo mesmo caminho.
 app.use(express.static(path.join(__dirname, "estatico")));
 
-// A tela antiga, na raiz.
-app.use(express.static(path.join(__dirname, "public")));
+// O painel. Não precisa de rota-curinga: as telas moram no "#" do endereço,
+// que nunca chega ao servidor.
+app.use(express.static(path.join(__dirname, "dist")));
 
-// A tela nova. Não precisa de rota-curinga: as telas dela moram no "#" do
-// endereço, que nunca chega ao servidor.
-app.use("/app", express.static(path.join(__dirname, "dist")));
+/*
+ * `/app` foi o endereço do painel durante toda a migração, então ele continua
+ * levando a algum lugar em vez de dar 404: são meses de link salvo, aba
+ * aberta e atalho na área de trabalho da fábrica.
+ *
+ * O redirecionamento carrega o "#" adiante — `/app/#/moldes` vira `/#/moldes`
+ * —, senão quem clicasse num link antigo cairia na tela inicial em vez da que
+ * pediu. O "#" NÃO chega ao servidor, então quem o transporta é a página de
+ * uma linha devolvida abaixo, já no navegador.
+ */
+app.get(/^\/app(\/.*)?$/, (req, res) => {
+  res.type("html").send('<!doctype html><meta charset="utf-8">'
+    + '<script>location.replace("/" + location.hash)</script>');
+});
 
 app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
 // A tela de Macros: entrega o .bas da macro do Corel e ajuda a pô-lo lá.

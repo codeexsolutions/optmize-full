@@ -26,3 +26,18 @@ export function formatarCm(valor: number | null | undefined): string {
 export function formatarSegundos(ms: number | null | undefined, casas = 1): string {
   return `${formatarNumero((Number(ms) || 0) / 1000, casas)} s`;
 }
+
+/** Metragem de tecido, recebida em centímetros: "5,32 m". */
+export function formatarMetros(cm: number | null | undefined): string {
+  return `${formatarNumero((Number(cm) || 0) / 100, 2)} m`;
+}
+
+/** Área: "8,00 m²". */
+export function formatarM2(m2: number | null | undefined): string {
+  return `${formatarNumero(m2, 2)} m²`;
+}
+
+/** Porcentagem: "70,0%". */
+export function formatarPorcento(pct: number | null | undefined, casas = 1): string {
+  return `${formatarNumero(pct, casas)}%`;
+}

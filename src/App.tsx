@@ -6,6 +6,7 @@
  * tela nova entra em `src/rotas.ts` e mais nada aqui muda.
  */
 
+import { Producao, ehProducaoIntegrada } from "./producao/Producao";
 import { useState } from "react";
 import { Menu } from "./casca/Menu";
 import { Cabecalho } from "./casca/Cabecalho";
@@ -19,7 +20,7 @@ export function App() {
   const { Componente } = tela;
 
   return (
-    <div className="h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
+    <div data-tela={rota} className="app-react h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
       <Menu
         atual={rota}
         aberto={menuAberto}
@@ -36,7 +37,8 @@ export function App() {
         <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 tela:px-[30px]">
-          <Componente />
+          <Producao pagina={rota} irPara={irPara} />
+          {!ehProducaoIntegrada(rota) && <Componente />}
         </div>
       </main>
     </div>

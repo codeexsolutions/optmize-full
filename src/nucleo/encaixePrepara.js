@@ -1,4 +1,13 @@
 /**
+ * ===========================================================================
+ * PREPARO EM PARALELO — tirar fundo e montar máscara em vários núcleos
+ * ===========================================================================
+ *
+ * Reparte por peça os dois trabalhos pesados que antecedem a busca. Quem faz o
+ * trabalho é o `preparaWorker.js`; aqui mora só o pool e o repartir.
+ */
+
+/**
  * O preparo das peças espalhado pelos núcleos.
  *
  * Medindo seis arquivos de tamanho real, o preparo custava 2,4 segundos de
@@ -13,22 +22,29 @@
  * uma. A tela não fica sabendo da diferença.
  */
 
+import { gradeDaPeca } from "./encaixeMascara";
+import {
+  chaveDasMascaras, mascarasDaPeca, pixelsDaArteNaGrade, pixelsDaImagem,
+  removerFundoDaImagem,
+} from "./pecaNaGrade";
+import { respirarNaTela } from "./respirar";
+
 // O mesmo raciocínio do pool da busca: um núcleo fica de fora para a tela
 // continuar respondendo. O teto é menor porque quem manda aqui é a quantidade
 // de peças, que raramente passa de uma dúzia.
-const PREPARA_MAX_WORKERS = 6;
+export const PREPARA_MAX_WORKERS = 6;
 
-let poolPrepara = [];
+export let poolPrepara = [];
 
-function derrubarPoolPrepara() {
+export function derrubarPoolPrepara() {
   poolPrepara.forEach((w) => { try { w.terminate(); } catch (erro) { /* já estava morto */ } });
   poolPrepara = [];
 }
 
-function pegarPoolPrepara(quantidade) {
+export function pegarPoolPrepara(quantidade) {
   if (poolPrepara.length >= quantidade) return poolPrepara.slice(0, quantidade);
   derrubarPoolPrepara();
-  for (let k = 0; k < quantidade; k++) poolPrepara.push(new Worker("/prepara-worker.js"));
+  for (let k = 0; k < quantidade; k++) poolPrepara.push(new Worker(new URL("./preparaWorker.js", import.meta.url), { type: "module" }));
   return poolPrepara;
 }
 
@@ -39,7 +55,7 @@ function pegarPoolPrepara(quantidade) {
  * dos pixels continua sendo da página (ver prepara-worker.js para o porquê).
  * Faltando qualquer coisa, o preparo volta a ser na tela mesmo.
  */
-function podePrepararEmWorker() {
+export function podePrepararEmWorker() {
   return typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined";
 }
 
@@ -51,7 +67,7 @@ function podePrepararEmWorker() {
  * vez de receber um bloco fixo no começo: peça grande e peça pequena custam
  * muito diferente, e com bloco fixo um worker terminava cedo e ficava parado.
  */
-function repartirEntreWorkers(workers, tarefas) {
+export function repartirEntreWorkers(workers, tarefas) {
   const respostas = new Array(tarefas.length);
   let proxima = 0;
 
@@ -95,7 +111,7 @@ function repartirEntreWorkers(workers, tarefas) {
  * nem viram tarefa. Devolve a quantidade que foi realmente calculada, para
  * quem chamou poder contar na tela.
  */
-async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
+export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
   const pendentes = pecas.filter((peca) => {
     const chave = chaveDasMascaras(peca, passo, raio);
     return !(peca._cacheMascaras && peca._cacheMascaras.chave === chave);
@@ -207,7 +223,7 @@ async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
  * como travada. Os pixels precisam ser lidos aqui (só a tela tem canvas), mas
  * não precisam ser lidos todos de uma vez sem respirar.
  */
-async function tirarFundoEmParalelo(imagens, forcar = false, aoAndar = null) {
+export async function tirarFundoEmParalelo(imagens, forcar = false, aoAndar = null) {
   if (imagens.length === 0) return [];
 
   const emSerie = async () => {
