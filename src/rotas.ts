@@ -47,9 +47,11 @@ import { Maquinas } from "./telas/Maquinas";
 import { Whatsapp } from "./telas/Whatsapp";
 import { Reposicao } from "./telas/Reposicao";
 import { Pedidos } from "./telas/Pedidos";
+import { Macros } from "./telas/Macros";
+import { Imagem } from "./telas/Imagem";
 
 export type NomeDeTela =
-  | "moldes" | "projetos" | "encaixe" | "vetor"
+  | "moldes" | "projetos" | "encaixe" | "vetor" | "imagem" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
   | "historico" | "reposicao";
 
@@ -121,6 +123,25 @@ export const TELAS: readonly Tela[] = [
   },
 
   // ------------------------------------------------------------ Impressão
+  {
+    nome: "imagem",
+    grupo: "producao",
+    rotulo: "Imagem",
+    apoioMenu: "Resolução para imprimir",
+    apoioTopo: "Aumenta a resolução da arte com rede neural, para imprimir grande sem borrar.",
+    icone: "icones.svg#zoom-in",
+    Componente: Imagem,
+  },
+  {
+    nome: "macros",
+    grupo: "producao",
+    rotulo: "Macros",
+    apoioMenu: "Ferramentas no CorelDRAW",
+    apoioTopo: "Baixe e instale as macros que rodam dentro do Corel e falam com este sistema.",
+    icone: "icones.svg#puzzle",
+    Componente: Macros,
+  },
+
   {
     nome: "impressoras",
     grupo: "impressao",
@@ -215,20 +236,6 @@ export const TELAS_DA_CASCA_ANTIGA: readonly TelaDaCascaAntiga[] = [
     apoioMenu: "Arte na cor certa",
     icone: "icones.svg#palette",
     endereco: "/#/cor",
-  },
-  {
-    grupo: "producao",
-    rotulo: "Imagem",
-    apoioMenu: "Resolução para imprimir",
-    icone: "icones.svg#image",
-    endereco: "/#/imagem",
-  },
-  {
-    grupo: "producao",
-    rotulo: "Macros",
-    apoioMenu: "Ferramentas no CorelDRAW",
-    icone: "icones.svg#puzzle",
-    endereco: "/#/macros",
   },
 ];
 

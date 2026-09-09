@@ -304,34 +304,72 @@ function Pendente({ achado, aoMudar }: { achado: AchadoDaVarredura; aoMudar: () 
   );
 }
 
-/** Uma máquina que já está no sistema. */
+/**
+ * Uma máquina que já está no sistema.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE EXCLUIR EXIGE DESATIVAR ANTES
+ * ---------------------------------------------------------------------------
+ *
+ * Não é burocracia: desativar é o que EXPORTA A PLANILHA do histórico
+ * (`POST /machines/:id/deactivate`, em `impressoras/routes/machines.js`).
+ * Excluir apaga a máquina e tudo que veio dela — os registros, os itens de
+ * pedido que apontavam para eles e o pedido que ficar vazio. Sem a planilha
+ * gravada antes, isso é perda definitiva de meses de produção com dois
+ * cliques.
+ *
+ * O servidor recusa a exclusão de máquina ativa, e esta tela não tenta
+ * contornar: ela mostra o caminho na ordem certa e diz, na confirmação,
+ * exatamente quantos registros vão embora.
+ *
+ * Desativar sozinho já resolve a maior parte dos casos: a máquina some do
+ * painel, para de ser lida, e o histórico continua inteiro e consultável.
+ */
 function Cadastrada({ maquina, aoMudar }: { maquina: MaquinaGerenciada; aoMudar: () => void }) {
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [renomeando, setRenomeando] = useState(false);
+  const [nome, setNome] = useState(maquina.name);
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
 
-  const desativar = async () => {
+  const comErro = async (oQueFazer: () => Promise<void>, recado: string) => {
     setOcupado(true);
     setErro(null);
     try {
-      await api.post(`/impressoras/machines/${maquina.id}/deactivate`, {});
+      await oQueFazer();
       aoMudar();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não consegui desativar.");
+      setErro(e instanceof Error ? e.message : recado);
     }
     setOcupado(false);
   };
 
-  const reativar = async () => {
-    setOcupado(true);
-    setErro(null);
-    try {
-      await api.patch(`/impressoras/machines/${maquina.id}`, { enabled: true });
-      aoMudar();
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Não consegui reativar.");
-    }
-    setOcupado(false);
-  };
+  const desativar = () => comErro(
+    async () => { await api.post(`/impressoras/machines/${maquina.id}/deactivate`, {}); },
+    "Não consegui desativar.");
+
+  const reativar = () => comErro(
+    async () => { await api.patch(`/impressoras/machines/${maquina.id}`, { enabled: true }); },
+    "Não consegui reativar.");
+
+  /*
+   * Renomear troca só o rótulo. O `id` fica como está de propósito: é ele que
+   * amarra o histórico já gravado (`imp_records.machineId`) e os itens de
+   * pedido. Trocá-lo junto órfãozaria tudo que a máquina produziu — que é
+   * exatamente o que a varredura evita ao reconhecer uma máquina pelo nome do
+   * computador em vez de cadastrá-la de novo.
+   */
+  const salvarNome = () => comErro(async () => {
+    const limpo = nome.trim();
+    if (!limpo) throw new Error("O nome não pode ficar vazio.");
+    await api.patch(`/impressoras/machines/${maquina.id}`, { name: limpo });
+    setRenomeando(false);
+  }, "Não consegui renomear.");
+
+  const excluir = () => comErro(async () => {
+    await api.apagar(`/impressoras/machines/${maquina.id}`);
+    setConfirmandoExclusao(false);
+  }, "Não consegui excluir.");
 
   return (
     <li className={`rounded-[10px] border px-3.5 py-3 ${maquina.enabled ? "border-linha bg-painel-suave" : "border-linha-suave bg-painel opacity-60"}`}>
@@ -340,7 +378,24 @@ function Cadastrada({ maquina, aoMudar }: { maquina: MaquinaGerenciada; aoMudar:
           aria-hidden="true"
           className={`size-2 shrink-0 rounded-full ${maquina.online ? "bg-certo" : "bg-[var(--text-faint)]"}`}
         />
-        <strong className="text-[0.95rem] text-tinta">{maquina.name}</strong>
+
+        {renomeando ? (
+          <input
+            type="text"
+            value={nome}
+            autoFocus
+            onChange={(evento) => setNome(evento.target.value)}
+            onKeyDown={(evento) => {
+              if (evento.key === "Enter") salvarNome();
+              if (evento.key === "Escape") { setNome(maquina.name); setRenomeando(false); }
+            }}
+            aria-label="Nome da máquina"
+            className="min-w-[160px] flex-1 rounded-[9px] border border-[var(--accent-line)] bg-painel px-2.5 py-1 text-[0.95rem] text-tinta outline-none"
+          />
+        ) : (
+          <strong className="text-[0.95rem] text-tinta">{maquina.name}</strong>
+        )}
+
         <span className="font-mono text-[0.72rem] text-tinta-apagada">{maquina.host || maquina.ip}</span>
         <span className="rounded-full border border-linha px-2.5 py-0.5 text-[0.72rem] text-tinta-fraca">
           {maquina.typeLabel}
@@ -351,13 +406,42 @@ function Cadastrada({ maquina, aoMudar }: { maquina: MaquinaGerenciada; aoMudar:
           </span>
         )}
 
-        <span className="ml-auto flex items-center gap-2">
+        <span className="ml-auto flex flex-wrap items-center gap-2">
+          {renomeando ? (
+            <>
+              <button
+                type="button"
+                onClick={salvarNome}
+                disabled={ocupado}
+                className="rounded-[9px] border border-ambar bg-ambar px-3 py-1.5 text-[0.78rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
+              >
+                Salvar
+              </button>
+              <button
+                type="button"
+                onClick={() => { setNome(maquina.name); setRenomeando(false); setErro(null); }}
+                className="rounded-[9px] border border-linha px-3 py-1.5 text-[0.78rem] text-tinta-fraca transition-colors hover:text-tinta"
+              >
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setRenomeando(true)}
+              className="rounded-[9px] border border-linha px-3 py-1.5 text-[0.78rem] text-tinta-fraca transition-colors hover:text-tinta"
+            >
+              Renomear
+            </button>
+          )}
+
           <a
             href={`/api/impressoras/machines/${maquina.id}/export.xlsx`}
             className="rounded-[9px] border border-linha px-3 py-1.5 text-[0.78rem] text-tinta-fraca no-underline transition-colors hover:text-tinta"
           >
             Planilha
           </a>
+
           {maquina.enabled ? (
             <button
               type="button"
@@ -368,14 +452,24 @@ function Cadastrada({ maquina, aoMudar }: { maquina: MaquinaGerenciada; aoMudar:
               Desativar
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={reativar}
-              disabled={ocupado}
-              className="rounded-[9px] border border-linha px-3 py-1.5 text-[0.78rem] text-tinta-fraca transition-colors hover:text-tinta disabled:opacity-50"
-            >
-              Reativar
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={reativar}
+                disabled={ocupado}
+                className="rounded-[9px] border border-linha px-3 py-1.5 text-[0.78rem] text-tinta-fraca transition-colors hover:text-tinta disabled:opacity-50"
+              >
+                Reativar
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmandoExclusao(true)}
+                disabled={ocupado}
+                className="rounded-[9px] border border-linha px-3 py-1.5 text-[0.78rem] text-tinta-fraca transition-colors hover:text-alerta disabled:opacity-50"
+              >
+                Excluir
+              </button>
+            </>
           )}
         </span>
       </div>
@@ -386,8 +480,53 @@ function Cadastrada({ maquina, aoMudar }: { maquina: MaquinaGerenciada; aoMudar:
         {maquina.stats.meters > 0 && ` — ${metrosCurtos(maquina.stats.meters)}`}
       </p>
 
+      {/*
+        A confirmação diz o TAMANHO do que some, e não só "tem certeza?".
+        "Excluir 9.965 registros" é uma pergunta que dá para responder;
+        "excluir a máquina" não é.
+      */}
+      {confirmandoExclusao && (
+        <div className="mt-2.5 rounded-[9px] border border-alerta px-3 py-2.5">
+          <p className="m-0 text-[0.82rem] text-tinta">
+            Excluir <strong>{maquina.name}</strong> apaga também{" "}
+            <strong>{maquina.stats.records.toLocaleString("pt-BR")} registro(s)</strong> de histórico
+            {maquina.stats.pedidoItems > 0 && (
+              <> e <strong>{maquina.stats.pedidoItems}</strong> item(ns) em {maquina.stats.pedidos} pedido(s)</>
+            )}
+            . Não tem como desfazer.
+          </p>
+          <p className="mt-1 mb-2.5 text-[0.75rem] text-tinta-apagada">
+            A planilha do histórico foi gravada quando você desativou — ela fica em{" "}
+            <code className="font-mono">exportado/</code>, ao lado do banco.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={excluir}
+              disabled={ocupado}
+              className="rounded-[9px] border border-alerta px-3 py-1.5 text-[0.78rem] font-semibold text-alerta disabled:opacity-50"
+            >
+              Excluir mesmo
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmandoExclusao(false)}
+              className="rounded-[9px] border border-linha px-3 py-1.5 text-[0.78rem] text-tinta-fraca"
+            >
+              Não
+            </button>
+          </div>
+        </div>
+      )}
+
+      {maquina.enabled && (
+        <p className="mt-1 mb-0 text-[0.72rem] text-tinta-apagada">
+          Para excluir, desative antes — é o que grava a planilha do histórico.
+        </p>
+      )}
+
       {!maquina.online && maquina.error && (
-        <p className="mt-1 mb-0 text-[0.75rem] text-atencao">{maquina.error}</p>
+        <p className="mt-2 mb-0 text-[0.75rem] text-atencao">{maquina.error}</p>
       )}
       {erro && <Aviso texto={erro} />}
 

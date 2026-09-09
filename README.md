@@ -56,7 +56,7 @@ São treze telas, separadas no menu por momento do trabalho:
 
 | Grupo | Telas |
 | --- | --- |
-| **Produção** — antes de imprimir | Moldes, Projetos, Encaixe, Cor, Vetor, Imagem, Macros |
+| **Produção** — antes de imprimir | Moldes, Projetos, Encaixe, Vetor, Imagem, Macros, Cor |
 | **Impressão** — enquanto imprime | Impressoras, Pedidos, Máquinas, WhatsApp |
 | **Relatórios** — depois, para conferir | Histórico, Reposição |
 
