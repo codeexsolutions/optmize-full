@@ -364,6 +364,16 @@ ao igualar as cascas e deixei a nova 8px mais larga do que devia. Antes de
 copiar medida da tela antiga, confira qual das duas folhas está valendo — ou
 meça na página, que não mente.
 
+**Levantar dependência procurando só `function`.** Ao portar o motor de
+encaixe, o mapa de "quem usa o quê" foi montado com uma varredura que procurava
+`function nome`. Ela perdeu `rotacoesDe` e `podeDeitar`, que são
+`const nome = (x) => …` no `encaixe-giro.js` — e o motor portado ficou sem o
+`import` deles. Em `<script>` global aquilo funcionava (tudo dividia o mesmo
+escopo); em ESM é `ReferenceError` na primeira chamada. Quem pegou foi o
+`npm run bancada:porte`, na primeira execução. Varredura de dependência tem que
+enxergar `const`, `let` e `class` também — e, de qualquer forma, **a prova de um
+porte é rodar os dois lados juntos, não comparar o texto**.
+
 **Lista de máquinas escrita à mão.** O sistema de origem trazia quatro
 impressoras num `config/machines.json`, com os caminhos UNC digitados. Aquilo
 funcionava numa instalação: a de quem escreveu o arquivo. Renomear um

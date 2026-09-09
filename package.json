@@ -16,6 +16,7 @@
     "check": "node --check server.js",
     "bancada": "node bancada/medir.js",
     "bancada:conferir": "node bancada/conferir.js",
+    "bancada:porte": "node bancada/conferir-porte.js",
     "bancada:pdf": "node bancada/conferir-pdf.js",
     "bancada:arte": "node bancada/conferir-arte.js",
     "bancada:grupos": "node bancada/conferir-grupos.js",

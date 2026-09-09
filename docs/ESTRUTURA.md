@@ -91,6 +91,17 @@ a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
 - `bancada/conferir.js`: `npm run bancada:conferir`. O motor em WebAssembly tem
   que dar exatamente o mesmo resultado do motor em JavaScript, e é este arquivo
   que prova.
+- `bancada/conferir-porte.js`: `npm run bancada:porte`. **Temporário.** Enquanto
+  o motor existe em dois lugares — `public/encaixe-motor.js`, que a tela antiga
+  carrega, e `src/nucleo/encaixeMotor.js`, que a tela nova carrega —, este
+  arquivo prova que os dois são o MESMO: sobe as duas instâncias, roda a mesma
+  ordem embaralhada com a mesma semente em cada combinação, e exige resultado
+  idêntico peça por peça. Some junto com `public/`.
+- `bancada/motor-nucleo.js`: sobe o motor portado fora do navegador. O
+  `motor.js` concatena o texto dos `<script>` de `public/`; aqui não dá, porque
+  os de `src/nucleo/` são módulos ESM e um deles é TypeScript. O esbuild — o
+  mesmo que o Vite usa — junta a árvore num arquivo só, então o que se mede é o
+  que o navegador roda.
 - `bancada/conferir-sobreposicao.js`: `npm run bancada:sobreposicao`. Repinta
   cada peça posicionada na grade do rolo e acusa célula ocupada duas vezes.
   Nasceu para achar a causa de "peça saindo sobreposta" no encaixe por NFP —
