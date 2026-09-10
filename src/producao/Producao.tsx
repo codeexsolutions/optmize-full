@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Estrutura } from "./Estrutura";
 import { montarProducao } from "./controlador";
 import { ProvedorDaLigacao, type Ligacao } from "./ligacao";
@@ -6,10 +6,23 @@ import { Cor } from "../telas/Cor";
 import type { NomeDeTela } from "../rotas";
 import "./producao.css";
 
-export const ehProducaoIntegrada = (pagina: string) => ["moldes", "projetos", "encaixe", "cor"].includes(pagina);
+/**
+ * As telas que o controlador imperativo ainda desenha.
+ *
+ * Elas têm rota, mas a rota não desenha nada: quem as desenha é este
+ * componente, que fica montado o tempo todo para não perder o trabalho em
+ * memória ao trocar de aba (ver `casca/Casca.tsx`). A lista encolhendo é a
+ * medida do quanto a migração andou — Cor e Projetos já saíram dela.
+ */
+export const ehProducaoIntegrada = (pagina: string) => ["moldes", "encaixe", "cor"].includes(pagina);
 
 /** Mantém o trabalho em memória ao navegar; desmontar libera os recursos. */
-export function Producao({ pagina, irPara }: { pagina: NomeDeTela; irPara: (pagina: NomeDeTela) => void }) {
+export function Producao({ pagina, irPara, children }: {
+  pagina: NomeDeTela;
+  irPara: (pagina: NomeDeTela) => void;
+  /** As telas React, que vão DENTRO do provedor da ligação. Ver abaixo. */
+  children?: ReactNode;
+}) {
   const raiz = useRef<HTMLDivElement>(null);
   const controle = useRef<ReturnType<typeof montarProducao> | null>(null);
   const navegar = useRef(irPara);
@@ -37,20 +50,32 @@ export function Producao({ pagina, irPara }: { pagina: NomeDeTela; irPara: (pagi
       if (!controle.current) throw new Error("o editor de produção não está montado");
       await controle.current.adicionarArquivos(arquivos);
     },
+    async mandarProjetoParaOEncaixe(projeto) {
+      if (!controle.current) throw new Error("o editor de produção não está montado");
+      await controle.current.mandarProjeto(projeto);
+    },
     irPara: (destino) => navegar.current(destino),
   }), []);
 
-  return <div ref={raiz} className="producao h-full" hidden={!ehProducaoIntegrada(pagina)}>
-    {erro && <p role="alert">{erro} <button type="button" onClick={() => setErro("")}>Fechar aviso</button></p>}
-    <Estrutura />
-    {/*
-      A Cor é React de verdade, então fica FORA da `Estrutura`: aquela é
-      memoizada para o controlador poder mexer nos nós dela sem o React desfazer,
-      e esta precisa redesenhar a cada arte convertida. Montada sempre, escondida
-      quando não é a vez — é o que conserva a lista ao navegar.
-    */}
-    <ProvedorDaLigacao value={ligacao}>
+  /*
+   * A ordem aqui importa. O `<div className="producao">` é o que o controlador
+   * dirige e o que a folha `producao.css` escopa — e ele fica ESCONDIDO quando
+   * a tela da vez não é dele. As telas React que a rota desenha (o `children`)
+   * ficam FORA desse div, senão sumiriam junto; mas continuam dentro do
+   * provedor, porque uma delas (Projetos) ainda entrega trabalho ao Encaixe.
+   */
+  return <ProvedorDaLigacao value={ligacao}>
+    <div ref={raiz} className="producao h-full" hidden={!ehProducaoIntegrada(pagina)}>
+      {erro && <p role="alert">{erro} <button type="button" onClick={() => setErro("")}>Fechar aviso</button></p>}
+      <Estrutura />
+      {/*
+        A Cor é React de verdade, então fica FORA da `Estrutura`: aquela é
+        memoizada para o controlador poder mexer nos nós dela sem o React desfazer,
+        e esta precisa redesenhar a cada arte convertida. Montada sempre, escondida
+        quando não é a vez — é o que conserva a lista ao navegar.
+      */}
       <Cor ativa={pagina === "cor"} />
-    </ProvedorDaLigacao>
-  </div>;
+    </div>
+    {children}
+  </ProvedorDaLigacao>;
 }

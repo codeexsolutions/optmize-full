@@ -30,6 +30,7 @@
 import { Suspense, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
+import { ProvedorDeDialogo } from "./Dialogo";
 import { Cabecalho } from "./Cabecalho";
 import { Producao } from "../producao/Producao";
 import { useTelaAtual, type NomeDeTela } from "../rotas";
@@ -41,7 +42,13 @@ export function Casca() {
 
   const irPara = (nome: NomeDeTela) => navegar(`/${nome}`);
 
+  /*
+   * O provedor do diálogo envolve a casca inteira: a caixa de confirmar e a de
+   * perguntar são de quem estiver na frente, e uma tela não deveria precisar
+   * montar a sua para poder perguntar alguma coisa.
+   */
   return (
+    <ProvedorDeDialogo>
     <div data-tela={tela.nome} className="app-react h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
       <Menu aberto={menuAberto} aoFechar={() => setMenuAberto(false)} />
 
@@ -54,18 +61,26 @@ export function Casca() {
         <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 tela:px-[30px]">
-          <Producao pagina={tela.nome} irPara={irPara} />
           {/*
-            A espera das telas que chegam sob demanda (ver o `lazy` em
-            `rotas.ts`). É uma linha de texto e não um esqueleto da tela: o
-            pedaço baixa em milésimos numa máquina da fábrica, e um desenho
-            piscando ali chamaria mais atenção do que a troca de tela.
+            As telas da rota vão DENTRO da `Producao`, e não ao lado dela: é lá
+            que mora o provedor da ponte com o controlador imperativo, e a tela
+            de Projetos ainda precisa dele para levar um trabalho ao Encaixe. O
+            que a `Producao` desenha por conta própria continua escondido
+            quando a tela da vez não é dela.
+
+            O `<Suspense>` é a espera das telas que chegam sob demanda (ver o
+            `lazy` em `rotas.ts`). É uma linha de texto e não um esqueleto da
+            tela: o pedaço baixa em milésimos numa máquina da fábrica, e um
+            desenho piscando ali chamaria mais atenção do que a troca de tela.
           */}
-          <Suspense fallback={<p className="p-6 text-sm text-tinta-apagada">Abrindo {tela.rotulo}…</p>}>
-            <Outlet />
-          </Suspense>
+          <Producao pagina={tela.nome} irPara={irPara}>
+            <Suspense fallback={<p className="p-6 text-sm text-tinta-apagada">Abrindo {tela.rotulo}…</p>}>
+              <Outlet />
+            </Suspense>
+          </Producao>
         </div>
       </main>
     </div>
+    </ProvedorDeDialogo>
   );
 }

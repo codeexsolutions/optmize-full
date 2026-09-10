@@ -76,3 +76,46 @@ function pixelsPorCmDoJPEG(bytes) {
   }
   return null;
 }
+
+/**
+ * As medidas em pixels, lidas do cabeçalho do arquivo.
+ *
+ * Serve para decidir o tamanho de decodificação ANTES de decodificar: saber que
+ * a arte tem 7235x9254 permite pedir ao navegador uma versão já reduzida, em
+ * vez de abrir 67 megapixels para depois jogar fora três quartos deles.
+ *
+ * Estava dentro do `producao/controlador.js`, em cópia idêntica à do
+ * `encaixe.js` antigo. Desceu para cá quando a tela de Projetos saiu do
+ * controlador e passou a precisar dela — que é o critério de sempre: conta
+ * pura que duas telas usam não mora dentro de uma delas.
+ */
+export function medidasDoArquivo(bytes) {
+  // PNG: as medidas estão no IHDR, sempre o primeiro bloco.
+  if (bytes.length > 24 && bytes[0] === 0x89 && bytes[1] === 0x50) {
+    const ler32 = (i) => (bytes[i] << 24 | bytes[i + 1] << 16 | bytes[i + 2] << 8 | bytes[i + 3]) >>> 0;
+    return { largura: ler32(16), altura: ler32(20) };
+  }
+  // JPEG: o tamanho está no marcador SOF (0xC0..0xCF, tirando os que não são).
+  if (bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < bytes.length) {
+      if (bytes[i] !== 0xff) { i++; continue; }
+      const m = bytes[i + 1];
+      if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue; }
+      if (m === 0xda) break; // começou a imagem
+      const tamanho = (bytes[i + 2] << 8) | bytes[i + 3];
+      const ehSOF = m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc;
+      if (ehSOF) return { altura: (bytes[i + 5] << 8) | bytes[i + 6], largura: (bytes[i + 7] << 8) | bytes[i + 8] };
+      i += 2 + tamanho;
+    }
+  }
+  return null;
+}
+
+/*
+ * O padrão de quando o arquivo não diz nada: 300 dpi, que é o de arte para
+ * impressão. Ele nasce no `pecaNaGrade` (é lá que o preparo da peça o usa) e
+ * sai por aqui também, porque quem pergunta "quantos pixels por centímetro?"
+ * quer o padrão no mesmo lugar da resposta, e não numa terceira porta.
+ */
+export { DPI_PADRAO, PPCM_PADRAO } from "./pecaNaGrade";
