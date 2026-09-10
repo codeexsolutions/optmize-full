@@ -3,18 +3,18 @@
  * Domínio importado de src/nucleo; estado privado por montagem, sem scripts globais.
  * As listas e o canvas são ilhas imperativas: não devem receber children dinâmicos React.
  */
-import { arredondar } from "../nucleo/geometria";
-import { moldeParaImagem, ehArquivoDeMolde, FORMATOS_DE_MOLDE, lerMoldeVetorial } from "../nucleo/moldes";
-import { COR_SEGURA, diagnosticoDeCorDoArquivo } from "../nucleo/corDoArquivo";
-import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../nucleo/encaixeRede";
-import { encaixar, posicoesDasColocacoes, assinaturaDoTrabalho, buscarMelhorEncaixe } from "../nucleo/encaixeMotor";
-import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../nucleo/encaixeParalelo";
-import { prepararUnidadesNoWasm } from "../nucleo/encaixeWasm";
-import { grade, gradeDaPeca, tirarFundoDosPixels, silhuetaDeDados, mascarasDeSilhueta } from "../nucleo/encaixeMascara";
-import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../nucleo/encaixePrepara";
-import { AJUSTE_PADRAO, MODOS_DE_ARTE, TIPOS_DE_ARTE, ajusteNovo, tamanhoDoRapport, ppcmDaArte, desenharArteNoMolde } from "../nucleo/arteMolde";
-import { formatarNumero, formatarMetros, formatarCm, formatarSegundos, formatarPorcento, formatarM2 } from "../casca/numero";
-import { jpegSeguroParaPdf } from "../nucleo/jpegParaPdf";
+import { arredondar } from "../utils/geometria";
+import { moldeParaImagem, ehArquivoDeMolde, FORMATOS_DE_MOLDE, lerMoldeVetorial } from "../motores/moldes";
+import { COR_SEGURA, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
+import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
+import { encaixar, posicoesDasColocacoes, assinaturaDoTrabalho, buscarMelhorEncaixe } from "../motores/encaixeMotor";
+import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
+import { prepararUnidadesNoWasm } from "../motores/encaixeWasm";
+import { grade, gradeDaPeca, tirarFundoDosPixels, silhuetaDeDados, mascarasDeSilhueta } from "../motores/encaixeMascara";
+import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../motores/encaixePrepara";
+import { AJUSTE_PADRAO, MODOS_DE_ARTE, TIPOS_DE_ARTE, ajusteNovo, tamanhoDoRapport, ppcmDaArte, desenharArteNoMolde } from "../motores/arteMolde";
+import { formatarNumero, formatarMetros, formatarCm, formatarSegundos, formatarPorcento, formatarM2 } from "../utils/numero";
+import { jpegSeguroParaPdf } from "../motores/jpegParaPdf";
 import { criarEscopo } from "./escopo";
 export function montarProducao(raiz, irPara) {
 const escopo = criarEscopo(raiz);
@@ -987,7 +987,7 @@ async function adicionarArquivos(files) {
           // está vivo: a miniatura sai dele, sem decodificar nada de novo.
           const peca = await montarPecaDaImagem(cru, null, cru.img);
           // O que o navegador vai fazer com a cor desta arte. Só lê o cabeçalho
-          // do arquivo (ver src/nucleo/corDoArquivo.js) — não decodifica nada, e
+          // do arquivo (ver src/motores/corDoArquivo.js) — não decodifica nada, e
           // por isso não pesa na leitura.
           peca.cor = await diagnosticoDeCorDoArquivo(file);
           prontas[indice] = [peca];
@@ -1231,7 +1231,7 @@ const CAMPO_MINI =
  * O programa carrega toda arte por canvas, e canvas só existe em RGB. Arte em
  * CMYK, ou em RGB sem dizer em que espaço está, é convertida pelo navegador de
  * um jeito que não é o do Photoshop — o desenho sai certo e a COR não. Metade
- * das artes desta loja está num desses dois casos (ver src/nucleo/corDoArquivo.js).
+ * das artes desta loja está num desses dois casos (ver src/motores/corDoArquivo.js).
  *
  * O aviso mostra a MINIATURA junto: dizer "uma arte está em CMYK" no meio de 25
  * arquivos não ajuda ninguém a achar qual é. Com a imagem, quem conhece o
@@ -2206,7 +2206,7 @@ async function optmizar() {
     const assinatura = assinaturaDoTrabalho(pecasEncaixe, larguraTecido);
     // O mesmo formato que vira a assinatura, mas sem arredondar para caber
     // num texto de balde — é o que a rede das receitas usa para generalizar
-    // (ver src/nucleo/encaixeRede.mjs e a nota em cima de `buscarMelhorEncaixe`).
+    // (ver src/motores/encaixeRede.mjs e a nota em cima de `buscarMelhorEncaixe`).
     const vetorTrabalho = vetorDoTrabalho(pecasEncaixe, larguraTecido);
     const chave = chaveDoTrabalho(pecasEncaixe, larguraTecido, espaco, comprimentoBancada);
     atualizarCarregamento({
@@ -2316,7 +2316,7 @@ async function optmizar() {
       // `chaveDoTrabalho`). É o único número que a busca de agora tem obrigação
       // de alcançar, e o servidor só o substitui quando vem coisa melhor.
       alvo: guardadoAntes ? guardadoAntes.consumo : null,
-      // A rede das receitas (src/nucleo/encaixeRede.mjs): pontua cada receita
+      // A rede das receitas (src/motores/encaixeRede.mjs): pontua cada receita
       // candidata pela chance dela ganhar ESTE trabalho, generalizando a
       // partir do formato das peças em vez de só do balde exato da
       // assinatura. `redeMadura` só fica true depois de um bocado de
@@ -2402,7 +2402,7 @@ async function optmizar() {
       aproveitamento,
       tentativas: ultimoResultado.tentativas,
       // O dado de treino da rede das receitas — ver a nota lá em cima de
-      // `vetorTrabalho` e o cabeçalho de src/nucleo/encaixeRede.mjs.
+      // `vetorTrabalho` e o cabeçalho de src/motores/encaixeRede.mjs.
       features: vetorTrabalho,
       // Em qual versão do vetor estas features foram calculadas. Vai daqui, de
       // quem calculou, e não do servidor: uma aba aberta desde antes de uma
@@ -5887,7 +5887,7 @@ ${p.capa ? `<img src="${p.capa}" alt="" />` : `<span class="pasta-sem-capa">sem 
 
 /*
  * Aqui morava a TELA DE COR, em 352 linhas imperativas. Ela foi para o React:
- * `src/telas/Cor.tsx` tem o estado, e `src/nucleo/miniaturaDaArte.js` e
+ * `src/telas/Cor.tsx` tem o estado, e `src/motores/miniaturaDaArte.js` e
  * `src/api/cor.ts` têm o que era domínio e chamada de servidor.
  *
  * O que ficou deste lado é só a ponte: o `adicionarArquivos` sai no objeto de

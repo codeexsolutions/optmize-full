@@ -28,7 +28,7 @@ const http = require("http");
 const express = require("express");
 const { Server: ServidorDeSocket } = require("socket.io");
 
-const { RAIZ_DE_UPLOADS } = require("./caminhos");
+const { RAIZ_DE_UPLOADS, PASTA_DO_APP } = require("./caminhos");
 require("./db"); // garante que o banco SQLite e as tabelas existem antes de tudo
 const encaixePdfRouter = require("./encaixe-pdf");
 const macrosRouter = require("./macros-api");
@@ -62,11 +62,11 @@ app.use(express.json({ limit: "15mb" })); // dá folga para o contorno de um mol
 
 // Os arquivos que as duas telas usam como estão: o sprite de ícones e o wasm
 // do encaixe. Vêm primeiro porque as duas os pedem pelo mesmo caminho.
-app.use(express.static(path.join(__dirname, "estatico")));
+app.use(express.static(path.join(PASTA_DO_APP, "estatico")));
 
 // O painel. Não precisa de rota-curinga: as telas moram no "#" do endereço,
 // que nunca chega ao servidor.
-app.use(express.static(path.join(__dirname, "dist")));
+app.use(express.static(path.join(PASTA_DO_APP, "dist")));
 
 /*
  * `/app` foi o endereço do painel durante toda a migração, então ele continua

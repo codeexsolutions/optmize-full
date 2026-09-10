@@ -10,7 +10,7 @@
  * e é por isso que moram aqui.
  *
  * ---------------------------------------------------------------------------
- * REGRA DESTE ARQUIVO (e de toda a pasta `nucleo/`)
+ * REGRA DESTE ARQUIVO (e de toda a pasta `motores/`)
  * ---------------------------------------------------------------------------
  * Só entra aqui o que for **conta pura**: recebe números, devolve números.
  * Nada de `document`, `window`, canvas, fetch — nem React. É o que permite

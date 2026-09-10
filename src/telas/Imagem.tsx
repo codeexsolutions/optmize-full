@@ -57,11 +57,11 @@
  * ONDE O TRABALHO ACONTECE, E O QUE MUDOU NO PORTE
  * ---------------------------------------------------------------------------
  *
- * No navegador, em worker (`nucleo/imagemWorker.js`). **Nada sobe para
+ * No navegador, em worker (`motores/imagemWorker.js`). **Nada sobe para
  * servidor nenhum**: a arte do cliente não sai da máquina da gráfica.
  *
  * Veio de `public/imagem.js`. O diagnóstico — que era conta pura no meio da
- * tela — foi para `nucleo/diagnosticoDaImagem.js` sem uma linha alterada. O
+ * tela — foi para `motores/diagnosticoDaImagem.js` sem uma linha alterada. O
  * que sobrou aqui é o que mexe com canvas, com o worker e com a tela.
  */
 
@@ -71,7 +71,7 @@ import { Icone } from "../casca/Icone";
 import {
   ESPERA_CONFORTAVEL_MS, REDES, dpiNaLargura, pareceArteChapada,
   planoDaImagem, vereditoDoDpi,
-} from "../nucleo/diagnosticoDaImagem";
+} from "../motores/diagnosticoDaImagem";
 
 /** O tamanho da janela da lupa, em pixels de tela. */
 const LUPA_LARGURA = 300;
@@ -166,7 +166,7 @@ export function Imagem() {
 
   const pegarWorker = useCallback(() => {
     if (!worker.current) {
-      worker.current = new Worker(new URL("../nucleo/imagemWorker.js", import.meta.url), { type: "module" });
+      worker.current = new Worker(new URL("../motores/imagemWorker.js", import.meta.url), { type: "module" });
     }
     return worker.current;
   }, []);

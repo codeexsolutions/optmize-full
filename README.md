@@ -2024,13 +2024,18 @@ credencial**: quem a copiar entra no WhatsApp do bot.
 
 ```
 optimize/
-├── server.js               # backend: Express — serve o painel e monta as rotas da API
-├── encaixe-pdf.js           # rota que monta o PDF do encaixe em tamanho real
-├── encaixe-memoria.js       # o que a tela de Encaixe aprendeu: recordes, placar das receitas e o melhor encaixe guardado inteiro
-├── moldes-api.js            # rotas da biblioteca de moldes (guardar, reabrir, apagar)
-├── projetos-api.js          # rotas dos projetos de cliente: cliente -> projeto -> peças prontas
-├── db.js                     # conexão SQLite + criação das tabelas
-├── caminhos.js               # onde ficam o banco e os uploads (pasta do projeto ou do usuário)
+├── servidor/                 # O BACKEND, todo ele — Express, SQLite e as rotas
+│   ├── server.js             # serve o painel e monta as rotas da API
+│   ├── encaixe-pdf.js        # rota que monta o PDF do encaixe em tamanho real
+│   ├── encaixe-memoria.js    # o que a tela de Encaixe aprendeu: recordes, placar das receitas e o melhor encaixe guardado inteiro
+│   ├── moldes-api.js         # rotas da biblioteca de moldes (guardar, reabrir, apagar)
+│   ├── projetos-api.js       # rotas dos projetos de cliente: cliente -> projeto -> peças prontas
+│   ├── cor-api.js            # conversão de cor da arte, pelo perfil ICC
+│   ├── macros-api.js         # entrega e instala as macros do CorelDRAW
+│   ├── db.js                 # conexão SQLite + criação das tabelas
+│   ├── caminhos.js           # onde ficam o banco e os uploads (pasta do projeto ou do usuário)
+│   ├── impressoras-api.js    # monta a central das impressoras em /api/impressoras
+│   └── impressoras/          # a central: varredura da rede, leitores, pedidos, WhatsApp
 ├── src-tauri/                # o app de janela: só sobe o servidor e abre a janela nele
 │   ├── src/main.rs           # arranca o node.exe embutido numa porta livre e navega para ela
 │   ├── tauri.conf.json       # o que entra no instalador, o ícone, o nome
@@ -2053,40 +2058,21 @@ optimize/
 │   ├── conferir-bancada.js   # nenhuma peça cruza a linha entre duas bancadas
 │   ├── conferir-sobreposicao.js  # nenhuma peça pisa em cima de outra
 │   └── vaos.js               # quanto do rolo virou vão que o motor não alcança
-├── src/                      # a tela nova: React + TypeScript (ver docs/ARQUITETURA.md)
-│   ├── App.tsx               # a casca: menu + cabeçalho + a tela da vez
+├── src/                      # O FRONT: React + TypeScript (ver docs/ARQUITETURA.md)
+│   ├── App.tsx               # as rotas: a tabela de telas virando react-router
 │   ├── rotas.ts              # a tabela das telas — uma linha por aba
-│   ├── casca/                # Menu, Cabecalho, Cartao, Icone: o que toda tela usa
-│   ├── telas/                # uma por aba, conforme migram
+│   ├── casca/                # Casca (o layout), Menu, Cabecalho, Cartao, Icone
+│   ├── telas/                # uma por aba
 │   ├── api/                  # o fetch num lugar só, com os três estados de carga
-│   └── nucleo/               # domínio puro: sem DOM, sem React, roda em worker
+│   ├── utils/                # ajuda sem dono: geometria, número, formato, respirar
+│   └── motores/              # domínio puro: sem DOM, sem React, roda em worker
 ├── estilo/
 │   ├── tokens.css            # a paleta — o único arquivo com hex no projeto
 │   └── entrada.css           # traduz os tokens em utilitários do Tailwind
-├── estatico/                 # servido como está pelas duas telas
+├── estatico/                 # servido como está: o sprite, o wasm e as redes da IA
 │   ├── icones.svg            # gerado por `npm run icones`
 │   └── encaixe.wasm          # gerado por `npm run build:wasm`
-├── public/                   # a tela ANTIGA — some quando a migração terminar
-│   ├── index.html           # tela do sistema (4 abas)
-│   ├── style.css             # estrutura das telas — sem nenhuma cor própria
-│   ├── interface.css         # a paleta Optimize, a tipografia e o responsivo
-│   ├── tailwind.css          # gerado por `npm run css` — só os utilitários usados
-│   ├── interface.js          # menu lateral, troca de tela e relógio
-│   ├── moldes.js              # leitores de DXF, PLT, SVG e PDF: molde vetorial vira peça em centímetros
-│   ├── encaixe.js             # tela de Encaixe: a tela, o desenho e quem manda na busca
-│   ├── encaixe-motor.js       # os encaixadores (contorno, caixa, faixas) e a busca por receitas
-│   ├── encaixe-mascara.js     # silhueta da arte: tira o fundo, engorda pela folga e vira grade
-│   ├── encaixe-prepara.js     # prepara as peças antes da busca (máscaras, rotações, duplas)
-│   ├── prepara-worker.js      # o preparo fora da thread da tela
-│   ├── encaixe-paralelo.js    # espalha a busca pelos núcleos e junta o melhor de cada fatia
-│   ├── encaixe-worker.js      # uma fatia da busca, rodando fora da tela
-│   ├── encaixe-wasm.js        # a ponte com wasm/src/lib.rs (cai no JavaScript se não carregar)
-│   ├── vetor.js               # imagem vira desenho: paleta, contorno e curva
-│   ├── vetor-worker.js        # a vetorização fora da thread da tela
-│   ├── vetor-tela.js          # tela de Vetor: os controles, a lupa e as duas prévias
-│   ├── arte-molde.js          # coloca a arte dentro do contorno da peça e recorta pela linha
-│   ├── moldes-tela.js         # tela de Moldes: o passo a passo de criar molde e a estante
-│   └── projetos.js            # tela de Projetos: a estante por cliente e o editor do projeto
+├── dist/                     # o painel compilado pelo Vite — é o que o Express serve
 ├── package.json
 ├── dados.db                  # gerado no primeiro uso — moldes e memória do encaixe (SQLite)
 ├── uploads/artes-molde/      # gerado ao salvar a 1ª estampa — artes guardadas nos moldes
@@ -2143,7 +2129,7 @@ Instalado, eles vão para **`%APPDATA%r.com.optimize.desktop`**. Não é
 capricho: o programa fica numa pasta que o Windows protege contra escrita, e
 gravar o banco lá dentro ou falha, ou o Windows desvia a escrita para uma pasta
 virtual e os dados somem na primeira atualização. Quem decide isso é o
-`caminhos.js`, pela variável `OPTIMIZE_DADOS`.
+`servidor/caminhos.js`, pela variável `OPTIMIZE_DADOS`.
 
 **É essa a pasta do backup.** Desinstalar não a apaga, mas trocar de máquina
 sim: copie ela inteira.

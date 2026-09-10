@@ -25,7 +25,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/cliente";
 import { Icone } from "../casca/Icone";
-import { dataBr, metros, metrosCurtos } from "./formato";
+import { dataBr, metros, metrosCurtos } from "../utils/formato";
 import type { Registro } from "./tipos";
 
 interface ConferenciaDoItem {

@@ -27,7 +27,7 @@ import {
   chaveDasMascaras, mascarasDaPeca, pixelsDaArteNaGrade, pixelsDaImagem,
   removerFundoDaImagem,
 } from "./pecaNaGrade";
-import { respirarNaTela } from "./respirar";
+import { respirarNaTela } from "../utils/respirar";
 
 // O mesmo raciocínio do pool da busca: um núcleo fica de fora para a tela
 // continuar respondendo. O teto é menor porque quem manda aqui é a quantidade

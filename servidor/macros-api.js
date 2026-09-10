@@ -27,7 +27,9 @@ const { execFile } = require("child_process");
 
 const router = express.Router();
 
-const PASTA_DAS_MACROS = path.join(__dirname, "corel");
+const { PASTA_DO_APP } = require("./caminhos");
+
+const PASTA_DAS_MACROS = path.join(PASTA_DO_APP, "corel");
 
 /**
  * O catálogo. Cada macro é um arquivo em `corel/` mais o que a tela precisa

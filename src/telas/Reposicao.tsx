@@ -28,7 +28,7 @@ import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { useRecarregarComEventos } from "../impressoras/socket";
-import { dataBr, metros, metrosCurtos } from "../impressoras/formato";
+import { dataBr, metros, metrosCurtos } from "../utils/formato";
 
 interface ItemDaSemana {
   id: string;

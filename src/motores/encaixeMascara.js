@@ -13,7 +13,7 @@
  * quem o usa — a tela, o `preparaWorker` e a bancada — importa daqui.
  */
 
-import { arredondar } from "./geometria";
+import { arredondar } from "../utils/geometria";
 
 // ==================== O FUNDO DA ARTE ====================
 

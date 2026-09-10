@@ -1,46 +1,74 @@
 /**
- * A casca: menu à esquerda, cabeçalho no topo, tela escolhida no miolo.
+ * ===========================================================================
+ * APP — a tabela de rotas virando rotas de verdade
+ * ===========================================================================
  *
- * Não sabe o que é molde, encaixe ou vetor — só qual linha da tabela de rotas
- * está aberta. Era o contrato do `interface.js` antigo e continua valendo:
- * tela nova entra em `src/rotas.ts` e mais nada aqui muda.
+ * O roteamento era escrito à mão: um `hashchange` num `useState`, em
+ * `casca/useRota.ts`. Enquanto foram quatro telas sem sub-rota aquilo cabia;
+ * com treze, e com telas que vão ganhar endereço próprio (um molde aberto, um
+ * pedido, um encaixe guardado), passou a ser o `react-router` — que dá de
+ * graça o que aquilo não dava: rota aninhada, link que é `<a>` de verdade
+ * (abre em outra aba, o teclado enxerga), redirecionamento e endereço
+ * desconhecido caindo em algum lugar em vez de na primeira tela por acidente.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE `HashRouter`, E NÃO `BrowserRouter`
+ * ---------------------------------------------------------------------------
+ *
+ * O endereço continua sendo `#/moldes`. Não é gosto: são meses de link salvo,
+ * aba aberta e atalho na área de trabalho da fábrica apontando para o "#" — e
+ * o `server.js` tem um redirecionamento de `/app` que carrega o "#" adiante,
+ * escrito para essa forma.
+ *
+ * Além disso o "#" nunca chega ao servidor, então o Express não precisa de
+ * rota-curinga para o painel: ele serve `dist/` como arquivo estático e pronto.
+ * Com `BrowserRouter`, abrir `/encaixe` direto (ou recarregar a página nela)
+ * daria 404 no Express até alguém lembrar de acrescentar o curinga — e daria
+ * 404 também no app instalado, onde o servidor é o mesmo.
+ *
+ * ---------------------------------------------------------------------------
+ * AS ROTAS SAEM DA MESMA TABELA QUE O MENU
+ * ---------------------------------------------------------------------------
+ *
+ * `src/rotas.ts` continua sendo a única lista de telas do sistema: o menu, o
+ * cabeçalho e as rotas saem dela. Tela nova é uma linha lá e mais nada aqui.
+ *
+ * As quatro telas do editor de produção (Moldes, Projetos, Encaixe, Cor) têm
+ * rota, mas a rota não desenha nada: quem as desenha é o `<Producao/>` da
+ * casca, que fica montado o tempo todo para não perder as artes já lidas ao
+ * trocar de aba (ver `casca/Casca.tsx`). A rota existe para o endereço, o
+ * menu e o cabeçalho funcionarem como nas outras.
  */
 
-import { Producao, ehProducaoIntegrada } from "./producao/Producao";
-import { useState } from "react";
-import { Menu } from "./casca/Menu";
-import { Cabecalho } from "./casca/Cabecalho";
-import { useRota } from "./casca/useRota";
-import { acharTela } from "./rotas";
+import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Casca } from "./casca/Casca";
+import { ehProducaoIntegrada } from "./producao/Producao";
+import { TELAS, TELA_PADRAO } from "./rotas";
 
 export function App() {
-  const [rota, irPara] = useRota();
-  const [menuAberto, setMenuAberto] = useState(false);
-  const tela = acharTela(rota);
-  const { Componente } = tela;
-
   return (
-    <div data-tela={rota} className="app-react h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
-      <Menu
-        atual={rota}
-        aberto={menuAberto}
-        aoEscolher={irPara}
-        aoFechar={() => setMenuAberto(false)}
-      />
+    <HashRouter>
+      <Routes>
+        <Route element={<Casca />}>
+          {/* A raiz (`#/`) leva à tela inicial, sem deixar o endereço vazio. */}
+          <Route index element={<Navigate to={`/${TELA_PADRAO}`} replace />} />
 
-      {/*
-        A casca ocupa a janela e não rola. O cabeçalho fica parado no alto e a
-        rolagem é do outlet — assim uma tela que precise da altura toda pede
-        `h-full` em vez de descontar o topo numa conta de viewport.
-      */}
-      <main className="flex h-screen flex-col overflow-hidden tela:ml-[244px] tela:max-[1100px]:ml-[78px]">
-        <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />
+          {TELAS.map(({ nome, Componente }) => (
+            <Route
+              key={nome}
+              path={nome}
+              element={ehProducaoIntegrada(nome) ? null : <Componente />}
+            />
+          ))}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 tela:px-[30px]">
-          <Producao pagina={rota} irPara={irPara} />
-          {!ehProducaoIntegrada(rota) && <Componente />}
-        </div>
-      </main>
-    </div>
+          {/*
+            Endereço que não existe volta para a tela inicial em vez de mostrar
+            a casca vazia. `replace` para o botão "voltar" não cair de novo no
+            endereço quebrado.
+          */}
+          <Route path="*" element={<Navigate to={`/${TELA_PADRAO}`} replace />} />
+        </Route>
+      </Routes>
+    </HashRouter>
   );
 }

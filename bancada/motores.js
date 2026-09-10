@@ -1,7 +1,8 @@
 /**
- * Carrega módulos de `src/nucleo/` fora do navegador.
+ * Carrega módulos de `src/` fora do navegador — os motores e os utilitários
+ * que eles usam.
  *
- * O núcleo é ESM, e um dos arquivos (`geometria.ts`) é TypeScript, que o Node
+ * Eles são ESM, e um deles (`utils/geometria.ts`) é TypeScript, que o Node
  * nem abre. Então o esbuild — o MESMO que o Vite usa para empacotar a tela —
  * junta a árvore num arquivo só, e o Node importa esse arquivo.
  *
@@ -19,7 +20,7 @@ const os = require("os");
 const path = require("path");
 
 /*
- * De onde vem o núcleo.
+ * De onde vêm os motores.
  *
  * Normalmente é o projeto. `OPTIMIZE_MOTOR_RAIZ` aponta para outra pasta —
  * outro checkout, ou uma cópia, para comparar duas versões lado a lado.
@@ -30,21 +31,22 @@ const RAIZ = process.env.OPTIMIZE_MOTOR_RAIZ
 
 /**
  * Empacota os módulos pedidos e devolve o que eles exportam, tudo num objeto
- * só. Os nomes vão COM extensão, e são só as portas de entrada: quem descobre
- * o resto da árvore, e a ordem, é o esbuild, pelos `import` de verdade.
+ * só. Os nomes vão COM extensão e relativos a `src/` (`motores/vetor.js`,
+ * `utils/geometria.ts`), e são só as portas de entrada: quem descobre o resto
+ * da árvore, e a ordem, é o esbuild, pelos `import` de verdade.
  */
-async function carregarDoNucleo(modulos) {
+async function carregarDosMotores(modulos) {
   const esbuild = require("esbuild");
-  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), "optimize-nucleo-"));
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), "optimize-motores-"));
   const entrada = path.join(pasta, "entrada.js");
-  const saida = path.join(pasta, "nucleo.mjs");
+  const saida = path.join(pasta, "motores.mjs");
 
   // O arquivo de entrada é escrito na pasta temporária do sistema, então os
   // caminhos têm que ser ABSOLUTOS: um caminho relativo ali resolveria a
   // partir de lá, e não a partir do projeto.
   fs.writeFileSync(entrada, modulos
     .map((nome) => {
-      const caminho = path.join(RAIZ, "src", "nucleo", nome).split(path.sep).join("/");
+      const caminho = path.join(RAIZ, "src", nome).split(path.sep).join("/");
       return `export * from ${JSON.stringify(caminho)};`;
     })
     .join("\n"), "utf8");
@@ -64,7 +66,7 @@ async function carregarDoNucleo(modulos) {
       // extensão entra na lista à mão.
       resolveExtensions: [".mjs", ".js", ".ts", ".tsx", ".jsx", ".json"],
       // `import.meta.env.BASE_URL` só existe dentro do Vite. Aqui não há Vite,
-      // e o núcleo só o usa no endereço padrão do .wasm — que a bancada não
+      // e os motores só o usam no endereço padrão do .wasm — que a bancada não
       // usa, porque ela passa os bytes lidos do disco.
       define: { "import.meta.env.BASE_URL": '"/"' },
       logLevel: "warning",
@@ -78,4 +80,4 @@ async function carregarDoNucleo(modulos) {
   }
 }
 
-module.exports = { carregarDoNucleo, RAIZ };
+module.exports = { carregarDosMotores, RAIZ };

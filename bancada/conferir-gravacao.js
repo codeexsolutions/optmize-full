@@ -106,10 +106,10 @@ function pngMinimo() {
 
 function subir() {
   const app = express();
-  app.use("/api/cor", require("../cor-api"));
+  app.use("/api/cor", require("../servidor/cor-api"));
   app.use(express.json({ limit: "15mb" }));
-  app.use("/api/moldes", require("../moldes-api"));
-  app.use("/api/projetos", require("../projetos-api"));
+  app.use("/api/moldes", require("../servidor/moldes-api"));
+  app.use("/api/projetos", require("../servidor/projetos-api"));
   return new Promise((pronto) => {
     const servidor = app.listen(0, "127.0.0.1", () =>
       pronto({ servidor, base: "http://127.0.0.1:" + servidor.address().port }));
@@ -268,7 +268,7 @@ async function principal() {
  * uma pasta temporária, e o sistema a recolhe.
  */
 function limpar() {
-  try { require("../db").close(); } catch { /* já fechado, ou sem close */ }
+  try { require("../servidor/db").close(); } catch { /* já fechado, ou sem close */ }
   try { fs.rmSync(PASTA, { recursive: true, force: true }); } catch { /* o SO recolhe */ }
 }
 

@@ -30,7 +30,7 @@ import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { useEventos } from "../impressoras/socket";
-import { dataBr, metrosCurtos } from "../impressoras/formato";
+import { dataBr, metrosCurtos } from "../utils/formato";
 import type { AchadoDaVarredura, EstadoDaVarredura, MaquinaGerenciada, RotasDaMaquina } from "../impressoras/tipos";
 
 const ROTULO_DA_FASE: Record<EstadoDaVarredura["phase"], string> = {

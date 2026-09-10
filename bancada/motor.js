@@ -1,7 +1,7 @@
 /**
  * A bancada carrega o motor de encaixe fora do navegador.
  *
- * Quem faz o trabalho é o `nucleo.js` ao lado: ele empacota `src/nucleo/` com
+ * Quem faz o trabalho é o `motores.js` ao lado: ele empacota `src/motores/` com
  * o esbuild — o MESMO que o Vite usa — e o Node importa o resultado. Aqui só
  * ficam a lista de módulos do motor e o WASM.
  *
@@ -26,19 +26,19 @@
 
 const fs = require("fs");
 const path = require("path");
-const { carregarDoNucleo, RAIZ } = require("./nucleo");
+const { carregarDosMotores, RAIZ } = require("./motores");
 
 /*
  * Os módulos do motor. Não é uma ordem de carregamento — é só o conjunto de
  * portas de entrada; quem descobre a ordem é o esbuild, pelos `import`.
  */
 const MODULOS = [
-  "encaixeMotor.js",
-  "encaixeMascara.js",
-  "encaixeGiro.js",
-  "encaixeRede.mjs",
-  "encaixeWasm.js",
-  "geometria.ts",
+  "motores/encaixeMotor.js",
+  "motores/encaixeMascara.js",
+  "motores/encaixeGiro.js",
+  "motores/encaixeRede.mjs",
+  "motores/encaixeWasm.js",
+  "utils/geometria.ts",
 ];
 
 /**
@@ -49,7 +49,7 @@ const MODULOS = [
  * referência de correção, com ele é o que a produção roda de verdade.
  */
 async function carregarMotor({ comWasm = true } = {}) {
-  const motor = await carregarDoNucleo(MODULOS);
+  const motor = await carregarDosMotores(MODULOS);
   motor.comWasm = false;
   if (comWasm) {
     const bytes = fs.readFileSync(path.join(RAIZ, "estatico/encaixe.wasm"));

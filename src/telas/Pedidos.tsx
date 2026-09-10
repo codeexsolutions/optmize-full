@@ -43,7 +43,7 @@ import { api } from "../api/cliente";
 import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
-import { dataBr, metros, metrosCurtos } from "../impressoras/formato";
+import { dataBr, metros, metrosCurtos } from "../utils/formato";
 
 type AndamentoDoPedido = "aberto" | "pausado" | "concluido";
 type ResultadoDaCalandra = "pendente" | "ok" | "erro";

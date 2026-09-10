@@ -10,11 +10,12 @@
  * este arquivo continua sem saber o que é molde, encaixe ou impressora — só
  * desenha a tabela que recebe.
  *
- * Alguns itens não são tela daqui: Cor, Imagem e Macros ainda moram na casca
- * antiga, em `/`. Aparecem no menu mesmo assim, como link, porque o problema
- * que isso resolve é real — sem eles, quem entra por uma tela de impressora
- * fica preso em metade do sistema e não tem como adivinhar que existe outro
- * endereço. Some quando as três migrarem.
+ * Cada item é um `<NavLink>`, e não um `<button>` com `onClick`: é um `<a>` de
+ * verdade, então abre em outra aba pelo meio do mouse, mostra o endereço ao
+ * passar por cima e é anunciado como link por um leitor de tela. Quem marca o
+ * item aberto é o próprio router (o `isActive` do `NavLink`), e não uma
+ * comparação feita aqui — este arquivo deixou de precisar saber qual tela está
+ * na frente.
  *
  * ---------------------------------------------------------------------------
  * AS MEDIDAS VIERAM DA CASCA ANTIGA, E ISSO FOI DE PROPÓSITO
@@ -39,14 +40,13 @@
  */
 
 import { useEffect } from "react";
+import { NavLink } from "react-router-dom";
 import { Icone } from "./Icone";
 import { useRelogio } from "./useRelogio";
-import { GRUPOS, telasDoGrupo, type NomeDeTela } from "../rotas";
+import { GRUPOS, telasDoGrupo } from "../rotas";
 
 interface Props {
-  atual: NomeDeTela;
   aberto: boolean;
-  aoEscolher: (nome: NomeDeTela) => void;
   aoFechar: () => void;
 }
 
@@ -76,7 +76,7 @@ const ROTULO = "truncate text-[13px] font-semibold tracking-[-0.01em]";
 const APOIO = "truncate text-[10.5px] font-[450] text-tinta-apagada";
 const APOIO_ATIVO = "truncate text-[10.5px] font-[450] text-[color-mix(in_srgb,var(--accent)_55%,var(--text))]";
 
-export function Menu({ atual, aberto, aoEscolher, aoFechar }: Props) {
+export function Menu({ aberto, aoFechar }: Props) {
   const relogio = useRelogio();
 
   useEffect(() => {
@@ -145,27 +145,27 @@ export function Menu({ atual, aberto, aoEscolher, aoFechar }: Props) {
                   {grupo.rotulo}
                 </h2>
 
-                {telas.map((tela) => {
-                  const ativa = tela.nome === atual;
-                  return (
-                    <button
-                      key={tela.nome}
-                      type="button"
-                      aria-current={ativa ? "page" : undefined}
-                      onClick={() => { aoEscolher(tela.nome); aoFechar(); }}
-                      className={[ITEM, ativa ? ITEM_ATIVO : ITEM_PARADO].join(" ")}
-                    >
-                      <Icone
-                        referencia={tela.icone}
-                        className={[ICONE, ativa ? ICONE_ATIVO : ICONE_PARADO].join(" ")}
-                      />
-                      <span className={TEXTO_DO_ITEM}>
-                        <strong className={ROTULO}>{tela.rotulo}</strong>
-                        <small className={ativa ? APOIO_ATIVO : APOIO}>{tela.apoioMenu}</small>
-                      </span>
-                    </button>
-                  );
-                })}
+                {telas.map((tela) => (
+                  <NavLink
+                    key={tela.nome}
+                    to={`/${tela.nome}`}
+                    onClick={aoFechar}
+                    className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO].join(" ")}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <Icone
+                          referencia={tela.icone}
+                          className={[ICONE, isActive ? ICONE_ATIVO : ICONE_PARADO].join(" ")}
+                        />
+                        <span className={TEXTO_DO_ITEM}>
+                          <strong className={ROTULO}>{tela.rotulo}</strong>
+                          <small className={isActive ? APOIO_ATIVO : APOIO}>{tela.apoioMenu}</small>
+                        </span>
+                      </>
+                    )}
+                  </NavLink>
+                ))}
 
               </nav>
             );

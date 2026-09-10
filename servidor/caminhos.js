@@ -20,9 +20,17 @@
 const fs = require("fs");
 const path = require("path");
 
+/**
+ * A pasta do programa — a de cima desta, porque o servidor mora em
+ * `servidor/` e o resto do app (`dist/`, `estatico/`, `corel/`) é irmão dela.
+ * Vale nos dois lugares: no repositório é a raiz do projeto, e no instalado é
+ * a pasta de recursos, porque o `preparar.js` copia a mesma forma para lá.
+ */
+const PASTA_DO_APP = path.join(__dirname, "..");
+
 const RAIZ = process.env.OPTIMIZE_DADOS
   ? path.resolve(process.env.OPTIMIZE_DADOS)
-  : __dirname;
+  : PASTA_DO_APP;
 
 fs.mkdirSync(RAIZ, { recursive: true });
 
@@ -64,6 +72,7 @@ function arquivoDeConfig(nome) {
 
 module.exports = {
   RAIZ,
+  PASTA_DO_APP,
   ARQUIVO_DO_BANCO,
   RAIZ_DE_UPLOADS,
   pastaDeUploads,

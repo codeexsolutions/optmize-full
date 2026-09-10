@@ -27,7 +27,7 @@ import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { useRecarregarComEventos } from "../impressoras/socket";
 import { LancarPedido } from "../impressoras/LancarPedido";
-import { dataBr, duracao, hojeIso, metros, metrosCurtos, somarDias, tinta } from "../impressoras/formato";
+import { dataBr, duracao, hojeIso, metros, metrosCurtos, somarDias, tinta } from "../utils/formato";
 import type { RespostaDeHistorico, Registro } from "../impressoras/tipos";
 
 type Modo = "lista" | "producao";

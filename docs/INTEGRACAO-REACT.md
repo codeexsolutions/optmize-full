@@ -6,7 +6,7 @@ Moldes, Projetos, Encaixe e Cor agora têm estrutura JSX e estão disponíveis d
 
 Esta é uma integração de compatibilidade, **não a conclusão da migração declarativa descrita em ARQUITETURA.md**. As listas, formulários e o canvas ainda são atualizados pelo controlador imperativo em `src/producao/controlador.js`. A estrutura inicial é React, e o ciclo de vida, a navegação e a apresentação de erros são gerenciados por `Producao.tsx`.
 
-O código de domínio é importado de `src/nucleo/`. Não há iframe, carregamento de scripts de `public/` nem publicação das funções de tela no `window`. `escopo.js` limita consultas de elementos à montagem e remove eventos, temporizadores e URLs temporárias na desmontagem. Eventos de navegação fecham os editores abertos. A lista de Cor e o trabalho do Encaixe permanecem em memória ao visitar as demais telas.
+O código de domínio é importado de `src/motores/`. Não há iframe, carregamento de scripts de `public/` nem publicação das funções de tela no `window`. `escopo.js` limita consultas de elementos à montagem e remove eventos, temporizadores e URLs temporárias na desmontagem. Eventos de navegação fecham os editores abertos. A lista de Cor e o trabalho do Encaixe permanecem em memória ao visitar as demais telas.
 
 Os elementos de listas e canvas são espaços de uso exclusivo do controlador: não adicionar filhos React dinâmicos nesses mesmos elementos enquanto essa integração existir. Os componentes de estrutura são memoizados para evitar reconciliação sobre conteúdo que o controlador modificou.
 
