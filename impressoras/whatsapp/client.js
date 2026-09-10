@@ -17,8 +17,61 @@ const SESSION_ROOT = pastaDeDados("whatsapp-sessao");
 // (data/whatsapp-session/session-arteof). Renomear obrigaria a ler o QR de novo.
 const CLIENT_ID = "arteof";
 const SESSION_DIR = path.join(SESSION_ROOT, `session-${CLIENT_ID}`);
+
+/*
+ * A marca de que o pareamento realmente aconteceu.
+ *
+ * A pasta da sessão NÃO responde isso. Ela é um perfil de Chrome inteiro, e o
+ * `LocalAuth` a cria no instante em que o navegador abre — antes de qualquer
+ * QR ser lido. Uma tentativa de pareamento abandonada deixa 76 MB de perfil
+ * para trás, e o `hasSession()` antigo, que só perguntava "tem alguma coisa
+ * dentro?", passava a responder "sim" para sempre. Resultado: todo restart do
+ * servidor abria um Chrome e ficava num QR que ninguém pediu.
+ *
+ * Nem o IndexedDB do WhatsApp serve de pista: ele nasce de só ABRIR o
+ * web.whatsapp.com. Então em vez de adivinhar pelas entranhas do Chrome, o
+ * programa anota o que ele mesmo viu acontecer — o evento `ready` — e apaga a
+ * anotação no logout.
+ */
+const MARCA_DE_PAREAMENTO = path.join(SESSION_ROOT, "pareado.json");
 const START_TIMEOUT_MS = Number(process.env.WA_START_TIMEOUT_MS || 60000);
 const RESTART_DELAY_MS = Number(process.env.WA_RESTART_DELAY_MS || 5000);
+
+/*
+ * Quanto tempo o QR fica de pé esperando alguém ler.
+ *
+ * ISTO EXISTE POR CAUSA DE UM VAZAMENTO DE VERDADE. O watchdog do start() só
+ * olha o estado "starting"; assim que o primeiro QR aparece o estado vira
+ * "qr", ele desiste, e a partir daí NADA mais desligava o cliente. Quem abria
+ * a aba do WhatsApp e não lia o código deixava um Chrome aberto para sempre —
+ * medido num servidor real: 8,9 horas de pé, 906 QRs renovados, e o processo
+ * morreu com falha de alocação de memória.
+ *
+ * Pareamento é coisa de um minuto: a pessoa está com o celular na mão quando
+ * clica em "Conectar". Cinco minutos é folga generosa para quem foi atender o
+ * telefone no meio, e curto o bastante para não atravessar a noite.
+ *
+ * O que NÃO é afetado: quem já tem sessão salva nunca passa por aqui, porque
+ * reconecta direto para "ready" sem mostrar QR nenhum.
+ */
+const QR_TIMEOUT_MS = Number(process.env.WA_QR_TIMEOUT_MS || 5 * 60 * 1000);
+
+/*
+ * Teto para o `destroy()` do Puppeteer responder.
+ *
+ * Sem ele, um Chrome travado fazia `stopping` ficar true para sempre, e daí em
+ * diante todo `start()` devolvia sem fazer nada — o bot ficava morto até
+ * alguém reiniciar o servidor, sem nenhuma mensagem dizendo por quê. O
+ * watchdog do start() já corria essa corrida; agora ela vale para todos.
+ */
+const DESTROY_TIMEOUT_MS = 10000;
+
+/** O prazo do QR em português, sem virar "0 min" quando alguém o encurta. */
+function prazoDoQrEmTexto() {
+  if (QR_TIMEOUT_MS < 60000) return `${Math.max(1, Math.round(QR_TIMEOUT_MS / 1000))} s`;
+  const minutos = Math.round(QR_TIMEOUT_MS / 60000);
+  return `${minutos} ${minutos === 1 ? "minuto" : "minutos"}`;
+}
 
 // status:
 //   off        — cliente parado (nunca iniciado ou desconectado de propósito)
@@ -37,12 +90,40 @@ const state = {
 
 let client = null;
 let stopping = false;
+// O relógio do QR. Um só, e sempre solto pelo `pararRelogioDoQr`.
+let relogioDoQr = null;
 
-function hasSession() {
+/** Existe um perfil de navegador guardado? (Não quer dizer que pareou.) */
+function temPerfilGuardado() {
   try {
     return fs.existsSync(SESSION_DIR) && fs.readdirSync(SESSION_DIR).length > 0;
   } catch {
     return false;
+  }
+}
+
+/** Já houve um pareamento confirmado neste perfil? */
+function hasSession() {
+  return fs.existsSync(MARCA_DE_PAREAMENTO);
+}
+
+function marcarPareado(me) {
+  try {
+    fs.mkdirSync(SESSION_ROOT, { recursive: true });
+    const anotacao = { em: new Date().toISOString(), numero: (me && me.number) || "" };
+    fs.writeFileSync(MARCA_DE_PAREAMENTO, JSON.stringify(anotacao, null, 2) + "\n", "utf8");
+  } catch (error) {
+    // Não é motivo para derrubar a conexão que acabou de dar certo: o custo de
+    // falhar aqui é o servidor não reconectar sozinho no próximo restart.
+    console.warn(`[whatsapp] não consegui anotar o pareamento: ${error.message}`);
+  }
+}
+
+function apagarMarcaDePareamento() {
+  try {
+    fs.rmSync(MARCA_DE_PAREAMENTO, { force: true });
+  } catch (error) {
+    console.warn(`[whatsapp] não consegui apagar a marca de pareamento: ${error.message}`);
   }
 }
 
@@ -78,15 +159,21 @@ function wire(c) {
       state.lastError = `Falha ao desenhar o QR: ${error.message}`;
     }
     console.log("[whatsapp] QR novo disponível — escaneie na aba WhatsApp do painel.");
+    ligarRelogioDoQr(c);
   });
 
   c.on("authenticated", () => {
+    // Alguém leu: o relógio do QR perdeu a razão de existir. Se ficasse de pé,
+    // ele acharia daqui a pouco um cliente que já está conectando e — mesmo
+    // com a guarda de estado — seria uma bomba armada à toa.
+    pararRelogioDoQr();
     console.log("[whatsapp] autenticado, carregando a sessão...");
     state.status = "starting";
     state.qrSvg = "";
   });
 
   c.on("ready", () => {
+    pararRelogioDoQr();
     state.status = "ready";
     state.qrSvg = "";
     state.lastError = null;
@@ -97,9 +184,12 @@ function wire(c) {
       name: info.pushname || ""
     };
     console.log(`[whatsapp] conectado como ${state.me.name || state.me.number || "(sem nome)"}`);
+    // Só aqui se sabe que o pareamento existe de verdade.
+    marcarPareado(state.me);
   });
 
   c.on("auth_failure", message => {
+    pararRelogioDoQr();
     state.status = "error";
     state.qrSvg = "";
     state.lastError = `Falha de autenticação: ${message}`;
@@ -107,6 +197,7 @@ function wire(c) {
   });
 
   c.on("disconnected", reason => {
+    pararRelogioDoQr();
     state.status = "off";
     state.qrSvg = "";
     state.me = null;
@@ -120,10 +211,54 @@ function wire(c) {
 
 async function destroyQuietly(c) {
   try {
-    await c.destroy();
+    /*
+     * O `destroy()` do Puppeteer pode não voltar nunca quando o Chrome já está
+     * travado — e é justamente aí que ele mais precisa ser chamado. A corrida
+     * com o relógio garante que quem chamou siga em frente: o pior caso é um
+     * processo de Chrome órfão, que o sistema recolhe, e não o módulo inteiro
+     * preso esperando.
+     */
+    await Promise.race([
+      c.destroy(),
+      new Promise(resolve => setTimeout(resolve, DESTROY_TIMEOUT_MS)),
+    ]);
   } catch (error) {
     console.warn(`[whatsapp] erro ao encerrar o cliente: ${error.message}`);
   }
+}
+
+/** Solta o relógio do QR. Seguro chamar sem relógio nenhum de pé. */
+function pararRelogioDoQr() {
+  if (relogioDoQr) clearTimeout(relogioDoQr);
+  relogioDoQr = null;
+}
+
+/**
+ * Liga o relógio do QR — uma vez por sessão de pareamento, e não a cada código.
+ *
+ * O WhatsApp renova o QR a cada ~20 s, então religar o relógio a cada evento
+ * `qr` seria o mesmo que não ter relógio: ele nunca chegaria ao fim. O que se
+ * mede aqui é há quanto tempo a tela está PEDINDO para alguém ler, não a idade
+ * do código atual.
+ */
+function ligarRelogioDoQr(c) {
+  if (relogioDoQr) return;
+  relogioDoQr = setTimeout(async () => {
+    relogioDoQr = null;
+    if (client !== c || state.status !== "qr") return;
+
+    state.lastError = `Ninguém leu o QR em ${prazoDoQrEmTexto()}, então o WhatsApp Web foi`
+      + " fechado para não ficar ocupando memória. Clique em Conectar para tentar de novo.";
+    console.warn(`[whatsapp] QR expirou sem leitura — fechando o navegador.`);
+
+    client = null;
+    await destroyQuietly(c);
+    state.status = "off";
+    state.qrSvg = "";
+    state.me = null;
+  }, QR_TIMEOUT_MS);
+  // Não é motivo para segurar o processo de pé.
+  if (relogioDoQr.unref) relogioDoQr.unref();
 }
 
 // Sobe o cliente. É seguro chamar várias vezes: se já existe um rodando,
@@ -146,16 +281,29 @@ function start() {
   state.status = "starting";
   state.lastError = null;
   state.qrSvg = "";
+  // Um começo novo não herda o relógio de um pareamento que não deu certo.
+  pararRelogioDoQr();
 
   const c = buildClient(navegador);
   client = c;
   wire(c);
 
-  c.initialize().catch(error => {
+  c.initialize().catch(async error => {
     state.status = "error";
     state.lastError = error.message;
     console.error(`[whatsapp] não consegui iniciar: ${error.message}`);
     if (client === c) client = null;
+    /*
+     * O Chrome JÁ SUBIU quando o `initialize()` falha — a falha típica
+     * ("Execution context was destroyed") acontece depois de o Puppeteer ter
+     * aberto o navegador, no meio do carregamento do WhatsApp Web. Sem este
+     * `destroy`, soltar a referência só fazia o processo virar órfão: ninguém
+     * mais tinha como fechá-lo, e ele ficava até o servidor inteiro morrer.
+     *
+     * Solta o relógio junto, porque um QR pode ter aparecido antes da falha.
+     */
+    pararRelogioDoQr();
+    await destroyQuietly(c);
   });
 
   // Chromium/WhatsApp Web pode ficar preso indefinidamente em "starting"
@@ -180,6 +328,7 @@ function start() {
 
 async function stop() {
   if (!client) return;
+  pararRelogioDoQr();
   stopping = true;
   const c = client;
   client = null;
@@ -193,19 +342,27 @@ async function stop() {
 // Desconecta o número e apaga a sessão salva: o próximo start() vai pedir
 // QR de novo.
 async function logout() {
+  pararRelogioDoQr();
   const c = client;
   client = null;
   stopping = true;
 
   if (c) {
     try {
-      await c.logout();
+      // Com teto, pelo mesmo motivo do `destroyQuietly`: um Chrome travado não
+      // pode deixar `stopping` em true para sempre. A sessão em disco é apagada
+      // logo abaixo de qualquer jeito, que é o que "sair" precisa garantir.
+      await Promise.race([
+        c.logout(),
+        new Promise(resolve => setTimeout(resolve, DESTROY_TIMEOUT_MS)),
+      ]);
     } catch (error) {
       console.warn(`[whatsapp] logout: ${error.message}`);
     }
     await destroyQuietly(c);
   }
 
+  apagarMarcaDePareamento();
   try {
     fs.rmSync(SESSION_DIR, { recursive: true, force: true });
   } catch (error) {
@@ -360,15 +517,42 @@ async function sendText(to, text) {
   return c.sendMessage(to, text);
 }
 
-// Chamado na subida do servidor: se já existe sessão salva, reconecta
-// sozinho pra que os avisos voltem sem ninguém precisar mexer no painel.
+/*
+ * Chamado na subida do servidor: se já houve pareamento, reconecta sozinho pra
+ * que os avisos voltem sem ninguém precisar mexer no painel.
+ *
+ * TRÊS CASOS, E O DO MEIO É O QUE CUSTAVA CARO:
+ *
+ *   marca de pareamento          reconecta, e vai direto para "ready"
+ *   perfil sem marca             tenta uma vez, com prazo
+ *   nada                         não abre navegador nenhum
+ *
+ * O caso do meio existe por duas razões diferentes, e não dá para distingui-las
+ * daqui: pode ser um pareamento abandonado no meio (o perfil fica, e não há o
+ * que reconectar), ou pode ser alguém que já usava o bot ANTES desta marca
+ * existir — e recusar aí desligaria os avisos de quem estava com tudo
+ * funcionando, sem avisar.
+ *
+ * Então tenta. Se estava pareado, sobe direto para "ready" e a marca passa a
+ * existir; da próxima vez cai no primeiro caso. Se não estava, aparece um QR —
+ * e agora o relógio o fecha em poucos minutos, em vez de segurar um Chrome a
+ * noite inteira. O pior caso deixou de ser caro.
+ */
 function autoStart() {
-  if (!hasSession()) {
-    console.log("[whatsapp] nenhuma sessão salva — leia o QR na aba WhatsApp do painel.");
+  if (hasSession()) {
+    console.log("[whatsapp] pareamento anotado, reconectando...");
+    start();
     return;
   }
-  console.log("[whatsapp] sessão salva encontrada, reconectando...");
-  start();
+
+  if (temPerfilGuardado()) {
+    console.log("[whatsapp] há um perfil guardado, mas sem pareamento anotado —"
+      + ` tentando reconectar. Se aparecer QR, ele se fecha em ${prazoDoQrEmTexto()}.`);
+    start();
+    return;
+  }
+
+  console.log("[whatsapp] nenhuma sessão salva — leia o QR na aba WhatsApp do painel.");
 }
 
 module.exports = { start, stop, logout, getStatus, getGroups, sendText, autoStart, hasSession, SESSION_DIR };

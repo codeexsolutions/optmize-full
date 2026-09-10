@@ -364,6 +364,24 @@ ao igualar as cascas e deixei a nova 8px mais larga do que devia. Antes de
 copiar medida da tela antiga, confira qual das duas folhas está valendo — ou
 meça na página, que não mente.
 
+**Watchdog que só olha UM estado.** O cliente do WhatsApp tinha um relógio de
+segurança para o caso de ele ficar preso abrindo o navegador, e a primeira
+linha dele era `if (state.status !== "starting") return`. Parece defensivo. Na
+prática, era um desarme: assim que o primeiro QR aparecia o estado virava
+`"qr"`, o relógio desistia, e **nada mais desligava o cliente**. Um servidor
+real ficou 8,9 horas renovando 906 QRs que ninguém leu, segurando um Chrome, e
+morreu com falha de alocação de memória.
+
+O irmão do mesmo defeito estava ao lado: quando o `initialize()` falhava, o
+código soltava a referência (`client = null`) mas não chamava `destroy()` — e o
+Chrome já tinha subido. Virava órfão, sem ninguém para fechá-lo.
+
+Os dois têm a mesma forma: **soltar a referência não é o mesmo que liberar o
+recurso**, e um estado de espera sem prazo é um vazamento esperando o horário
+comercial acabar. Nenhum dos dois dá erro — o programa segue respondendo, e a
+conta chega dias depois como "o servidor caiu sozinho". Quem tranca isso agora
+é o `npm run bancada:whatsapp`.
+
 **Confiar numa varredura de dependência que casa nomes soltos.** Depois da
 lição do `rotacoesDe` a varredura passou a enxergar `const` e `window.X =` — e
 mesmo assim mentiu nos dois sentidos. Ela **acusou** dependências que não
