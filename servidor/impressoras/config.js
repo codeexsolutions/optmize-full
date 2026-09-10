@@ -35,21 +35,9 @@ function hostFromUnc(value) {
   return match ? match[1] : null;
 }
 
-function machineHost(machine) {
-  return machine.host
-    || hostFromUnc(machine.historyPath)
-    || hostFromUnc(machine.previewDir)
-    || null;
-}
-
 /** As impressoras ativas, na ordem em que aparecem no painel. */
 async function loadMachines() {
   return listMachines();
-}
-
-/** Todas, inclusive as desativadas — é a lista da tela de gestão. */
-async function loadAllMachines() {
-  return listMachines({ includeDisabled: true });
 }
 
 /**
@@ -62,4 +50,4 @@ async function getMachine(id) {
   return machine && machine.enabled !== false ? machine : null;
 }
 
-module.exports = { loadMachines, loadAllMachines, getMachine, hostFromUnc, machineHost };
+module.exports = { loadMachines, getMachine, hostFromUnc };

@@ -327,12 +327,3 @@ export function pesosParaJSON(rede) {
   });
 }
 
-export function redeDoJSON(texto) {
-  const dados = JSON.parse(texto);
-  // Pesos gravados antes da versão existir são, por definição, da versão 1.
-  return {
-    tamanhos: dados.tamanhos, camadas: dados.camadas,
-    versaoFeatures: dados.versaoFeatures == null ? 1 : dados.versaoFeatures,
-  };
-}
-

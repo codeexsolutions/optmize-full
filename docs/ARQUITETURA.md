@@ -80,7 +80,8 @@ comportamento. Um ciclo de importação que se resolve diferente, uma variável 
 módulo que deixa de ser compartilhada, uma função que sai içada de outro jeito
 — nada disso aparece num diff de linhas.
 
-Por isso o `npm run bancada:porte`: ele sobe as duas instâncias do motor — a de
+Por isso existiu o `bancada:porte` (ele saiu junto com o `public/`, quando o
+segundo lado deixou de existir): subia as duas instâncias do motor — a de
 `public/` e a de `src/motores/` — monta as mesmas peças, roda a mesma ordem
 embaralhada com a mesma semente em cada combinação de heurística, salto,
 agrupamento e bancada, e exige resultado idêntico peça por peça. São 637 casos,
@@ -156,10 +157,11 @@ existem **nos dois lados**: a cópia de `public/` é a que a tela antiga carrega
 por `<script>`, a que os workers carregam por `importScripts`, e — no caso da
 máscara — a que a BANCADA lê como texto para medir o motor.
 
-**Mexeu numa conta de um lado, mexe no outro, e rode `npm run bancada:porte`** —
-ele acusa a divergência em segundos, o que a bancada de consumo (que leva sete
-minutos e tem ruído de sorteio) não faria. As duas cópias somem numa quando a
-Etapa C terminar.
+**As duas cópias já sumiram numa** — o `public/` saiu, e com ele a segunda
+instância de cada arquivo. Sobrou a lição, que vale para o próximo porte:
+divergência entre duas cópias de uma conta se acha rodando os dois lados
+juntos, em segundos, e não relendo o texto nem esperando a bancada de consumo
+(que leva sete minutos e tem ruído de sorteio).
 
 ## As pastas
 
@@ -261,9 +263,9 @@ uma casca visivelmente diferente — outra largura de barra, outra marca, outro
 jeito de marcar o item aberto, o relógio noutro canto. Parecia ter trocado de
 programa, não de tela.
 
-A casca nova nasceu como um REDESENHO da antiga, e enquanto as duas convivem
-isso é defeito, não melhoria. Então `src/casca/Menu.tsx` e `Cabecalho.tsx`
-copiam as medidas de `public/style.css` e `public/interface.css`: largura de
+A casca nova nasceu como um REDESENHO da antiga, e enquanto as duas conviveram
+isso era defeito, não melhoria. Então `src/casca/Menu.tsx` e `Cabecalho.tsx`
+copiaram as medidas de `public/style.css` e `public/interface.css`: largura de
 252px, os recuos, o `logo.png` (que passou a morar em `estatico/`, servido
 pelas duas), o ativo com borda âmbar e a barrinha de 3px, e o relógio no pé do
 menu — onde a casca antiga já o tinha posto, e pelo motivo dela: o cabeçalho
@@ -332,9 +334,9 @@ merece cuidado na Etapa B.
 saiu do `public/` e do `index.html` antigo, e o domínio que ela usava virou
 módulo em `src/motores/` com `export`.
 
-**No fim:** `base` do Vite vira `"/"`, o `public/` inteiro é apagado, o
-`npm run css` (que existe só para a tela antiga) some junto, e os links entre
-as cascas deixam de existir porque só há uma.
+**No fim** — e isto já aconteceu: `base` do Vite virou `"/"`, o `public/`
+inteiro foi apagado, o `npm run css` (que existia só para a tela antiga) some
+junto, e os links entre as cascas deixaram de existir porque só há uma.
 
 ## Regras
 
@@ -411,13 +413,12 @@ continua funcionando, a tela só deixa de se atualizar sozinha.
 
 ## Dívidas conhecidas
 
-- **As fontes vêm do Google.** `fonts.googleapis.com` no `<head>` das duas
-  telas. O programa instalado roda sem internet, então hoje ele cai para a
-  fonte do sistema quando está offline. As fontes precisam ir para `estatico/`.
-- **`npm run css` existe só para a tela antiga.** Some com ela.
-- **A tela de Cor não pode migrar antes do Encaixe.** É a última que ainda
-  aparece no menu novo como link para a casca antiga, e o motivo é a entrega de
-  arquivos descrita acima.
+- **As fontes vêm do Google.** `fonts.googleapis.com` no `<head>`. O programa
+  instalado roda sem internet, então hoje ele cai para a fonte do sistema
+  quando está offline. As fontes precisam ir para `estatico/`.
+- **O Encaixe ainda é imperativo.** É a última tela dirigida pelo
+  `producao/controlador.js`; o domínio dela já saiu para `motores/` e `api/`.
+  O que falta está listado em `INTEGRACAO-REACT.md`.
 - **A varredura da rede é do Windows.** `nbtstat`, `net view` e `ping -a` são
   chamados como processo. É onde o sistema roda, e o UNC do resto do módulo já
   seria de todo jeito específico do Windows — mas está escrito aqui para não

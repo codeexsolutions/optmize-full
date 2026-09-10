@@ -50,7 +50,7 @@ interface Props {
   aoFechar: () => void;
 }
 
-/** O item do menu, nas medidas do `.nav-btn` da casca antiga. */
+/** O item do menu. As medidas vieram do `.nav-btn` da casca antiga, que já saiu. */
 const ITEM =
   "grid min-h-[50px] grid-cols-[30px_minmax(0,1fr)] items-center gap-[10px] rounded-[10px]" +
   // `no-underline`: o item virou <a>, e link sublinhado num menu lateral não é
