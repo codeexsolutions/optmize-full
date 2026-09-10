@@ -97,7 +97,7 @@ export function Moldes() {
 
   return (
     // Ver o cabeçalho: `producao.css` é escopada em `:where(.producao)`.
-    <div className="producao">
+    <div className="producao tela-cheia">
       <section className="card">
         <div className="card-head">
           <div className="card-head-copy">

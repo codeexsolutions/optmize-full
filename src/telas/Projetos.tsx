@@ -180,7 +180,7 @@ export function Projetos() {
 
   return (
     // Ver o cabeçalho: a folha `producao.css` é escopada em `:where(.producao)`.
-    <div className="producao">
+    <div className="producao tela-cheia">
       <section className="card">
         <div className="card-head">
           <div className="card-head-copy">

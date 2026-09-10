@@ -272,7 +272,7 @@ export function Cor({ ativa = false }: { ativa?: boolean }) {
   if (comErro) resumo.push(`${comErro} que deram erro`);
 
   return (
-    <div className="page active" hidden={!ativa}>
+    <div className="page active tela-cheia" hidden={!ativa}>
       <section className="card">
         <div className="card-head">
           <div className="card-head-copy">

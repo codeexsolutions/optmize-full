@@ -226,6 +226,7 @@ export function Historico() {
         titulo={modo === "lista" ? "Trabalhos" : "Produção"}
         icone="icones.svg#printer"
         apoio={`${registros.length} de ${dados?.records.length ?? 0} no período.`}
+        preencher
       >
         {carregando && <p className="m-0 text-[0.85rem] text-tinta-fraca">Carregando o histórico...</p>}
         {erro && (

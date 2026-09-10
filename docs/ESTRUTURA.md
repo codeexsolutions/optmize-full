@@ -91,6 +91,14 @@ redirecionamento que carrega o `#` adiante.)
   quando é aberta (`lazy`), e não toda vez que alguém abre o painel.
 - `src/casca/`: a moldura — `Casca` (o layout das rotas), `Menu`, `Cabecalho`,
   `Cartao`, `Icone`.
+
+  **A tela ocupa a janela.** A casca é uma coluna de altura fixa: menu à
+  esquerda, cabeçalho parado no alto, e o que sobra é do miolo. Dentro dele, o
+  cartão marcado com `preencher` cresce até o pé da janela e rola POR DENTRO —
+  o título, o filtro e o botão de ação ficam parados, e só a lista corre. É um
+  cartão por tela (dois dividiriam a sobra e nenhuma lista ficaria com altura
+  útil), e as telas que ainda usam a folha antiga fazem o mesmo pela classe
+  `tela-cheia` (ver o fim de `producao.css`).
 - `src/telas/`: uma por aba.
 - `src/motores/`: o domínio — sem React e sem a tela. Ver a regra em
   `ARQUITETURA.md`.

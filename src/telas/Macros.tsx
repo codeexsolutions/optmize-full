@@ -74,6 +74,7 @@ export function Macros() {
 
   return (
     <Cartao
+      preencher
       titulo="Macros do CorelDRAW"
       icone="icones.svg#puzzle"
       apoio="Ferramentas que rodam dentro do Corel e conversam com este sistema."

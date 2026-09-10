@@ -270,6 +270,9 @@ export function Imagem() {
         titulo="Melhorar a imagem"
         icone="icones.svg#image"
         apoio="Aumenta a resolução com rede neural, para imprimir grande sem borrar. Nada sai desta máquina."
+        /* Enquanto não há imagem na mesa, é este que ocupa a janela. Com
+           imagens, cada uma é um cartão e a leitura passa a ser corrida. */
+        preencher={itens.length === 0}
       >
         <label
           onDragEnter={(e) => { e.preventDefault(); setArrastando(true); }}

@@ -228,6 +228,7 @@ function PainelDeAjustes({ dados, conectado, aoSalvar, aoTestar }: {
 
   return (
     <Cartao
+      preencher
       titulo="O que avisar"
       icone="icones.svg#bell"
       apoio="Sem nenhuma máquina marcada, avisa de todas."

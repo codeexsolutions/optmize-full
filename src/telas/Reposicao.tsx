@@ -82,6 +82,9 @@ export function Reposicao() {
         titulo="Reposição"
         icone="icones.svg#rotate-ccw"
         apoio="Trabalho refeito, por semana. Reconhecido pela palavra “reposição” no nome do arquivo."
+        /* Sem semana nenhuma não existe o cartão de baixo, e é este que ocupa
+           a janela — senão a tela fica um cartão fino com um vazio embaixo. */
+        preencher={!dados || dados.weeks.length === 0}
       >
         {carregando && <p className="m-0 text-[0.85rem] text-tinta-fraca">Carregando...</p>}
 
@@ -113,7 +116,12 @@ export function Reposicao() {
       </Cartao>
 
       {dados && dados.weeks.length > 0 && (
-        <Cartao titulo="Por semana" icone="icones.svg#calendar" apoio="Da mais recente para a mais antiga. Clique para ver os trabalhos.">
+        <Cartao
+          titulo="Por semana"
+          icone="icones.svg#calendar"
+          apoio="Da mais recente para a mais antiga. Clique para ver os trabalhos."
+          preencher
+        >
           <ul className="m-0 grid list-none gap-2 p-0">
             {dados.weeks.map((semana) => {
               const aberta = abertas.has(semana.weekStart);
