@@ -46,40 +46,35 @@ const esbuild = require("esbuild");
 const bytenode = require("bytenode");
 
 const RAIZ = path.join(__dirname, "..");
-const DESTINO = path.join(RAIZ, "src-tauri", "servidor");
+const PACOTE = path.join(RAIZ, "src-tauri", "servidor");
+
+/**
+ * A pasta do backend dentro da cópia. O `preparar.js` guarda a mesma forma do
+ * repositório, então o servidor mora em `servidor/` lá também.
+ */
+const DESTINO = path.join(PACOTE, "servidor");
 
 /** O ponto de entrada do servidor. Tudo que ele exige entra no pacote. */
 const ENTRADA = "server.js";
 
 /**
- * Os arquivos do servidor que somem depois de virar bytecode.
+ * O que some depois de virar bytecode: TUDO que está na pasta do servidor,
+ * menos o carregador.
  *
- * A lista é explícita, e não "tudo que é .js na raiz": um dia alguém põe um
- * arquivo ali que precisa continuar legível, e uma varredura o apagaria sem
- * perguntar.
+ * Aqui a lista era escrita à mão, arquivo por arquivo, para que uma varredura
+ * não apagasse por engano algo que precisasse continuar legível. Com o backend
+ * numa pasta só isso deixou de ser um risco e virou o contrário: um arquivo
+ * novo de servidor que ninguém lembrasse de acrescentar aqui sairia no
+ * instalador em texto, comentado, que é justamente o que este script existe
+ * para evitar. Nada dentro de `servidor/` é lido do disco em execução — o que
+ * a central das impressoras lê são os arquivos DAS MÁQUINAS, pela rede, e a
+ * configuração do WhatsApp, que mora na pasta de dados.
  */
-const DO_SERVIDOR = [
-  "server.js", "caminhos.js", "db.js", "moldes-api.js", "projetos-api.js",
-  "uploads-arquivos.js", "encaixe-pdf.js", "encaixe-memoria.js",
-  "cor-api.js", "cor-icc.js", "macros-api.js", "impressoras-api.js",
-];
-
-/**
- * Pastas do servidor que somem inteiras.
- *
- * A central das impressoras são 39 arquivos numa árvore, e todos entram no
- * bundle: os `require` dela são literais, então o esbuild os segue a partir do
- * `impressoras-api.js`. Nenhum deles é lido do disco em execução — o que a
- * central lê são os arquivos DAS IMPRESSORAS, pela rede, e a configuração do
- * WhatsApp, que mora na pasta de dados. Então depois do bundle a árvore é peso
- * morto legível, e sai.
- *
- * Isto ficou de fora na primeira vez que a central entrou no projeto, e o
- * instalável teria saído com ela inteira em texto — comentada, que é
- * justamente o que este arquivo existe para evitar. Pasta nova de servidor
- * entra aqui.
- */
-const PASTAS_DO_SERVIDOR = ["impressoras"];
+function fontesDoServidor() {
+  return fs.readdirSync(DESTINO, { withFileTypes: true })
+    .filter((item) => item.name !== ENTRADA && item.name !== "servidor.jsc")
+    .map((item) => item.name);
+}
 
 /**
  * O que fica de fora e continua texto, de propósito:
@@ -116,9 +111,11 @@ async function compilarServidor() {
     process.exit(1);
   }
 
-  const antes =
-    DO_SERVIDOR.reduce((soma, n) => soma + tamanho(path.join(DESTINO, n)), 0) +
-    PASTAS_DO_SERVIDOR.reduce((soma, n) => soma + tamanhoDaPasta(path.join(DESTINO, n)), 0);
+  const fontes = fontesDoServidor();
+  const antes = fontes.reduce((soma, nome) => {
+    const caminho = path.join(DESTINO, nome);
+    return soma + (fs.statSync(caminho).isDirectory() ? tamanhoDaPasta(caminho) : tamanho(caminho));
+  }, 0);
 
   // O bytecode anterior sai primeiro, e não é arrumação.
   //
@@ -161,13 +158,17 @@ async function compilarServidor() {
     "require(\"bytenode\");\nrequire(\"./servidor.jsc\");\n");
 
   // 4. Os originais saem.
-  for (const nome of DO_SERVIDOR) {
-    if (nome === ENTRADA) continue;
-    fs.rmSync(path.join(DESTINO, nome), { force: true });
+  for (const nome of fontes) {
+    fs.rmSync(path.join(DESTINO, nome), { recursive: true, force: true });
   }
-  for (const pasta of PASTAS_DO_SERVIDOR) {
-    fs.rmSync(path.join(DESTINO, pasta), { recursive: true, force: true });
-  }
+
+  /*
+   * E com eles os motores do front que o servidor exige (ver `LEVAR`, no
+   * preparar.js). Eles vieram para cá só para o esbuild poder segui-los; agora
+   * estão dentro do bytecode, e o que ficasse na pasta seria o motor de
+   * encaixe em texto, comentado — exatamente o que este script evita.
+   */
+  fs.rmSync(path.join(PACOTE, "src"), { recursive: true, force: true });
 
   return { antes, depois: tamanho(jsc) };
 }
@@ -190,7 +191,7 @@ async function compilarServidor() {
  * máquina do cliente, e do jeito mais silencioso: o servidor não sobe.
  */
 function conferirNode() {
-  const embutido = path.join(DESTINO, "node.exe");
+  const embutido = path.join(PACOTE, "node.exe");
   if (!fs.existsSync(embutido)) {
     console.error("compilar: o node.exe ainda não está em src-tauri/servidor.");
     console.error("O bytecode precisa casar com ELE. Rode o preparar.js antes.");
@@ -211,8 +212,7 @@ function conferirNode() {
 
 /** Sobrou algum fonte do servidor na pasta? */
 function conferirLimpeza() {
-  const sobrou = [...DO_SERVIDOR.filter((n) => n !== ENTRADA), ...PASTAS_DO_SERVIDOR]
-    .filter((n) => fs.existsSync(path.join(DESTINO, n)));
+  const sobrou = fontesDoServidor();
   if (sobrou.length > 0) {
     console.error("compilar: estes fontes do servidor continuam na pasta:");
     sobrou.forEach((n) => console.error("  " + n));

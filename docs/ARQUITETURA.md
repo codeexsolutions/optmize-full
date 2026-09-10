@@ -33,7 +33,7 @@ Daí a regra que manda em tudo o resto:
 > tirar a dependência do escopo global. Se uma conta mudou de resultado, o
 > porte está errado.
 
-`src/nucleo/geometria.ts` é a referência de como um módulo de domínio TIPADO se
+`src/utils/geometria.ts` é a referência de como um módulo de domínio TIPADO se
 parece.
 
 ### O domínio grande atravessa como `.js`, e isso é deliberado
@@ -51,23 +51,23 @@ quantas linhas diferem do original:
 
 | Arquivo | Linhas | Diferem |
 |---|---|---|
-| `nucleo/vetor.js` | 1.209 | **1** |
-| `nucleo/encaixeMascara.js` | 452 | **6** |
-| `nucleo/imagemWorker.js` | 423 | **5** |
-| `nucleo/diagnosticoDaImagem.js` | 197 | só os `export` |
-| `nucleo/encaixeMotor.js` | 3.014 | 74 `export`/`import`, o resto é o cabeçalho novo |
-| `nucleo/encaixeWasm.js` | 365 | 11 `export`/`import` |
-| `nucleo/encaixeRede.js` | 331 | 21 `export` |
-| `nucleo/encaixeGiro.js` | 30 | 3 `export` |
-| `nucleo/moldes.js` | 2.029 | 76 `export`, mais o `import` do `caixaDeContorno` |
-| `nucleo/encaixeParalelo.js` | 441 | 19 `export`, mais o `new Worker` |
-| `nucleo/encaixePrepara.js` | 319 | 8 `export`, mais o `new Worker` |
-| `nucleo/arteMolde.js` | 270 | só os `export` |
-| `nucleo/corDoArquivo.js` | 237 | só os `export` |
-| `nucleo/encaixeWorker.js` | 139 | o `importScripts` virou `import` |
-| `nucleo/preparaWorker.js` | 121 | o `importScripts` virou `import` |
-| `nucleo/pecaNaGrade.js` | 158 | recortado do `encaixe.js` — ver abaixo |
-| `nucleo/respirar.js` | 25 | recortado do `encaixe.js` — ver abaixo |
+| `motores/vetor.js` | 1.209 | **1** |
+| `motores/encaixeMascara.js` | 452 | **6** |
+| `motores/imagemWorker.js` | 423 | **5** |
+| `motores/diagnosticoDaImagem.js` | 197 | só os `export` |
+| `motores/encaixeMotor.js` | 3.014 | 74 `export`/`import`, o resto é o cabeçalho novo |
+| `motores/encaixeWasm.js` | 365 | 11 `export`/`import` |
+| `motores/encaixeRede.js` | 331 | 21 `export` |
+| `motores/encaixeGiro.js` | 30 | 3 `export` |
+| `motores/moldes.js` | 2.029 | 76 `export`, mais o `import` do `caixaDeContorno` |
+| `motores/encaixeParalelo.js` | 441 | 19 `export`, mais o `new Worker` |
+| `motores/encaixePrepara.js` | 319 | 8 `export`, mais o `new Worker` |
+| `motores/arteMolde.js` | 270 | só os `export` |
+| `motores/corDoArquivo.js` | 237 | só os `export` |
+| `motores/encaixeWorker.js` | 139 | o `importScripts` virou `import` |
+| `motores/preparaWorker.js` | 121 | o `importScripts` virou `import` |
+| `motores/pecaNaGrade.js` | 158 | recortado do `encaixe.js` — ver abaixo |
+| `utils/respirar.js` | 25 | recortado do `encaixe.js` — ver abaixo |
 
 Os tipos entram depois, arquivo por arquivo, quando alguém tiver motivo para
 mexer lá dentro. Quem chama declara o contrato do seu lado enquanto isso — ver
@@ -81,7 +81,7 @@ módulo que deixa de ser compartilhada, uma função que sai içada de outro jei
 — nada disso aparece num diff de linhas.
 
 Por isso o `npm run bancada:porte`: ele sobe as duas instâncias do motor — a de
-`public/` e a de `src/nucleo/` — monta as mesmas peças, roda a mesma ordem
+`public/` e a de `src/motores/` — monta as mesmas peças, roda a mesma ordem
 embaralhada com a mesma semente em cada combinação de heurística, salto,
 agrupamento e bancada, e exige resultado idêntico peça por peça. São 637 casos,
 com o WASM ligado dos dois lados.
@@ -100,7 +100,7 @@ porte não é o diff — é rodar os dois lado a lado.
 
 ### O domínio da Etapa C desceu antes das telas, e trouxe duas surpresas
 
-As 3.739 linhas de domínio que o Encaixe usa já estão em `src/nucleo/`. Duas
+As 3.739 linhas de domínio que o Encaixe usa já estão em `src/motores/`. Duas
 coisas apareceram no caminho, e as duas eram invisíveis enquanto tudo era
 `<script>` global:
 
@@ -110,7 +110,7 @@ seis funções que moravam no `encaixe.js` (`pixelsDaImagem`,
 `mascarasDaPeca`, `respirarNaTela`), e o `arte-molde.js` usava o `PPCM_PADRAO`.
 Como módulo isso seria o domínio importando da tela — justamente a parte que
 vai ser reescrita. Então o que o domínio usa desceu antes, em
-`nucleo/pecaNaGrade.js` (o lado do canvas do preparo) e `nucleo/respirar.js`.
+`motores/pecaNaGrade.js` (o lado do canvas do preparo) e `utils/respirar.js`.
 
 **2. O endereço do WASM estava absoluto.** `carregarMotorWasm` tinha
 `"/encaixe.wasm"` como padrão. Na casca antiga, servida em `/`, isso achava o
@@ -124,16 +124,16 @@ aparecer, o que sugere procurar por eles de propósito na Etapa D.
 ### A cópia dupla acabou
 
 Enquanto a casca antiga existiu, o domínio morou em dois lugares — `public/` e
-`src/nucleo/` — e a regra era "mexeu numa conta de um lado, mexe no outro". Isso
+`src/motores/` — e a regra era "mexeu numa conta de um lado, mexe no outro". Isso
 acabou: o `public/` foi apagado, com **22.608 linhas**, e sobrou uma cópia só.
 
 Quatro coisas ainda apontavam para lá, e cada uma exigiu uma decisão:
 
 | quem | o que fazia | como ficou |
 |---|---|---|
-| `encaixe-memoria.js` | o SERVIDOR dava `require("./public/encaixe-rede.js")` | passou a carregar `src/nucleo/encaixeRede.mjs` |
-| `bancada/motor.js` | lia 6 arquivos de `public/` e concatenava o TEXTO | empacota `src/nucleo/` com esbuild (`bancada/nucleo.js`) |
-| `bancada/conferir-arte.js` | RECORTAVA duas funções do texto de `encaixe.js` | importa `src/nucleo/jpegParaPdf.js` |
+| `encaixe-memoria.js` | o SERVIDOR dava `require("./public/encaixe-rede.js")` | passou a carregar `src/motores/encaixeRede.mjs` |
+| `bancada/motor.js` | lia 6 arquivos de `public/` e concatenava o TEXTO | empacota `src/motores/` com esbuild (`bancada/motores.js`) |
+| `bancada/conferir-arte.js` | RECORTAVA duas funções do texto de `encaixe.js` | importa `src/motores/jpegParaPdf.js` |
 | `npm run css` | gerava `public/tailwind.css` | saiu; o CSS vem do Vite |
 
 **Por que o `encaixeRede` é `.mjs`.** O projeto é CommonJS, então um `.js` com
@@ -164,26 +164,55 @@ Etapa C terminar.
 ## As pastas
 
 ```
-src/                     A tela nova (React + TypeScript)
+servidor/                O BACKEND — Express, SQLite e as rotas da API
+├── server.js            sobe o Express, serve o painel e liga as rotas
+├── caminhos.js          onde ficam o dados.db e o uploads/
+├── db.js                o banco
+├── *-api.js             uma porta por assunto: moldes, projetos, cor, macros…
+└── impressoras/         a central das impressoras (portada; nomes em inglês)
+
+src/                     O FRONT (React + TypeScript)
 ├── main.tsx             entrada: monta o React e carrega o CSS
-├── App.tsx              a casca: menu + cabeçalho + a tela da vez
+├── App.tsx              as rotas — a tabela de telas virando react-router
 ├── rotas.ts             a tabela das telas — uma linha por aba, e mais nada
-├── casca/               o que toda tela usa: Menu, Cabecalho, Cartao, Icone
-├── telas/               uma pasta por aba, quando ela migrar
+├── casca/               a moldura: Casca (o layout), Menu, Cabecalho, Cartao…
+├── telas/               uma por aba
 ├── api/                 cliente.ts (o fetch) e useDados.ts (os 3 estados)
-└── nucleo/              DOMÍNIO — sem React e sem a tela (ver a regra abaixo)
+├── utils/               ajuda pura e sem dono: geometria, números, formato
+└── motores/             DOMÍNIO — sem React e sem a tela (ver a regra abaixo)
 
 estilo/
 ├── tokens.css           a paleta. O ÚNICO arquivo com hex no projeto
 └── entrada.css          traduz os tokens em utilitários do Tailwind
 
-estatico/                servido como está pelas duas telas
+estatico/                servido como está pelo Express
 ├── icones.svg           gerado: só os ícones do Lucide que o código usa
 └── encaixe.wasm         gerado pelo Rust em wasm/
 
-public/                  A TELA ANTIGA — some quando a migração terminar
-dist/                    gerado pelo Vite; é o que o Express serve em /app
+dist/                    gerado pelo Vite; é o painel que o Express serve
 ```
+
+**Um repositório só, duas pastas de primeiro nível.** `servidor/` é o que roda
+no Node; `src/` é o que roda no navegador. Antes o backend eram doze arquivos
+soltos na raiz, misturados com o `vite.config.mts` e o `index.html` do front —
+e quem chegava não tinha como saber, pelo nome, de que lado cada um estava.
+
+A única coisa que atravessa a linha é o `src/motores/encaixeRede.mjs`: o
+vocabulário da rede que pontua as receitas de encaixe, que o navegador usa para
+escolher e o servidor usa para aprender. Ele é compartilhado de propósito — já
+houve duas cópias dele, uma de cada lado, e elas divergiram em silêncio.
+
+### Onde fica a diferença entre `motores/` e `utils/`
+
+`motores/` é o produto: o encaixe, o vetor, os leitores de DXF/PLT/SVG, a cor.
+Cada arquivo ali responde por uma decisão que a fábrica sente no tecido.
+
+`utils/` é o que não pertence a ninguém: `geometria.ts` (ponto, retângulo,
+arredondar), `numero.ts` e `formato.ts` (como um número aparece escrito),
+`respirar.js` (ceder a vez para a tela), `arquivoDeImagem.ts`, `avisos.ts`.
+São coisas que três telas e dois motores usam e que não fazem sentido morar
+dentro de um deles — antes moravam, e importar o formatador de metros obrigava
+a puxar a tela das impressoras junto.
 
 ## Por que o Tauri não precisou mudar
 
@@ -301,7 +330,7 @@ merece cuidado na Etapa B.
 
 **Uma tela está migrada quando:** faz tudo que a antiga fazia, o arquivo dela
 saiu do `public/` e do `index.html` antigo, e o domínio que ela usava virou
-módulo em `src/nucleo/` com `export`.
+módulo em `src/motores/` com `export`.
 
 **No fim:** `base` do Vite vira `"/"`, o `public/` inteiro é apagado, o
 `npm run css` (que existe só para a tela antiga) some junto, e os links entre
@@ -312,7 +341,7 @@ as cascas deixam de existir porque só há uma.
 - **Um hex só no projeto**, em `estilo/tokens.css`. As duas telas leem os
   mesmos tokens: o React pelos utilitários do Tailwind, a antiga pelo
   `var(--accent)` do CSS à mão.
-- **Nada de React, de tela ou de `fetch` em `src/nucleo/`.** O que vale é não
+- **Nada de React, de tela ou de `fetch` em `src/motores/`.** O que vale é não
   depender da PÁGINA: nada de `getElementById`, de ler o valor de um campo, de
   mexer no que está montado. Usar a **plataforma** é permitido e às vezes
   necessário — `document.createElement("canvas")` para rasterizar
@@ -349,7 +378,7 @@ Duas peças novas apareceram por causa dela:
 
 - **`src/impressoras/`** — o que as cinco telas dividem: os tipos das respostas
   do servidor, a formatação de metragem/tempo/tinta e o cliente do socket. Não
-  é `nucleo/`: `nucleo/` é domínio puro que roda em worker, e isto conversa com
+  é `motores/`: `motores/` é domínio puro que roda em worker, e isto conversa com
   o servidor.
 - **socket.io** — as impressoras são a única parte do Optimize que muda
   sozinha. Moldes e projetos só mudam quando alguém mexe; uma impressão começa
@@ -370,12 +399,12 @@ continua funcionando, a tela só deixa de se atualizar sozinha.
   servidor virando mensagem na tela.
 - `casca/Cartao.tsx` — a caixa padrão das telas.
 - Tela de Projetos lendo a estante de clientes da API de verdade.
-- `nucleo/geometria.ts` portado, como referência da receita.
+- `utils/geometria.ts` portado, como referência da receita.
 - Servidor e empacotador servindo e levando as duas telas.
 - A central das impressoras inteira, em React: painel, histórico, pedidos,
   varredura da rede e o bot do WhatsApp.
 - **Vetor**, **Imagem** e **Macros** migradas (Etapa A), com o domínio delas em
-  `src/nucleo/`: `vetor.js`, `vetorWorker.js`, `imagemWorker.js`,
+  `src/motores/`: `vetor.js`, `vetorWorker.js`, `imagemWorker.js`,
   `diagnosticoDaImagem.js`, `encaixeMascara.js` e `medidaDoArquivo.js`.
 - `src/casca/numero.ts` e `src/casca/arquivoDeImagem.ts` — os auxiliares que
   moravam pendurados no `window` do `ui.js`.

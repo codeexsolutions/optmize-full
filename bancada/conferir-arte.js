@@ -10,7 +10,7 @@
  * O caso que mais assusta é a ORIENTAÇÃO EXIF — o navegador aplica, o PDF não,
  * e a arte sairia deitada com a peça encaixada em pé. Por isso ele tem teste.
  *
- * As duas funções vêm de `src/nucleo/jpegParaPdf.js`, importadas de verdade.
+ * As duas funções vêm de `src/motores/jpegParaPdf.js`, importadas de verdade.
  * Elas já moraram no meio da tela, e esta conferência as RECORTAVA do texto do
  * arquivo — procurando `function jpegSeguroParaPdf(` e contando chaves até
  * fechar. Funcionava, e era frágil do pior jeito: renomear a função, ou
@@ -20,7 +20,7 @@
 
 const jpeg = require("jpeg-js");
 
-const { carregarDoNucleo } = require("./nucleo");
+const { carregarDosMotores } = require("./motores");
 
 /*
  * As duas funções vêm importadas do núcleo.
@@ -119,7 +119,7 @@ const CASOS = [
 ];
 
 async function principal() {
-  ({ jpegSeguroParaPdf } = await carregarDoNucleo(["jpegParaPdf.js"]));
+  ({ jpegSeguroParaPdf } = await carregarDosMotores(["motores/jpegParaPdf.js"]));
 
   let erros = 0;
   CASOS.forEach(([nome, dados, esperado]) => {

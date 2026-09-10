@@ -72,11 +72,11 @@ fn esperar_servidor(porta: u16, filho: &Mutex<Option<Child>>) -> bool {
     false
 }
 
-/// Sobe o `server.js` com o Node que veio junto.
+/// Sobe o `servidor/server.js` com o Node que veio junto.
 fn subir_servidor(pasta: &PathBuf, dados: &PathBuf, porta: u16) -> std::io::Result<Child> {
     let mut comando = Command::new(pasta.join("node.exe"));
     comando
-        .arg(pasta.join("server.js"))
+        .arg(pasta.join("servidor").join("server.js"))
         .current_dir(pasta)
         .env("PORT", porta.to_string())
         .env("OPTIMIZE_DADOS", dados);

@@ -1,4 +1,3 @@
-import { Cor } from "./telas/Cor";
 /**
  * ===========================================================================
  * ROTAS — a tabela das telas
@@ -37,19 +36,42 @@ import { Cor } from "./telas/Cor";
  * (`#/historico`), então mudar uma tela de grupo não quebra link guardado.
  */
 
-import type { ComponentType } from "react";
+import { lazy, type ComponentType } from "react";
+import { useLocation } from "react-router-dom";
+
+/*
+ * ---------------------------------------------------------------------------
+ * CADA TELA CHEGA QUANDO É ABERTA
+ * ---------------------------------------------------------------------------
+ *
+ * `lazy` em vez de `import` direto: o navegador baixa e compila o código de
+ * uma tela na primeira vez que alguém entra nela, e não todo ele antes de
+ * desenhar a primeira. Eram treze telas num pacote só — quem abre o painel
+ * para olhar as impressoras esperava o vetorizador e a rede neural da Imagem
+ * carregarem junto, e nunca ia usar nenhum dos dois.
+ *
+ * A troca de tela passa por um `<Suspense>` (ver `casca/Casca.tsx`), e o
+ * pedaço fica no cache do navegador: a espera acontece uma vez por tela.
+ *
+ * As quatro do editor de produção NÃO entram aqui. Elas não são desenhadas
+ * pela rota — quem as desenha é o `<Producao/>`, que fica montado o tempo todo
+ * (ver `casca/Casca.tsx`), então dividi-las não adiantaria nada: o pacote
+ * viria junto de qualquer forma, na primeira tela.
+ */
 import { Moldes } from "./telas/Moldes";
 import { Projetos } from "./telas/Projetos";
 import { Encaixe } from "./telas/Encaixe";
-import { Vetor } from "./telas/Vetor";
-import { Impressoras } from "./telas/Impressoras";
-import { Historico } from "./telas/Historico";
-import { Maquinas } from "./telas/Maquinas";
-import { Whatsapp } from "./telas/Whatsapp";
-import { Reposicao } from "./telas/Reposicao";
-import { Pedidos } from "./telas/Pedidos";
-import { Macros } from "./telas/Macros";
-import { Imagem } from "./telas/Imagem";
+import { Cor } from "./telas/Cor";
+
+const Vetor = lazy(() => import("./telas/Vetor").then((m) => ({ default: m.Vetor })));
+const Imagem = lazy(() => import("./telas/Imagem").then((m) => ({ default: m.Imagem })));
+const Macros = lazy(() => import("./telas/Macros").then((m) => ({ default: m.Macros })));
+const Impressoras = lazy(() => import("./telas/Impressoras").then((m) => ({ default: m.Impressoras })));
+const Pedidos = lazy(() => import("./telas/Pedidos").then((m) => ({ default: m.Pedidos })));
+const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m.Maquinas })));
+const Whatsapp = lazy(() => import("./telas/Whatsapp").then((m) => ({ default: m.Whatsapp })));
+const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default: m.Historico })));
+const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
 
 export type NomeDeTela =
   | "cor" | "moldes" | "projetos" | "encaixe" | "vetor" | "imagem" | "macros"
@@ -215,4 +237,17 @@ export const TELA_PADRAO: NomeDeTela = "moldes";
 
 export function acharTela(nome: string | null | undefined): Tela {
   return TELAS.find((tela) => tela.nome === nome) ?? TELAS[0]!;
+}
+
+/**
+ * A linha da tabela correspondente ao endereço aberto.
+ *
+ * O menu e o cabeçalho precisam da tela inteira (rótulo, ícone, apoio), e não
+ * só do nome que está na URL. Quem lê o endereço é o `react-router`; este hook
+ * traduz o que ele devolve para a linguagem da tabela, e é o único lugar do
+ * projeto que faz essa tradução.
+ */
+export function useTelaAtual(): Tela {
+  const { pathname } = useLocation();
+  return acharTela(pathname.replace(/^\/+/, ""));
 }

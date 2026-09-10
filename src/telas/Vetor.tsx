@@ -4,7 +4,7 @@
  * ===========================================================================
  *
  * Aqui só tem tela: escolher o arquivo, mexer nos controles, mostrar as duas
- * imagens lado a lado e entregar o SVG. Quem faz a conta é `nucleo/vetor.js`,
+ * imagens lado a lado e entregar o SVG. Quem faz a conta é `motores/vetor.js`,
  * do mesmo jeito que a tela de Encaixe não sabe encaixar — e a conta roda
  * dentro de um Web Worker, fora daqui, para a página não travar enquanto ela
  * acontece.
@@ -38,11 +38,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
-import { carregarImagem, lerComoDataURL } from "../casca/arquivoDeImagem";
-import { formatarCm, formatarNumero, formatarSegundos } from "../casca/numero";
-import { vetorizarImagem } from "../nucleo/vetor";
-import { tirarFundoDosPixels } from "../nucleo/encaixeMascara";
-import { pixelsPorCmDoArquivo } from "../nucleo/medidaDoArquivo";
+import { carregarImagem, lerComoDataURL } from "../utils/arquivoDeImagem";
+import { formatarCm, formatarNumero, formatarSegundos } from "../utils/numero";
+import { vetorizarImagem } from "../motores/vetor";
+import { tirarFundoDosPixels } from "../motores/encaixeMascara";
+import { pixelsPorCmDoArquivo } from "../motores/medidaDoArquivo";
 
 /**
  * Acima disto a imagem é reduzida antes de virar vetor.
@@ -58,7 +58,7 @@ const ZOOM_MAXIMO = 20;
 /**
  * O que a tela manda para `vetorizarImagem`.
  *
- * O núcleo é `.js` e não declara isto (ver o cabeçalho de `nucleo/vetor.js`);
+ * O núcleo é `.js` e não declara isto (ver o cabeçalho de `motores/vetor.js`);
  * o contrato mora aqui, do lado de quem chama. Quando aquele arquivo ganhar
  * tipos, este bloco sai e o tipo vem de lá.
  */
@@ -178,7 +178,7 @@ export function Vetor() {
   const pegarWorker = useCallback((): Worker | false => {
     if (worker.current !== null) return worker.current;
     try {
-      const w = new Worker(new URL("../nucleo/vetorWorker.js", import.meta.url), { type: "module" });
+      const w = new Worker(new URL("../motores/vetorWorker.js", import.meta.url), { type: "module" });
       w.addEventListener("error", () => { worker.current = false; });
       worker.current = w;
       return w;
@@ -192,7 +192,7 @@ export function Vetor() {
    * Os pixels da imagem, já reduzidos ao tamanho de trabalho.
    *
    * Reduzir aqui, e não no núcleo, é de propósito: canvas só existe na página,
-   * e a regra da pasta `nucleo/` é conta pura. O que atravessa para o worker
+   * e a regra da pasta `motores/` é conta pura. O que atravessa para o worker
    * são os bytes já lidos.
    */
   const prepararPixels = useCallback((img: HTMLImageElement, tirarFundo: boolean) => {
@@ -548,7 +548,7 @@ export function Vetor() {
                   className="grid h-[320px] place-items-center [&_svg]:size-full [&_svg]:object-contain"
                   {...gestos(saida)}
                   /*
-                    O SVG vem de `nucleo/vetor.js`, gerado nesta máquina a partir
+                    O SVG vem de `motores/vetor.js`, gerado nesta máquina a partir
                     dos pixels da própria imagem — não há texto de fora entrando
                     aqui. O `width`/`height` sai: o arquivo guardado tem o
                     tamanho real, o da tela precisa caber na caixa.

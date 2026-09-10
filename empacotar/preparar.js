@@ -26,24 +26,36 @@ const { execFileSync } = require("child_process");
 const RAIZ = path.join(__dirname, "..");
 const DESTINO = path.join(RAIZ, "src-tauri", "servidor");
 
-/** Os arquivos e pastas do servidor, na raiz do projeto. */
+/**
+ * As pastas do projeto que vão para dentro do instalador.
+ *
+ * A cópia guarda a MESMA FORMA do repositório: `servidor/` continua sendo
+ * `servidor/` lá dentro, com `dist/`, `estatico/` e `corel/` ao lado dela.
+ * É o que permite ao `caminhos.js` achar as três com um `..` só, sem precisar
+ * saber se está rodando do projeto ou do programa instalado.
+ *
+ * Antes esta lista nomeava arquivo por arquivo do servidor, e ficava para
+ * trás toda vez que o backend crescia (ver o aviso mais abaixo, sobre a tela
+ * de Cor). Com o servidor inteiro numa pasta, a lista deixa de ser um lugar
+ * onde se esquece de acrescentar coisas.
+ */
 const LEVAR = [
-  "server.js",
-  "caminhos.js",
-  "db.js",
-  "moldes-api.js",
-  "projetos-api.js",
-  "uploads-arquivos.js",
-  "encaixe-pdf.js",
-  "encaixe-memoria.js",
-  "cor-api.js",
-  "cor-icc.js",
-  "macros-api.js",
-  "impressoras-api.js",
-  // A central das impressoras: 39 arquivos de servidor numa pasta só. Vai
-  // inteira, e é justamente por causa dela que o guard de `require` abaixo
-  // passou a descer nas subpastas.
-  "impressoras",
+  // O backend inteiro: Express, SQLite, as rotas e a central das impressoras.
+  "servidor",
+  /*
+   * Os motores, e SÓ eles, do lado do front.
+   *
+   * O servidor usa um deles: o `encaixeRede.mjs`, o vocabulário da rede que
+   * pontua as receitas de encaixe. Ele é um arquivo só, e é compartilhado de
+   * propósito — já houve duas cópias do mesmo vocabulário, uma para o
+   * navegador e outra para o Node, e elas divergiram sem dar erro nenhum.
+   *
+   * Vai a pasta inteira e não o arquivo solto porque o dia em que o servidor
+   * precisar de um segundo motor não pode ser um "Cannot find module" na
+   * máquina de quem instalou. O `compilar.js` a apaga depois de embutir tudo
+   * no bytecode, então ela não chega ao instalador em texto.
+   */
+  path.join("src", "motores"),
   // A pasta das macros do Corel. Vai inteira porque não é só o `.cs` que a
   // tela entrega: o `instalar-no-corel.ps1` é chamado pelo `macros-api.js` em
   // tempo de execução, e um `require` não o menciona — o guard de dependências
@@ -243,6 +255,19 @@ for (const item of LEVAR) {
 }
 
 fs.mkdirSync(DESTINO, { recursive: true });
+
+/*
+ * O que a cópia guarda de builds anteriores e não faz mais parte da lista sai
+ * agora. Sem isto, mudar a forma do projeto deixa entulho lá dentro — e
+ * entulho de SERVIDOR é o pior tipo: o `compilar.js` só compila o que está na
+ * lista de hoje, então um `server.js` de outra época iria para o instalador
+ * em texto, comentado, que é justamente o que aquele script existe para
+ * evitar.
+ */
+const FICAM = new Set([...LEVAR.map((item) => item.split(path.sep)[0]), "node.exe"]);
+for (const item of fs.readdirSync(DESTINO)) {
+  if (!FICAM.has(item)) fs.rmSync(path.join(DESTINO, item), { recursive: true, force: true });
+}
 
 // O que é leve vai inteiro, sempre: é o código que muda a cada build.
 for (const item of LEVAR) {

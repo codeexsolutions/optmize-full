@@ -24,7 +24,7 @@
  * daí pra frente é o mesmo caminho de sempre.
  */
 
-import { caixaDeContorno } from "./geometria";
+import { caixaDeContorno } from "../utils/geometria";
 
 // $INSUNITS do cabeçalho: quanto vale 1 unidade do arquivo em centímetros.
 export const DXF_UNIDADES = {

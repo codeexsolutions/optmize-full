@@ -39,7 +39,7 @@ quebra os dois.
 | **Reposição** | Quanto tecido foi gasto refazendo trabalho, por semana. | `src/telas/Reposicao.tsx` |
 | **WhatsApp** | Avisa num grupo quando uma impressão começa e termina. | `src/telas/Whatsapp.tsx`, `impressoras/whatsapp/` |
 
-O servidor delas está em `impressoras/`, montado por `impressoras-api.js` em
+O servidor delas está em `servidor/impressoras/`, montado por `servidor/impressoras-api.js` em
 `/api/impressoras`.
 
 **Não existe impressora escrita no código.** Nem em código, nem em arquivo de
@@ -242,20 +242,20 @@ histórico dela continua saindo do banco.
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `server.js` | Express + socket.io: serve o painel, monta as rotas e escuta em `0.0.0.0` |
-| `db.js` | SQLite: cria as tabelas e migra colunas novas |
-| `moldes-api.js` | Rotas de `/api/moldes` |
-| `projetos-api.js` | Rotas de `/api/projetos` |
-| `encaixe-memoria.js` | O que o Encaixe aprendeu: recordes e placar de receitas |
-| `encaixe-pdf.js` | O PDF do encaixe em tamanho real |
-| `uploads-arquivos.js` | Comum a moldes e projetos: tipo do arquivo, nome sem colisão, faxina do disco |
-| `caminhos.js` | Onde ficam o banco, os uploads e a configuração: pasta do projeto, ou a do usuário no app instalado |
-| `impressoras-api.js` | Monta a central das impressoras em `/api/impressoras` e levanta os leitores |
-| `impressoras/` | A central: varredura da rede, leitores, OS, pedidos, WhatsApp |
+| `servidor/server.js` | Express + socket.io: serve o painel, monta as rotas e escuta em `0.0.0.0` |
+| `servidor/db.js` | SQLite: cria as tabelas e migra colunas novas |
+| `servidor/moldes-api.js` | Rotas de `/api/moldes` |
+| `servidor/projetos-api.js` | Rotas de `/api/projetos` |
+| `servidor/encaixe-memoria.js` | O que o Encaixe aprendeu: recordes e placar de receitas |
+| `servidor/encaixe-pdf.js` | O PDF do encaixe em tamanho real |
+| `servidor/uploads-arquivos.js` | Comum a moldes e projetos: tipo do arquivo, nome sem colisão, faxina do disco |
+| `servidor/caminhos.js` | Onde ficam o banco, os uploads e a configuração: pasta do projeto, ou a do usuário no app instalado |
+| `servidor/impressoras-api.js` | Monta a central das impressoras em `/api/impressoras` e levanta os leitores |
+| `servidor/impressoras/` | A central: varredura da rede, leitores, OS, pedidos, WhatsApp |
 | `src-tauri/src/main.rs` | A casca de janela: sobe o servidor, abre a janela nele, mata o servidor na saída |
 
 **Dado de usuário nunca fica ao lado do programa.** Todo caminho de gravação
-passa por `caminhos.js`. Escrever `path.join(__dirname, ...)` para gravar
+passa por `servidor/caminhos.js`. Escrever `path.join(__dirname, ...)` para gravar
 alguma coisa funciona rodando pelo código e quebra no programa instalado, onde
 a pasta é somente-leitura.
 

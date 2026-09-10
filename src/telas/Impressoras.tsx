@@ -44,11 +44,11 @@ import {
   falar, gravarPreferencias, lerPreferencias, notificar,
   pedirPermissaoDeNotificacao, prepararSom, tocarBipe,
   type PreferenciasDeAviso,
-} from "../impressoras/avisos";
+} from "../utils/avisos";
 import {
   NOME_DO_CANAL, dataBr, duracao, metros, metrosCurtos,
   metrosQuadrados, tinta, variacao,
-} from "../impressoras/formato";
+} from "../utils/formato";
 import type { AoVivo, DiaDaSerie, RespostaDeDashboard } from "../impressoras/tipos";
 
 const JANELAS = [

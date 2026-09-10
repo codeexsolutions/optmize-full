@@ -38,7 +38,7 @@
 
 const stream = require("stream");
 
-const { montarPdf, PT_POR_CM, LIMITE_PT } = require("../encaixe-pdf");
+const { montarPdf, PT_POR_CM, LIMITE_PT } = require("../servidor/encaixe-pdf");
 
 // Um PNG de 1x1 opaco. O que se confere aqui é a página, não a arte: qualquer
 // imagem válida serve, e a menor possível deixa o teste instantâneo.

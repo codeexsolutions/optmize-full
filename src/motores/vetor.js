@@ -33,7 +33,7 @@
  * arquivo rodar dentro do Web Worker (ver `vetorWorker.js`).
  */
 
-import { areaComSinal, ladoMenorDoContorno, simplificar } from "./geometria";
+import { areaComSinal, ladoMenorDoContorno, simplificar } from "../utils/geometria";
 
 // ==================== 1. JUNTAR CORES ====================
 

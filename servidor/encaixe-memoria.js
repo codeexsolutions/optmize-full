@@ -27,7 +27,7 @@ const db = require("./db");
  * módulo ESM direto, e o Vite continua resolvendo `./encaixeRede` sem extensão
  * porque `.mjs` vem antes de `.js` na lista dele.
  */
-const rede = require("./src/nucleo/encaixeRede.mjs");
+const rede = require("../src/motores/encaixeRede.mjs");
 
 const router = express.Router();
 

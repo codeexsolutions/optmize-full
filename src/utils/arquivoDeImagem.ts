@@ -5,8 +5,8 @@
  * vivem aqui porque as telas de Vetor, Imagem e arte do molde precisam das
  * mesmas duas. Vieram de `public/encaixe.js`, sem mudança.
  *
- * Não entram em `nucleo/`: mexem com `Image` e `FileReader`, que só existem na
- * página. A regra da pasta do núcleo é conta pura, sem DOM.
+ * Não entram em `motores/`: mexem com `Image` e `FileReader`, que só existem na
+ * página. A regra da pasta dos motores é conta pura, sem DOM.
  */
 
 /** Uma `<img>` já carregada, a partir de um endereço. */

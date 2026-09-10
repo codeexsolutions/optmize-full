@@ -16,7 +16,7 @@
  *
  * O caminho da tela
  * -----------------
- *   1. lê o cabeçalho de cada arquivo         (`nucleo/corDoArquivo`, instantâneo)
+ *   1. lê o cabeçalho de cada arquivo         (`motores/corDoArquivo`, instantâneo)
  *   2. manda para o servidor só o que precisa (`api/cor` → `cor-icc.js`)
  *   3. mostra o antes e o depois lado a lado
  *   4. entrega tudo ao Encaixe — o convertido no lugar do original
@@ -64,10 +64,10 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { COR_SEGURA, diagnosticoDeCorDoArquivo } from "../nucleo/corDoArquivo";
-import { miniaturaDaArte } from "../nucleo/miniaturaDaArte";
+import { COR_SEGURA, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
+import { miniaturaDaArte } from "../motores/miniaturaDaArte";
 import { buscarArteConvertida, converterArte } from "../api/cor";
-import { formatarNumero } from "../casca/numero";
+import { formatarNumero } from "../utils/numero";
 import { useLigacao } from "../producao/ligacao";
 
 type Estado = "esperando" | "convertendo" | "pronto" | "intacto" | "parado" | "erro";

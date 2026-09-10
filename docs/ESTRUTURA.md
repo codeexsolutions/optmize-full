@@ -5,46 +5,59 @@
 
 O sistema fica dividido em código do servidor, painel web e arquivos gerados em execução.
 
-## Código do servidor
+**Um repositório só, e duas pastas que dizem de que lado cada coisa está:**
+`servidor/` roda no Node, `src/` roda no navegador. Os dois sobem juntos — o
+Express serve o painel que o Vite compila — e vão juntos para o mesmo
+instalador.
 
-- `server.js`: inicialização do Express, arquivos estáticos e rotas da API.
-- `caminhos.js`: decide onde ficam o `dados.db` e a pasta `uploads/`. Rodando pelo código, na pasta do projeto; no programa instalado, na pasta de dados do usuário.
-- `db.js`: banco dos moldes e da memória do encaixe.
-- `moldes-api.js`: operações da área de moldes.
-- `uploads-arquivos.js`: o que moldes e projetos têm em comum ao guardar imagem em disco.
-- `projetos-api.js`: projetos de cliente — a pasta, o projeto e as peças já prontas.
-- `encaixe-memoria.js` e `encaixe-pdf.js`: cálculo, memória e documento do encaixe.
-- `impressoras-api.js`: monta a central das impressoras em `/api/impressoras` e levanta os leitores das máquinas.
+## Código do servidor — `servidor/`
+
+- `servidor/server.js`: inicialização do Express, arquivos estáticos e rotas da API.
+- `servidor/caminhos.js`: decide onde ficam o `dados.db` e a pasta `uploads/`. Rodando pelo código, na pasta do projeto; no programa instalado, na pasta de dados do usuário. Exporta também `PASTA_DO_APP`, a pasta de cima — é por ela que o servidor acha `dist/`, `estatico/` e `corel/` sem saber se está rodando do repositório ou do programa instalado.
+- `servidor/db.js`: banco dos moldes e da memória do encaixe.
+- `servidor/moldes-api.js`: operações da área de moldes.
+- `servidor/uploads-arquivos.js`: o que moldes e projetos têm em comum ao guardar imagem em disco.
+- `servidor/projetos-api.js`: projetos de cliente — a pasta, o projeto e as peças já prontas.
+- `servidor/encaixe-memoria.js` e `servidor/encaixe-pdf.js`: cálculo, memória e documento do encaixe.
+- `servidor/impressoras-api.js`: monta a central das impressoras em `/api/impressoras` e levanta os leitores das máquinas.
+
+**O servidor importa um arquivo do front, e só um:**
+`src/motores/encaixeRede.mjs`, o vocabulário da rede que pontua as receitas de
+encaixe. O navegador o usa para escolher, o servidor para aprender, e duas
+cópias dele já divergiram em silêncio uma vez. Por causa dele o
+`empacotar/preparar.js` leva `src/motores/` para dentro da cópia do
+instalador, e o `empacotar/compilar.js` a apaga depois de embuti-la no
+bytecode.
 
 ## A central das impressoras
 
-`impressoras/` acompanha o que já saiu das máquinas: acha as impressoras na
+`servidor/impressoras/` acompanha o que já saiu das máquinas: acha as impressoras na
 rede, lê o histórico de cada uma e guarda no mesmo `dados.db`. Foi **portada**
 de um sistema que já rodava na produção, e por isso é a única parte do projeto
 com nomes em inglês por dentro (`machineId`, `printLength`): portar é
 acrescentar o que falta, não reescrever o que funciona.
 
-- `impressoras/config.js`: de onde saem as máquinas. **De lugar nenhum escrito
+- `servidor/impressoras/config.js`: de onde saem as máquinas. **De lugar nenhum escrito
   à mão** — só da varredura da rede.
-- `impressoras/services/discovery.js`: a varredura. Procura quem responde em
+- `servidor/impressoras/services/discovery.js`: a varredura. Procura quem responde em
   SMB, resolve o nome do computador e reconhece o tipo da impressora pelo que
   ela deixa no compartilhamento.
-- `impressoras/sources/`: os três leitores de histórico — `csvHistory`,
+- `servidor/impressoras/sources/`: os três leitores de histórico — `csvHistory`,
   `xmlHistory` e `atBinary`. Um por formato de arquivo de impressora.
-- `impressoras/services/sync.js`: a importação da subida, que enche o banco.
-- `impressoras/services/realtime.js`, `liveLog.js`, `printer2Live.js`: os
+- `servidor/impressoras/services/sync.js`: a importação da subida, que enche o banco.
+- `servidor/impressoras/services/realtime.js`, `liveLog.js`, `printer2Live.js`: os
   leitores ao vivo. São os únicos que conversam com as máquinas depois da
   subida.
-- `impressoras/services/printer2Cancel.js`: descobre cancelamento nas máquinas
+- `servidor/impressoras/services/printer2Cancel.js`: descobre cancelamento nas máquinas
   CSV, cujo software não registra cancelamento em lugar nenhum.
-- `impressoras/db/`: as tabelas `imp_*` do `dados.db`.
-- `impressoras/routes/`: as rotas de máquinas, pedidos e WhatsApp — e as de
+- `servidor/impressoras/db/`: as tabelas `imp_*` do `dados.db`.
+- `servidor/impressoras/routes/`: as rotas de máquinas, pedidos e WhatsApp — e as de
   Ordem de Serviço, que continuam de pé sem tela que as chame (ver MAPA.md).
-- `impressoras/services/matching.js`: lê "CLIENTE - TECIDO" do nome do arquivo.
+- `servidor/impressoras/services/matching.js`: lê "CLIENTE - TECIDO" do nome do arquivo.
   É o que sustenta o aviso de "já rodado antes" ao lançar um pedido.
-- `impressoras/services/qrcode.js`: o QR da folha de produção, desenhado em SVG
+- `servidor/impressoras/services/qrcode.js`: o QR da folha de produção, desenhado em SVG
   no próprio servidor — sem serviço de fora e sem imagem carregada da internet.
-- `impressoras/whatsapp/`: o bot de avisos. `navegador.js` decide qual Chrome
+- `servidor/impressoras/whatsapp/`: o bot de avisos. `navegador.js` decide qual Chrome
   usar — ver abaixo.
 
 **As tabelas levam prefixo `imp_`.** `machines`, `records` e `pedidos` são
@@ -55,7 +68,7 @@ já custou caro aqui uma vez.
 
 **O bot não embute Chrome.** O sistema de origem levava o Chrome do Puppeteer
 no instalador: 409 MB, mais do que o resto do programa inteiro. Aqui
-`impressoras/whatsapp/navegador.js` procura, nesta ordem, a variável
+`servidor/impressoras/whatsapp/navegador.js` procura, nesta ordem, a variável
 `OPTIMIZE_CHROME`, o Chrome do Puppeteer (que existe na máquina de quem
 desenvolve), o Google Chrome instalado e o Microsoft Edge — que vem com o
 Windows. Não achando nenhum, a tela diz o que instalar, em vez de estourar um
@@ -68,15 +81,22 @@ pasta `public/`, com a tela antiga em `<script>` soltos; ela foi apagada, e
 `/app` — o endereço do painel durante a migração — responde hoje com um
 redirecionamento que carrega o `#` adiante.)
 
-- `src/main.tsx` e `src/App.tsx`: a montagem e a casca — menu, cabeçalho, a
-  tela da vez.
+- `src/main.tsx`: a montagem do React e o CSS.
+- `src/App.tsx`: as rotas. A tabela de telas vira `react-router` aqui — em
+  `HashRouter`, porque o endereço do painel sempre foi `#/moldes` e o "#" nunca
+  chega ao Express, que por isso serve `dist/` como arquivo estático e não
+  precisa de rota-curinga.
 - `src/rotas.ts`: a tabela das telas. **Uma linha por aba, e mais nada** — quem
-  acrescenta uma tela mexe aqui e no arquivo dela.
-- `src/casca/`: o que toda tela usa — `Menu`, `Cabecalho`, `Cartao`, `Icone`, os
-  formatadores de número.
+  acrescenta uma tela mexe aqui e no arquivo dela. Cada tela chega ao navegador
+  quando é aberta (`lazy`), e não toda vez que alguém abre o painel.
+- `src/casca/`: a moldura — `Casca` (o layout das rotas), `Menu`, `Cabecalho`,
+  `Cartao`, `Icone`.
 - `src/telas/`: uma por aba.
-- `src/nucleo/`: o domínio — sem React e sem a tela. Ver a regra em
+- `src/motores/`: o domínio — sem React e sem a tela. Ver a regra em
   `ARQUITETURA.md`.
+- `src/utils/`: a ajuda sem dono — `geometria.ts`, `numero.ts`, `formato.ts`,
+  `respirar.js`, `arquivoDeImagem.ts`, `avisos.ts`. O que três telas e dois
+  motores usam e não cabe dentro de nenhum deles.
 - `estilo/tokens.css`: a paleta. **O único arquivo com hex no projeto**;
   escrever cor em qualquer outro lugar quebra o tema.
 - `src/producao/`: a integração de compatibilidade de Moldes, Projetos e
@@ -102,7 +122,8 @@ a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
 - `bancada/conferir.js`: `npm run bancada:conferir`. O motor em WebAssembly tem
   que dar exatamente o mesmo resultado do motor em JavaScript, e é este arquivo
   que prova.
-- `bancada/nucleo.js`: sobe módulos de `src/nucleo/` fora do navegador. O
+- `bancada/motores.js`: sobe módulos de `src/` (os motores e os `utils/` que
+  eles usam) fora do navegador. O
   esbuild — o MESMO que o Vite usa — junta a árvore num arquivo só, então o que
   a bancada mede é o que o navegador roda, e não uma aproximação. Usam-no o
   `motor.js` e o `conferir-arte.js`.
@@ -198,7 +219,7 @@ O `dados.db` de instalações antigas ainda guarda as tabelas do módulo comerci
 Uma tela nova é um arquivo em `src/telas/` e **uma linha em `src/rotas.ts`** —
 mais nada. O `App.tsx` não muda.
 
-Dentro dela: o que é conta vai para `src/nucleo/`, o que é chamada de servidor
+Dentro dela: o que é conta vai para `src/motores/`, o que é chamada de servidor
 vai para `src/api/`, e o que sobra — o estado e o desenho — fica na tela. Cor
 não se escreve à mão em lugar nenhum: sai dos tokens de `estilo/tokens.css`,
 que é o único arquivo com hex no projeto.

@@ -31,7 +31,7 @@
 const fs = require("fs");
 const path = require("path");
 const sharp = require("sharp");
-const { converterParaSrgb, nomeDoPerfil, perfilDoJpeg } = require("../cor-icc");
+const { converterParaSrgb, nomeDoPerfil, perfilDoJpeg } = require("../servidor/cor-icc");
 
 /*
  * O SWOP que acompanha o Windows. Em máquina sem ele a conferência não falha:
