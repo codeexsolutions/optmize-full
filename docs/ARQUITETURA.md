@@ -30,10 +30,136 @@ de não-encaixe. Esse código é o produto; a tela é a moldura dele.
 Daí a regra que manda em tudo o resto:
 
 > **Domínio se porta, não se reescreve.** Portar é acrescentar `export` e
-> tipos, e tirar a dependência do escopo global. Se uma conta mudou de
-> resultado, o porte está errado.
+> tirar a dependência do escopo global. Se uma conta mudou de resultado, o
+> porte está errado.
 
-`src/nucleo/geometria.ts` já está portado e serve de referência da receita.
+`src/nucleo/geometria.ts` é a referência de como um módulo de domínio TIPADO se
+parece.
+
+### O domínio grande atravessa como `.js`, e isso é deliberado
+
+A regra dizia "acrescentar `export` **e tipos**". Na prática, tipar à mão os
+~9.000 linhas de domínio que faltam (motor de encaixe, vetor, leitores de
+DXF/PLT/SVG, máscara, rede) seriam ~1.400 anotações em código numérico denso —
+e cada anotação é uma chance de ler um índice errado e mudar um resultado sem
+ninguém ver. Que é exatamente o que a regra acima proíbe.
+
+Então o domínio grande entra como `.js`, por transformação **mecânica**: só
+`import` e `export`, nada mais. O `tsconfig.json` aceita (`allowJs`), o Vite
+empacota igual, e o porte é conferível — a prova de cada arquivo portado é
+quantas linhas diferem do original:
+
+| Arquivo | Linhas | Diferem |
+|---|---|---|
+| `nucleo/vetor.js` | 1.209 | **1** |
+| `nucleo/encaixeMascara.js` | 452 | **6** |
+| `nucleo/imagemWorker.js` | 423 | **5** |
+| `nucleo/diagnosticoDaImagem.js` | 197 | só os `export` |
+| `nucleo/encaixeMotor.js` | 3.014 | 74 `export`/`import`, o resto é o cabeçalho novo |
+| `nucleo/encaixeWasm.js` | 365 | 11 `export`/`import` |
+| `nucleo/encaixeRede.js` | 331 | 21 `export` |
+| `nucleo/encaixeGiro.js` | 30 | 3 `export` |
+| `nucleo/moldes.js` | 2.029 | 76 `export`, mais o `import` do `caixaDeContorno` |
+| `nucleo/encaixeParalelo.js` | 441 | 19 `export`, mais o `new Worker` |
+| `nucleo/encaixePrepara.js` | 319 | 8 `export`, mais o `new Worker` |
+| `nucleo/arteMolde.js` | 270 | só os `export` |
+| `nucleo/corDoArquivo.js` | 237 | só os `export` |
+| `nucleo/encaixeWorker.js` | 139 | o `importScripts` virou `import` |
+| `nucleo/preparaWorker.js` | 121 | o `importScripts` virou `import` |
+| `nucleo/pecaNaGrade.js` | 158 | recortado do `encaixe.js` — ver abaixo |
+| `nucleo/respirar.js` | 25 | recortado do `encaixe.js` — ver abaixo |
+
+Os tipos entram depois, arquivo por arquivo, quando alguém tiver motivo para
+mexer lá dentro. Quem chama declara o contrato do seu lado enquanto isso — ver
+`OpcoesDoVetor`, em `src/telas/Vetor.tsx`.
+
+### O motor tem uma prova própria, e ela pegou um erro na primeira corrida
+
+"Só acrescentei `export`" é uma afirmação sobre o TEXTO, não sobre o
+comportamento. Um ciclo de importação que se resolve diferente, uma variável de
+módulo que deixa de ser compartilhada, uma função que sai içada de outro jeito
+— nada disso aparece num diff de linhas.
+
+Por isso o `npm run bancada:porte`: ele sobe as duas instâncias do motor — a de
+`public/` e a de `src/nucleo/` — monta as mesmas peças, roda a mesma ordem
+embaralhada com a mesma semente em cada combinação de heurística, salto,
+agrupamento e bancada, e exige resultado idêntico peça por peça. São 637 casos,
+com o WASM ligado dos dois lados.
+
+**Ele falhou na primeira execução**, e o que ele achou é instrutivo: o
+`encaixe-motor` usa `rotacoesDe` e `podeDeitar`, que moram no `encaixe-giro` —
+e o levantamento de dependências não os tinha visto, porque são
+`const nome = (x) => …` e o levantamento só procurava `function nome`. O
+arquivo portado ficou sem o `import`, e em ESM isso é `ReferenceError` na
+primeira chamada. Em `<script>` global teria funcionado, porque lá tudo dividia
+o mesmo escopo.
+
+**A lição, para a Etapa C:** levantamento de dependência que só procura
+`function` perde metade do que existe num arquivo moderno. E a prova de um
+porte não é o diff — é rodar os dois lado a lado.
+
+### O domínio da Etapa C desceu antes das telas, e trouxe duas surpresas
+
+As 3.739 linhas de domínio que o Encaixe usa já estão em `src/nucleo/`. Duas
+coisas apareceram no caminho, e as duas eram invisíveis enquanto tudo era
+`<script>` global:
+
+**1. Dois módulos de domínio dependiam da TELA.** O `encaixe-prepara.js` usava
+seis funções que moravam no `encaixe.js` (`pixelsDaImagem`,
+`removerFundoDaImagem`, `pixelsDaArteNaGrade`, `chaveDasMascaras`,
+`mascarasDaPeca`, `respirarNaTela`), e o `arte-molde.js` usava o `PPCM_PADRAO`.
+Como módulo isso seria o domínio importando da tela — justamente a parte que
+vai ser reescrita. Então o que o domínio usa desceu antes, em
+`nucleo/pecaNaGrade.js` (o lado do canvas do preparo) e `nucleo/respirar.js`.
+
+**2. O endereço do WASM estava absoluto.** `carregarMotorWasm` tinha
+`"/encaixe.wasm"` como padrão. Na casca antiga, servida em `/`, isso achava o
+arquivo; na casca nova, servida em `/app/`, não acharia — e a queda para o
+JavaScript é **silenciosa por desenho**, então o encaixe passaria a rodar 3,9x
+mais devagar sem uma linha de erro. Agora é
+`` `${import.meta.env.BASE_URL}encaixe.wasm` ``. É o mesmo defeito que o `/ia/`
+do `imagemWorker.js` teve na Etapa A — e o terceiro caminho absoluto a
+aparecer, o que sugere procurar por eles de propósito na Etapa D.
+
+### A cópia dupla acabou
+
+Enquanto a casca antiga existiu, o domínio morou em dois lugares — `public/` e
+`src/nucleo/` — e a regra era "mexeu numa conta de um lado, mexe no outro". Isso
+acabou: o `public/` foi apagado, com **22.608 linhas**, e sobrou uma cópia só.
+
+Quatro coisas ainda apontavam para lá, e cada uma exigiu uma decisão:
+
+| quem | o que fazia | como ficou |
+|---|---|---|
+| `encaixe-memoria.js` | o SERVIDOR dava `require("./public/encaixe-rede.js")` | passou a carregar `src/nucleo/encaixeRede.mjs` |
+| `bancada/motor.js` | lia 6 arquivos de `public/` e concatenava o TEXTO | empacota `src/nucleo/` com esbuild (`bancada/nucleo.js`) |
+| `bancada/conferir-arte.js` | RECORTAVA duas funções do texto de `encaixe.js` | importa `src/nucleo/jpegParaPdf.js` |
+| `npm run css` | gerava `public/tailwind.css` | saiu; o CSS vem do Vite |
+
+**Por que o `encaixeRede` é `.mjs`.** O projeto é CommonJS, então um `.js` com
+`export` seria lido como CJS pelo Node e quebraria no primeiro `export`. A
+extensão explícita deixa o Node dar `require()` no módulo ESM. O Vite continua
+resolvendo `./encaixeRede` sem extensão porque `.mjs` vem antes de `.js` na
+ordem dele — **mas o esbuild cru não**, e foi isso que quebrou a bancada e o
+`conferir-react` até os dois ganharem `resolveExtensions`.
+
+**O recorte por texto era pior do que parecia.** O `conferir-arte.js` achava
+`function jpegSeguroParaPdf(` e contava chaves até fechar. Funcionava — e
+renomear a função, ou transformá-la numa arrow, quebraria a conferência sem
+quebrar o programa. Conferência quebrada é pior que nenhuma, porque some sem
+avisar.
+
+### A cópia dupla é transitória, e tem regra
+
+Enquanto o Encaixe não migrar, `encaixe-mascara`, `geometria` e o leitor de dpi
+existem **nos dois lados**: a cópia de `public/` é a que a tela antiga carrega
+por `<script>`, a que os workers carregam por `importScripts`, e — no caso da
+máscara — a que a BANCADA lê como texto para medir o motor.
+
+**Mexeu numa conta de um lado, mexe no outro, e rode `npm run bancada:porte`** —
+ele acusa a divergência em segundos, o que a bancada de consumo (que leva sete
+minutos e tem ruído de sorteio) não faria. As duas cópias somem numa quando a
+Etapa C terminar.
 
 ## As pastas
 
@@ -45,7 +171,7 @@ src/                     A tela nova (React + TypeScript)
 ├── casca/               o que toda tela usa: Menu, Cabecalho, Cartao, Icone
 ├── telas/               uma pasta por aba, quando ela migrar
 ├── api/                 cliente.ts (o fetch) e useDados.ts (os 3 estados)
-└── nucleo/              DOMÍNIO PURO — sem DOM, sem React, roda em worker
+└── nucleo/              DOMÍNIO — sem React e sem a tela (ver a regra abaixo)
 
 estilo/
 ├── tokens.css           a paleta. O ÚNICO arquivo com hex no projeto
@@ -83,50 +209,176 @@ provisório-eterno — é o que permite parar no meio de uma tela sem deixar o
 sistema quebrado, e ter sempre a versão antiga do lado para comparar
 comportamento.
 
-**A ordem, do mais fácil para o mais arriscado:**
+### As duas telas têm o MESMO menu
 
-1. **Projetos** (574 linhas de tela) — CRUD contra a API, sem geometria e sem
-   canvas. É a tela que prova o padrão. *A estante de clientes já está em pé.*
-2. **Moldes** (1.385) — formulário de vários passos e upload de arquivo. O
-   `moldes.js` (2.017) vai junto para `nucleo/moldes/`, portado.
-3. **Vetor** (508 de tela) — canvas e worker. O `vetor.js` (1.196) é puro e vai
-   inteiro para o núcleo sem uma linha alterada.
-4. **Encaixe** (2.429) — por último, porque é a maior e a que mais tem estado:
-   pool de workers, wasm, desenho em canvas e o PDF. O motor é puro e não se
-   toca.
+Isto custou caro para ser aprendido: o programa instalado abre `/`, e quem o
+abriu não tinha como adivinhar que metade do sistema morava noutro endereço.
+A central das impressoras existia, funcionava, e era invisível.
+
+Então os dois menus listam as treze telas. O que muda é o tipo do item:
+
+- tela desta casca é botão;
+- tela da outra casca é `<a>`, com uma seta discreta avisando que o clique sai
+  da página. Na antiga são as seis de impressora; na nova são Cor, Imagem e
+  Macros.
+
+**Uma porta só.** Abre-se `localhost:8000` e tudo está no menu. O pulo entre
+as cascas acontece no clique, não no conhecimento de quem usa.
+
+### E as duas cascas são IGUAIS por fora
+
+Listar tudo nos dois menus não bastou: clicar num item de impressora levava a
+uma casca visivelmente diferente — outra largura de barra, outra marca, outro
+jeito de marcar o item aberto, o relógio noutro canto. Parecia ter trocado de
+programa, não de tela.
+
+A casca nova nasceu como um REDESENHO da antiga, e enquanto as duas convivem
+isso é defeito, não melhoria. Então `src/casca/Menu.tsx` e `Cabecalho.tsx`
+copiam as medidas de `public/style.css` e `public/interface.css`: largura de
+252px, os recuos, o `logo.png` (que passou a morar em `estatico/`, servido
+pelas duas), o ativo com borda âmbar e a barrinha de 3px, e o relógio no pé do
+menu — onde a casca antiga já o tinha posto, e pelo motivo dela: o cabeçalho
+some na tela de encaixe e levava o relógio junto.
+
+Até a ORDEM dos itens é a mesma, e foi a antiga que cedeu: Cor saiu do meio da
+lista para junto de Imagem e Macros, no fim de Produção.
+
+**A regra, enquanto durar a migração: mexeu na aparência de uma casca, mexe na
+outra.** É trabalho dobrado, é temporário, e acaba junto com o `public/`.
+
+Os links moram em `public/index.html` (mão) e em `TELAS_DA_CASCA_ANTIGA`, no
+`src/rotas.ts`. **Tela que migra sai de um lado e vira botão do outro** — e
+quando a última migrar, os dois blocos somem junto com o `public/`.
+
+**A ordem que estava escrita aqui não sobreviveu ao levantamento.** Ela ia do
+mais fácil para o mais arriscado e deixava o Encaixe por último. Mas três telas
+ENTREGAM ARQUIVOS ao Encaixe por função global na mesma página:
+
+```
+Moldes   ─┐
+Projetos ─┼─→  adicionarArquivos(File[])  →  Encaixe
+Cor      ─┘
+```
+
+`File` em memória não atravessa uma navegação de página. Enquanto o Encaixe
+estiver na casca antiga, qualquer uma das três que migre perde a entrega — que
+no caso da Cor é o passo 4, o que o próprio arquivo dela chama de "o ponto da
+tela".
+
+Então a ordem passou a ser ditada pelas dependências:
+
+| Etapa | O que | Estado |
+|---|---|---|
+| **A** | **Vetor**, **Imagem** e **Macros** — não conversam com ninguém | ✅ feita |
+| **B** | O **motor de encaixe** vira módulo, sem tocar na lógica | ✅ feita |
+| **C** | **Encaixe + Moldes + Projetos + Cor** juntos — as entregas viram estado React | domínio portado; **Cor** declarativa; faltam Encaixe, Moldes e Projetos |
+| **D** | Apagar o `public/`, `base` do Vite vira `/` | ✅ feita |
+
+### O grafo do domínio, que é raso
+
+Levantado antes da Etapa A, porque cada tela puxava uma dependência nova e
+estava sendo descoberta uma por vez:
+
+```
+geometria       independente        ← portado (.ts)
+encaixe-giro    independente
+encaixe-rede    independente
+cor-do-arquivo  independente
+arte-molde      independente
+
+encaixe-mascara  ← geometria                     ← portado
+vetor            ← geometria                     ← portado
+moldes           ← geometria, encaixe-mascara
+encaixe-prepara  ← encaixe-mascara
+encaixe-paralelo ← encaixe-motor
+encaixe-motor    ↔ encaixe-wasm      (ciclo)
+```
+
+Cinco arquivos podem ir sozinhos a qualquer momento. O `encaixe-motor` e o
+`encaixe-wasm` **se exigem mutuamente** — funciona em `<script>` global e
+funciona em ESM (as chamadas são em tempo de execução), mas é o ponto que
+merece cuidado na Etapa B.
 
 **Uma tela está migrada quando:** faz tudo que a antiga fazia, o arquivo dela
 saiu do `public/` e do `index.html` antigo, e o domínio que ela usava virou
 módulo em `src/nucleo/` com `export`.
 
-**No fim:** `base` do Vite vira `"/"`, o `public/` inteiro é apagado, e o
-`npm run css` (que existe só para a tela antiga) some junto.
+**No fim:** `base` do Vite vira `"/"`, o `public/` inteiro é apagado, o
+`npm run css` (que existe só para a tela antiga) some junto, e os links entre
+as cascas deixam de existir porque só há uma.
 
 ## Regras
 
 - **Um hex só no projeto**, em `estilo/tokens.css`. As duas telas leem os
   mesmos tokens: o React pelos utilitários do Tailwind, a antiga pelo
   `var(--accent)` do CSS à mão.
-- **Nada de DOM, React ou fetch em `src/nucleo/`.** É o que deixa esse código
+- **Nada de React, de tela ou de `fetch` em `src/nucleo/`.** O que vale é não
+  depender da PÁGINA: nada de `getElementById`, de ler o valor de um campo, de
+  mexer no que está montado. Usar a **plataforma** é permitido e às vezes
+  necessário — `document.createElement("canvas")` para rasterizar
+  (`pecaNaGrade`, `arteMolde`), um palco fora da vista para o navegador medir
+  SVG (`moldes`, porque `getTotalLength` só funciona em elemento vivo, e ele
+  sai no `finally`), `new Worker` para repartir trabalho (`encaixePrepara`,
+  `encaixeParalelo`). A linha é essa: **um módulo do núcleo funciona numa
+  página em branco**. É o que deixa esse código
   rodar dentro de um Web Worker e ser testado sem navegador.
 - **Ícone é referência entre aspas** (`"icones.svg#shapes"`), nunca string
   montada em pedaços: o gerador do sprite lê o código para saber o que incluir.
 - **React e Vite são `devDependencies`.** Eles viram `dist/` no build e não são
   carregados pelo Node em execução — por isso não entram no instalador.
 - **A rota mora no `#`.** Sem rota-curinga no Express, e recarregar a página em
-  qualquer tela funciona.
+  qualquer tela funciona. **O grupo do menu não entra no endereço**: a rota
+  continua sendo só o nome da tela (`#/historico`), então mudar uma tela de
+  grupo não quebra link guardado nem favorito.
+- **Botão em `/app` precisa do reset de `#raiz`.** Sem o preflight do Tailwind,
+  o navegador estiliza `<button>` como controle do sistema. O reset mínimo está
+  em `estilo/entrada.css`, em `@layer base` e preso ao `#raiz`.
+
+## A central das impressoras entrou já em React
+
+A parte que acompanha as impressoras da produção não passou pela tela antiga:
+ela nasceu direto em `/app`, nas cinco telas de `src/telas/` (Impressoras,
+Histórico, Ordens de Serviço, Máquinas e WhatsApp). Não havia motivo para
+escrevê-la em `public/` — seria escrever, no mesmo mês, código para a pasta que
+este documento diz que vai ser apagada.
+
+Isso muda uma coisa no desenho: `/app` deixou de ser só o destino da migração e
+passou a ter função própria. Quem quer acompanhar impressora abre `/app` hoje.
+
+Duas peças novas apareceram por causa dela:
+
+- **`src/impressoras/`** — o que as cinco telas dividem: os tipos das respostas
+  do servidor, a formatação de metragem/tempo/tinta e o cliente do socket. Não
+  é `nucleo/`: `nucleo/` é domínio puro que roda em worker, e isto conversa com
+  o servidor.
+- **socket.io** — as impressoras são a única parte do Optimize que muda
+  sozinha. Moldes e projetos só mudam quando alguém mexe; uma impressão começa
+  e termina sem ninguém tocar na tela. Há **uma** conexão para o app inteiro
+  (`src/impressoras/socket.ts`), e cada tela diz que eventos lhe interessam.
+
+E uma regra que veio junto: **falha de socket não derruba a tela**. É a mesma
+que já valia para a memória do Encaixe — sem o servidor de eventos, tudo
+continua funcionando, a tela só deixa de se atualizar sozinha.
 
 ## O que já está de pé
 
 - Vite + React + TypeScript (`strict`, com `noUncheckedIndexedAccess`).
-- A casca inteira em React: menu lateral (com gaveta no celular), cabeçalho com
-  selo por aba, relógio, rota por `#`.
+- A casca inteira em React: menu lateral em três grupos (Produção, Impressão,
+  Relatórios), com gaveta no celular, cabeçalho com selo por aba, relógio e
+  rota por `#`.
 - `api/cliente.ts` e `api/useDados.ts` — toda chamada num lugar só, com erro do
   servidor virando mensagem na tela.
 - `casca/Cartao.tsx` — a caixa padrão das telas.
 - Tela de Projetos lendo a estante de clientes da API de verdade.
 - `nucleo/geometria.ts` portado, como referência da receita.
 - Servidor e empacotador servindo e levando as duas telas.
+- A central das impressoras inteira, em React: painel, histórico, pedidos,
+  varredura da rede e o bot do WhatsApp.
+- **Vetor**, **Imagem** e **Macros** migradas (Etapa A), com o domínio delas em
+  `src/nucleo/`: `vetor.js`, `vetorWorker.js`, `imagemWorker.js`,
+  `diagnosticoDaImagem.js`, `encaixeMascara.js` e `medidaDoArquivo.js`.
+- `src/casca/numero.ts` e `src/casca/arquivoDeImagem.ts` — os auxiliares que
+  moravam pendurados no `window` do `ui.js`.
 
 ## Dívidas conhecidas
 
@@ -134,6 +386,13 @@ módulo em `src/nucleo/` com `export`.
   telas. O programa instalado roda sem internet, então hoje ele cai para a
   fonte do sistema quando está offline. As fontes precisam ir para `estatico/`.
 - **`npm run css` existe só para a tela antiga.** Some com ela.
+- **A tela de Cor não pode migrar antes do Encaixe.** É a última que ainda
+  aparece no menu novo como link para a casca antiga, e o motivo é a entrega de
+  arquivos descrita acima.
+- **A varredura da rede é do Windows.** `nbtstat`, `net view` e `ping -a` são
+  chamados como processo. É onde o sistema roda, e o UNC do resto do módulo já
+  seria de todo jeito específico do Windows — mas está escrito aqui para não
+  ser descoberto no dia em que alguém tentar rodar isto em outro sistema.
 - **O leitor de SVG do `moldes.js` precisa do DOM de verdade** (mede texto e
   caminho no documento). Quando ele for para o núcleo, vai marcado: roda na
   thread principal, não em worker.

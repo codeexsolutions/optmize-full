@@ -1,21 +1,21 @@
 {
   "name": "optimize",
-  "version": "1.0.18",
-  "description": "Optimize: biblioteca de moldes, encaixe de peças no tecido e vetorização de imagem.",
+  "version": "1.0.20",
+  "description": "Optimize: biblioteca de moldes, encaixe de peças no tecido, vetorização de imagem e a central das impressoras da produção.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "icones": "node empacotar/icones.js",
-    "css": "tailwindcss -i estilo/entrada.css -o public/tailwind.css --minify",
-    "front": "npm run icones && npm run css && vite build",
+    "front": "npm run icones && npm run ia && vite build",
     "dev:app": "vite",
-    "css:dev": "tailwindcss -i estilo/entrada.css -o public/tailwind.css --watch",
     "prestart": "npm run front",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "check": "node --check server.js",
     "bancada": "node bancada/medir.js",
     "bancada:conferir": "node bancada/conferir.js",
+    "bancada:gravacao": "node bancada/conferir-gravacao.js",
+    "bancada:cor": "node bancada/conferir-cor.js",
     "bancada:pdf": "node bancada/conferir-pdf.js",
     "bancada:arte": "node bancada/conferir-arte.js",
     "bancada:grupos": "node bancada/conferir-grupos.js",
@@ -26,13 +26,21 @@
     "app": "npm run front && tauri dev",
     "build:app": "npm run front && tauri build",
     "tauri": "tauri",
-    "build:wasm": "cd wasm && cargo build --release --target wasm32-unknown-unknown && cd .. && node -e \"require('fs').copyFileSync('wasm/target/wasm32-unknown-unknown/release/encaixe.wasm','estatico/encaixe.wasm')\""
+    "build:wasm": "cd wasm && cargo build --release --target wasm32-unknown-unknown && cd .. && node -e \"require('fs').copyFileSync('wasm/target/wasm32-unknown-unknown/release/encaixe.wasm','estatico/encaixe.wasm')\"",
+    "ia": "node empacotar/ia.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
+    "bytenode": "^1.6.0",
     "express": "^4.19.2",
+    "iconv-lite": "^0.6.3",
     "jpeg-js": "^0.4.4",
-    "pdfkit": "^0.15.0"
+    "multer": "^2.2.0",
+    "pdfkit": "^0.15.0",
+    "sharp": "^0.35.3",
+    "socket.io": "^4.8.1",
+    "whatsapp-web.js": "^1.34.7",
+    "xml2js": "^0.6.2"
   },
   "engines": {
     "node": ">=24"
@@ -44,10 +52,13 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.1",
+    "esbuild": "^0.28.2",
     "jsdom": "^30.0.1",
     "lucide-static": "^1.37.0",
+    "onnxruntime-web": "^1.29.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"

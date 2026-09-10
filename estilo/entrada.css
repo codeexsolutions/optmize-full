@@ -37,6 +37,133 @@
 @source "../src/**/*.{ts,tsx}";
 @source "../index.html";
 
+/*
+ * ===========================================================================
+ * O RESET QUE FALTAVA — só para a tela nova
+ * ===========================================================================
+ *
+ * O preflight do Tailwind está fora (ver a explicação lá em cima), e isso tem
+ * um efeito que passou despercebido: sem ele, um `<button>` continua com o
+ * estilo que o SISTEMA dá a botão. No Windows isso é fundo cinza-claro e borda
+ * `outset` — foi assim que o menu lateral inteiro ficou com botões brancos
+ * sobre o painel preto, e só o item ativo parecia certo, porque era o único
+ * com um `bg-*` escrito.
+ *
+ * Não dá para consertar botão a botão: são dezenas, e o próximo que alguém
+ * escrever nasce branco de novo. Também não dá para trazer o preflight, que
+ * apagaria a tela antiga inteira. Então o reset é o mínimo necessário, e vive
+ * dentro de `#raiz` — o `<div>` em que o React monta. A tela antiga não tem
+ * esse id, então nada aqui a alcança.
+ *
+ * Fica em `@layer base` por dois motivos: os utilitários (camada `utilities`)
+ * ganham dele, que é o que se quer; e o CSS à mão das folhas antigas está FORA
+ * de camada, e fora de camada ganha de qualquer camada — de novo, a tela
+ * antiga fica intacta.
+ */
+@layer base {
+  /*
+   * A MOLDURA BRANCA.
+   *
+   * `body { margin: 8px }` é padrão do navegador, e o preflight é quem
+   * normalmente o zera. Sem ele, a tela nova ficava com uma faixa de 8px em
+   * volta — e branca, porque nem `html` nem `body` tinham fundo: quem pinta o
+   * preto é a `<div>` do app, que não alcança a margem. De quebra, os 8px
+   * somados aos 100vh do app faziam a página passar da altura da janela e
+   * nascer uma barra de rolagem que não tinha o que rolar.
+   *
+   * `body:has(#raiz)` e não `body` solto: esta folha também gera o
+   * `public/tailwind.css`, que a tela antiga carrega. Lá o `#raiz` não existe,
+   * então a regra não a alcança — e a antiga já resolve isso por conta dela.
+   */
+  body:has(#raiz) {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  /*
+   * A rolagem, copiada do `interface.css`. Sem isto o navegador desenha a
+   * barra dele: larga e clara, encostada no painel preto — que era metade da
+   * "borda branca" relatada.
+   *
+   * `color-scheme: dark` é o que faz o navegador entender que a tela é escura,
+   * e vale também para o que ele desenha sozinho: o calendário do campo de
+   * data, a setinha do <select>, a barra de rolagem em Firefox.
+   */
+  #raiz {
+    color-scheme: dark;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text-dim) 42%, transparent) transparent;
+  }
+
+  #raiz ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  #raiz ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--text-dim) 38%, transparent);
+    background-clip: padding-box;
+  }
+
+  /*
+   * `border-box` em tudo. É a peça do preflight que mais falta, e a que passou
+   * mais tempo escondida: sem ela um `size-[30px]` com `p-[6px]` e borda de
+   * 1px desenha 44px, não 30. O menu inteiro estava com ícones um terço
+   * maiores do que o pedido, e a barra 21px mais larga do que a da tela
+   * antiga — que declara `border-box` desde sempre, no `style.css`.
+   *
+   * Toda medida escrita nas telas novas supõe isto. Tirar daqui não quebra
+   * nada de forma visível: só engorda tudo, calado.
+   */
+  #raiz,
+  #raiz *,
+  #raiz *::before,
+  #raiz *::after {
+    box-sizing: border-box;
+  }
+
+  /*
+   * Borda começa em zero e sólida, como o preflight faria. Sem isto, um
+   * `border-linha` (que só define cor e largura) herda o `border-style:
+   * outset` do sistema e desenha um relevo de janela dos anos 90.
+   */
+  #raiz *,
+  #raiz *::before,
+  #raiz *::after {
+    border: 0 solid;
+  }
+
+  /*
+   * O conserto do menu branco. Fundo transparente para o painel aparecer, cor
+   * e fonte herdadas para o botão parecer o que ele é na tela — texto que se
+   * clica —, e não um controle do sistema operacional.
+   */
+  #raiz button {
+    background-color: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  #raiz button:disabled {
+    cursor: default;
+  }
+
+  /*
+   * Campos herdam a tipografia da tela. O fundo NÃO é mexido aqui de
+   * propósito: cada campo já escreve o seu, e caixa de marcar e botão de rádio
+   * dependem do fundo que o sistema dá para desenhar a marca.
+   */
+  #raiz input,
+  #raiz select,
+  #raiz textarea {
+    font: inherit;
+    color: inherit;
+  }
+}
+
 @theme {
   /*
    * O app troca para o layout de celular em 800px (é onde o menu lateral vira

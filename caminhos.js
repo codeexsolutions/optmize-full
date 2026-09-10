@@ -39,4 +39,34 @@ function pastaDeUploads(...partes) {
   return caminho;
 }
 
-module.exports = { RAIZ, ARQUIVO_DO_BANCO, RAIZ_DE_UPLOADS, pastaDeUploads };
+/**
+ * Uma pasta de dados que não é upload de imagem: a sessão do WhatsApp, as
+ * planilhas exportadas antes de desativar uma impressora, o estado da
+ * varredura de cancelamento da 02. Mesma regra do resto — pasta do projeto
+ * rodando pelo código, pasta do usuário no app instalado.
+ */
+function pastaDeDados(...partes) {
+  const caminho = path.join(RAIZ, ...partes);
+  fs.mkdirSync(caminho, { recursive: true });
+  return caminho;
+}
+
+/**
+ * Um arquivo de configuração que o programa reescreve em execução (hoje só o
+ * `config/whatsapp.json`). Não vem semente nenhuma no pacote: quem não achar
+ * o arquivo usa os próprios padrões e grava na primeira alteração. É de
+ * propósito — a lista de impressoras nasce da varredura da rede, nunca de um
+ * arquivo escrito à mão.
+ */
+function arquivoDeConfig(nome) {
+  return path.join(pastaDeDados("config"), nome);
+}
+
+module.exports = {
+  RAIZ,
+  ARQUIVO_DO_BANCO,
+  RAIZ_DE_UPLOADS,
+  pastaDeUploads,
+  pastaDeDados,
+  arquivoDeConfig
+};

@@ -6,6 +6,11 @@
  * mais casos, mas aqui o servidor é local, roda na mesma máquina e responde em
  * milissegundos: não há rede para amortecer nem estado de servidor remoto para
  * sincronizar. O `recarregar` cobre o resto — depois de gravar, pede de novo.
+ *
+ * O `setDados` é a exceção a esse "peça de novo": quando o próprio servidor
+ * empurra o estado completo por um evento — é o caso do progresso da varredura
+ * da rede, que chega inteiro a cada passo —, ir buscar de novo o que acabou de
+ * chegar é uma volta ao servidor para receber a mesma coisa.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -39,5 +44,10 @@ export function useDados<T>(buscar: () => Promise<T>, dependencias: unknown[] = 
 
   useEffect(() => recarregar(), [recarregar]);
 
-  return { ...estado, recarregar };
+  /** Substitui o que está na tela sem ir ao servidor. Ver o cabeçalho. */
+  const setDados = useCallback((dados: T) => {
+    setEstado({ dados, carregando: false, erro: null });
+  }, []);
+
+  return { ...estado, recarregar, setDados };
 }

@@ -47,5 +47,16 @@ export const api = {
     pedir<T>(caminho, { method: "POST", body: JSON.stringify(corpo) }),
   put: <T,>(caminho: string, corpo: unknown) =>
     pedir<T>(caminho, { method: "PUT", body: JSON.stringify(corpo) }),
+  /*
+   * PATCH e PUT não são a mesma coisa aqui, e a diferença já custou um defeito:
+   * a tela de Máquinas mandava PUT numa rota declarada só como PATCH, e o
+   * Express respondia 404 — o botão "Reativar" não fazia nada, sem erro visível
+   * além de um recado de máquina não encontrada.
+   *
+   * PUT substitui o registro inteiro; PATCH altera os campos enviados e deixa o
+   * resto como está. Rota que aceita alteração parcial pede PATCH.
+   */
+  patch: <T,>(caminho: string, corpo: unknown) =>
+    pedir<T>(caminho, { method: "PATCH", body: JSON.stringify(corpo) }),
   apagar: <T,>(caminho: string) => pedir<T>(caminho, { method: "DELETE" }),
 };

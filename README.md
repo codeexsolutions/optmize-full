@@ -1,9 +1,14 @@
 # Optimize
 
-Sistema web local para preparar o que vai para a máquina: biblioteca de moldes,
-encaixe das peças no tecido e vetorização de imagem, tudo salvo em um banco
-SQLite local. Backend em Node.js (Express + better-sqlite3), frontend em
-HTML/CSS/JS puro — sem dependências externas de conta ou nuvem.
+Sistema local com duas metades. A primeira **prepara o que vai para a
+máquina**: biblioteca de moldes, encaixe das peças no tecido e vetorização de
+imagem. A segunda **acompanha o que já foi**: a central das impressoras, que
+acha as máquinas da rede sozinha, lê o histórico de cada uma e mostra a
+produção em tempo real.
+
+Tudo num banco SQLite local. Backend em Node.js (Express + better-sqlite3 +
+socket.io); a tela antiga em HTML/CSS/JS puro e a nova em React — sem
+dependências de conta ou nuvem.
 
 A interface é âmbar sobre preto, num tema só. Toda cor sai dos tokens de
 `public/interface.css`: nenhum outro arquivo deve escrever um hex direto.
@@ -13,6 +18,10 @@ A interface é âmbar sobre preto, num tema só. Toda cor sai dos tokens de
 - **Este sistema roda na sua própria máquina.** Não há servidor externo,
   login nem nuvem: o banco é o arquivo `dados.db` e as imagens ficam em
   `uploads/`, na pasta do projeto.
+- **O painel atende pela rede.** O servidor escuta em `0.0.0.0`, para outras
+  pessoas da fábrica abrirem a central das impressoras pelo IP deste PC. Não há
+  login: quem alcança a porta vê tudo. Numa rede que não seja só da empresa,
+  isso é uma decisão a rever.
 - Faça cópia de `dados.db` e de `uploads/` de vez em quando: é ali que estão
   os moldes, as estampas e os projetos.
 
@@ -35,8 +44,21 @@ npm install
 npm start
 ```
 
-Abra **http://localhost:8000** no navegador. A tela tem quatro áreas: **Moldes**,
-**Projetos**, **Encaixe** e **Vetor**.
+Abra **http://localhost:8000**. Ao subir, o servidor imprime também o endereço
+pela rede, que é por onde os outros computadores entram.
+
+O sistema está no meio de uma mudança de interface, e por isso são duas cascas
+ao mesmo tempo: a antiga em `/` e a nova em `/app`. **Não é preciso saber
+disso**: as duas listam as mesmas treze telas no menu, e clicar numa que mora
+do outro lado leva você até lá. O endereço de entrada é sempre o `/`.
+
+São treze telas, separadas no menu por momento do trabalho:
+
+| Grupo | Telas |
+| --- | --- |
+| **Produção** — antes de imprimir | Moldes, Projetos, Encaixe, Vetor, Imagem, Macros, Cor |
+| **Impressão** — enquanto imprime | Impressoras, Pedidos, Máquinas, WhatsApp |
+| **Relatórios** — depois, para conferir | Histórico, Reposição |
 
 Não há login nem identificação: quem abre o painel entra direto na tela de
 Moldes.
@@ -1870,6 +1892,134 @@ CorelDRAW ou no Illustrator poupa a viagem pela pasta de downloads.
 
 Tudo roda no navegador: a imagem não sobe para o servidor e não fica salva.
 
+## Central das impressoras
+
+Acompanha o que já saiu das máquinas de impressão: quanto cada uma produziu,
+o que está imprimindo agora, o histórico inteiro e os avisos no WhatsApp.
+
+### Não há impressora escrita no código
+
+Nem no código, nem num arquivo de configuração. **A única forma de uma
+impressora entrar no sistema é a varredura da rede achá-la.** Abra
+**Máquinas** e clique em **Procurar máquinas**:
+
+1. varre as sub-redes IPv4 locais procurando quem responde na porta 445 (SMB);
+2. resolve o nome do computador com `nbtstat` (com `ping -a` e DNS reverso de
+   reserva) — é o nome, e não o IP, que entra nos caminhos, para o DHCP não
+   quebrar a máquina no próximo reinício do roteador;
+3. lista os compartilhamentos (`net view`) e reconhece o tipo pela assinatura:
+
+   | Tipo | Como é reconhecido |
+   | --- | --- |
+   | `csv` | `History.csv` na raiz do PrinterManager |
+   | `at-binary` | arquivo `PrintHistory\PrintHistory` |
+   | `xml` | pasta `PrintHistroy` (ou `PrintHistory` com subpastas por ano) |
+
+4. máquina que **já existe** é reconhecida pelo nome do computador: mantém o id
+   e o nome, e só tem os caminhos reescritos — o histórico não se perde nem
+   duplica;
+5. máquina **nova** fica esperando alguém dar um nome a ela. Só aí ela é
+   cadastrada, e o histórico dela é importado junto.
+
+Deixando o campo de computadores vazio, varre a rede toda (~30 s numa /24).
+Informando nomes ou IPs separados por vírgula, testa só aqueles. O progresso
+aparece na tela em tempo real.
+
+**Por que não um arquivo de configuração:** caminho de rede escrito à mão só
+está certo numa instalação — a de quem escreveu. Noutra máquina, noutra loja,
+ou depois de renomearem um computador, ele passa a apontar para o vazio. E
+passa **calado**: uma rota morta faz a impressora aparecer offline, que é
+exatamente como ela aparece quando está de fato desligada.
+
+### Por que existe um banco no meio
+
+A tela **não lê a impressora a cada acesso**. Era isso que travava o painel
+quando várias pessoas olhavam ao mesmo tempo: cada requisição ia bater no
+compartilhamento SMB de cada máquina.
+
+Hoje o `dados.db` guarda o histórico inteiro (tabelas `imp_*`). Na subida do
+servidor, `impressoras/services/sync.js` importa as fontes originais; depois
+disso, quem continua conversando com as máquinas são só os leitores ao vivo,
+que gravam o que descobrem. As rotas consultam apenas o SQLite. Dia antigo
+continua consultável com a máquina desligada.
+
+Para mudar quantos dias voltam na importação inicial:
+
+```bat
+set HISTORY_BACKFILL_DAYS=180
+npm start
+```
+
+### O que a central faz
+
+- painel com o que está imprimindo agora, o dia e o período;
+- produção por dia e composição de tinta por canal;
+- histórico completo com filtro por período, máquina e nome do trabalho;
+- dois modos de ver — lista para conferir, cartões com a arte para reconhecer;
+- seleção compartilhada entre os dois modos, e duas folhas de produção para
+  imprimir a partir dela;
+- planilha do histórico de cada máquina, a qualquer momento;
+- relatório de produção dos últimos 30 dias em PDF;
+- acompanhamento da **reposição** — quanto tecido foi gasto refazendo trabalho,
+  semana a semana;
+- avisos no WhatsApp quando uma impressão começa e quando termina;
+- aviso local de trabalho novo — som, voz e notificação do sistema, cada um
+  ligado por quem quiser, e só naquele computador.
+
+### Pedidos e a calandra
+
+Um **pedido** é a lista de trabalhos já impressos na ordem em que vão passar na
+calandra. Ele nasce no **Histórico**: marcam-se os trabalhos e clica-se em
+**Lançar pedido**.
+
+Antes de criar, o sistema confere uma coisa que ninguém sabe de cabeça: **se
+aquilo já foi rodado antes** — se existe no histórico outra impressão do mesmo
+cliente e tecido. Reposição é legítima; repetir por engano, não.
+
+A comparação sai do nome do arquivo, lido como "CLIENTE - TECIDO". É convenção
+da produção, não campo de sistema — então o palpite erra de vez em quando, e
+por isso o resultado é um aviso, não um impedimento.
+
+A folha impressa leva um QR do pedido inteiro no rodapé — um só, grande, para a
+câmera da calandra ler com facilidade. O aparelho de lá lê e marca cada item
+como **passou** ou **erro** (com o motivo). A tela de Pedidos mostra esse
+resultado; ela não o inventa, e por isso não tem botão de marcar item — quem
+marca é quem está na máquina.
+
+> **Ordem de Serviço.** O sistema teve uma tela de OS — o pedido de produção
+> preenchido à mão, com imagens de referência — que foi retirada. O servidor
+> dela continua de pé e as tabelas continuam sendo criadas, de propósito: o
+> item de pedido ainda tem o campo `osId`, então voltar com a OS um dia é
+> escrever uma tela, não migrar banco. Ver `docs/MAPA.md` para o que apagar
+> caso a decisão seja não voltar.
+
+### Bot do WhatsApp
+
+Avisa num grupo. Não precisa de servidor externo nem chave de API: o servidor
+abre um Chrome invisível com o WhatsApp Web dentro do próprio processo.
+
+Abra a aba **WhatsApp**, clique em *Conectar WhatsApp* e leia o QR no celular
+do bot (WhatsApp → Aparelhos conectados → Conectar aparelho). Depois escolha o
+grupo — o número do bot precisa **já ser membro** dele.
+
+O que isso custa, e está escrito também na própria tela:
+
+- o Chrome invisível consome 300 a 500 MB de RAM enquanto o bot está conectado;
+- o `whatsapp-web.js` não é oficial: mudanças no WhatsApp Web podem quebrá-lo
+  até sair versão nova;
+- se o servidor reiniciar no meio de uma impressão, aquele trabalho não gera
+  aviso — o nome dele vem da linha que a máquina escreve ao *iniciar*.
+
+**O instalador não embute Chrome.** O bot usa, nesta ordem: a variável
+`OPTIMIZE_CHROME`, o Chrome do Puppeteer (se existir), o Google Chrome
+instalado, ou o Microsoft Edge — que vem com o Windows. Embutir o Chrome do
+Puppeteer somaria 409 MB ao instalador, mais do que o resto do programa junto.
+
+A sessão fica em `whatsapp-sessao/`, ao lado do `dados.db`. **Essa pasta é uma
+credencial**: quem a copiar entra no WhatsApp do bot.
+
+---
+
 ## Estrutura do projeto
 
 ```
@@ -2006,3 +2156,9 @@ sim: copie ela inteira.
 - Aproveitar o vazado fechado de uma peça para encaixar peça pequena dentro.
 - Mostrar na tela o histórico de encaixes de cada tipo, para acompanhar a
   melhora ao longo do tempo (os dados já são guardados).
+- Ligar as duas metades do sistema: hoje o Encaixe não sabe o que a impressora
+  imprimiu, e a central não sabe de qual encaixe o trabalho saiu. O nome do
+  arquivo é o único fio entre os dois.
+- Conferir o consumo de tinta das máquinas AT contra a tela da própria máquina.
+  Enquanto isso não for feito, o número continua marcado como experimental (o
+  `?` ao lado dele na tela).
