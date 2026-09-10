@@ -109,10 +109,6 @@ function patchMachine(id, patch) {
   return upsertMachine(merged);
 }
 
-function deleteMachine(id) {
-  return db.prepare("DELETE FROM imp_machines WHERE id = ?").run(id).changes > 0;
-}
-
 // Tudo que ficou gravado no banco em nome de uma máquina. Serve para a tela de
 // gestão mostrar o tamanho do histórico e para a confirmação de exclusão dizer
 // exatamente o que vai embora.
@@ -166,7 +162,6 @@ module.exports = {
   countMachines,
   upsertMachine,
   patchMachine,
-  deleteMachine,
   machineDataStats,
   purgeMachine
 };

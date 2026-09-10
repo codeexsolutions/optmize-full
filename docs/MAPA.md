@@ -388,8 +388,8 @@ encaixe, o mapa de "quem usa o quê" foi montado com uma varredura que procurava
 `function nome`. Ela perdeu `rotacoesDe` e `podeDeitar`, que são
 `const nome = (x) => …` no `encaixe-giro.js` — e o motor portado ficou sem o
 `import` deles. Em `<script>` global aquilo funcionava (tudo dividia o mesmo
-escopo); em ESM é `ReferenceError` na primeira chamada. Quem pegou foi o
-`npm run bancada:porte`, na primeira execução. Varredura de dependência tem que
+escopo); em ESM é `ReferenceError` na primeira chamada. Quem pegou foi a bancada de porte, na primeira
+execução — ela existia enquanto os dois lados conviviam, e saiu com o `public/`. Varredura de dependência tem que
 enxergar `const`, `let` e `class` também — e, de qualquer forma, **a prova de um
 porte é rodar os dois lados juntos, não comparar o texto**.
 

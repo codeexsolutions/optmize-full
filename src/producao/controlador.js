@@ -24,6 +24,7 @@ import {
 import { DPI_EXPORTACAO, prepararArtes } from "../motores/exportarEncaixe";
 import { chaveDoTrabalho, encaixeApi, posicoesParaGuardar } from "../api/encaixe";
 import { coresDePeca } from "../utils/coresDePeca";
+import { carregarImagem } from "../utils/arquivoDeImagem";
 import { criarEscopo } from "./escopo";
 export function montarProducao(raiz, irPara) {
 const escopo = criarEscopo(raiz);
@@ -478,41 +479,10 @@ async function lerMoldesDoArquivo(file) {
       qtdDoArquivo: doNome.veioDoArquivo,
       giro: giroPadrao(),
       contorno: "auto",
-      origem: `${lido.formato} · ${lido.unidade}`
-        + (modo === "inteiro" ? " · arquivo inteiro" : ""),
+      origem: `${lido.formato} · ${lido.unidade}`,
     });
   }
   return { pecas: novas, avisos: lido.avisos };
-}
-
-function carregarImagem(src) {
-  return new Promise((pronto, falhou) => {
-    const img = new Image();
-    img.onload = () => pronto(img);
-    img.onerror = () => falhou(new Error("Não consegui desenhar o molde."));
-    img.src = src;
-  });
-}
-
-/**
- * O arquivo escolhido no disco, lido como endereço `data:`.
- *
- * `carregarImagem` precisa de um endereço, e um `File` não tem nenhum. É a
- * ponte entre os dois, e é o que a tela de Vetor e a de arte do molde usam
- * para abrir o que a pessoa escolheu.
- *
- * `URL.createObjectURL` também serviria e gastaria menos memória, mas devolve
- * um endereço que morre se ninguém revogar — e estas duas telas seguram a
- * imagem enquanto durar o ajuste. Um endereço que se sustenta sozinho evita a
- * imagem sumir no meio do caminho.
- */
-function lerComoDataURL(file) {
-  return new Promise((pronto, falhou) => {
-    const leitor = new FileReader();
-    leitor.onload = () => pronto(String(leitor.result));
-    leitor.onerror = () => falhou(new Error("Não consegui ler o arquivo."));
-    leitor.readAsDataURL(file);
-  });
 }
 
 /**

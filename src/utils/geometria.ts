@@ -95,8 +95,6 @@ export function ladoMenorDoContorno(pontos: readonly Ponto[]): number {
   return Math.min(c.largura, c.altura);
 }
 
-/** A distância entre dois pontos. */
-export const distanciaEntre = (a: Ponto, b: Ponto): number => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** A distância de um ponto até o SEGMENTO a-b (não até a reta infinita). */
 export function distanciaAteSegmento(p: Ponto, a: Ponto, b: Ponto): number {

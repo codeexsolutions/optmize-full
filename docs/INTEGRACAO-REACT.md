@@ -38,7 +38,7 @@ Os elementos de listas e canvas são espaços de uso exclusivo do controlador: n
   saindo do dpi, a busca rodando nos workers, o risco no canvas e o PDF vindo do
   servidor. É o que o jsdom não alcança.
 - `node bancada/conferir-react.cjs`: monta o `App` inteiro (com o router) num jsdom e anda por ele — rotas, StrictMode, ausência de gravações duplicadas, clientes e projetos, preservação dos milímetros no projeto, modais, Cor e conservação dos ajustes do Encaixe ao trocar de aba.
-- `npm run bancada:porte`: 637 comparações entre os motores antigo e portado.
+- `npm run bancada:conferir`: 624 rodadas provando que o motor em WebAssembly dá exatamente o mesmo resultado do motor em JavaScript.
 - `npm run bancada:pdf`: geometria e tamanho real em oito configurações e sete tipos de arte.
 - `npm run bancada:gravacao`: molde, estampa e projeto atravessam o banco e voltam. As coordenadas são feias de propósito (12,3456789) para que nenhum arredondamento passe despercebido, e a folga zero é conferida à parte, porque o `projetos-api.js` desvia do `numero()` só por causa dela.
 - `npm run bancada:cor`: ida e volta sRGB → CMYK → sRGB pelo perfil U.S. Web Coated (SWOP), com tolerância por cor.

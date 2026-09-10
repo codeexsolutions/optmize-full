@@ -68,20 +68,6 @@ export interface Registro {
   isClipOrTile: boolean;
 }
 
-/** Uma impressora como o painel a vê: rotas, estado e o resumo de hoje. */
-export interface Maquina {
-  id: string;
-  name: string;
-  type: TipoDeMaquina;
-  enabled: boolean;
-  host: string | null;
-  ip: string | null;
-  online: boolean;
-  error: string | null;
-  /** As cores cujo nível a máquina está acusando como baixo. */
-  inkLowColors: string[];
-  todaySummary: Resumo;
-}
 
 /** Os caminhos de rede de uma máquina. Quem os preenche é a varredura. */
 export interface RotasDaMaquina {

@@ -11,7 +11,7 @@ socket.io); a tela antiga em HTML/CSS/JS puro e a nova em React — sem
 dependências de conta ou nuvem.
 
 A interface é âmbar sobre preto, num tema só. Toda cor sai dos tokens de
-`public/interface.css`: nenhum outro arquivo deve escrever um hex direto.
+`estilo/tokens.css`: nenhum outro arquivo deve escrever um hex direto.
 
 ## Importante antes de usar
 
@@ -74,38 +74,38 @@ lado se o conjunto fosse centralizado.
 
 ## Organização do projeto
 
-> **O front está no meio de uma mudança de arquitetura para React.** As duas
-> telas rodam ao mesmo tempo — a antiga em `/`, a nova em `/app` — e a
-> migração acontece uma tela por vez. O desenho completo, com a ordem das
-> telas e as regras, está em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
+> **O painel é React + TypeScript, compilado pelo Vite.** Houve duas telas
+> rodando ao mesmo tempo enquanto a migração acontecia — a antiga em `/` e a
+> nova em `/app` —, e isso acabou: a pasta `public/` saiu, o painel voltou para
+> a raiz e `/app` responde com um redirecionamento por causa dos links salvos.
+> O desenho completo está em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md), e o
+> que ainda não migrou, em
+> [`docs/INTEGRACAO-REACT.md`](docs/INTEGRACAO-REACT.md).
 >
-> Para desenvolver a tela nova são dois terminais: `npm start` (o servidor,
-> na 8000) e `npm run dev:app` (o Vite, na 5173, que abre em
-> `localhost:5173/app/` e manda `/api` para o servidor). A tela antiga
-> continua precisando só do `npm start`.
+> Para desenvolver são dois terminais: `npm start` (o servidor, na 8000) e
+> `npm run dev:app` (o Vite, na 5173, que manda `/api` para o servidor). Só o
+> `npm start` também serve — ele compila o painel antes de subir.
 
-A paleta, a tipografia e a responsividade ficam em `public/interface.css`,
-enquanto `public/interface.js` cuida somente do menu e do relógio. As regras de
-moldes, encaixe e vetor continuam isoladas da interface. Veja a divisão completa
-em [`docs/ESTRUTURA.md`](docs/ESTRUTURA.md).
+A paleta e a tipografia ficam em `estilo/tokens.css`; a moldura (menu,
+cabeçalho, rotas) em `src/casca/`. Veja a divisão completa em
+[`docs/ESTRUTURA.md`](docs/ESTRUTURA.md).
 
 ### Tailwind
 
-As telas novas são escritas em utilitários do Tailwind, direto no HTML.
-`estilo/entrada.css` é a folha de entrada e `npm run css` gera
-`public/tailwind.css` (`npm run css:dev` fica olhando os arquivos e
-regerando; `npm start` e `npm run build:app` já geram sozinhos). Duas regras
-seguram a mistura com o CSS antigo:
+As telas são escritas em utilitários do Tailwind, direto no JSX.
+`estilo/entrada.css` é a folha de entrada, e quem a compila é o plugin do
+Tailwind dentro do Vite — não há passo separado para rodar. Duas regras seguram
+a mistura com o CSS que sobrou da tela antiga (`src/producao/producao.css`, que
+ainda desenha o Encaixe):
 
 - **A paleta não muda de dono.** Todo token do Tailwind (`bg-topo`,
   `text-ambar`, `border-linha`) aponta para a variável correspondente do
-  `interface.css`. Mexer no âmbar continua sendo mexer em um hex só.
+  `tokens.css`. Mexer no âmbar continua sendo mexer em um hex só.
 - **O preflight fica de fora, e utilitário não divide elemento com CSS antigo.**
-  O reset do Tailwind apagaria a interface inteira que já está escrita à mão; e
-  como o CSS das duas folhas antigas está fora de camada, ele venceria o
-  utilitário calado. Então a tela que migra para o Tailwind perde as regras
-  antigas dela — foi o que aconteceu com `.topbar`, que virou o `<header>`
-  do topo e não tem mais nenhuma linha de CSS própria.
+  O reset do Tailwind apagaria o que ainda está escrito à mão; e como aquela
+  folha está fora de camada, ela venceria o utilitário calado. Então a tela que
+  migra para o Tailwind perde as regras antigas dela — foi o que aconteceu com
+  o cabeçalho e com o menu lateral, cujas regras já saíram da folha.
 
 ### Ícones
 
