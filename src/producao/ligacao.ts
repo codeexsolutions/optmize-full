@@ -13,12 +13,50 @@
 import { createContext, useContext } from "react";
 import type { NomeDeTela } from "../rotas";
 
+/** Os ajustes que um projeto guarda e o Encaixe recebe prontos. */
+export interface AjustesDoEncaixe {
+  larguraTecido: number | null;
+  /** Em CENTÍMETRO — a unidade do Encaixe. Quem guarda em milímetro converte. */
+  espaco: number | null;
+  comprimentoBancada: number | null;
+  /** "180" | "livre" | "fixa", os mesmos valores do seletor. */
+  giro: string;
+}
+
+/** Uma arte já finalizada, com a medida real, indo para o Encaixe. */
+export interface PecaParaOEncaixe {
+  nome: string;
+  /** Onde a arte está no servidor (`/uploads/projetos/...`). */
+  url: string;
+  largura: number;
+  altura: number;
+  quantidade: number;
+}
+
+export interface ProjetoParaOEncaixe {
+  nome: string;
+  pecas: PecaParaOEncaixe[];
+  unidades: number;
+  ajustes: AjustesDoEncaixe;
+}
+
 export interface Ligacao {
   /**
    * Entrega arquivos ao Encaixe. Resolve quando ele terminou de ler todos —
    * quem entrega precisa saber disso para só então limpar a própria lista.
    */
   adicionarArquivos(arquivos: File[]): Promise<void>;
+
+  /**
+   * Entrega um projeto inteiro ao Encaixe: os ajustes guardados vão para os
+   * campos dele e as artes entram na lista, já sem fundo.
+   *
+   * Resolve quando o Encaixe terminou de ler tudo. O cálculo NÃO começa
+   * sozinho — quem aperta "Optmizar" é a pessoa, depois de escolher o tempo de
+   * procura.
+   */
+  mandarProjetoParaOEncaixe(projeto: ProjetoParaOEncaixe): Promise<void>;
+
   irPara(pagina: NomeDeTela): void;
 }
 

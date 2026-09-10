@@ -53,7 +53,9 @@ interface Props {
 /** O item do menu, nas medidas do `.nav-btn` da casca antiga. */
 const ITEM =
   "grid min-h-[50px] grid-cols-[30px_minmax(0,1fr)] items-center gap-[10px] rounded-[10px]" +
-  " border border-transparent px-[10px] py-2 text-left transition-colors" +
+  // `no-underline`: o item virou <a>, e link sublinhado num menu lateral não é
+  // o desenho desta casca — era <button> antes e assim continua parecendo.
+  " border border-transparent px-[10px] py-2 text-left no-underline transition-colors" +
   // Barra estreita: o ícone sozinho, centrado.
   " tela:max-[1100px]:grid-cols-[1fr] tela:max-[1100px]:justify-items-center tela:max-[1100px]:p-[7px]";
 

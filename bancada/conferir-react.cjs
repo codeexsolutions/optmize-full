@@ -1,3 +1,23 @@
+/**
+ * A conferência do painel React, fora do navegador.
+ *
+ * Monta o `App` inteiro num jsdom -- com o router, a casca e as telas -- e
+ * anda por ele como uma pessoa andaria: clica, navega, salva. E verifica o que
+ * so aparece quando as pecas estao juntas: que o StrictMode nao duplica uma
+ * gravacao, que sair de uma tela fecha o que estava aberto nela, e que o
+ * trabalho em memoria sobrevive a troca de aba.
+ *
+ * ANTES ELE MONTAVA SO O `Producao`, e navegava chamando `irPara` na mao. Isso
+ * deixou de ser o sistema: quem navega e o `react-router`, e as telas que ja
+ * sairam do controlador sao desenhadas pela ROTA, nao por aquele componente.
+ * Montar o `App` e mexer no `#` do endereco e o caminho de verdade.
+ *
+ * Os seletores das telas migradas sao por classe e por TEXTO, nunca por `id`:
+ * uma tela React nao tem `id` nenhum, e o que uma pessoa enxerga e o rotulo do
+ * botao. As duas que ainda sao imperativas (Moldes e Encaixe) continuam sendo
+ * achadas por `id`, que e o que o controlador usa.
+ */
+
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -8,7 +28,7 @@ const { buildSync } = require('esbuild');
 async function main() {
   const root = path.resolve(__dirname, '..');
   const bundle = path.join(os.tmpdir(), 'optimize-react-' + process.pid + '.cjs');
-  buildSync({ entryPoints: [path.join(root, 'src/producao/Producao.tsx')], bundle: true,
+  buildSync({ entryPoints: [path.join(root, 'src/App.tsx')], bundle: true,
     outfile: bundle, platform: 'node', format: 'cjs', loader: { '.css': 'empty' },
     external: ['react','react-dom'], define: { 'import.meta.env.BASE_URL': '"/"' },
     // O esbuild cru nao procura `.mjs` sozinho; o Vite procura. O `encaixeRede`
@@ -19,8 +39,8 @@ async function main() {
   // O bundle temporário encontra os mesmos pacotes React da aplicação.
   const Module = require('node:module');
   process.env.NODE_PATH = path.join(root,'node_modules'); Module._initPaths();
-  const dom = new JSDOM('<!doctype html><div id="raiz"></div>', { url:'http://localhost/app/', pretendToBeVisual:true });
-  for(const k of ['window','document','CustomEvent','Event','EventTarget','HTMLElement','Node','getComputedStyle']) global[k]=dom.window[k];
+  const dom = new JSDOM('<!doctype html><div id="raiz"></div>', { url:'http://localhost/#/moldes', pretendToBeVisual:true });
+  for(const k of ['window','document','CustomEvent','Event','EventTarget','HTMLElement','Node','getComputedStyle','MouseEvent','File','Blob','location','history','navigator']) global[k]=dom.window[k];
   global.CSS = { escape: s=>s.replace(/[^\w-]/g,'\\$&') };
   global.requestAnimationFrame=dom.window.requestAnimationFrame.bind(dom.window);
   global.cancelAnimationFrame=dom.window.cancelAnimationFrame.bind(dom.window);
@@ -36,42 +56,70 @@ async function main() {
     throw new Error('Requisição inesperada: '+url);
   };
   const React=require('react'); const {act}=React; const {createRoot}=require('react-dom/client');
-  const {Producao}=require(bundle);
+  const {App}=require(bundle);
   const app=createRoot(document.getElementById('raiz'));
-  let pagina='moldes';
-  const irPara = p=>{pagina=p;render();};
-  const render=()=>app.render(React.createElement(React.StrictMode,null,React.createElement(Producao,{pagina,irPara})));
-  const click = async selector=>{
-    const node=document.querySelector(selector); assert.ok(node,selector);
-    await act(async()=>node.click());
+
+  /** Navega como o menu navega: mexendo no `#` do endereco. */
+  const irPara = async pagina => {
+    await act(async()=>{
+      dom.window.location.hash = '#/' + pagina;
+      // As telas de rota chegam por `import()` (o `lazy` de rotas.ts): sem esta
+      // volta ao laco de eventos o `<Suspense>` ainda estaria na espera.
+      await new Promise(r=>setTimeout(r,0));
+    });
   };
-  await act(async()=>{render();});
+  const click = async alvo=>{
+    const node = typeof alvo === 'string' ? document.querySelector(alvo) : alvo;
+    assert.ok(node, String(alvo));
+    await act(async()=>node.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true})));
+  };
+  /** O botao que uma pessoa acharia: pelo texto escrito nele. */
+  const botao = (texto,dentro=document) =>
+    [...dentro.querySelectorAll('button,label')].find(b=>b.textContent.includes(texto));
+
+  await act(async()=>{
+    app.render(React.createElement(React.StrictMode,null,React.createElement(App)));
+    await new Promise(r=>setTimeout(r,0));
+  });
   const error=document.querySelector('[role="alert"]'); assert.equal(error,null,error?.textContent);
+
+  // ---------- Moldes: ainda imperativa ----------
   assert.match(document.getElementById('moldes-body').textContent,/Nenhum|nenhum/);
   await click('#btn-molde-novo');
   assert.equal(document.getElementById('molde-modal').classList.contains('hidden'),false);
-  await act(async()=>irPara('projetos'));
-  assert.equal(document.getElementById('molde-modal').classList.contains('hidden'),true);
-  assert.match(document.getElementById('projetos-lista').textContent,/Cliente de teste/);
-  await click('[data-cliente="1"]');
-  assert.match(document.getElementById('projetos-lista').textContent,/Uniforme/);
-  await click('[data-projeto-abrir="2"]');
-  assert.equal(document.getElementById('projeto-espaco').value,'5');
-  assert.equal(document.getElementById('projeto-editor').classList.contains('hidden'),false);
-  await click('#btn-projeto-salvar');
+
+  // ---------- Projetos: React, desenhada pela rota ----------
+  await irPara('projetos');
+  assert.equal(document.getElementById('molde-modal').classList.contains('hidden'),true,
+    'sair de Moldes fecha o modal dela');
+  const estante = () => document.querySelector('.projeto-lista');
+  assert.match(estante().textContent,/Cliente de teste/);
+  await click('.projeto-pasta');
+  assert.match(estante().textContent,/Uniforme/);
+  await click(botao('Abrir',estante()));
+
+  const editor = () => document.querySelector('.modal-projeto');
+  assert.ok(editor(),'o editor do projeto abriu');
+  const campoDoRotulo = texto =>
+    [...editor().querySelectorAll('label')].find(l=>l.textContent.includes(texto)).querySelector('input,select');
+  assert.equal(campoDoRotulo('Folga entre peças').value,'5');
+  assert.equal(campoDoRotulo('Largura do tecido').value,'160');
+
+  await click(botao('Salvar',editor()));
   const gravacoes=requests.filter(r=>r[0]==='/api/projetos/2' && r[1]==='PUT');
   assert.equal(gravacoes.length,1,'StrictMode não duplica a gravação');
   assert.equal(JSON.parse(gravacoes[0][2]).espaco,5,'Espaçamento salvo continua em milímetros');
-  await act(async()=>irPara('encaixe'));
-  assert.equal(document.getElementById('projeto-editor').classList.contains('hidden'),true);
+
+  // ---------- Encaixe: o trabalho sobrevive a troca de aba ----------
+  await irPara('encaixe');
+  assert.equal(document.querySelector('.modal-projeto'),null,'sair de Projetos fecha o editor');
   document.getElementById('encaixe-largura').value='179';
-  // A tela de Cor virou React: nao tem mais `id` nenhum, entao os seletores sao
-  // por classe, e o botao de limpar e achado pelo texto. E o que uma pessoa
-  // enxerga, e nao um gancho que so existe para o teste.
-  await act(async()=>irPara('cor'));
+
+  // ---------- Cor: React, dentro do editor de producao ----------
+  await irPara('cor');
   const cor = () => document.querySelector('.page:not([data-page])');
   const listaDeCor = () => cor().querySelector('.cor-lista');
-  const png = new File([Buffer.from('89504e470d0a1a0a','hex')],'arte.png',{type:'image/png'});
+  const png = new dom.window.File([Buffer.from('89504e470d0a1a0a','hex')],'arte.png',{type:'image/png'});
   await act(async()=>{
     const drop=new dom.window.Event('drop',{bubbles:true,cancelable:true});
     Object.defineProperty(drop,'dataTransfer',{value:{files:[png]}});
@@ -81,24 +129,26 @@ async function main() {
   assert.equal(cor().hidden,false,'a tela de Cor aparece quando e a vez dela');
   assert.match(listaDeCor().textContent,/arte.png/);
   assert.match(listaDeCor().textContent,/já estava certa/);
-  await act(async()=>irPara('impressoras'));
+
+  await irPara('impressoras');
   assert.equal(document.querySelector('.producao').hidden,true);
-  await act(async()=>irPara('encaixe'));
-  assert.equal(document.getElementById('encaixe-largura').value,'179');
+  await irPara('encaixe');
+  assert.equal(document.getElementById('encaixe-largura').value,'179',
+    'o ajuste do Encaixe sobrevive a ida e volta');
   // A Cor esconde-se sozinha pelo `hidden`, e nao pela classe `active` que o
   // controlador liga nas outras: se alguem devolver o `data-page` a ela, o
   // controlador volta a mexer na classe e o proximo render desfaz.
   assert.equal(cor().hidden,true,'a tela de Cor some quando nao e a vez dela');
   assert.match(listaDeCor().textContent,/arte.png/,'e a lista sobrevive escondida');
-  await act(async()=>irPara('cor'));
+  await irPara('cor');
   assert.match(listaDeCor().textContent,/arte.png/);
-  const limpar=[...cor().querySelectorAll('button')].find(b=>/Limpar a lista/.test(b.textContent));
-  await act(async()=>{limpar.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));});
+  await click(botao('Limpar a lista',cor()));
   assert.equal(listaDeCor(),null,'lista vazia nao desenha o painel');
+
   await act(async()=>app.unmount());
-  assert.equal(window.uiConfirm,undefined);
-  assert.equal(window.carregarProjetos,undefined);
+  assert.equal(dom.window.uiConfirm,undefined);
+  assert.equal(dom.window.carregarProjetos,undefined);
   fs.unlinkSync(bundle); dom.window.close();
-  console.log('React: montagem em StrictMode, navegação, modais, clientes, editor de projeto, Cor e preservação de ajustes passaram.');
+  console.log('React: rotas, StrictMode, modais, clientes, editor de projeto, Cor e preservação de ajustes passaram.');
 }
 main().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1);});

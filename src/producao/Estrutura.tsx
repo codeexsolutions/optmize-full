@@ -9,12 +9,14 @@
  * É por isso que a Cor saiu daqui quando virou React de verdade: ela precisa
  * redesenhar a cada arte convertida, e não caberia dentro de um componente que
  * existe justamente para nunca redesenhar. Ela é irmã deste, no `Producao`.
+ *
+ * A de Projetos saiu depois, e foi mais longe: virou uma tela de rota como as
+ * outras, desenhada pelo `<Outlet/>` da casca. Sobraram duas.
  */
 import { memo } from "react";
 import { Moldes } from "../telas/Moldes";
-import { Projetos } from "../telas/Projetos";
 import { Encaixe } from "../telas/Encaixe";
-export const Estrutura = memo(function Estrutura() { return <><Moldes /><Projetos /><Encaixe /><div className="ui-dialog-backdrop hidden" id="ui-dialog" role="presentation">
+export const Estrutura = memo(function Estrutura() { return <><Moldes /><Encaixe /><div className="ui-dialog-backdrop hidden" id="ui-dialog" role="presentation">
 
 <section className="ui-dialog" role="dialog" aria-modal="true" aria-labelledby="ui-dialog-title" aria-describedby="ui-dialog-message">
 
