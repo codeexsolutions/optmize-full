@@ -139,6 +139,13 @@ a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
   jsdom, que não tem nenhum dos três. Ela nasceu de um defeito real: uma
   extração levou junto duas funções da leitura de arquivo, e tudo o mais
   passou enquanto largar um PNG na tela dava `lerImagemCrua is not defined`.
+- `bancada/conferir-whatsapp.js`: `npm run bancada:whatsapp`. O bot mantém um
+  Chrome invisível aberto, e isso custa de 300 a 500 MB — preço aceito
+  **enquanto ele está conectado**. Esta conferência tranca o que não pode
+  acontecer: pagar esse preço sem estar conectado. Roda com um cliente de
+  mentira, sem rede e sem navegador, porque subir o WhatsApp Web de verdade
+  depende de um site que muda sem avisar, e conferência que falha por motivo
+  alheio é conferência que as pessoas aprendem a ignorar.
 - `bancada/conferir-cor.js`: `npm run bancada:cor`. Ida e volta
   sRGB → CMYK → sRGB pelo perfil SWOP do Windows. O `cor-icc.js` caminha na LUT
   do perfil à mão, e um erro ali não parece erro: o arquivo abre, as cores só

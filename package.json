@@ -16,6 +16,7 @@
     "bancada:conferir": "node bancada/conferir.js",
     "bancada:gravacao": "node bancada/conferir-gravacao.js",
     "bancada:cor": "node bancada/conferir-cor.js",
+    "bancada:whatsapp": "node bancada/conferir-whatsapp.js",
     "bancada:pdf": "node bancada/conferir-pdf.js",
     "bancada:arte": "node bancada/conferir-arte.js",
     "bancada:grupos": "node bancada/conferir-grupos.js",
