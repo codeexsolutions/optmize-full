@@ -14,11 +14,15 @@ import { grade, gradeDaPeca, tirarFundoDosPixels, silhuetaDeDados, mascarasDeSil
 import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../motores/encaixePrepara";
 import { AJUSTE_PADRAO, MODOS_DE_ARTE, TIPOS_DE_ARTE, ajusteNovo, tamanhoDoRapport, ppcmDaArte, desenharArteNoMolde } from "../motores/arteMolde";
 import { formatarNumero, formatarMetros, formatarCm, formatarSegundos, formatarPorcento, formatarM2 } from "../utils/numero";
-import { jpegSeguroParaPdf } from "../motores/jpegParaPdf";
 import {
   DPI_PADRAO, PPCM_PADRAO, medidasDoArquivo, pixelsPorCmDoArquivo,
 } from "../motores/medidaDoArquivo";
 import { lerQuantidadeDoNome } from "../motores/nomeDeArquivo";
+import {
+  bancadasDoResultado, cortesEntreBancadas, desenharArte, desenharEncaixe,
+} from "../motores/desenhoDoEncaixe";
+import { DPI_EXPORTACAO, prepararArtes } from "../motores/exportarEncaixe";
+import { chaveDoTrabalho, encaixeApi, posicoesParaGuardar } from "../api/encaixe";
 import { coresDePeca } from "../utils/coresDePeca";
 import { criarEscopo } from "./escopo";
 export function montarProducao(raiz, irPara) {
@@ -341,6 +345,97 @@ function removerFundoDaImagem(img, forcar = false) {
  * tamanho, não 30 peças. Por isso o "x" da quantidade não pode ter número
  * dos dois lados — é isso que separa "5x" de "30x40".
  */
+/**
+ * Carrega uma arte em PNG/JPG.
+ *
+ * A medida em centímetros vem da resolução gravada no arquivo (o dpi), e não
+ * de um valor digitado: é a única informação do arquivo que diz o tamanho de
+ * verdade. Quando o arquivo não traz essa informação, vale 300 dpi — o padrão
+ * de arte para impressão — e a linha na tabela avisa que foi suposto.
+ *
+ * O fundo em volta da arte é apagado aqui, antes de tudo: assim a mesma
+ * imagem serve para o encaixe, para o desenho e para o PDF sem a moldura
+ * branca em volta.
+ */
+/**
+ * A primeira metade: abre o arquivo e decodifica a imagem, sem tocar no fundo.
+ *
+ * A separação existe para o fundo poder ser tirado de todos os arquivos de uma
+ * vez, nos workers, em vez de um por um aqui na tela.
+ */
+async function lerImagemCrua(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const ppcmDoArquivo = pixelsPorCmDoArquivo(bytes);
+  // Bitmap, e não <img> com data URL: a arte de impressão passa de 29
+  // megapixels, e num <img> a decodificação cai na thread da tela no primeiro
+  // `drawImage` — 1,2 a 1,8 s por arquivo, travando a página. O endereço vem
+  // do próprio arquivo, para a miniatura da tabela ter o que mostrar.
+  const endereco = URL.createObjectURL(file);
+  const ppcm = ppcmDoArquivo || PPCM_PADRAO;
+  // O teto sai da medida real da arte: os centímetros dela vezes o dpi que o
+  // PDF consegue imprimir. Sem as medidas no cabeçalho não há teto, e o
+  // arquivo entra inteiro como antes.
+  const m = medidasDoArquivo(bytes);
+  const teto = m ? ladoDeTrabalho(Math.max(m.largura, m.altura) / ppcm) : 0;
+  const img = await criarBitmapOuImagem(file, endereco, teto)
+    .catch(() => { throw new Error(`"${file.name}" não parece ser uma imagem válida.`); });
+  return {
+    file, img, endereco, ppcm, ppcmDoArquivo,
+    pxOriginal: m || { largura: img.naturalWidth || img.width, altura: img.naturalHeight || img.height },
+  };
+}
+
+/**
+ * A segunda metade: com o fundo já resolvido, monta a peça.
+ *
+ * `semFundo` é o que o preparo devolveu — `null` quando não havia fundo para
+ * tirar, e nesse caso a imagem original é que vale.
+ */
+async function montarPecaDaImagem(cru, semFundo, imagemPronta = null) {
+  const { file, ppcm, ppcmDoArquivo } = cru;
+  // `imagemPronta` é o bitmap que a leitura já decodificou, quando ele ainda
+  // está vivo — é o caminho de quando a peça entra na tabela antes de o fundo
+  // sair, e é o que evita decodificar 30 megapixels de novo só para a linha
+  // aparecer.
+  //
+  // Sem ele: com recorte, vale o blob que o worker devolveu (é pequeno); sem
+  // recorte, o bitmap original já foi transferido ao worker e fechado, então
+  // refaz-se do próprio arquivo.
+  const img = imagemPronta
+    || (semFundo
+      ? await criarBitmapOuImagem(semFundo.blob, semFundo.src)
+      : await criarBitmapOuImagem(file, cru.endereco));
+  // O desenho usa os pixels do bitmap; a miniatura da tabela é um <img> e
+  // precisa de um endereço. Mesma arte, dois caminhos.
+  const endereco = semFundo ? semFundo.src : cru.endereco;
+
+  const doNome = lerQuantidadeDoNome(file.name.replace(/\.[^.]+$/, ""));
+  const dpi = Math.round(ppcm * 2.54);
+  return {
+    id: proximoIdPeca++,
+    nome: doNome.nome,
+    src: endereco,
+    miniatura: miniaturaDaArte(img),
+    img,
+    pxW: img.naturalWidth || img.width,
+    pxH: img.naturalHeight || img.height,
+    // A medida vem do ARQUIVO, não do bitmap: ele pode ter sido decodificado
+    // reduzido (ver `ladoDeTrabalho`), e medir o reduzido daria uma peça menor
+    // do que ela é. Foi exatamente esse erro, por outra causa, que fazia uma
+    // camiseta de 49,3 cm entrar como 15,2 cm.
+    largura: arredondar(cru.pxOriginal.largura / ppcm),
+    altura: arredondar(cru.pxOriginal.altura / ppcm),
+    qtd: doNome.qtd,
+    qtdDoArquivo: doNome.veioDoArquivo,
+    giro: giroPadrao(),
+    contorno: "auto", // "auto" lê a silhueta da arte; "caixa" usa o retângulo
+    origem: `${dpi} dpi${ppcmDoArquivo ? "" : " (suposto)"}${semFundo ? " · fundo removido" : ""}`,
+  };
+}
+
+// Quem sabe abrir cada formato é o `moldes.js`; aqui só interessa saber se o
+// arquivo é vetorial (a leitura em si passa por `lerMoldeVetorial`).
+
 const ehMoldeVetorial = (file) => ehArquivoDeMolde(file);
 
 /**
@@ -1481,95 +1576,6 @@ function mascarasDaPeca(peca, passo, raio) {
  */
 
 /** Espalha os caracteres num número (FNV-1a), só para a chave ficar curta. */
-function embaralharTexto(texto) {
-  let n = 0x811c9dc5;
-  for (let i = 0; i < texto.length; i++) {
-    n ^= texto.charCodeAt(i);
-    n = Math.imul(n, 0x01000193) >>> 0;
-  }
-  return n.toString(36);
-}
-
-function chaveDoTrabalho(pecas, larguraTecido, espaco, comprimentoBancada) {
-  // O grupo entra na chave: ele muda a fila de entrada e, com ela, o encaixe.
-  // Sem isso, agrupar peças e refazer a procura traria de volta o risco salvo
-  // de ANTES do grupo, e a tela mostraria um encaixe que ignora o agrupamento
-  // como se fosse a resposta a ele.
-  const lista = pecas.map((p) =>
-    [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH, p.grupo || ""].join("~")
-  ).sort().join("|");
-  // O "b" antes do comprimento não é enfeite: sem ele, uma chave nova de
-  // bancada 1 cm cairia em cima da chave velha de margem 1 cm, e o trabalho
-  // abriria com um encaixe guardado que não respeita bancada nenhuma.
-  return `${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
-}
-
-/** O encaixe do jeito que ele vai para o banco: só o essencial de cada peça. */
-function posicoesParaGuardar(resultado) {
-  return resultado.posicoes.map((p) => ({
-    indice: p.item.indice,
-    copia: p.item.copia == null ? 1 : p.item.copia,
-    x: Math.round(p.x * 1000) / 1000,
-    y: Math.round(p.y * 1000) / 1000,
-    rot: p.rot == null ? (p.girado ? 90 : 0) : p.rot,
-    comMascara: !!p.mascara,
-    // A bancada vai junto: um encaixe guardado sem ela voltaria como um rolo
-    // inteiriço, e o PDF sairia numa página só depois de a busca ter respeitado
-    // a bancada. A chave do trabalho já inclui o comprimento (`chaveDoTrabalho`),
-    // então um guardado só volta para o mesmo comprimento de bancada.
-    bancada: p.bancada || 0,
-  }));
-}
-
-/**
- * A memória melhora o resultado, mas nunca pode impedir o encaixe de começar
- * se o servidor local estiver reiniciando ou ocupado. Depois do prazo, a tela
- * simplesmente continua sem memória e tenta salvá-la na próxima vez.
- */
-async function fetchEncaixeComPrazo(url, opcoes = {}, prazoMs = 2500) {
-  const controlador = new AbortController();
-  const timer = setTimeout(() => controlador.abort(), prazoMs);
-  try {
-    return await fetch(url, { ...opcoes, signal: controlador.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
- * As quatro conversas com a memória do encaixe passam por aqui.
- *
- * Eram quatro funções escritas à mão, duas delas idênticas letra por letra e
- * diferindo só no endereço. Quatro cópias do mesmo `try/catch` querem dizer
- * quatro lugares para lembrar quando a regra mudar — e a regra é uma só:
- * **falha de rede nunca derruba o encaixe**. Sem servidor a tela funciona
- * igual, só começa do zero.
- */
-async function pedirAoServidorDoEncaixe(caminho, opcoes) {
-  try {
-    const resposta = await fetchEncaixeComPrazo(caminho, opcoes);
-    return resposta.ok ? await resposta.json() : null;
-  } catch (err) {
-    return null;
-  }
-}
-
-const enviarAoServidorDoEncaixe = (caminho, dados) =>
-  pedirAoServidorDoEncaixe(caminho, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(dados),
-  });
-
-async function buscarEncaixeGuardado(chave) {
-  const r = await pedirAoServidorDoEncaixe(
-    `/api/encaixe/guardado?chave=${encodeURIComponent(chave)}`);
-  return r ? r.guardado : null;
-}
-
-const guardarEncaixe = (dados) =>
-  enviarAoServidorDoEncaixe("/api/encaixe/guardado", dados);
-
 /**
  * Remonta na tela um encaixe que estava guardado.
  *
@@ -1669,13 +1675,6 @@ function esconderOfertaDoGuardado() {
 // ==================== MEMÓRIA ====================
 
 /** O que o sistema já aprendeu com encaixes parecidos. */
-const buscarMemoria = (assinatura) => pedirAoServidorDoEncaixe(
-  `/api/encaixe/memoria?assinatura=${encodeURIComponent(assinatura)}`);
-
-/** Anota como foi este encaixe, para o próximo começar mais esperto. */
-const guardarNaMemoria = (dados) =>
-  enviarAoServidorDoEncaixe("/api/encaixe/memoria", dados);
-
 // ==================== EXECUÇÃO ====================
 
 let pararBusca = false;
@@ -2001,7 +2000,7 @@ async function optmizar() {
       detalhe: "Se este mesmo trabalho já foi feito, o melhor resultado será reaproveitado.",
       progresso: 27,
     });
-    const guardadoAntes = await buscarEncaixeGuardado(chave);
+    const guardadoAntes = await encaixeApi.guardado(chave);
     esconderOfertaDoGuardado();
     atualizarCarregamento({
       etapa: "Consultando histórico",
@@ -2009,7 +2008,7 @@ async function optmizar() {
       detalhe: "Usando os encaixes anteriores para começar por uma organização melhor.",
       progresso: 31,
     });
-    const aprendido = await buscarMemoria(assinatura);
+    const aprendido = await encaixeApi.memoria(assinatura);
 
     const alturaMax = itens.reduce((soma, it) => soma + Math.max(it.largura, it.altura) + espaco, 0);
     // Com o contorno ligado os dois encaixadores disputam: peça quase
@@ -2169,7 +2168,7 @@ async function optmizar() {
       detalhe: "Na próxima vez este mesmo trabalho poderá abrir mais rápido.",
       progresso: 96,
     });
-    await guardarEncaixe({
+    await encaixeApi.guardar({
       chave, assinatura, larguraTecido, espaco, comprimentoBancada,
       consumo: ultimoResultado.consumo,
       aproveitamento,
@@ -2178,7 +2177,7 @@ async function optmizar() {
       receita: ultimoResultado.receita,
     });
 
-    const anotado = await guardarNaMemoria({
+    const anotado = await encaixeApi.anotarNaMemoria({
       assinatura,
       receita: ultimoResultado.receita,
       placar: ultimoResultado.placar,
@@ -2483,7 +2482,8 @@ function renderResultado() {
   }
 
   encaixeResultado.classList.remove("hidden");
-  desenharEncaixe(encaixeCanvas, r, { escala: null, comLegenda: true });
+  vistaDoRisco = desenharEncaixe(encaixeCanvas, r,
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
 
   // A barra de rolagem só aparece depois que o desenho entra na caixa, e ela
   // come alguns pixels da medida que decidiu a escala. Deitado quem manda é a
@@ -2492,378 +2492,12 @@ function renderResultado() {
   const wrap = encaixeCanvas.parentElement;
   const sobrou = wrap && (wrap.scrollHeight > wrap.clientHeight + 1);
   if (sobrou) {
-    desenharEncaixe(encaixeCanvas, r, { escala: null, comLegenda: true });
+    vistaDoRisco = desenharEncaixe(encaixeCanvas, r,
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
   }
 }
 
 // ==================== DESENHO ====================
-
-/**
- * Desenha o rolo em pé (largura na horizontal, comprimento descendo), com a
- * arte de cada peça dentro do seu lugar — igual à prévia dos encaixadores.
- * `escala` em pixels por centímetro; quando vem nula, ajusta à largura da tela.
- */
-/**
- * Desenha a arte já girada dentro da caixa (x, y, w, h) que ela ocupa no rolo.
- * Cada rotação tem sua própria origem porque o canvas gira em torno do ponto
- * transladado — errar isso joga a arte para fora do lugar.
- */
-function desenharArte(ctx, p, x, y, w, h) {
-  const img = p.item.img;
-  const rot = p.rot || (p.girado ? 90 : 0);
-
-  ctx.save();
-  ctx.translate(x, y);
-  if (rot === 90) {
-    ctx.translate(w, 0);
-    ctx.rotate(Math.PI / 2);
-    ctx.drawImage(img, 0, 0, h, w);
-  } else if (rot === 180) {
-    ctx.translate(w, h);
-    ctx.rotate(Math.PI);
-    ctx.drawImage(img, 0, 0, w, h);
-  } else if (rot === 270) {
-    ctx.translate(0, h);
-    ctx.rotate(-Math.PI / 2);
-    ctx.drawImage(img, 0, 0, h, w);
-  } else {
-    ctx.drawImage(img, 0, 0, w, h);
-  }
-  ctx.restore();
-}
-
-/**
- * O contorno de uma máscara, guardado como faixas horizontais.
- *
- * Antes, desenhar o contorno significava varrer a grade inteira da peça a cada
- * redesenho — e a grade de uma camiseta a 0,25 cm tem uns 60 mil quadradinhos,
- * cada um com cinco consultas aos vizinhos para saber se estava na borda.
- * Vezes o número de peças no rolo, vezes toda vez que a janela muda de
- * tamanho. O desenho era mais caro que muita conta do encaixe.
- *
- * Só que o contorno **não muda**: ele depende da máscara, não do tamanho da
- * tela nem da posição da peça no tecido. Então a varredura é feita uma vez e o
- * resultado fica guardado na própria máscara. E como todas as cópias de uma
- * peça compartilham a mesma máscara, um rolo com 40 camisetas varre a grade
- * uma vez, não quarenta.
- *
- * As células vizinhas na mesma linha viram uma faixa só, guardada como três
- * números (coluna inicial, linha, quantas células) numa lista plana. Isso troca
- * um `fillRect` por célula por um `fillRect` por faixa.
- *
- * O desenho sai igual: as células de uma faixa são todas da mesma altura e
- * ficam encostadas (ou sobrepostas, quando a célula é menor que um pixel e o
- * traço é forçado a 1 px), então a união delas é exatamente o retângulo da
- * faixa — a mesma área pintada.
- *
- * Quando a célula cai num número inteiro de pixels (é o caso da exportação, em
- * que ela vale 1 px) o resultado é idêntico pixel a pixel, conferido. Em
- * escala quebrada, meio por cento dos pixels muda no fio da borda: é o
- * antialiasing, que num retângulo comprido não cai igual ao de vários
- * quadradinhos emendados. Ampliado quatro vezes os dois traços são
- * indistinguíveis.
- */
-function faixasDoContorno(m) {
-  const { cols, rows, desenho } = m;
-  const cheia = (cx, cy) =>
-    cx >= 0 && cy >= 0 && cx < cols && cy < rows && desenho[cy * cols + cx];
-
-  const faixas = [];
-  for (let cy = 0; cy < rows; cy++) {
-    let inicio = -1;
-    for (let cx = 0; cx < cols; cx++) {
-      // Na borda = célula cheia que faz divisa com célula vazia.
-      const naBorda = cheia(cx, cy)
-        && !(cheia(cx - 1, cy) && cheia(cx + 1, cy) && cheia(cx, cy - 1) && cheia(cx, cy + 1));
-      if (naBorda) {
-        if (inicio < 0) inicio = cx;
-      } else if (inicio >= 0) {
-        faixas.push(inicio, cy, cx - inicio);
-        inicio = -1;
-      }
-    }
-    if (inicio >= 0) faixas.push(inicio, cy, cols - inicio);
-  }
-  return Int32Array.from(faixas);
-}
-
-/**
- * Traça a silhueta usando a própria grade da máscara: marca as células cheias
- * que fazem divisa com célula vazia. Não é um contorno vetorial bonito, mas é
- * exatamente o contorno que o encaixe enxergou — que é o que interessa
- * conferir no desenho.
- */
-function contornar(ctx, p, REGUA, px, cor) {
-  const m = p.mascara;
-  const lado = p.passo * px;
-  if (lado < 0.4) return; // no zoom de tela viraria borrão
-
-  const faixas = m.faixas || (m.faixas = faixasDoContorno(m));
-  const x0 = REGUA + (p.x + m.offX) * px;
-  const y0 = (p.y + m.offY) * px;
-  // Célula menor que um pixel ainda precisa deixar traço: o mínimo é 1 px.
-  const grossura = Math.max(1, lado);
-
-  ctx.fillStyle = cor;
-  for (let i = 0; i < faixas.length; i += 3) {
-    const cx = faixas[i], cy = faixas[i + 1], quantas = faixas[i + 2];
-    ctx.fillRect(x0 + cx * lado, y0 + cy * lado, (quantas - 1) * lado + grossura, grossura);
-  }
-}
-
-/**
- * As bancadas do resultado, na ordem, com o que cada uma ocupa no rolo.
- *
- * Quem decide a que bancada uma peça pertence é o MOTOR, que carimba o número
- * em cada posição (ver `posicoesDasColocacoes` em encaixe-motor.js). Aqui só se
- * mede o que cada grupo ocupa. Refazer a conta da geometria seria pedir para a
- * tela e o PDF discordarem do motor sobre onde uma bancada termina — e é
- * exatamente sobre esse ponto que o corte do tecido acontece.
- *
- * Os limites saem da caixa da ARTE, e não da silhueta: é a arte que vai
- * impressa, e é ela que a página do PDF precisa conter inteira.
- */
-function bancadasDoResultado(r) {
-  const porNumero = new Map();
-  (r.posicoes || []).forEach((p) => {
-    const n = p.bancada || 0;
-    const faixa = porNumero.get(n) || { numero: n, topo: Infinity, fundo: -Infinity, pecas: 0 };
-    faixa.topo = Math.min(faixa.topo, p.y);
-    faixa.fundo = Math.max(faixa.fundo, p.y + p.altura);
-    faixa.pecas++;
-    porNumero.set(n, faixa);
-  });
-  return [...porNumero.values()].sort((a, b) => a.numero - b.numero);
-}
-
-/**
- * Onde o tecido é cortado entre uma bancada e a seguinte.
- *
- * No meio do vão entre a última peça de uma e a primeira da outra: peça
- * nenhuma pode estar ali, então qualquer ponto do vão serve, e o meio é o que
- * dá a mesma folga para os dois lados na hora de cortar com a tesoura.
- */
-function cortesEntreBancadas(faixas) {
-  const cortes = [];
-  for (let i = 1; i < faixas.length; i++) {
-    cortes.push((faixas[i - 1].fundo + faixas[i].topo) / 2);
-  }
-  return cortes;
-}
-
-/**
- * Desenha o risco.
- *
- * NA TELA o rolo fica DEITADO: a largura do tecido ocupa a altura da bancada e
- * o comprimento corre para a direita, que é como o rolo sai da máquina e como
- * a bancada tem espaço — um rolo em pé numa área larga e baixa desperdiça a
- * tela inteira e obriga a rolar para baixo por 25 metros.
- *
- * O giro é feito no CANVAS, não em CSS. Girar o elemento com `transform`
- * levaria junto o texto (que sairia de lado) e desalinharia o clique da
- * seleção. Aqui a rotação vale só para o TECIDO: as peças, os contornos e a
- * arte giram; a régua e o nome de cada peça são desenhados depois, já no
- * sentido da leitura.
- *
- * O que SAI do programa — PNG e PDF — continua em pé: lá o rolo é físico, e
- * quem imprime espera a largura na largura.
- */
-function desenharEncaixe(canvas, r, { escala, comLegenda, deitado }) {
-  const REGUA = 34; // faixa com as marcas de metro
-  const pai = canvas.parentElement;
-
-  // Deitado é o padrão da tela; o que tem escala fixa (PNG, PDF) sai em pé.
-  const deitar = deitado === undefined ? !escala : deitado;
-
-  // clientWidth/Height já descontam a barra de rolagem, mas incluem o padding
-  // do contêiner (10px de cada lado) — sem descontar sobraria rolagem à toa.
-  // Em pé, quem limita é a largura da caixa; deitado, é a altura dela.
-  const disponivel = deitar
-    ? (pai ? pai.clientHeight - 22 : 500)
-    : (pai ? pai.clientWidth - 22 : 900);
-  // O zoom multiplica a escala que caberia na tela: 100% é exatamente o que
-  // cabe, e daí para cima o rolo cresce e a caixa rola.
-  const cabendo = (disponivel - REGUA) / r.larguraTecido;
-  const px = escala || Math.max(0.6, cabendo * zoomDoRisco);
-
-  const larguraCanvas = deitar
-    ? Math.round(r.consumo * px)
-    : Math.round(r.larguraTecido * px) + REGUA;
-  const alturaCanvas = deitar
-    ? Math.round(r.larguraTecido * px) + REGUA
-    : Math.round(r.consumo * px);
-  const dpr = escala ? 1 : (window.devicePixelRatio || 1);
-
-  // A escala do desenho NA TELA é o que traduz pixel do mouse em centímetro de
-  // tecido. Só vale para o desenho da tela: o PNG e o PDF vêm com `escala`
-  // própria, e guardar a deles faria a seleção mirar no lugar errado.
-  if (!escala) vistaDoRisco = { px, regua: REGUA, deitado: deitar, larguraTecido: r.larguraTecido };
-
-  canvas.width = larguraCanvas * dpr;
-  canvas.height = alturaCanvas * dpr;
-  canvas.style.width = `${larguraCanvas}px`;
-  canvas.style.height = `${alturaCanvas}px`;
-
-  const ctx = canvas.getContext("2d");
-  ctx.scale(dpr, dpr);
-  ctx.textBaseline = "middle";
-
-  ctx.fillStyle = "#0d1113";
-  ctx.fillRect(0, 0, larguraCanvas, alturaCanvas);
-
-  /*
-   * Daqui até o `restore` o desenho acontece no sentido DE PÉ — largura do
-   * tecido no eixo X, comprimento descendo —, exatamente como sempre foi. O
-   * que muda é a moldura: deitado, o desenho inteiro é girado um quarto de
-   * volta no sentido anti-horário e encostado no canto.
-   *
-   * É por isso que nada no código das peças precisou mudar de eixo: quem gira
-   * é a folha, não o que está escrito nela.
-   */
-  ctx.save();
-  if (deitar) {
-    ctx.translate(0, REGUA + r.larguraTecido * px);
-    ctx.rotate(-Math.PI / 2);
-  }
-
-  // Fundo do tecido
-  ctx.fillStyle = "#171d21";
-  ctx.fillRect(REGUA, 0, r.larguraTecido * px, r.consumo * px);
-
-  // Régua do rolo em pé. Deitado, ela é desenhada depois, fora do giro, para o
-  // número não sair de lado.
-  if (!deitar) {
-    ctx.strokeStyle = "#2b3438";
-    ctx.fillStyle = "#5e696d";
-    ctx.font = "10px system-ui, sans-serif";
-    ctx.lineWidth = 1;
-    for (let cm = 0; cm <= r.consumo; cm += 10) {
-      const y = Math.round(cm * px) + 0.5;
-      const metro = cm % 100 === 0;
-      ctx.beginPath();
-      ctx.moveTo(metro ? REGUA - 10 : REGUA - 5, y);
-      ctx.lineTo(REGUA, y);
-      ctx.stroke();
-      if (metro && cm > 0) ctx.fillText(`${cm / 100}m`, 2, y + 6);
-    }
-  }
-
-  // Peças
-  r.posicoes.forEach((p) => {
-    const x = REGUA + p.x * px;
-    const y = p.y * px;
-    const w = p.largura * px;
-    const h = p.altura * px;
-    const cor = CORES_PECA[p.item.indice % CORES_PECA.length];
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-    desenharArte(ctx, p, x, y, w, h);
-    ctx.restore();
-
-    // No contorno, o traço segue a silhueta; no retângulo, a caixa mesmo.
-    if (p.mascara) {
-      contornar(ctx, p, REGUA, px, cor);
-    } else {
-      ctx.strokeStyle = cor;
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5);
-    }
-
-    // Seleção: âmbar por cima da peça, só na tela.
-    if (!escala && selecaoNoRisco.has(p.item.indice)) {
-      ctx.fillStyle = "rgba(249, 115, 22, 0.22)";
-      ctx.fillRect(x, y, w, h);
-      ctx.strokeStyle = "#ffa04d";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
-    }
-
-    // Deitado, o nome é escrito depois — dentro do giro ele sairia de lado.
-    if (comLegenda && !deitar && w > 46 && h > 18) {
-      escreverNome(ctx, p, x, y, w, h);
-    }
-  });
-
-  // A linha de corte entre bancadas. Vai por cima das peças de propósito: ela
-  // não cruza nenhuma, e é ela que a pessoa procura no desenho para saber onde
-  // o rolo se separa.
-  const faixasDeBancada = bancadasDoResultado(r);
-  if (faixasDeBancada.length > 1) {
-    ctx.save();
-    ctx.strokeStyle = "#f97316";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 6]);
-    cortesEntreBancadas(faixasDeBancada).forEach((cm) => {
-      const y = Math.round(cm * px) + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(REGUA, y);
-      ctx.lineTo(REGUA + r.larguraTecido * px, y);
-      ctx.stroke();
-    });
-    ctx.restore();
-  }
-
-  // Contorno do tecido
-  ctx.strokeStyle = "#3a4448";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(REGUA + 0.5, 0.5, r.larguraTecido * px - 1, r.consumo * px - 1);
-
-  ctx.restore(); // fim do giro: daqui para baixo é o sentido da leitura
-
-  if (deitar) {
-    /*
-     * A régua deitada, na faixa de baixo. O comprimento agora corre para a
-     * direita, então a marca de metro é vertical e o número fica embaixo dela.
-     */
-    const baseDaRegua = alturaCanvas - REGUA;
-    ctx.strokeStyle = "#2b3438";
-    ctx.fillStyle = "#5e696d";
-    ctx.font = "10px system-ui, sans-serif";
-    ctx.lineWidth = 1;
-    for (let cm = 0; cm <= r.consumo; cm += 10) {
-      const x = Math.round(cm * px) + 0.5;
-      const metro = cm % 100 === 0;
-      ctx.beginPath();
-      ctx.moveTo(x, baseDaRegua);
-      ctx.lineTo(x, baseDaRegua + (metro ? 10 : 5));
-      ctx.stroke();
-      if (metro && cm > 0) ctx.fillText(`${cm / 100}m`, x + 3, baseDaRegua + 20);
-    }
-
-    /*
-     * E os nomes das peças, cada um no lugar que a peça ocupa depois do giro:
-     * o comprimento vira X, e a largura do tecido vira Y de baixo para cima.
-     */
-    if (comLegenda) {
-      r.posicoes.forEach((p) => {
-        const x = p.y * px;
-        const y = (r.larguraTecido - p.x - p.largura) * px;
-        const w = p.altura * px;
-        const h = p.largura * px;
-        if (w > 46 && h > 18) escreverNome(ctx, p, x, y, w, h);
-      });
-    }
-  }
-}
-
-/** O nome da peça, numa tarja escura para não sumir dentro da arte. */
-function escreverNome(ctx, p, x, y, w, h) {
-  const texto = `${p.item.nome}${p.item.qtd > 1 ? ` ${p.item.copia}` : ""}`;
-  ctx.font = "11px system-ui, sans-serif";
-  const largTexto = ctx.measureText(texto).width + 8;
-  ctx.fillStyle = "rgba(8, 12, 14, 0.78)";
-  ctx.fillRect(x + 3, y + 3, Math.min(largTexto, w - 6), 16);
-  ctx.fillStyle = "#edf2f3";
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(x + 3, y + 3, Math.min(largTexto, w - 6), 16);
-  ctx.clip();
-  ctx.fillText(texto, x + 7, y + 12);
-  ctx.restore();
-}
 
 escopo.ouvir(btnBaixarEncaixe, "click", () => {
   if (!ultimoResultado) return;
@@ -2888,237 +2522,6 @@ escopo.ouvir(btnBaixarEncaixe, "click", () => {
  * onde um sinal trocado passa despercebido até alguém imprimir 12 metros de
  * tecido com as peças de cabeça para baixo.
  */
-/*
- * A RESOLUÇÃO DE IMPRESSÃO, E ELA NÃO NEGOCIA.
- *
- * 150 dpi, sempre. Já foi um teto móvel: havia um limite de quanto podia subir
- * para o servidor (`TETO_DE_ENVIO_MB`, 300 MB), e quando as artes passavam
- * disso a tela baixava o dpi até caber. Parecia prudente e era um mau negócio
- * — trocava QUALIDADE DE IMAGEM por MEMÓRIA DE SERVIDOR. No trabalho de 155
- * artes distintas, quem pedia 150 dpi recebia 50, e o arquivo ainda saía com
- * meio giga porque a redução era uma passada só e terminava acima do próprio
- * teto.
- *
- * O teto saiu porque a razão dele saiu: o servidor não segura mais as artes na
- * memória (elas vão para disco assim que chegam, e são lidas uma a uma na hora
- * de embutir — ver o cabeçalho de encaixe-pdf.js). O peso do arquivo agora é
- * resolvido onde tem que ser resolvido, que é na escolha do formato de cada
- * arte e no passa-direto, e nenhum dos dois mexe em resolução.
- *
- * `desenharPecaGirada` continua nunca AUMENTANDO a arte: 150 dpi é um teto,
- * não um piso. Arte que tem menos que isso entra com o que tem.
- */
-const DPI_EXPORTACAO = 150;
-
-/*
- * ===========================================================================
- * O FORMATO DE CADA ARTE
- * ===========================================================================
- *
- * Toda arte saía em PNG. PNG é sem perda, o que parece a escolha óbvia para
- * quem vai imprimir 12 metros de tecido — e é a escolha certa para metade das
- * artes e a errada para a outra metade.
- *
- * Medido nas duas artes que existem de verdade nesta oficina, uma peça de
- * 50x70 cm a 150 dpi (2952 x 4132 px):
- *
- *                        PNG        JPEG q92
- *   arte fotográfica   28,5 MB       7,1 MB     PNG custa 4,0x
- *   arte chapada        0,1 MB       0,5 MB    JPEG custa 5,0x
- *
- * Os dois sentidos são grandes, e são opostos. O PNG guarda o ruído do
- * degradê pixel a pixel, que é justamente o que o JPEG joga fora sem ninguém
- * ver; e o JPEG põe chiado em volta de toda borda dura, que é justamente o que
- * o PNG guarda de graça — um logo de duas cores comprime quase a nada.
- *
- * Escolher no atacado erra metade das vezes, e erra feio. Então não se escolhe:
- * **os dois são gerados e fica o menor**. Custa uma codificação a mais por
- * arte (não por peça — a arte é desenhada uma vez por rotação usada), e a
- * decisão passa a ser medida em vez de adivinhada.
- *
- * DUAS TRAVAS, e as duas valem mais que os megabytes:
- *
- *   1. Arte com transparência nunca vai de JPEG. JPEG não tem canal alfa: o
- *      transparente viraria preto, e o preto sairia impresso. A varredura é
- *      exaustiva de propósito — um pixel translúcido perdido é uma mancha no
- *      tecido, e amostrar acharia 99,99% deles.
- *
- *   2. O JPEG só entra se for MENOR. Empate ou perda fica com o PNG, que é sem
- *      perda. Assim a arte chapada continua exatamente como sai hoje.
- *
- * O que isto custa em qualidade: na arte fotográfica, uma compressão q92 a 150
- * dpi, que é o padrão de prova de cor e não se distingue a olho no tecido. Na
- * arte chapada e na transparente, nada — elas continuam em PNG. Para voltar
- * tudo ao PNG de antes, é só pôr `QUALIDADE_JPEG` em 0.
- */
-const QUALIDADE_JPEG = 0.92;
-
-/**
- * A arte tem algum pixel que não seja opaco?
- *
- * Varre em faixas porque `getImageData` da arte inteira seria um vetor de
- * dezenas de MB de uma vez só — e no PDF de um lote grande isso acontece uma
- * vez por arte.
- */
-function totalmenteOpaca(ctx, largura, altura) {
-  const FAIXA = 256;
-  for (let y = 0; y < altura; y += FAIXA) {
-    const h = Math.min(FAIXA, altura - y);
-    const dados = ctx.getImageData(0, y, largura, h).data;
-    for (let i = 3; i < dados.length; i += 4) if (dados[i] !== 255) return false;
-  }
-  return true;
-}
-
-const paraBlob = (canvas, tipo, qualidade) =>
-  new Promise((pronto) => canvas.toBlob(pronto, tipo, qualidade));
-
-/*
- * ===========================================================================
- * O PASSA-DIRETO: a arte original, sem redesenhar
- * ===========================================================================
- *
- * O caminho normal decodifica a arte, redesenha num canvas na resolução de
- * impressão e codifica de novo. Quando a arte JÁ É um JPEG e a peça não está
- * girada, isso é trabalho puro: os bytes do arquivo entram no PDF do jeito que
- * estão (o pdfkit embute JPEG verbatim, como `/DCTDecode`, sem recodificar), o
- * arquivo sai menor e não há geração de perda nenhuma — é o único caminho aqui
- * que é sem perda de verdade.
- *
- * Só que "o pdfkit aceita" não é o mesmo que "a impressora aceita". O PDF
- * carrega o JPEG cru até a RIP, e é ela que vai decodificar. Por isso nada
- * passa sem ser lido marcador por marcador. Quatro coisas reprovam:
- *
- *   1. PROGRESSIVO (SOF2). O formato PDF permite, e RIP de verdade engasga — é
- *      o caso clássico do arquivo que abre no computador e não sai na máquina.
- *      Só o sequencial de Huffman (SOF0 e SOF1) passa, o que de quebra reprova
- *      o aritmético, o sem perda e o diferencial, que moram nos outros SOF.
- *
- *   2. QUATRO COMPONENTES (CMYK/YCCK). Pedem `/DeviceCMYK` e, no CMYK da Adobe,
- *      um `/Decode` invertido. Quem monta a página (encaixe-pdf.js) não faz nem
- *      um nem outro, e o erro sairia como a arte impressa em negativo.
- *
- *   3. PRECISÃO DE 12 BITS. É válida no JPEG e quase nada decodifica.
- *
- *   4. ORIENTAÇÃO EXIF DIFERENTE DE 1 — e este é o perigoso.
- *
- * O quarto merece o parágrafo dele, e merece ser contado direito. O navegador
- * APLICA a orientação do EXIF ao decodificar: uma foto marcada "gire 90°"
- * aparece em pé na tela, e é em pé que ela entra no encaixe, na silhueta e na
- * medida da peça. O pdfkit também lê o EXIF (`exif.fromBuffer`, no JPEG) e
- * também aplica — ou seja, o passa-direto de uma foto girada provavelmente
- * SAIRIA CERTO. "Provavelmente" é a palavra que reprova.
- *
- * São três leitores de EXIF em fila — o navegador, o pdfkit e a RIP — e o
- * resultado só sai certo se exatamente um deles aplicar. O pdfkit ainda troca
- * largura por altura quando a orientação passa de 4; aqui isso não muda a
- * medida (quem monta a página passa largura E altura explícitas, e o teste de
- * geometria cobre isso), mas é uma engrenagem a mais girando debaixo de um
- * arquivo que vai virar 12 metros de tecido. E a RIP decodifica o JPEG cru: se
- * ela também aplicar, a arte gira duas vezes.
- *
- * Reprovar custa uma recodificação e devolve o controle: a arte é redesenhada
- * já na posição certa, que é a mesma escolha que o resto deste arquivo faz ao
- * desenhar a peça girada em vez de girar dentro do PDF.
- *
- * Na dúvida, reprova: arquivo truncado, marcador que não fecha, EXIF que não se
- * deixa ler. Reprovar custa uma recodificação. Deixar passar custa o rolo.
- */
-
-
-
-/**
- * A arte original, quando ela puder entrar no PDF sem ser tocada.
- *
- * `null` quer dizer "redesenha": peça girada, arte que não é JPEG, ou JPEG que
- * não passou no validador. Falha de leitura cai aqui também — `src` pode ser um
- * endereço de objeto que o navegador já recolheu.
- */
-async function arteCrua(peca, rot) {
-  if (rot !== 0 || !peca.src) return null;   // girada, tem que ser redesenhada
-  try {
-    const blob = await (await fetch(peca.src)).blob();
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    return jpegSeguroParaPdf(bytes) ? blob : null;
-  } catch (err) {
-    return null;
-  }
-}
-
-async function desenharPecaGirada(peca, rot, larguraCm, alturaCm, dpi) {
-  // Nunca aumenta a imagem: se a arte tem menos resolução que isso, ampliar só
-  // deixaria o arquivo maior sem ganhar qualidade nenhuma.
-  const ppcmAlvo = dpi / 2.54;
-  const ppcmNativo = Math.max(peca.pxW / (rot === 90 || rot === 270 ? alturaCm : larguraCm), 1);
-  const ppcm = Math.min(ppcmAlvo, ppcmNativo);
-
-  const largura = Math.max(1, Math.round(larguraCm * ppcm));
-  const altura = Math.max(1, Math.round(alturaCm * ppcm));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = largura;
-  canvas.height = altura;
-  const ctx = canvas.getContext("2d");
-  ctx.imageSmoothingQuality = "high";
-  desenharArte(ctx, { item: peca, rot }, 0, 0, largura, altura);
-
-  const png = await paraBlob(canvas, "image/png");
-  // Ver o bloco acima: o JPEG só disputa quando a arte é opaca, e só ganha
-  // quando é menor de verdade.
-  let refeita = png;
-  if (png && QUALIDADE_JPEG > 0 && totalmenteOpaca(ctx, largura, altura)) {
-    const jpg = await paraBlob(canvas, "image/jpeg", QUALIDADE_JPEG);
-    if (jpg && jpg.size < png.size) refeita = jpg;
-  }
-
-  // E o passa-direto por último, porque ele precisa do tamanho da refeita para
-  // poder se comparar. A original ganha quando NÃO É MAIOR: aí ela é melhor nos
-  // dois eixos de uma vez — o mesmo byte de pixel que o arquivo trouxe, sem
-  // recodificação nenhuma, e o arquivo não cresce. Sendo maior ela perde, e
-  // perde certo: arte de resolução muito acima da exportação é justamente o que
-  // o `DPI_EXPORTACAO` existe para não mandar para a máquina.
-  const crua = await arteCrua(peca, rot);
-  if (crua && refeita && crua.size <= refeita.size) return crua;
-  return refeita || crua;
-}
-
-/** Desenha uma arte por rotação usada, na resolução pedida. */
-async function prepararArtes(posicoes, dpi) {
-  const artes = new Map();
-  for (const p of posicoes) {
-    const rot = p.rot || (p.girado ? 90 : 0);
-    const chave = `${p.item.indice}-${rot}`;
-    if (!artes.has(chave)) {
-      artes.set(chave, await desenharPecaGirada(p.item, rot, p.largura, p.altura, dpi));
-    }
-  }
-  return artes;
-}
-
-/**
- * O PDF do encaixe é UM ARQUIVO SÓ, sempre — seja o rolo de 3 m ou de 40 m.
- *
- * Já foi repartido em trechos de 10 m, por causa do RIP: rasterizar uma página
- * em tamanho real custa memória proporcional ao tamanho da página, e um arquivo
- * de onze metros obriga a máquina a segurar tudo antes de a primeira gota cair.
- * Repartido, o RIP processa um trecho enquanto imprime o anterior.
- *
- * **Só que repartir não sai de graça, e o preço caiu na produção.** O corte
- * procurava um vão entre peças, mas encaixe bom é exatamente o que não deixa
- * vão: num rolo denso as peças se encavalam de ponta a ponta, e aí o corte
- * passava por cima de uma peça — metade num arquivo, metade no outro. Os dois
- * pedaços só se reencontram se os arquivos entrarem na máquina colados, sem um
- * milímetro de folga entre um trabalho e o outro, e na prática isso não
- * acontece. Peça partida é peça perdida.
- *
- * Então a decisão é essa: **arquivo único, sempre**. O formato aguenta — o
- * teto de 508 cm por página é contornado pelo `/UserUnit` (ver encaixe-pdf.js),
- * e é o mesmo `/UserUnit` que já valia para qualquer rolo acima de 5 m. Se um
- * dia um RIP engasgar com um rolo muito longo, o caminho não é voltar a partir
- * peça: é cortar o TRABALHO em dois encaixes menores, na tela, onde dá para
- * escolher onde separar.
- */
-
 /** Manda o arquivo para o disco de quem está usando. */
 function baixarArquivo(blob, nome) {
   const endereco = URL.createObjectURL(blob);
@@ -3151,9 +2554,7 @@ async function baixarEncaixeEmPdf() {
     let enviados = 0;
     for (const [chave, arte] of artes) {
       if (!arte) continue;
-      const endereco = `/api/encaixe/arte?sessao=${encodeURIComponent(sessao)}&chave=${encodeURIComponent(chave)}`;
-      const envio = await fetch(endereco, { method: "POST", body: arte });
-      if (!envio.ok) throw new Error("o servidor não aceitou uma das artes.");
+      await encaixeApi.mandarArte(sessao, chave, arte);
       enviados++;
       btnExportarRotulo.textContent = `Enviando artes (${enviados}/${artes.size})…`;
     }
@@ -3170,25 +2571,16 @@ async function baixarEncaixeEmPdf() {
     const metros = (cm) => (cm / 100).toFixed(2).replace(".", ",");
     const nome = `encaixe-${metros(r.consumo)}m`;
 
-    const resposta = await fetch("/api/encaixe/pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessao,
-        larguraTecido: r.larguraTecido,
-        consumo: r.consumo,
-        nome,
-        imagens: [...artes.keys()].map((chave) => ({ chave })),
-        posicoes,
-      }),
+    const arquivo = await encaixeApi.pdf({
+      sessao,
+      larguraTecido: r.larguraTecido,
+      consumo: r.consumo,
+      nome,
+      imagens: [...artes.keys()].map((chave) => ({ chave })),
+      posicoes,
     });
 
-    if (!resposta.ok) {
-      const erro = await resposta.json().catch(() => ({}));
-      throw new Error(erro.error || "O servidor não conseguiu gerar o PDF.");
-    }
-
-    baixarArquivo(await resposta.blob(), `${nome}.pdf`);
+    baixarArquivo(arquivo, `${nome}.pdf`);
 
   } catch (err) {
     // O recado amigável não pode ser o fim da linha: erro de programa aqui
@@ -3295,7 +2687,8 @@ window.addEventListener("resize", () => {
   if (!ultimoResultado || encaixeResultado.classList.contains("hidden")) return;
   clearTimeout(redimensionarTimer);
   redimensionarTimer = setTimeout(() => {
-    desenharEncaixe(encaixeCanvas, ultimoResultado, { escala: null, comLegenda: true });
+    vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
+      { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
   }, 150);
 });
 
@@ -3360,7 +2753,8 @@ const btnSelecaoLimpar = document.getElementById("btn-selecao-limpar");
 
 function redesenharRisco() {
   if (ultimoResultado) {
-    desenharEncaixe(encaixeCanvas, ultimoResultado, { escala: null, comLegenda: true });
+    vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
+      { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
   }
 }
 
