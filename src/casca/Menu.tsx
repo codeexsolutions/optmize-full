@@ -50,17 +50,50 @@ interface Props {
   aoFechar: () => void;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * A ALTURA DA JANELA MANDA NA DENSIDADE
+ * ---------------------------------------------------------------------------
+ *
+ * São treze telas, e no tamanho cheio (item de 50px com duas linhas de texto)
+ * o menu pede ~940px de altura. Num monitor de 1366x768 — o mais comum no
+ * chão de fábrica — isso não cabia: dois itens ficavam fora da vista e o
+ * relógio ia parar 119px abaixo do fim da janela, inalcançável.
+ *
+ * Então o item encolhe conforme a janela: abaixo de 900px de altura a linha
+ * de apoio sai (o rótulo sozinho já identifica a tela), e abaixo de 760px o
+ * item aperta mais um pouco. Em 1366x768 o menu inteiro passa a caber sem
+ * rolagem nenhuma.
+ *
+ * `curta:` e `baixinha:` são variantes de ALTURA, declaradas em
+ * `estilo/entrada.css` — o Tailwind só traz as de largura.
+ *
+ * E elas vão ESCRITAS POR INTEIRO nas classes, nunca montadas em pedaços: o
+ * Tailwind gera CSS a partir do que ENCONTRA no código-fonte, e um
+ * `${PREFIXO}min-h-[42px]` não existe como texto em lugar nenhum — a regra não
+ * nasceria, a tela ficaria igual e nada acusaria. Foi o que aconteceu na
+ * primeira versão disto.
+ */
+
 /** O item do menu. As medidas vieram do `.nav-btn` da casca antiga, que já saiu. */
 const ITEM =
-  "grid min-h-[50px] grid-cols-[30px_minmax(0,1fr)] items-center gap-[10px] rounded-[10px]" +
+  "grid min-h-[50px] grid-cols-[30px_minmax(0,1fr)] items-center gap-[10px] rounded-[10px] baixinha:grid-cols-[26px_minmax(0,1fr)]" +
   // `no-underline`: o item virou <a>, e link sublinhado num menu lateral não é
   // o desenho desta casca — era <button> antes e assim continua parecendo.
   " border border-transparent px-[10px] py-2 text-left no-underline transition-colors" +
+  " curta:min-h-[40px] curta:py-1" +
+  " baixinha:min-h-[36px]" +
   // Barra estreita: o ícone sozinho, centrado.
   " tela:max-[1100px]:grid-cols-[1fr] tela:max-[1100px]:justify-items-center tela:max-[1100px]:p-[7px]";
 
 /** O rótulo e a linha de apoio somem quando a barra encolhe. */
 const TEXTO_DO_ITEM = "grid min-w-0 gap-0.5 tela:max-[1100px]:hidden";
+
+/**
+ * A linha de apoio sai quando a janela é baixa: ela é útil, mas é a primeira
+ * coisa que se troca por caber — o rótulo sozinho já diz qual tela é.
+ */
+const APOIO_SOME = "curta:hidden";
 
 const ITEM_PARADO = "text-tinta-fraca hover:border-linha hover:bg-[var(--surface-hover)] hover:text-tinta";
 
@@ -70,7 +103,12 @@ const ITEM_ATIVO =
   // Estreita, a barrinha vai para baixo: de lado ela encostaria no ícone.
   " tela:max-[1100px]:shadow-[inset_0_-2px_var(--accent)]";
 
-const ICONE = "size-[30px] shrink-0 rounded-[8px] border p-[6px]";
+/*
+ * O ícone é o piso da altura do item: `min-h` não encolhe nada enquanto o
+ * conteúdo for maior que ele. Por isso, na janela mais baixa, quem encolhe é
+ * o ícone — e é o que faz as treze telas caberem num monitor de 1280x720.
+ */
+const ICONE = "size-[30px] shrink-0 rounded-[8px] border p-[6px] baixinha:size-[26px] baixinha:p-[5px]";
 const ICONE_PARADO = "border-linha text-tinta-fraca";
 const ICONE_ATIVO = "border-[var(--accent-line)] bg-[var(--accent-soft)] text-ambar";
 
@@ -101,7 +139,11 @@ export function Menu({ aberto, aoFechar }: Props) {
 
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-80 flex w-[244px] flex-col gap-[18px] overflow-x-hidden overflow-y-auto",
+          // A barra NÃO rola: quem rola é a lista de telas, no meio dela. A
+          // marca fica presa no alto e o relógio no pé — antes os dois iam
+          // embora junto com a rolagem, e o relógio chegava a cair fora da
+          // janela numa tela de 768px.
+          "fixed inset-y-0 left-0 z-80 flex w-[244px] flex-col overflow-x-hidden",
           "border-r border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-4 pt-[22px] pb-[17px]",
           // A barra estreita, entre 801 e 1100px. Ver o cabeçalho.
           "tela:max-[1100px]:w-[78px] tela:max-[1100px]:px-[10px]",
@@ -111,7 +153,7 @@ export function Menu({ aberto, aoFechar }: Props) {
         ].join(" ")}
       >
         {/* A marca. O mesmo logo.png da casca antiga, servido de `estatico/`. */}
-        <div className="flex items-center gap-3 px-[7px] pt-0.5 pb-[18px] tela:max-[1100px]:justify-center tela:max-[1100px]:px-0">
+        <div className="flex shrink-0 items-center gap-3 px-[7px] pt-0.5 pb-[18px] curta:pb-3 tela:max-[1100px]:justify-center tela:max-[1100px]:px-0">
           <img
             src={`${import.meta.env.BASE_URL}logo.png`}
             alt=""
@@ -133,7 +175,7 @@ export function Menu({ aberto, aoFechar }: Props) {
           um leitor de tela anunciar "navegação Produção" em vez de despejar dez
           itens seguidos sem dizer onde um assunto acaba e o outro começa.
         */}
-        <div className="flex flex-col gap-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain curta:gap-2.5 baixinha:gap-2">
           {GRUPOS.map((grupo) => {
             const telas = telasDoGrupo(grupo.nome);
             if (!telas.length) return null;
@@ -142,7 +184,7 @@ export function Menu({ aberto, aoFechar }: Props) {
               <nav key={grupo.nome} aria-labelledby={`grupo-${grupo.nome}`} className="flex flex-col gap-[3px]">
                 <h2
                   id={`grupo-${grupo.nome}`}
-                  className="mt-0 mb-1 px-3 text-[10px] font-semibold tracking-[0.12em] text-tinta-apagada uppercase tela:max-[1100px]:hidden"
+                  className="mt-0 mb-1 px-3 text-[10px] font-semibold tracking-[0.12em] text-tinta-apagada uppercase curta:mb-0.5 tela:max-[1100px]:hidden"
                 >
                   {grupo.rotulo}
                 </h2>
@@ -162,7 +204,7 @@ export function Menu({ aberto, aoFechar }: Props) {
                         />
                         <span className={TEXTO_DO_ITEM}>
                           <strong className={ROTULO}>{tela.rotulo}</strong>
-                          <small className={isActive ? APOIO_ATIVO : APOIO}>{tela.apoioMenu}</small>
+                          <small className={`${isActive ? APOIO_ATIVO : APOIO} ${APOIO_SOME}`}>{tela.apoioMenu}</small>
                         </span>
                       </>
                     )}
@@ -180,10 +222,11 @@ export function Menu({ aberto, aoFechar }: Props) {
           que é onde a pessoa passa a tarde, e levava o relógio junto. Aqui
           embaixo ele fica de pé em todas as telas.
 
-          `mt-auto` encosta no pé por conta própria, sem depender de quantos
-          botões o menu tem.
+          Ele fica FORA da parte que rola, encostado no pé da barra: era
+          `mt-auto` dentro dela, e numa janela baixa descia junto com a lista
+          para fora da vista.
         */}
-        <div className="mt-auto flex items-center gap-[9px] border-t border-[var(--border-hairline)] px-[10px] pt-[11px] pb-0.5 tela:max-[1100px]:justify-center">
+        <div className="flex shrink-0 items-center gap-[9px] border-t border-[var(--border-hairline)] px-[10px] pt-[11px] pb-0.5 tela:max-[1100px]:justify-center">
           <Icone referencia="icones.svg#clock" className="size-3.5 shrink-0 text-ambar opacity-75" />
           <span className="flex min-w-0 flex-col gap-px leading-[1.25] tela:max-[1100px]:hidden">
             <span className="text-[10.5px] text-tinta-apagada capitalize">{relogio.data}</span>

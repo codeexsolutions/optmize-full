@@ -31,11 +31,30 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 
-/* Onde procurar por classes: a tela antiga (HTML + JS) e a tela nova (React). */
-@source "../public/index.html";
-@source "../public/*.js";
+/* Onde procurar por classes. (O `public/` saiu do projeto e saiu daqui junto.) */
 @source "../src/**/*.{ts,tsx}";
 @source "../index.html";
+
+/*
+ * ===========================================================================
+ * AS DUAS VARIANTES DE ALTURA
+ * ===========================================================================
+ *
+ * O Tailwind vem com variantes de LARGURA (`sm:`, `lg:`, e o `tela:` deste
+ * projeto). Altura não tem — e é a altura que aperta no menu lateral: são
+ * treze telas, e no tamanho cheio a barra pede ~940px. Num monitor de
+ * 1366x768, o mais comum no chão de fábrica, dois itens ficavam fora da vista
+ * e o relógio caía abaixo do fim da janela.
+ *
+ * `curta:` é a janela em que a linha de apoio de cada item já não cabe;
+ * `baixinha:` é a em que o próprio item precisa apertar.
+ *
+ * São variantes declaradas, e não `[@media(max-height:900px)]:` escrito no
+ * meio da classe, por dois motivos: o nome diz o que significa, e o valor
+ * mora num lugar só — mudar 900 aqui muda em todos os usos.
+ */
+@custom-variant curta (@media (max-height: 900px));
+@custom-variant baixinha (@media (max-height: 760px));
 
 /*
  * ===========================================================================

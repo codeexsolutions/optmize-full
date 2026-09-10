@@ -99,6 +99,13 @@ redirecionamento que carrega o `#` adiante.)
   cartão por tela (dois dividiriam a sobra e nenhuma lista ficaria com altura
   útil), e as telas que ainda usam a folha antiga fazem o mesmo pela classe
   `tela-cheia` (ver o fim de `producao.css`).
+
+  **A barra lateral também não rola inteira.** Marca no alto e relógio no pé
+  ficam presos; só a lista de telas corre. E a densidade dela segue a ALTURA da
+  janela, pelas variantes `curta:` (≤900px) e `baixinha:` (≤760px) declaradas
+  em `estilo/entrada.css`: a linha de apoio sai, o item aperta e o ícone
+  encolhe, o que faz as treze telas caberem num monitor de 1366x768 e de
+  1280x720 sem cortar nem rolar.
 - `src/telas/`: uma por aba.
 - `src/motores/`: o domínio — sem React e sem a tela. Ver a regra em
   `ARQUITETURA.md`.
