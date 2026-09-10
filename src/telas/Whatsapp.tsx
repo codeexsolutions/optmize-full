@@ -151,7 +151,9 @@ export function Whatsapp() {
           <div className="mt-3.5">
             <p className="mt-0 mb-2 text-[0.82rem] text-tinta-fraca">
               No celular do bot: WhatsApp → Aparelhos conectados → Conectar aparelho.
-              O código se renova sozinho a cada ~20 segundos.
+              O código se renova sozinho a cada ~20 segundos. Se ninguém ler em cinco
+              minutos, o WhatsApp Web é fechado para não ficar ocupando memória — daí é
+              só clicar em Conectar de novo.
             </p>
             <div
               className="inline-block rounded-[10px] bg-white p-3 [&_svg]:block [&_svg]:size-[220px]"
