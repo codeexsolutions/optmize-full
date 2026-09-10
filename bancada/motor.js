@@ -1,52 +1,45 @@
 /**
  * A bancada carrega o motor de encaixe fora do navegador.
  *
- * Os arquivos do motor (`public/geometria.js` e companhia) são <script> soltos:
- * nada de `export`, nada de `require`. No navegador eles dividem o escopo da
- * página; no worker, o do `importScripts`. Aqui a mesma coisa é feita à mão —
- * o conteúdo dos sete arquivos é concatenado dentro de uma função só, e o que
- * a bancada precisa sai pelo `return`.
+ * Quem faz o trabalho é o `nucleo.js` ao lado: ele empacota `src/nucleo/` com
+ * o esbuild — o MESMO que o Vite usa — e o Node importa o resultado. Aqui só
+ * ficam a lista de módulos do motor e o WASM.
  *
- * Por que não `vm.createContext`: as tipadas (`Int32Array`) de um contexto do
- * `vm` são de outro realm, e o WebAssembly reclama ao receber a memória. Uma
- * função basta, e sai mais barato.
+ * ---------------------------------------------------------------------------
+ * COMO ERA ANTES, E POR QUE MUDOU
+ * ---------------------------------------------------------------------------
  *
- * A ORDEM É A MESMA DO `public/encaixe-worker.js`. Se um arquivo entrar lá,
- * entra aqui — senão a bancada mede um motor que não é o que roda.
+ * Enquanto a casca antiga existiu, este arquivo lia os `<script>` soltos de
+ * `public/` e concatenava o TEXTO deles dentro de uma função só, porque
+ * naquele formato não havia `export` nem `require` — eles dividiam o escopo da
+ * página. A ordem tinha que ser copiada à mão do `importScripts` do worker, e
+ * um arquivo que entrasse lá e não entrasse aqui fazia a bancada medir um
+ * motor que não era o que rodava.
+ *
+ * Com módulos isso acabou: quem resolve a ordem é o empacotador, a partir dos
+ * `import` de verdade. Não há mais lista para manter em dois lugares.
+ *
+ * (Por que não `vm.createContext`, que seria o caminho óbvio: as tipadas
+ * `Int32Array` de um contexto do `vm` são de outro realm, e o WebAssembly
+ * reclama ao receber a memória.)
  */
 
 const fs = require("fs");
 const path = require("path");
+const { carregarDoNucleo, RAIZ } = require("./nucleo");
 
-const RAIZ = path.join(__dirname, "..");
-
-// A mesma lista, na mesma ordem, do importScripts do encaixe-worker.js.
-const ARQUIVOS = [
-  "public/geometria.js",
-  "public/encaixe-giro.js",
-  "public/encaixe-mascara.js",
-  "public/encaixe-rede.js",
-  "public/encaixe-wasm.js",
-  "public/encaixe-motor.js",
+/*
+ * Os módulos do motor. Não é uma ordem de carregamento — é só o conjunto de
+ * portas de entrada; quem descobre a ordem é o esbuild, pelos `import`.
+ */
+const MODULOS = [
+  "encaixeMotor.js",
+  "encaixeMascara.js",
+  "encaixeGiro.js",
+  "encaixeRede.mjs",
+  "encaixeWasm.js",
+  "geometria.ts",
 ];
-
-// O que a bancada alcança de dentro do motor.
-const EXPOSTOS = [
-  "buscarMelhorEncaixe", "encaixarContorno", "encaixarPorVaos", "encaixar",
-  "montarUnidades", "montarUnidadesCruzadas", "formasDaPeca", "formaDePartes",
-  "mascarasDeSilhueta", "silhuetaDeDados", "grade", "gradeDaPeca",
-  "assinaturaDoTrabalho", "vetorDoTrabalho", "juntarGrupos", "familiaDaUnidade",
-  "papelDaFatia", "ORDENS_CONTORNO", "motoresDaFatia", "fatiaDoPortfolio",
-  "carregarMotorWasm", "temMotorWasm",
-];
-
-function montarFonte() {
-  const partes = ARQUIVOS.map((rel) => {
-    const texto = fs.readFileSync(path.join(RAIZ, rel), "utf8");
-    return `// ===== ${rel} =====\n${texto}`;
-  });
-  return `${partes.join("\n;\n")}\n;return { ${EXPOSTOS.join(", ")} };`;
-}
 
 /**
  * Sobe uma instância do motor.
@@ -56,8 +49,7 @@ function montarFonte() {
  * referência de correção, com ele é o que a produção roda de verdade.
  */
 async function carregarMotor({ comWasm = true } = {}) {
-  // eslint-disable-next-line no-new-func
-  const motor = new Function(montarFonte())();
+  const motor = await carregarDoNucleo(MODULOS);
   motor.comWasm = false;
   if (comWasm) {
     const bytes = fs.readFileSync(path.join(RAIZ, "estatico/encaixe.wasm"));
@@ -66,4 +58,4 @@ async function carregarMotor({ comWasm = true } = {}) {
   return motor;
 }
 
-module.exports = { carregarMotor, ARQUIVOS };
+module.exports = { carregarMotor, MODULOS };
