@@ -11,12 +11,13 @@
  * existe justamente para nunca redesenhar. Ela é irmã deste, no `Producao`.
  *
  * A de Projetos saiu depois, e foi mais longe: virou uma tela de rota como as
- * outras, desenhada pelo `<Outlet/>` da casca. Sobraram duas.
+ * outras, desenhada pelo `<Outlet/>` da casca. A de Moldes foi pelo mesmo
+ * caminho. Sobrou o Encaixe — e quando ele sair, este arquivo some junto com o
+ * controlador.
  */
 import { memo } from "react";
-import { Moldes } from "../telas/Moldes";
 import { Encaixe } from "../telas/Encaixe";
-export const Estrutura = memo(function Estrutura() { return <><Moldes /><Encaixe /><div className="ui-dialog-backdrop hidden" id="ui-dialog" role="presentation">
+export const Estrutura = memo(function Estrutura() { return <><Encaixe /><div className="ui-dialog-backdrop hidden" id="ui-dialog" role="presentation">
 
 <section className="ui-dialog" role="dialog" aria-modal="true" aria-labelledby="ui-dialog-title" aria-describedby="ui-dialog-message">
 

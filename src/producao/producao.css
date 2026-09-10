@@ -496,10 +496,15 @@
   white-space: nowrap;
 }
 
-/* ---- o passo a passo de criar molde ---- */:where(.producao) .modal-fundo {
+/* ---- o passo a passo de criar molde ---- */
+/* z-index 90, e não 60: a barra lateral é 80, e com 60 o menu atravessava o
+   véu e ficava aceso por cima do modal, como se ainda desse para clicar nele.
+   O modal de Optmizar já resolvia isso por conta própria (ver `.modal-animado`,
+   lá embaixo); os de molde e de projeto ficaram anos por baixo do menu. */
+:where(.producao) .modal-fundo {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 90;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3555,3 +3560,25 @@
   .app-react[data-tela="encaixe"] > aside,
   .app-react[data-tela="encaixe"] main > header { display: none !important; }
 }
+
+/* ===========================================================================
+   O ESCOPO SEM A CAIXA
+   ===========================================================================
+
+   Esta folha inteira é escopada em `:where(.producao)`: ela veio da tela
+   antiga, e sem escopo os nomes genéricos dela (`.card`, `.btn`, `.modal`)
+   pintariam as telas que já são React e não pediram nada disso.
+
+   Só que a caixa de diálogo (`casca/Dialogo.tsx`) É React e mora na CASCA, por
+   fora de qualquer editor de produção — ela precisa poder perguntar alguma
+   coisa de qualquer tela. Sem o escopo em volta, ela aparecia sem estilo
+   nenhum: um texto solto no fim da página, em vez de uma caixa no meio dela.
+
+   Esta classe resolve os dois lados. O `display: contents` faz a marca de
+   escopo NÃO gerar caixa nenhuma — sem altura, sem fundo, sem ocupar espaço no
+   fluxo da casca —, e mesmo assim o que está dentro dela continua casando com
+   `:where(.producao) ...`.
+
+   Ela some quando esta folha for reescrita em utilitários, junto com o
+   controlador. */
+.producao.so-o-escopo { display: contents; }

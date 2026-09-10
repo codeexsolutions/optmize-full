@@ -12,9 +12,9 @@ import "./producao.css";
  * Elas têm rota, mas a rota não desenha nada: quem as desenha é este
  * componente, que fica montado o tempo todo para não perder o trabalho em
  * memória ao trocar de aba (ver `casca/Casca.tsx`). A lista encolhendo é a
- * medida do quanto a migração andou — Cor e Projetos já saíram dela.
+ * medida do quanto a migração andou — Cor, Projetos e Moldes já saíram dela.
  */
-export const ehProducaoIntegrada = (pagina: string) => ["moldes", "encaixe", "cor"].includes(pagina);
+export const ehProducaoIntegrada = (pagina: string) => ["encaixe", "cor"].includes(pagina);
 
 /** Mantém o trabalho em memória ao navegar; desmontar libera os recursos. */
 export function Producao({ pagina, irPara, children }: {
@@ -53,6 +53,10 @@ export function Producao({ pagina, irPara, children }: {
     async mandarProjetoParaOEncaixe(projeto) {
       if (!controle.current) throw new Error("o editor de produção não está montado");
       await controle.current.mandarProjeto(projeto);
+    },
+    async mandarMoldeParaOEncaixe(molde) {
+      if (!controle.current) throw new Error("o editor de produção não está montado");
+      await controle.current.mandarMolde(molde);
     },
     irPara: (destino) => navegar.current(destino),
   }), []);

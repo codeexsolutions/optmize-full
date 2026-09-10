@@ -83,17 +83,38 @@ async function main() {
   });
   const error=document.querySelector('[role="alert"]'); assert.equal(error,null,error?.textContent);
 
-  // ---------- Moldes: ainda imperativa ----------
-  assert.match(document.getElementById('moldes-body').textContent,/Nenhum|nenhum/);
-  await click('#btn-molde-novo');
-  assert.equal(document.getElementById('molde-modal').classList.contains('hidden'),false);
+  // ---------- Moldes: React, desenhada pela rota ----------
+  assert.match(document.querySelector('.molde-lista').textContent,/Nenhum|nenhum/);
+  await click(botao('Adicionar molde'));
+  assert.ok(document.querySelector('.modal-passo'),'o passo a passo do molde abriu');
+  assert.match(document.querySelector('.escolhas').textContent,/Camisa/);
+  assert.equal(document.body.classList.contains('modal-aberto'),true);
 
   // ---------- Projetos: React, desenhada pela rota ----------
   await irPara('projetos');
-  assert.equal(document.getElementById('molde-modal').classList.contains('hidden'),true,
-    'sair de Moldes fecha o modal dela');
+  assert.equal(document.querySelector('.modal-passo'),null,'sair de Moldes fecha o modal dela');
+  // O `modal-aberto` no body é o que segura a rolagem da pagina. Ficando para
+  // tras, a tela seguinte simplesmente nao rolava -- ja aconteceu.
+  assert.equal(document.body.classList.contains('modal-aberto'),false,
+    'e devolve a rolagem da pagina');
   const estante = () => document.querySelector('.projeto-lista');
   assert.match(estante().textContent,/Cliente de teste/);
+
+  // ---------- A caixa de dialogo React ----------
+  //
+  // Ela mora na CASCA, e a folha que a desenha e escopada em `:where(.producao)`.
+  // Sem uma marca de escopo em volta ela sai sem estilo nenhum -- e nao e so
+  // feio: sem `position: fixed` ela cai no fim da pagina, e o clique no botao
+  // vai parar em outro elemento. Foi assim que "Excluir" deixou de excluir.
+  await click(botao('Novo cliente'));
+  const caixa = document.querySelector('.ui-dialog-backdrop:not([id])');
+  assert.ok(caixa,'a caixa de dialogo React abriu');
+  assert.ok(caixa.closest('.producao'),'e ela esta dentro do escopo que a desenha');
+  assert.match(caixa.textContent,/Novo cliente/);
+  await click(botao('Cancelar',caixa));
+  await act(async()=>{ await new Promise(r=>setTimeout(r,200)); });
+  assert.equal(document.querySelector('.ui-dialog-backdrop:not([id])'),null,'e fecha no Cancelar');
+
   await click('.projeto-pasta');
   assert.match(estante().textContent,/Uniforme/);
   await click(botao('Abrir',estante()));
@@ -113,6 +134,7 @@ async function main() {
   // ---------- Encaixe: o trabalho sobrevive a troca de aba ----------
   await irPara('encaixe');
   assert.equal(document.querySelector('.modal-projeto'),null,'sair de Projetos fecha o editor');
+  assert.equal(document.body.classList.contains('dialog-open'),false);
   document.getElementById('encaixe-largura').value='179';
 
   // ---------- Cor: React, dentro do editor de producao ----------
@@ -149,6 +171,6 @@ async function main() {
   assert.equal(dom.window.uiConfirm,undefined);
   assert.equal(dom.window.carregarProjetos,undefined);
   fs.unlinkSync(bundle); dom.window.close();
-  console.log('React: rotas, StrictMode, modais, clientes, editor de projeto, Cor e preservação de ajustes passaram.');
+  console.log('React: rotas, StrictMode, modais, moldes, clientes, editor de projeto, Cor e preservação de ajustes passaram.');
 }
 main().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1);});

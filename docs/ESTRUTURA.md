@@ -99,9 +99,9 @@ redirecionamento que carrega o `#` adiante.)
   motores usam e não cabe dentro de nenhum deles.
 - `estilo/tokens.css`: a paleta. **O único arquivo com hex no projeto**;
   escrever cor em qualquer outro lugar quebra o tema.
-- `src/producao/`: a integração de compatibilidade de Moldes, Projetos e
-  Encaixe, que ainda são dirigidos por um controlador imperativo. Ver
-  `INTEGRACAO-REACT.md`. A tela de Cor já saiu de lá.
+- `src/producao/`: a integração de compatibilidade do **Encaixe**, que ainda é
+  dirigido por um controlador imperativo. Ver `INTEGRACAO-REACT.md`. Cor,
+  Projetos e Moldes já saíram de lá — a pasta some quando o Encaixe sair.
 
 ## A bancada do encaixe
 

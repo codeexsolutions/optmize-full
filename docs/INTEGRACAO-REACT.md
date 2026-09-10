@@ -3,8 +3,8 @@
 Moldes, Projetos, Encaixe e Cor vivem no painel React. A navegação entre elas
 conserva os arquivos, as imagens e o resultado do encaixe na mesma montagem.
 
-**Duas das quatro já saíram do controlador imperativo:** a de Cor primeiro, a
-de Projetos depois. Restam Moldes e Encaixe.
+**Três das quatro já saíram do controlador imperativo:** Cor, Projetos e
+Moldes. Resta o Encaixe.
 
 ## Onde cada uma está
 
@@ -12,15 +12,16 @@ de Projetos depois. Restam Moldes e Encaixe.
 |---|---|---|
 | **Cor** | React (`telas/Cor.tsx`) | nada — mora dentro do `Producao` só para conservar a lista ao navegar |
 | **Projetos** | React (`telas/Projetos.tsx`), desenhada pela ROTA | nada — a única amarra é levar um trabalho ao Encaixe, pela `ligacao` |
-| **Moldes** | `producao/controlador.js` | a estante, o passo a passo do molde e o painel de arte |
+| **Moldes** | React (`telas/Moldes.tsx` + `telas/moldes/`), desenhada pela ROTA | nada — a amarra é levar o molde vestido ao Encaixe, pela `ligacao` |
 | **Encaixe** | `producao/controlador.js` | a lista de peças, o canvas do risco e o painel de andamento |
 
 ## Limite desta etapa
 
-Esta ainda é uma integração de compatibilidade para DUAS telas, **não a
-conclusão da migração declarativa descrita em ARQUITETURA.md**. As listas, os
-formulários e o canvas de Moldes e Encaixe continuam sendo atualizados pelo
-controlador imperativo em `src/producao/controlador.js`. A estrutura inicial é
+Esta ainda é uma integração de compatibilidade para UMA tela, **não a conclusão
+da migração declarativa descrita em ARQUITETURA.md**. A lista de peças, o canvas
+do risco e o painel de andamento do Encaixe continuam sendo atualizados pelo
+controlador imperativo em `src/producao/controlador.js` — que caiu de 5.921 para
+3.815 linhas no caminho. A estrutura inicial é
 React, e o ciclo de vida, a navegação e a apresentação de erros são gerenciados
 por `Producao.tsx`.
 
@@ -70,6 +71,22 @@ do cliente. Esses dependem de material que só existe na loja.
      `:where(.producao)`, então a tela migrada se embrulha num `<div
      className="producao">`. Trocar o motor da tela e o desenho dela no mesmo
      passo faria uma mudança invisível chegar junto com uma visível.
+
+   A de Moldes acrescentou mais duas lições, as duas achadas por um navegador
+   de verdade e nenhuma delas visível no `tsc` ou no build:
+
+   - **A caixa de diálogo React precisa da marca de escopo.** `producao.css` é
+     escopada em `:where(.producao)`, e a caixa mora na casca, fora de qualquer
+     editor de produção. Sem a marca ela saía sem estilo nenhum — e não era só
+     feio: sem `position: fixed` ela caía no fim da página e o clique no botão
+     ia parar em outro elemento, então "Excluir" deixava de excluir sem erro
+     nenhum no console. A marca é `class="producao so-o-escopo"`, um
+     `display: contents` que casa com o seletor sem gerar caixa. A bancada do
+     React agora confere isso.
+   - **O modal ficava por baixo do menu lateral.** `.modal-fundo` nasceu com
+     `z-index: 60` e a barra é 80: o menu atravessava o véu e ficava aceso por
+     cima do modal. Era assim desde antes da migração — só o modal de Optmizar
+     escapava, porque tinha z-index próprio. Agora `.modal-fundo` é 90.
 
 2. Separar a transferência de peças em um contexto tipado, retirando a dependência de campos do formulário. **Metade feito**: `ligacao.ts` já leva um projeto inteiro tipado (`ProjetoParaOEncaixe`), mas quem o recebe ainda escreve nos campos do formulário do Encaixe — some quando o Encaixe virar React.
 3. ~~Validar CRUD de moldes e estampas, conversão de cor e exportação integrada em uma cópia descartável do banco com amostras representativas.~~ **Feito** — `bancada:gravacao` e `bancada:cor`, os dois em pasta descartável, sem encostar no `dados.db`. Falta só a exportação integrada e o material de produção de verdade.

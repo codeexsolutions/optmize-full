@@ -53,16 +53,15 @@ import { useLocation } from "react-router-dom";
  * A troca de tela passa por um `<Suspense>` (ver `casca/Casca.tsx`), e o
  * pedaço fica no cache do navegador: a espera acontece uma vez por tela.
  *
- * As que ainda são do editor de produção NÃO entram aqui (Moldes, Encaixe e
- * Cor). Elas não são desenhadas pela rota — quem as desenha é o
+ * As que ainda são do editor de produção NÃO entram aqui (Encaixe e Cor). Elas não são desenhadas pela rota — quem as desenha é o
  * `<Producao/>`, que fica montado o tempo todo (ver `casca/Casca.tsx`), então
  * dividi-las não adiantaria nada: o pacote viria junto de qualquer forma, na
  * primeira tela.
  */
-import { Moldes } from "./telas/Moldes";
 import { Encaixe } from "./telas/Encaixe";
 import { Cor } from "./telas/Cor";
 
+const Moldes = lazy(() => import("./telas/Moldes").then((m) => ({ default: m.Moldes })));
 const Projetos = lazy(() => import("./telas/Projetos").then((m) => ({ default: m.Projetos })));
 const Vetor = lazy(() => import("./telas/Vetor").then((m) => ({ default: m.Vetor })));
 const Imagem = lazy(() => import("./telas/Imagem").then((m) => ({ default: m.Imagem })));
