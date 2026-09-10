@@ -33,6 +33,7 @@ require("./db"); // garante que o banco SQLite e as tabelas existem antes de tud
 const encaixePdfRouter = require("./encaixe-pdf");
 const macrosRouter = require("./macros-api");
 const encaixeMemoriaRouter = require("./encaixe-memoria");
+const encaixeResolverRouter = require("./encaixe-resolver");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
 const corRouter = require("./cor-api");
@@ -53,6 +54,15 @@ const io = new ServidorDeSocket(servidor);
 // limite); aqui sobra só o desenho do encaixe, que é pequeno.
 app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixePdfRouter);
 app.use("/api/encaixe", express.json({ limit: "2mb" }), encaixeMemoriaRouter);
+
+// Encaixar do lado de cá, para quem não tem navegador que dê conta — hoje, o
+// CorelDRAW. Ver o cabeçalho de `encaixe-resolver.js` para o porquê.
+//
+// O limite é maior que o da memória porque o que chega aqui é geometria: um
+// molde com contorno detalhado passa fácil dos 2 MB quando vêm vinte peças
+// juntas, e recusar um pedido legítimo por causa do limite daria um 413 sem
+// explicação no meio de uma macro.
+app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixeResolverRouter);
 
 // A conversão de cor recebe a arte crua, e arte de produção passa de 15 MB com
 // frequência. Como o PDF acima, precisa vir antes do express.json geral.
