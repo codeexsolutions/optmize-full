@@ -31,8 +31,17 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 
-/* Onde procurar por classes. (O `public/` saiu do projeto e saiu daqui junto.) */
-@source "../src/**/*.{ts,tsx}";
+/*
+ * Onde procurar por classes. (O `public/` saiu do projeto e saiu daqui junto.)
+ *
+ * O `.js` NÃO é enfeite: o `producao/controlador.js` desenha a lista de peças
+ * do Encaixe com `innerHTML`, e as classes dele estão escritas ali dentro.
+ * Sem o `.js` na varredura, o Tailwind não via nenhuma delas e não gerava
+ * regra nenhuma — o campo de quantidade de cada peça, que pede `w-12!` (48px),
+ * saía com 295px e espremia o nome da peça até zero. E nada acusava: a folha
+ * antiga desenhava o resto, então a tela parecia só "meio torta".
+ */
+@source "../src/**/*.{ts,tsx,js}";
 @source "../index.html";
 
 /*

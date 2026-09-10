@@ -43,6 +43,24 @@ export function Casca() {
   const irPara = (nome: NomeDeTela) => navegar(`/${nome}`);
 
   /*
+   * O ENCAIXE NÃO TEM CABEÇALHO, E NÃO TEM FOLGA.
+   *
+   * É a tela em que a pessoa passa a tarde, e é a única em que o conteúdo é
+   * uma BANCADA: a lista de peças de um lado, a mesa do outro, as duas
+   * medindo-se pela janela. Um cabeçalho ali cobra 57px de altura para repetir
+   * a palavra que o menu já mostra acesa, e a folga em volta rouba mais 30 de
+   * cada lado do risco.
+   *
+   * Sem eles, o que sobra para a bancada é a janela inteira, sem `calc()`
+   * nenhum. E sem rolagem: o que não couber é problema de quem está dentro —
+   * a lista de peças rola sozinha, a mesa se ajusta —, nunca da página.
+   *
+   * Era assim na casca antiga (`.producao[data-tela="encaixe"] .pageheader`,
+   * em producao.css) e voltou a ser aqui.
+   */
+  const bancada = tela.nome === "encaixe";
+
+  /*
    * O provedor do diálogo envolve a casca inteira: a caixa de confirmar e a de
    * perguntar são de quem estiver na frente, e uma tela não deveria precisar
    * montar a sua para poder perguntar alguma coisa.
@@ -58,7 +76,7 @@ export function Casca() {
         recebe pronta, em vez de descontar o topo numa conta de viewport.
       */}
       <main className="flex h-screen flex-col overflow-hidden tela:ml-[244px] tela:max-[1100px]:ml-[78px]">
-        <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />
+        {!bancada && <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />}
 
         {/*
           O miolo é uma COLUNA de altura total. Quem rola, no caso comum, é a
@@ -75,7 +93,17 @@ export function Casca() {
           lista corre. Num painel que fica aberto o dia inteiro num monitor da
           produção, é a segunda coisa que se espera.
         */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-6 tela:px-[30px]">
+        <div
+          className={[
+            "flex min-h-0 flex-1 flex-col",
+            bancada
+              // `pt-[52px]` só no celular: lá o botão do menu é fixo no canto
+              // de cima e não some com o cabeçalho — sem a faixa ele cairia
+              // em cima da barra "Arquivos", que é a única saída da tela.
+              ? "overflow-hidden pt-[52px] tela:pt-0"
+              : "overflow-y-auto px-3 pb-6 tela:px-[30px]",
+          ].join(" ")}
+        >
           {/*
             As telas da rota vão DENTRO da `Producao`, e não ao lado dela: é lá
             que mora o provedor da ponte com o controlador imperativo, e a tela

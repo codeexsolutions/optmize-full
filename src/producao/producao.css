@@ -2883,3 +2883,22 @@
   padding-right: 10px;
   align-content: start;
 }
+
+/* ===========================================================================
+   `hidden` PRECISA GANHAR DE `.page.active`
+   ===========================================================================
+
+   A tela de Cor mora dentro do editor de produção e se esconde pelo atributo
+   `hidden` — é o que conserva a lista dela ao trocar de aba. Só que o navegador
+   esconde `[hidden]` com uma regra de especificidade (0,1,0), e a daqui,
+   `.page.active`, vale (0,2,0): ela ganhava, e a Cor continuava ocupando a
+   altura inteira da janela, escondida atrás do Encaixe.
+
+   Ninguém via porque a página rolava e aquilo virava um vão no fim. Apareceu
+   quando o Encaixe passou a ocupar a janela sem rolagem: o miolo dizia ter o
+   dobro do conteúdo que cabia.
+
+   Vale para qualquer `.page` escondida, e não só para a Cor. */
+:where(.producao) .page[hidden] {
+  display: none !important;
+}
