@@ -53,14 +53,29 @@ export function Casca() {
       <Menu aberto={menuAberto} aoFechar={() => setMenuAberto(false)} />
 
       {/*
-        A casca ocupa a janela e não rola. O cabeçalho fica parado no alto e a
-        rolagem é do miolo — assim uma tela que precise da altura toda pede
-        `h-full` em vez de descontar o topo numa conta de viewport.
+        A casca ocupa a janela e não rola. O cabeçalho fica parado no alto e o
+        que sobra é do miolo — assim uma tela que precise da altura toda a
+        recebe pronta, em vez de descontar o topo numa conta de viewport.
       */}
       <main className="flex h-screen flex-col overflow-hidden tela:ml-[244px] tela:max-[1100px]:ml-[78px]">
         <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 tela:px-[30px]">
+        {/*
+          O miolo é uma COLUNA de altura total. Quem rola, no caso comum, é a
+          tela lá dentro: o cartão marcado com `preencher` cresce até o pé da
+          janela e corre por dentro.
+
+          O `overflow-y-auto` continua aqui como rede: tela sem cartão que
+          preenche (as de leitura corrida, como Macros) flui como sempre fluiu
+          e rola a página. Sem ele, uma tela mais alta que a janela seria
+          cortada sem barra nenhuma.
+
+          A diferença aparece numa lista comprida: rolando a página, o título e
+          o filtro sobem e somem; rolando o cartão, eles ficam parados e só a
+          lista corre. Num painel que fica aberto o dia inteiro num monitor da
+          produção, é a segunda coisa que se espera.
+        */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-6 tela:px-[30px]">
           {/*
             As telas da rota vão DENTRO da `Producao`, e não ao lado dela: é lá
             que mora o provedor da ponte com o controlador imperativo, e a tela

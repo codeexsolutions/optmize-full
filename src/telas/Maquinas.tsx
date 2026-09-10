@@ -212,6 +212,7 @@ export function Maquinas() {
       )}
 
       <Cartao
+        preencher
         titulo="Impressoras cadastradas"
         icone="icones.svg#printer"
         apoio="O que o sistema conhece hoje. Desativar tira do painel e guarda uma planilha do histórico antes."

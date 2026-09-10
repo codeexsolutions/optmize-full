@@ -417,6 +417,9 @@ export function Vetor() {
         titulo="Imagem para vetor"
         icone="icones.svg#spline"
         apoio="Transforma a imagem em desenho de contornos, para corte e para imprimir em qualquer tamanho."
+        /* Sem imagem aberta, é este que ocupa a janela; com imagem, quem
+           merece a altura é a comparação lá embaixo. */
+        preencher={!aberta}
       >
         <label
           onDragEnter={(e) => { e.preventDefault(); setArrastando(true); }}
@@ -495,6 +498,7 @@ export function Vetor() {
           </Cartao>
 
           <Cartao
+            preencher
             titulo="Antes e depois"
             icone="icones.svg#zoom-in"
             apoio="A lupa é a mesma nas duas: aproxime e arraste para comparar a borda. Dois cliques volta ao inteiro."

@@ -115,6 +115,9 @@ export function Impressoras() {
         titulo="Hoje"
         icone="icones.svg#printer"
         apoio={dados ? dataBr(dados.date) : "Carregando..."}
+        /* Sem máquina cadastrada, os cartões de baixo não existem e é este que
+           ocupa a janela — é também onde está o recado de como cadastrar. */
+        preencher={!!semMaquinas}
       >
         {painel.carregando && !dados && <p className="m-0 text-[0.85rem] text-tinta-fraca">Carregando o painel...</p>}
         {painel.erro && (
@@ -202,7 +205,12 @@ export function Impressoras() {
       />
 
       {dados && !semMaquinas && (
-        <Cartao titulo="Máquinas" icone="icones.svg#server" apoio="Uma por impressora cadastrada, com o dia dela e o estado agora.">
+        <Cartao
+          titulo="Máquinas"
+          icone="icones.svg#server"
+          apoio="Uma por impressora cadastrada, com o dia dela e o estado agora."
+          preencher
+        >
           <ul className="m-0 grid list-none gap-2.5 p-0 [grid-template-columns:repeat(auto-fill,minmax(250px,1fr))]">
             {dados.machines.map((m) => (
               <li key={m.machine.id} className="rounded-[10px] border border-linha bg-painel-suave px-3.5 py-3">

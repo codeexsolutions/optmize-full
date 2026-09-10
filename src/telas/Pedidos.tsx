@@ -97,6 +97,7 @@ export function Pedidos() {
         titulo="Pedidos"
         icone="icones.svg#list-checks"
         apoio="A lista de produção na ordem da calandra. Monta-se no Histórico, marcando os trabalhos."
+        preencher
       >
         {lista.carregando && <p className="m-0 text-[0.85rem] text-tinta-fraca">Carregando...</p>}
 

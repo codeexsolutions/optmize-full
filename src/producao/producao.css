@@ -2823,3 +2823,63 @@
    Ela some quando esta folha for reescrita em utilitários, junto com o
    controlador. */
 .producao.so-o-escopo { display: contents; }
+
+/* ===========================================================================
+   A TELA QUE OCUPA A JANELA
+   ===========================================================================
+
+   As telas migradas que ainda usam esta folha (Moldes e Projetos) montam um
+   `.card` de altura natural: ele terminava onde o conteúdo terminava, e do
+   fim dele até o pé da janela sobrava um vazio preto — enquanto a lista de
+   verdade rolava a PÁGINA, levando o título e o botão de "Adicionar" para
+   fora da vista.
+
+   Com `tela-cheia`, o cartão cresce até o pé da janela e quem rola é a LISTA,
+   por dentro dele. É o mesmo arranjo do `preencher` de `casca/Cartao.tsx`,
+   escrito aqui porque quem manda no `.card` destas duas telas é esta folha —
+   ela está fora de camada e venceria o utilitário do Tailwind calada.
+
+   Some quando as duas telas trocarem esta folha por utilitários. */
+.producao.tela-cheia {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+/* A de Cor mora dentro do editor de produção, então o `tela-cheia` dela fica
+   na `.page` — que já é uma coluna flex por causa do `.page.active`. */
+.producao .page.tela-cheia > .card,
+.producao.tela-cheia > .card {
+  display: flex;
+  min-height: 220px;   /* o mesmo piso do Cartao: lista nenhuma vira fresta */
+  flex: 1;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+
+/* O cabeçalho e a ajuda ficam parados; a lista é que corre. */
+.producao .page.tela-cheia > .card > .card-head,
+.producao .page.tela-cheia > .card > .ajuda,
+.producao .page.tela-cheia > .card > .hint,
+.producao .page.tela-cheia > .card > .vetor-solta,
+.producao.tela-cheia > .card > .card-head,
+.producao.tela-cheia > .card > .ajuda,
+.producao.tela-cheia > .card > .hint {
+  flex-shrink: 0;
+}
+
+/* Na Cor, o que cresce é o bloco da lista — e ele só existe quando há arte na
+   mesa; sem nada, quem ocupa a janela é o próprio cartão, vazio. */
+.producao .page.tela-cheia > .card > div:has(> .cor-lista),
+.producao.tela-cheia > .card > .molde-lista,
+.producao.tela-cheia > .card > .projeto-lista {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  /* A margem negativa devolve o respiro do cartão à barra de rolagem, para
+     ela não nascer colada na lista. */
+  margin-right: -10px;
+  padding-right: 10px;
+  align-content: start;
+}
