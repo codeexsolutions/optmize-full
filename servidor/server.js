@@ -36,6 +36,8 @@ const encaixeMemoriaRouter = require("./encaixe-memoria");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
 const corRouter = require("./cor-api");
+const licenca = require("./licenca");
+const licencaRouter = require("./licenca-api");
 const { criarRotasDeImpressoras, iniciarImpressoras } = require("./impressoras-api");
 
 const app = express();
@@ -45,6 +47,41 @@ const app = express();
 // rede e do andamento de uma impressão — sem ficar perguntando.
 const servidor = http.createServer(app);
 const io = new ServidorDeSocket(servidor);
+
+/*
+ * ===========================================================================
+ * A TRAVA DA LICENÇA
+ * ===========================================================================
+ *
+ * Vem antes de QUALQUER rota ou arquivo estático, e é de propósito: sem
+ * licença válida não há painel, não há API, não há nada além da própria tela
+ * de ativação. Uma trava que mora no meio da fila é uma trava que se contorna
+ * pedindo o recurso pela porta que ficou na frente dela.
+ *
+ * Como a autoridade é a assinatura offline (ver `licenca.js`), isto não
+ * depende de rede: a conferência de revogação roda em segundo plano e nunca
+ * segura a subida nem o primeiro acesso.
+ */
+app.use("/api/licenca", express.json(), licencaRouter);
+app.use((req, res, next) => {
+  if (req.path === "/licenca" || req.path.startsWith("/api/licenca")) return next();
+
+  const estado = licenca.obterEstado();
+  if (estado.liberado) return next();
+
+  if (req.path.startsWith("/api/")) {
+    return res.status(403).json({ erro: "licenca", situacao: estado.situacao });
+  }
+  return res.redirect("/licenca");
+});
+
+licenca.conferirRevogacaoOnline().catch(() => {});
+
+// A tela de ativação sai de `estatico/`, que é irmã de `servidor/` — daí o
+// `PASTA_DO_APP` e não o `__dirname`. Ver o cabeçalho de `caminhos.js`.
+app.get("/licenca", (req, res) => {
+  res.sendFile(path.join(PASTA_DO_APP, "estatico", "licenca.html"));
+});
 
 // O PDF do encaixe carrega as artes em tamanho de impressão, então precisa de
 // um limite bem maior que o resto da API. Vem antes do express.json geral

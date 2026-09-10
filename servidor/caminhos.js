@@ -40,6 +40,9 @@ const ARQUIVO_DO_BANCO = path.join(RAIZ, "dados.db");
 /** A raiz das imagens enviadas — a que o Express publica em /uploads. */
 const RAIZ_DE_UPLOADS = path.join(RAIZ, "uploads");
 
+/** Estado da licença (código ativado + marca d'água anti-relógio-voltado), cifrado — ver licenca.js. */
+const ARQUIVO_DE_LICENCA = path.join(RAIZ, "licenca.dat");
+
 /** Garante que a pasta existe e devolve o caminho dela. */
 function pastaDeUploads(...partes) {
   const caminho = path.join(RAIZ_DE_UPLOADS, ...partes);
@@ -74,6 +77,7 @@ module.exports = {
   RAIZ,
   PASTA_DO_APP,
   ARQUIVO_DO_BANCO,
+  ARQUIVO_DE_LICENCA,
   RAIZ_DE_UPLOADS,
   pastaDeUploads,
   pastaDeDados,
