@@ -1449,6 +1449,102 @@ Duas coisas, as duas invisíveis de dentro do navegador:
   dois maiores trabalhos do conjunto, que são também os menos sujeitos a ruído.
   Nos dois menores a diferença ficou em meio centímetro, ou seja, empate.
 
+#### Encaixar de fora: `POST /api/encaixe/resolver`
+
+A tela roda o motor no próprio navegador, e continua assim — não há o que
+ganhar mandando para o servidor um trabalho que já está na máquina de quem
+pediu. Mas existe agora uma porta para **quem não tem navegador que dê conta**,
+e ela nasceu para o CorelDRAW.
+
+O motivo é medido, não suposto. O docker do Corel carrega um de dois
+controles, e nenhum serve sozinho:
+
+| | motor | acesso ao desenho |
+|---|---|---|
+| `type="browser"` | Internet Explorer 11 — sem ES6, **sem WebAssembly** | **`window.external.Application` completo** |
+| `type="browserEdge"` | Chromium 152 — ES6, WASM, Workers | **nenhum** — `hostObjects` vazio |
+
+Com o encaixe do lado do servidor isso deixa de importar: o lado do Corel só
+precisa ler curvas, mandar e reposicionar, que o IE faz sem esforço (a macro
+VSTA em C# também).
+
+O pedido fala em **centímetros**, do jeito que sai do desenho:
+
+```json
+{
+  "larguraTecido": 160,
+  "espaco": 1,
+  "tempoMs": 1500,
+  "pecas": [
+    { "nome": "frente", "qtd": 4, "giro": "180",   "contorno": [[10,10],[65,10],[65,80],[10,80]] },
+    { "nome": "manga",  "qtd": 8, "giro": "livre", "contorno": [[10,90],[50,90],[30,135]] }
+  ]
+}
+```
+
+Quem chama não escolhe passo nem célula: a conversão
+
+```
+contorno em cm  →  normalizado 0..1  →  bits na grade  →  máscaras
+```
+
+é feita no servidor, pelo mesmo caminho que `bancada/pecas.js` percorre a cada
+`npm run bancada` — o que significa que ele é medido junto com o motor, e não
+só quando alguém abre o Corel. Todo o vocabulário do motor fica de cá.
+
+A resposta devolve, por cópia, o canto superior esquerdo em centímetros e o
+giro em graus, mais a `origem` de onde a peça veio no desenho — que é o par que
+o Corel precisa para mover a curva:
+
+```json
+{ "consumo": 288, "aproveitamento": 0.9009,
+  "posicoes": [ { "peca": 0, "copia": 1, "x": 0.5, "y": 146.5, "rot": 0,
+                  "origem": { "minX": 10, "minY": 10 } } ],
+  "naoEncaixadas": [],
+  "comoFoi": { "tentativas": 26346, "wasm": true, "passo": 0.5, "folgaReal": 1 } }
+```
+
+**Não guarda nada** — sem banco, sem memória de recordes, sem rede de receitas.
+É deliberado: o Corel manda um desenho aberto, não um trabalho da loja com nome
+e histórico, e misturar os dois sujaria o placar da memória com trabalho que
+ninguém vai repetir. Quem quiser guardar usa `/api/encaixe/memoria`.
+
+As fatias do portfólio correm **uma depois da outra**, na mesma thread, como na
+bancada — elas são independentes por construção, então o resultado é o mesmo e
+só o relógio muda. O tempo de parede é `fatias × tempo`, e por isso o padrão
+daqui (4 × 2,5 s) é menor que o da tela: quem espera é uma macro, com o Corel
+parado na frente da pessoa. Paralelizar de verdade é trabalho para
+`worker_threads`, e vale quando houver medição dizendo que o tempo incomoda.
+
+O motor vem de `servidor/motor-encaixe.js`, que **é gerado**: o
+`empacotar/motor.js` junta `src/motores/` num arquivo só com o esbuild — o
+mesmo que a bancada e o Vite usam —, porque a árvore do motor desemboca em
+`utils/geometria.ts`, que o Node não abre, e os `.js` de `src/` são ESM num
+projeto CommonJS. O passo roda dentro do `npm run front`, ao lado de `icones` e
+`ia`. É de build e não de execução porque o esbuild é `devDependency` e o
+programa instalado não o leva — empacotar na primeira requisição seria um
+"Cannot find module" que só aparece na máquina de quem instalou.
+
+**A saída é CommonJS, e isso não é detalhe.** A primeira versão gerava ESM e o
+servidor a carregava com `import()` dinâmico. Funcionava perfeitamente em
+desenvolvimento e morria no programa instalado, onde o servidor roda como
+bytecode (ver `empacotar/compilar.js`): código vindo de um `.jsc` não tem
+callback de import registrado, e a resposta virava
+
+```
+A dynamic import callback was not specified.
+```
+
+Em CommonJS o problema some — e some junto um segundo, de graça: como
+`require("./motor-encaixe")` é estático, o esbuild do `compilar.js` embute o
+motor **dentro do bytecode**, em vez de deixá-lo em texto ao lado dele. O
+`.jsc` engordou 165 KB e a pasta do servidor instalado continua com dois
+arquivos só.
+
+Isso só apareceu porque o servidor compilado foi rodado de verdade antes de
+dar o endpoint por pronto. É o tipo de erro que passa em toda a bateria de
+desenvolvimento e explode na máquina do cliente.
+
 ### Aba Vetor
 
 Transforma um PNG ou JPG em desenho **vetorial** (SVG): contornos com
@@ -2028,6 +2124,8 @@ optimize/
 │   ├── server.js             # serve o painel e monta as rotas da API
 │   ├── encaixe-pdf.js        # rota que monta o PDF do encaixe em tamanho real
 │   ├── encaixe-memoria.js    # o que a tela de Encaixe aprendeu: recordes, placar das receitas e o melhor encaixe guardado inteiro
+│   ├── encaixe-resolver.js   # POST /api/encaixe/resolver: encaixa no servidor, para quem não tem navegador que dê conta (o CorelDRAW)
+│   ├── motor-encaixe.js      # GERADO por `npm run motor` — src/motores/ num arquivo só, em CommonJS. Vai para dentro do bytecode no instalador. Não versionado.
 │   ├── moldes-api.js         # rotas da biblioteca de moldes (guardar, reabrir, apagar)
 │   ├── projetos-api.js       # rotas dos projetos de cliente: cliente -> projeto -> peças prontas
 │   ├── cor-api.js            # conversão de cor da arte, pelo perfil ICC
@@ -2043,6 +2141,7 @@ optimize/
 ├── empacotar/
 │   ├── preparar.js           # junta servidor + node.exe em src-tauri/servidor antes do build
 │   ├── icones.js             # gera public/icones.svg com os ícones do Lucide que a tela usa
+│   ├── motor.js              # empacota src/motores/ em servidor/motor-encaixe.js, para o encaixe rodar fora do navegador
 │   ├── icone.png             # a marca de onde saem todos os ícones
 │   └── janela/               # as duas telas do app antes do servidor subir: abrindo e erro
 ├── wasm/
