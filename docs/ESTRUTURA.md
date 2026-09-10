@@ -132,6 +132,13 @@ a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
   confere que a **geometria volta igual** — contorno, furo, medida, folga zero.
   Não é um teste de "respondeu 200": um contorno que perde casa decimal não
   quebra nada e não avisa, só sai um pouco errado no tecido.
+- `bancada/conferir-tela.cjs`: `npm run bancada:tela`. Sobe o servidor numa
+  pasta descartável e abre o painel num Chrome de verdade: larga três artes no
+  Encaixe, manda otimizar e pede o PDF. É a única conferência que atravessa o
+  `<input type="file">`, o canvas e os workers — o `conferir-react` roda em
+  jsdom, que não tem nenhum dos três. Ela nasceu de um defeito real: uma
+  extração levou junto duas funções da leitura de arquivo, e tudo o mais
+  passou enquanto largar um PNG na tela dava `lerImagemCrua is not defined`.
 - `bancada/conferir-cor.js`: `npm run bancada:cor`. Ida e volta
   sRGB → CMYK → sRGB pelo perfil SWOP do Windows. O `cor-icc.js` caminha na LUT
   do perfil à mão, e um erro ali não parece erro: o arquivo abre, as cores só

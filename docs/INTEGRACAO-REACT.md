@@ -13,7 +13,7 @@ Moldes. Resta o Encaixe.
 | **Cor** | React (`telas/Cor.tsx`) | nada — mora dentro do `Producao` só para conservar a lista ao navegar |
 | **Projetos** | React (`telas/Projetos.tsx`), desenhada pela ROTA | nada — a única amarra é levar um trabalho ao Encaixe, pela `ligacao` |
 | **Moldes** | React (`telas/Moldes.tsx` + `telas/moldes/`), desenhada pela ROTA | nada — a amarra é levar o molde vestido ao Encaixe, pela `ligacao` |
-| **Encaixe** | `producao/controlador.js` | a lista de peças, o canvas do risco e o painel de andamento |
+| **Encaixe** | `producao/controlador.js` | a lista de peças, o canvas do risco e o painel de andamento — **o domínio já saiu** (ver abaixo) |
 
 ## Limite desta etapa
 
@@ -33,6 +33,10 @@ Os elementos de listas e canvas são espaços de uso exclusivo do controlador: n
 
 - `npm run tipos`
 - `npx vite build`
+- `npm run bancada:tela`: o painel num navegador de verdade, contra um servidor
+  em pasta descartável — as artes entrando pelo `<input type="file">`, a medida
+  saindo do dpi, a busca rodando nos workers, o risco no canvas e o PDF vindo do
+  servidor. É o que o jsdom não alcança.
 - `node bancada/conferir-react.cjs`: monta o `App` inteiro (com o router) num jsdom e anda por ele — rotas, StrictMode, ausência de gravações duplicadas, clientes e projetos, preservação dos milímetros no projeto, modais, Cor e conservação dos ajustes do Encaixe ao trocar de aba.
 - `npm run bancada:porte`: 637 comparações entre os motores antigo e portado.
 - `npm run bancada:pdf`: geometria e tamanho real em oito configurações e sete tipos de arte.
@@ -53,6 +57,43 @@ alguém lembrar de testar. Duas ressalvas honestas sobre o alcance delas:
 O que continua sem conferência automática é o fluxo com **arquivo de produção
 de verdade**: um molde exportado do Audaces ou do Corel, e uma arte CMYK vinda
 do cliente. Esses dependem de material que só existe na loja.
+
+## O que já saiu do Encaixe, e o que falta
+
+O Encaixe é a última tela imperativa, e a maior: era mais da metade do
+controlador. O que já foi separado dele — sem mexer numa conta, e conferido
+pela `bancada:tela` a cada passo:
+
+| Onde está agora | O que é |
+|---|---|
+| `motores/desenhoDoEncaixe.js` | o risco: rolo, peças, contornos e marcas de metro. Um desenho só para a tela, o PNG e o PDF |
+| `motores/exportarEncaixe.js` | a arte de cada peça na resolução de impressão: escolha PNG/JPEG medida, passa-direto do JPEG, o dpi que não negocia |
+| `api/encaixe.ts` | memória, recordes e PDF — com a regra de que falha de rede nunca derruba o encaixe |
+
+O desenho deixou de ler variáveis de módulo: zoom, seleção e cores **chegam
+como argumento**, e a "vista" (a escala que traduz pixel do mouse em
+centímetro de tecido) é **devolvida** em vez de escrita numa variável de fora.
+Era essa amarra que impedia a tela de virar React.
+
+**O que falta é a tela em si**, e ela se divide em cinco pedaços que podem ir
+um de cada vez, cada um com a `bancada:tela` como rede:
+
+1. **A entrada de arquivos** (`adicionarArquivos`, `lerImagemCrua`,
+   `montarPecaDaImagem`, `lerMoldesDoArquivo`) — vira
+   `motores/entradaDoEncaixe.js`. Cuidado já pago: `lerImagemCrua` e
+   `montarPecaDaImagem` moram entre funções que parecem vizinhas e não são;
+   uma extração por recorte de texto já as levou junto por engano.
+2. **A lista de peças e os grupos** — é `innerHTML` mais um `Map` de grupos;
+   vira estado com uma linha por peça.
+3. **A busca** (`optmizar`, ~380 linhas) — vira `motores/buscaDoEncaixe.js`
+   recebendo ganchos de progresso, e o painel de andamento vira componente.
+4. **O risco** — um `<canvas>` num `ref`, com o zoom e a seleção por área em
+   estado; o desenho já está pronto para isso.
+5. **O confere e o menu de exportar** — dois modais, o caminho mais curto.
+
+Quando o quinto sair, somem juntos o `producao/controlador.js`, a
+`Estrutura.tsx`, a `ligacao.ts` e o `<div className="producao">` das telas
+migradas — e a `producao.css` pode virar utilitários.
 
 ## Próximos passos para concluir a arquitetura
 

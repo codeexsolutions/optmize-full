@@ -2054,6 +2054,8 @@ optimize/
 │   ├── trabalhos.js          # os seis lotes de referência
 │   ├── medir.js              # a corrida: consumo, aproveitamento e a comparação
 │   ├── conferir.js           # o WASM tem que dar o mesmo resultado do JavaScript
+│   ├── conferir-tela.cjs     # o painel num navegador de verdade: arte -> encaixe -> PDF
+│   ├── conferir-react.cjs    # o painel em jsdom: rotas, modais, estado das telas
 │   ├── conferir-pdf.js       # o PDF: um arquivo, uma página por bancada, no tamanho certo
 │   ├── conferir-bancada.js   # nenhuma peça cruza a linha entre duas bancadas
 │   ├── conferir-sobreposicao.js  # nenhuma peça pisa em cima de outra

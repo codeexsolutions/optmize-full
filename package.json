@@ -22,6 +22,8 @@
     "bancada:corte": "node bancada/conferir-bancada.js",
     "bancada:sobreposicao": "node bancada/conferir-sobreposicao.js",
     "bancada:vaos": "node bancada/vaos.js",
+    "bancada:tela": "node bancada/conferir-tela.cjs",
+    "bancada:react": "node bancada/conferir-react.cjs",
     "tipos": "tsc --noEmit",
     "app": "npm run front && tauri dev",
     "build:app": "npm run front && tauri build",
