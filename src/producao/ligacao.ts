@@ -40,6 +40,29 @@ export interface ProjetoParaOEncaixe {
   ajustes: AjustesDoEncaixe;
 }
 
+/** Uma peça de molde a caminho do tecido, com a arte já colocada nela. */
+export interface PecaDeMoldeParaOEncaixe {
+  papel: string;
+  nome: string;
+  quantidade: number;
+  largura: number;
+  altura: number;
+  contorno: { x: number; y: number }[];
+  furos?: { x: number; y: number }[][];
+  /** A arte desenhada dentro do contorno. Sem ela, vai só o contorno. */
+  desenho?: { src: string; pxW: number; pxH: number };
+  /** Os nomes que vão para a origem da peça, na lista do Encaixe. */
+  arte?: string;
+  estampa?: string;
+}
+
+export interface MoldeParaOEncaixe {
+  nome: string;
+  tamanho: string;
+  pecas: PecaDeMoldeParaOEncaixe[];
+  unidades: number;
+}
+
 export interface Ligacao {
   /**
    * Entrega arquivos ao Encaixe. Resolve quando ele terminou de ler todos —
@@ -56,6 +79,16 @@ export interface Ligacao {
    * procura.
    */
   mandarProjetoParaOEncaixe(projeto: ProjetoParaOEncaixe): Promise<void>;
+
+  /**
+   * Entrega um molde vestido ao Encaixe.
+   *
+   * As peças chegam com a arte JÁ DESENHADA dentro do contorno, no dpi
+   * escolhido — desenhar é trabalho da tela de Moldes, que é quem tem a arte
+   * na mão e o ajuste aberto. Peça sem `desenho` entra como contorno pintado,
+   * o bastante para calcular o encaixe.
+   */
+  mandarMoldeParaOEncaixe(molde: MoldeParaOEncaixe): Promise<void>;
 
   irPara(pagina: NomeDeTela): void;
 }

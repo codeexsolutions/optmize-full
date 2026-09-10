@@ -190,7 +190,15 @@ export function ProvedorDeDialogo({ children }: { children: ReactNode }) {
     <Contexto.Provider value={dialogo.current}>
       {children}
 
+      {/*
+        A marca de escopo. A folha `producao.css` — que é quem desenha esta
+        caixa, e a caixa imperativa, com o mesmo traço — é escopada em
+        `:where(.producao)`, e esta aqui mora na casca, fora do editor de
+        produção. `so-o-escopo` é um `display: contents`: casa com o seletor
+        sem gerar caixa nenhuma no fluxo da casca. Ver o fim de `producao.css`.
+      */}
       {aberto && (
+        <div className="producao so-o-escopo">
         <div
           className={`ui-dialog-backdrop${fechando ? " closing" : ""}`}
           role="presentation"
@@ -245,6 +253,7 @@ export function ProvedorDeDialogo({ children }: { children: ReactNode }) {
               </button>
             </div>
           </section>
+        </div>
         </div>
       )}
     </Contexto.Provider>
