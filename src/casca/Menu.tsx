@@ -21,9 +21,10 @@
  * AS MEDIDAS VIERAM DA CASCA ANTIGA, E ISSO FOI DE PROPÓSITO
  * ---------------------------------------------------------------------------
  *
- * Largura, recuos, a marca, o estado do item ativo e o relógio no pé: tudo
- * aqui foi copiado de `public/style.css` e `public/interface.css`, que era o
- * menu da tela antiga. Enquanto as duas cascas conviveram, um clique que
+ * Largura, recuos, o estado do item ativo e o relógio no pé: tudo aqui foi
+ * copiado de `public/style.css` e `public/interface.css`, que era o menu da
+ * tela antiga. (A marca do alto — logo, nome e "Moldes & encaixe" — saiu; o
+ * nome do programa vive agora no pé.) Enquanto as duas cascas conviveram, um clique que
  * trocava de casca não podia parecer um clique que trocou de programa — e era
  * o que parecia, porque esta nasceu como um redesenho e não como uma cópia.
  *
@@ -152,23 +153,17 @@ export function Menu({ aberto, aoFechar }: Props) {
           "tela:translate-x-0",
         ].join(" ")}
       >
-        {/* A marca. O mesmo logo.png da casca antiga, servido de `estatico/`. */}
-        <div className="flex shrink-0 items-center gap-3 px-[7px] pt-0.5 pb-[18px] curta:pb-3 tela:max-[1100px]:justify-center tela:max-[1100px]:px-0">
-          <img
-            src={`${import.meta.env.BASE_URL}logo.png`}
-            alt=""
-            width={40}
-            height={40}
-            draggable={false}
-            className="size-10 shrink-0 rounded-[11px] border border-[var(--accent-line)] bg-ambar shadow-[0_8px_18px_rgba(0,0,0,0.4)]"
-          />
-          <span className="flex min-w-0 flex-col tela:max-[1100px]:hidden">
-            <span className="truncate font-titulo text-[17px] font-bold tracking-[-0.02em] text-tinta">Optimize</span>
-            <small className="mt-[3px] text-[10px] font-semibold tracking-[0.1em] text-tinta-apagada uppercase">
-              Moldes &amp; encaixe
-            </small>
-          </span>
-        </div>
+        {/*
+          AQUI MORAVA A MARCA — o logo, "Optimize" e "Moldes & encaixe".
+          Ela saiu: o nome do programa passou para o pé da barra, junto do
+          relógio, e o alto virou o que a barra existe para ser — a lista de
+          telas, começando na primeira linha.
+
+          Não é só arrumação: eram ~70px de altura gastos para dizer onde a
+          pessoa está, num programa que ela abre o dia inteiro. Com eles de
+          volta, as treze telas cabem com folga até num monitor baixo (ver a
+          nota sobre `curta:` e `baixinha:`, acima).
+        */}
 
         {/*
           Um <nav> por grupo, cada um rotulado pelo próprio título. É o que faz
@@ -217,20 +212,33 @@ export function Menu({ aberto, aoFechar }: Props) {
         </div>
 
         {/*
-          O relógio mora no pé do menu, e não no cabeçalho — mesma decisão da
-          casca antiga, e o motivo está lá: o cabeçalho some na tela de encaixe,
-          que é onde a pessoa passa a tarde, e levava o relógio junto. Aqui
-          embaixo ele fica de pé em todas as telas.
+          O PÉ DA BARRA: o nome do programa e o relógio.
 
-          Ele fica FORA da parte que rola, encostado no pé da barra: era
-          `mt-auto` dentro dela, e numa janela baixa descia junto com a lista
-          para fora da vista.
+          O relógio está aqui, e não no cabeçalho, pela mesma razão da casca
+          antiga: o cabeçalho some nas telas de bancada — que é onde a pessoa
+          passa a tarde — e levava o relógio junto. Aqui embaixo ele fica de pé
+          em todas as telas.
+
+          O nome desceu para cá quando a marca saiu do alto. É o lugar certo
+          para ele: quem usa o programa não precisa dele para trabalhar, mas
+          quem OLHA a tela — de longe, numa foto, num chamado de suporte —
+          precisa saber que programa é.
+
+          O bloco fica FORA da parte que rola, encostado no pé: era `mt-auto`
+          dentro dela, e numa janela baixa descia junto com a lista para fora
+          da vista.
         */}
-        <div className="flex shrink-0 items-center gap-[9px] border-t border-[var(--border-hairline)] px-[10px] pt-[11px] pb-0.5 tela:max-[1100px]:justify-center">
-          <Icone referencia="icones.svg#clock" className="size-3.5 shrink-0 text-ambar opacity-75" />
-          <span className="flex min-w-0 flex-col gap-px leading-[1.25] tela:max-[1100px]:hidden">
-            <span className="text-[10.5px] text-tinta-apagada capitalize">{relogio.data}</span>
-            <strong className="font-mono text-xs font-semibold text-tinta-fraca">{relogio.hora}</strong>
+        <div className="shrink-0 border-t border-[var(--border-hairline)] px-[10px] pt-[9px] pb-0.5">
+          <span className="block truncate font-titulo text-[12px] font-semibold tracking-[-0.01em] text-tinta-fraca tela:max-[1100px]:hidden">
+            CodeEx Optmize
+          </span>
+
+          <span className="mt-[5px] flex items-center gap-[9px] tela:max-[1100px]:mt-0 tela:max-[1100px]:justify-center">
+            <Icone referencia="icones.svg#clock" className="size-3.5 shrink-0 text-ambar opacity-75" />
+            <span className="flex min-w-0 items-baseline gap-1.5 leading-[1.25] tela:max-[1100px]:hidden">
+              <span className="truncate text-[10.5px] text-tinta-apagada capitalize">{relogio.data}</span>
+              <strong className="font-mono text-[11px] font-semibold text-tinta-fraca">{relogio.hora}</strong>
+            </span>
           </span>
         </div>
       </aside>
