@@ -18,6 +18,8 @@ export interface NoDoRisco {
   entrada: { x: number; y: number };
   saida: { x: number; y: number };
   canto?: boolean;
+  /** O trecho deste nó até o seguinte é reta, e não curva. */
+  retaDepois?: boolean;
 }
 
 export interface PecaDoRisco {
