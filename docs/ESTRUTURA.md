@@ -104,10 +104,11 @@ redirecionamento que carrega o `#` adiante.)
   útil), e as telas que ainda usam a folha antiga fazem o mesmo pela classe
   `tela-cheia` (ver o fim de `producao.css`).
 
-  **O Encaixe não tem cabeçalho nem folga.** É a única tela cujo conteúdo é uma
-  bancada — lista de peças de um lado, mesa do outro, as duas medindo-se pela
-  janela —, e ali o cabeçalho cobraria 57px de altura para repetir o que o
-  menu já mostra aceso. Sem ele e sem a folga, o que sobra para a bancada é a
+  **O Encaixe e o Projetos não têm cabeçalho nem folga.** São as telas cujo
+  conteúdo é uma bancada — uma coluna de um lado, a área de trabalho do outro,
+  as duas medindo-se pela janela —, e ali o cabeçalho cobraria 57px de altura
+  para repetir o que o menu já mostra aceso. Sem cabeçalho, quem abre a gaveta
+  no celular é um botão flutuante no canto (a casca antiga tinha o mesmo). Sem ele e sem a folga, o que sobra para a bancada é a
   janela inteira, sem `calc()` nenhum, e sem rolagem de página: o que não
   couber é problema de quem está dentro. Era assim na casca antiga e voltou a
   ser (ver `bancada` em `casca/Casca.tsx`).
