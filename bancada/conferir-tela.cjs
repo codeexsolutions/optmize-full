@@ -115,7 +115,7 @@ async function principal() {
   const porta = await portaLivre();
   // Pasta de dados descartável: esta bancada nunca encosta no `dados.db` de quem roda.
   const servidor = spawn(process.execPath, [path.join(RAIZ, 'servidor', 'server.js')], {
-    env: { ...process.env, PORT: String(porta), OPTIMIZE_DADOS: pasta, OPTIMIZE_SEM_EXPLORER: '1' },
+    env: { ...process.env, PORT: String(porta), OPTIMIZE_DADOS: pasta },
     stdio: 'ignore',
   });
 
@@ -146,6 +146,46 @@ async function principal() {
     p.on('response', (r) => {
       if (r.url().includes('/api/encaixe/pdf')) respostasDoPdf.push(r.status());
       if (r.url().includes('/api/') && r.status() >= 400) problemas.push(`${r.status()} ${r.url()}`);
+    });
+
+    /*
+     * A CAIXA DE "SALVAR COMO", AQUI, É DE MENTIRA.
+     *
+     * Exportar pergunta onde salvar antes de gerar o arquivo
+     * (`escolherOndeSalvar`, no controlador), e `showSaveFilePicker` existe no
+     * navegador sem cabeça mas nunca responde — não há tela para a caixa
+     * aparecer. Sem isto a conferência ficava esperando para sempre.
+     *
+     * O destino falso não é um atalho: ele recolhe o que a tela GRAVOU, e é
+     * isso que prova a exportação de ponta a ponta. O 200 do servidor, sozinho,
+     * não diz se sobrou um PDF de zero byte.
+     */
+    await p.evaluateOnNewDocument(() => {
+      window.__salvo = null;
+      window.showSaveFilePicker = async ({ suggestedName }) => ({
+        name: suggestedName,
+        /*
+         * Tem que ser um `WritableStream` de verdade: o PDF vai para o arquivo
+         * por `pipeTo`, que não aceita um objeto qualquer com `write`. O
+         * `write`/`close` avulsos são os da API real (o
+         * `FileSystemWritableFileStream` tem os dois), e é por eles que o PNG,
+         * que sai pronto do canvas, é gravado.
+         */
+        createWritable: async () => {
+          const pedacos = [];
+          const fluxo = new WritableStream({
+            write(d) { pedacos.push(d); },
+            close() { window.__salvo = { nome: suggestedName, tamanho: new Blob(pedacos).size }; },
+          });
+          let escritor = null;
+          fluxo.write = async (d) => {
+            escritor = escritor || fluxo.getWriter();
+            await escritor.write(d);
+          };
+          fluxo.close = async () => { if (escritor) await escritor.close(); };
+          return fluxo;
+        },
+      });
     });
 
     await p.goto(`http://127.0.0.1:${porta}/encaixe`, { waitUntil: 'networkidle2' });
@@ -180,6 +220,11 @@ async function principal() {
     });
     await esperar(300);
 
+    // Exportar não é para funcionar antes de existir encaixe: o menu dele só
+    // tem saídas para um risco, e não há risco nenhum ainda.
+    assert.equal(await p.$eval('#btn-exportar', (n) => n.disabled), true,
+      'o Exportar tinha que estar apagado antes do encaixe');
+
     // "Optmizar" abre o confere; quem manda calcular é o botão de dentro dele.
     await p.evaluate(() => document.getElementById('btn-encaixar').click());
     await esperar(800);
@@ -209,26 +254,24 @@ async function principal() {
 
     const aviso = await p.$eval('#encaixe-error', (n) => (n.classList.contains('hidden') ? '' : n.textContent));
     assert.equal(aviso, '', `a exportação reclamou: ${aviso}`);
-    assert.deepEqual(respostasDoPdf, [200], 'o servidor tinha que aceitar o pedido do PDF');
+    assert.deepEqual(respostasDoPdf, [200], 'o servidor tinha que devolver o PDF');
 
-    /*
-     * O PDF NÃO VOLTA PELO CANO: ele é gravado na pasta de saída, e a tela diz
-     * onde. Conferir o arquivo no disco é o que prova a exportação inteira —
-     * o 200 sozinho não diz se sobrou um PDF de zero byte.
-     */
+    assert.equal(await p.$eval('#btn-exportar', (n) => n.disabled), false,
+      'com o risco na tela, o Exportar tinha que estar aceso');
+
+    // O que a tela escreveu no arquivo que a pessoa escolheu.
+    const salvo = await p.evaluate(() => window.__salvo);
+    assert.ok(salvo, 'a tela não gravou o PDF no destino escolhido');
+    assert.match(salvo.nome, /^encaixe-\d+,\d+m\.pdf$/, `nome sugerido estranho: ${salvo.nome}`);
+    assert.ok(salvo.tamanho > 5000, `o PDF saiu pequeno demais para ter as artes (${salvo.tamanho} bytes)`);
+
     const recado = await p.$eval('#encaixe-andamento', (n) => n.textContent);
-    assert.match(recado, /^Salvo em .+\.pdf$/, `a tela tinha que dizer onde salvou (veio "${recado}")`);
-
-    const saida = path.join(pasta, 'exportado');
-    const gravados = fs.readdirSync(saida).filter((n) => n.endsWith('.pdf'));
-    assert.equal(gravados.length, 1, `tinha que sobrar um PDF em ${saida} (veio ${gravados.length})`);
-    const tamanho = fs.statSync(path.join(saida, gravados[0])).size;
-    assert.ok(tamanho > 5000, `o PDF saiu pequeno demais para ter as artes (${tamanho} bytes)`);
+    assert.match(recado, /^Salvo: encaixe-/, `a tela tinha que confirmar o arquivo (veio "${recado}")`);
 
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
-      + ` (${risco}) e o PDF ficou gravado na pasta de saída.`);
+      + ` (${risco}) e o PDF foi gravado onde a tela mandou.`);
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();
