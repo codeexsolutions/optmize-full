@@ -118,7 +118,10 @@ redirecionamento que carrega o `#` adiante.)
   em `estilo/entrada.css`: a linha de apoio sai, o item aperta e o ícone
   encolhe, o que faz as treze telas caberem num monitor de 1366x768 e de
   1280x720 sem cortar nem rolar.
-- `src/telas/`: uma por aba.
+- `src/telas/`: uma por aba. A de **Projetos** usa o desenho do Optmize Lite —
+  árvore de clientes à esquerda, projeto aberto à direita —, e só o desenho: a
+  estrutura continua Cliente → Projeto → peças, no `dados.db` desta máquina,
+  com o "levar pro Encaixe" de sempre. Ver o cabeçalho de `telas/Projetos.tsx`.
 - `src/motores/`: o domínio — sem React e sem a tela. Ver a regra em
   `ARQUITETURA.md`.
 - `src/utils/`: a ajuda sem dono — `geometria.ts`, `numero.ts`, `formato.ts`,
