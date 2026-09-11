@@ -61,6 +61,17 @@ export function Casca() {
   const bancada = tela.nome === "encaixe";
 
   /*
+   * Telas que vão de ponta a ponta, sem a folga do miolo.
+   *
+   * A de Projetos tem a árvore encostada na borda esquerda e o editor
+   * ocupando o resto — é o desenho do Optmize Lite, e uma faixa de 30px em
+   * volta o desmancharia: a árvore pareceria um cartão solto no meio da tela
+   * em vez da lateral que ela é. O Encaixe é o mesmo caso, e ainda dispensa o
+   * cabeçalho (ver acima).
+   */
+  const semFolga = bancada || tela.nome === "projetos";
+
+  /*
    * O provedor do diálogo envolve a casca inteira: a caixa de confirmar e a de
    * perguntar são de quem estiver na frente, e uma tela não deveria precisar
    * montar a sua para poder perguntar alguma coisa.
@@ -96,12 +107,12 @@ export function Casca() {
         <div
           className={[
             "flex min-h-0 flex-1 flex-col",
-            bancada
-              // `pt-[52px]` só no celular: lá o botão do menu é fixo no canto
-              // de cima e não some com o cabeçalho — sem a faixa ele cairia
-              // em cima da barra "Arquivos", que é a única saída da tela.
-              ? "overflow-hidden pt-[52px] tela:pt-0"
-              : "overflow-y-auto px-3 pb-6 tela:px-[30px]",
+            semFolga ? "overflow-hidden" : "overflow-y-auto px-3 pb-6 tela:px-[30px]",
+            // `pt-[52px]` só no celular, e só na bancada: lá o botão do menu é
+            // fixo no canto de cima e não some com o cabeçalho — sem a faixa
+            // ele cairia em cima da barra "Arquivos", que é a única saída da
+            // tela. As outras telas têm o cabeçalho, que já o acomoda.
+            bancada ? "pt-[52px] tela:pt-0" : "",
           ].join(" ")}
         >
           {/*
