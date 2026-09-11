@@ -1,6 +1,6 @@
 [package]
 name = "optimize"
-version = "1.0.20"
+version = "1.0.25"
 description = "Optimize — moldes, encaixe e vetor"
 edition = "2021"
 rust-version = "1.77"
