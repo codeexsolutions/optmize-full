@@ -63,6 +63,37 @@
  * papel na mão — por isso a conferência lê o MediaBox e confere os centímetros.
  *
  * ---------------------------------------------------------------------------
+ * 8. NÃO EXISTE NÓ EMPILHADO EM NÓ
+ * ---------------------------------------------------------------------------
+ *
+ * Dois nós a fração de célula um do outro não desenham nada — a mediana dos
+ * trechos é 25 células — e atrapalham de verdade: a pessoa arrasta um, o de
+ * baixo fica onde estava, e o traço abre um bico que ela não entende de onde
+ * veio. Nas fotos da fábrica apareciam nós a 0,2 célula.
+ *
+ * Eles vinham de dois lugares: quebras quase coincidentes (um canto caindo ao
+ * lado da ponta de uma reta) e a recursão do ajuste partindo colada na ponta de
+ * um trecho. Os dois são tratados no `ajusteDeCurvas`, e é isto que confere.
+ *
+ * ---------------------------------------------------------------------------
+ * 7. O TRAÇO FICA EM CIMA DA FORMA — medido, não olhado
+ * ---------------------------------------------------------------------------
+ *
+ * A foto do teste é pintada a partir de um caminho conhecido, então a forma de
+ * verdade é conhecida também: dá para percorrer o mesmo caminho e medir o
+ * quanto o traço se afastou dele, nos dois sentidos.
+ *
+ * Isto existe por causa de um erro específico. O ajuste de curvas media o erro
+ * de cada cúbica pela distância de cada ponto até o ponto da curva no seu `t`
+ * — e aquele `t` é um palpite. Quando ele errava, a curva passava perto de cada
+ * ponto MEDIDO e estufava ENTRE eles: a conta dizia 2 células, o traço se
+ * afastava 8. Nas fotos da fábrica isso deu 18 mm numa manga.
+ *
+ * Nada disso aparecia na tela, e nenhuma conferência de então pegava — a de
+ * nós contava quantos eram, a de côncavo olhava a área, e as duas passavam com
+ * o traço abaulado. Só medir contra a forma pega.
+ *
+ * ---------------------------------------------------------------------------
  * 5. O DELETE APAGA NÓ, E O BACKSPACE NO CAMPO DA MEDIDA NÃO
  * ---------------------------------------------------------------------------
  *
@@ -129,17 +160,47 @@ async function esperarServidor(porta, tentativas = 60) {
  * As duas ficam bem afastadas: peça encostada em peça vira uma mancha só, e
  * isso é limitação conhecida do motor, não o que esta bancada mede.
  */
+/**
+ * O desenho da camisa do teste, numa constante.
+ *
+ * Fica separado porque serve a duas coisas: pintar a foto, e ser a VERDADE
+ * contra a qual o traço é medido (ver o ponto 7). Se o desenho e a verdade
+ * fossem duas cópias do mesmo caminho, um dia uma seria mexida sem a outra e a
+ * conferência passaria a se comparar com a forma errada.
+ */
+const CAMISA = 'M 300 120 C 340 190, 560 190, 600 120'
+  + ' L 760 190 C 800 210, 810 300, 780 330'
+  + ' L 690 300 C 700 520, 700 820, 700 980'
+  + ' L 200 980 C 200 820, 200 520, 210 300'
+  + ' L 120 330 C 90 300, 100 210, 140 190 Z';
+
+/** A camisa percorrida, em pontos — a forma de verdade, sem passar por imagem. */
+function camisaEmPontos(passosPorCurva = 24) {
+  const numeros = (t) => t.trim().split(/[\s,]+/).map(Number);
+  const saida = [];
+  let atual = null;
+  for (const passo of CAMISA.matchAll(/([MLCZ])([^MLCZ]*)/g)) {
+    const tipo = passo[1];
+    const n = passo[2].trim() ? numeros(passo[2]) : [];
+    if (tipo === 'M' || tipo === 'L') {
+      atual = { x: n[0], y: n[1] };
+      saida.push(atual);
+    } else if (tipo === 'C' && atual) {
+      const p1 = { x: n[0], y: n[1] };
+      const p2 = { x: n[2], y: n[3] };
+      const p3 = { x: n[4], y: n[5] };
+      for (let k = 1; k <= passosPorCurva; k++) saida.push(naCurva(atual, p1, p2, p3, k / passosPorCurva));
+      atual = p3;
+    }
+  }
+  return saida;
+}
+
 function fotoDeTeste(pasta) {
   const sharp = require('sharp');
   const arquivo = path.join(pasta, 'mesa-de-teste.png');
   const camisa = (dx, dy, escala) => `
-    <path transform='translate(${dx},${dy}) scale(${escala})'
-          d='M 300 120 C 340 190, 560 190, 600 120
-             L 760 190 C 800 210, 810 300, 780 330
-             L 690 300 C 700 520, 700 820, 700 980
-             L 200 980 C 200 820, 200 520, 210 300
-             L 120 330 C 90 300, 100 210, 140 190 Z'
-          fill='#e8e2d4'/>`;
+    <path transform='translate(${dx},${dy}) scale(${escala})' d='${CAMISA}' fill='#e8e2d4'/>`;
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='1100'>
     <rect width='1600' height='1100' fill='#232a30'/>
     ${camisa(40, 60, 0.95)}
@@ -164,36 +225,79 @@ function naCurva(p0, p1, p2, p3, t) {
 /**
  * Cada `<path>` do SVG achatado numa poligonal.
  *
- * O risco sai em CURVAS (`M` seguido de vários `C`), então não dá para ler as
- * coordenadas soltas: metade delas são alças, que ficam FORA do traço. Somar
- * alça com nó daria uma área errada, e é da área que sai a conferência do
- * côncavo — então cada cúbica é percorrida de verdade.
+ * O risco sai com `C` onde é curva e `L` onde é reta, e os dois precisam ser
+ * lidos na ORDEM em que aparecem: ler só as coordenadas soltas somaria as alças
+ * das cúbicas, que ficam FORA do traço, e a área sairia errada — e é da área
+ * que sai a conferência do côncavo.
  */
 function pecasDoSvg(svg) {
   return [...svg.matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((m) => {
     const d = m[1];
-    const inicio = /M\s*(-?[\d.]+)\s+(-?[\d.]+)/.exec(d);
-    if (!inicio) return [];
-    let atual = { x: Number(inicio[1]), y: Number(inicio[2]) };
-    const saida = [atual];
-    const curvas = [...d.matchAll(
-      /C\s*(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)/g,
-    )];
-    for (const c of curvas) {
-      const p1 = { x: Number(c[1]), y: Number(c[2]) };
-      const p2 = { x: Number(c[3]), y: Number(c[4]) };
-      const p3 = { x: Number(c[5]), y: Number(c[6]) };
-      for (let k = 1; k <= 8; k++) saida.push(naCurva(atual, p1, p2, p3, k / 8));
-      atual = p3;
+    const passos = [...d.matchAll(/([MLC])\s*([-\d.\s]+)/g)];
+    let atual = null;
+    const saida = [];
+    for (const passo of passos) {
+      const tipo = passo[1];
+      const n = passo[2].trim().split(/\s+/).map(Number);
+      if (tipo === 'M') {
+        atual = { x: n[0], y: n[1] };
+        saida.push(atual);
+      } else if (tipo === 'L') {
+        atual = { x: n[0], y: n[1] };
+        saida.push(atual);
+      } else if (atual) {
+        const p1 = { x: n[0], y: n[1] };
+        const p2 = { x: n[2], y: n[3] };
+        const p3 = { x: n[4], y: n[5] };
+        for (let k = 1; k <= 8; k++) saida.push(naCurva(atual, p1, p2, p3, k / 8));
+        atual = p3;
+      }
     }
     return saida;
   });
 }
 
-/** Quantos nós tem cada `<path>` (um `M` mais um `C` por trecho). */
+/** Quantos nós tem cada `<path>`: um por trecho, seja `L` ou `C`. */
 function nosDoSvg(svg) {
   return [...svg.matchAll(/<path[^>]*\sd="([^"]+)"/g)]
-    .map((m) => (m[1].match(/C/g) || []).length);
+    .map((m) => (m[1].match(/[LC]/g) || []).length);
+}
+
+/**
+ * A posição de cada nó de cada `<path>`.
+ *
+ * O nó é o PONTO FINAL de cada trecho: num `L` são as duas coordenadas, num `C`
+ * são as duas últimas das seis (as quatro primeiras são alças, que não estão
+ * sobre o traço).
+ */
+function posicoesDosNos(svg) {
+  return [...svg.matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((m) => {
+    const saida = [];
+    for (const passo of m[1].matchAll(/([MLC])\s*([-\d.\s]+)/g)) {
+      const n = passo[2].trim().split(/\s+/).map(Number);
+      if (passo[1] === 'C') saida.push({ x: n[4], y: n[5] });
+      else saida.push({ x: n[0], y: n[1] });
+    }
+    /*
+     * O último trecho volta ao primeiro nó, então ele aparece duas vezes: uma
+     * no `M` e outra no fim. Sem tirar a repetição, a conferência do
+     * espaçamento acusa "dois nós a 0,00 cm" em todo risco que fecha a volta —
+     * e foi o que ela acusou, com razão sintática e nenhuma serventia.
+     */
+    const primeiro = saida[0];
+    const ultimo = saida[saida.length - 1];
+    if (saida.length > 1 && primeiro && ultimo
+        && Math.hypot(ultimo.x - primeiro.x, ultimo.y - primeiro.y) < 1e-6) {
+      saida.pop();
+    }
+    return saida;
+  });
+}
+
+/** Quantos trechos de cada `<path>` são RETA. */
+function retasDoSvg(svg) {
+  return [...svg.matchAll(/<path[^>]*\sd="([^"]+)"/g)]
+    .map((m) => (m[1].match(/L/g) || []).length);
 }
 
 /** A área que um contorno fecha (fórmula do laço). */
@@ -203,6 +307,66 @@ function area(pontos) {
     soma += (pontos[j].x + pontos[i].x) * (pontos[j].y - pontos[i].y);
   }
   return Math.abs(soma / 2);
+}
+
+/** Distância de um ponto ao segmento `u`-`v`. */
+function aoSegmento(p, u, v) {
+  const dx = v.x - u.x;
+  const dy = v.y - u.y;
+  const t2 = dx * dx + dy * dy;
+  const t = t2 > 0 ? Math.max(0, Math.min(1, ((p.x - u.x) * dx + (p.y - u.y) * dy) / t2)) : 0;
+  return Math.hypot(u.x + t * dx - p.x, u.y + t * dy - p.y);
+}
+
+/** Distância de um ponto à poligonal fechada. */
+function aPoligonal(p, linha) {
+  let menor = Infinity;
+  for (let i = 0; i < linha.length; i++) {
+    const d = aoSegmento(p, linha[i], linha[(i + 1) % linha.length]);
+    if (d < menor) menor = d;
+  }
+  return menor;
+}
+
+/** Caixa de uma poligonal. */
+function caixaDe(pts) {
+  let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+  for (const p of pts) {
+    if (p.x < a) a = p.x;
+    if (p.y < b) b = p.y;
+    if (p.x > c) c = p.x;
+    if (p.y > d) d = p.y;
+  }
+  return { minX: a, minY: b, largura: c - a, altura: d - b };
+}
+
+/** Põe a forma numa caixa 0..1, para comparar desenho com desenho sem escala. */
+function normalizar(pts) {
+  const cx = caixaDe(pts);
+  const lado = Math.max(cx.largura, cx.altura) || 1;
+  return pts.map((p) => ({ x: (p.x - cx.minX) / lado, y: (p.y - cx.minY) / lado }));
+}
+
+/**
+ * O quanto duas formas se afastam, nos DOIS sentidos (Hausdorff), em fração do
+ * lado maior.
+ *
+ * Os dois sentidos importam, e medir só um já me enganou: um trecho RETO tem as
+ * duas pontas em cima do contorno, então medindo só os pontos do traço contra a
+ * verdade ele sai com erro zero — a barriga que a corda corta fica entre as
+ * pontas, onde não há ponto do traço para medir.
+ */
+function afastamento(a, b) {
+  let maior = 0;
+  for (const p of a) {
+    const d = aPoligonal(p, b);
+    if (d > maior) maior = d;
+  }
+  for (const p of b) {
+    const d = aPoligonal(p, a);
+    if (d > maior) maior = d;
+  }
+  return maior;
 }
 
 /** Casco convexo (monotone chain) — a volta mais apertada em torno de tudo. */
@@ -434,10 +598,11 @@ async function principal() {
       // ajustar meia dúzia à mão é o que torna a tela usável. Muitos nós aqui
       // querem dizer que o ajuste parou de rodar e voltou a poligonal.
       assert.ok(
-        nos >= 4 && nos <= 80,
+        nos >= 4 && nos <= 60,
         `a peça ${i + 1} saiu com ${nos} nós. Fora da faixa esperada: menos de 4 não desenha a`
-        + ' camisa, e mais de 80 é sinal de o `ajusteDeCurvas` ter deixado de agrupar — era assim'
-        + ' quando o risco ainda era poligonal, com centenas de pontos para arrastar um a um.',
+        + ' camisa, e mais de 60 é sinal de o `ajusteDeCurvas` ter deixado de agrupar — era assim'
+        + ' quando o risco ainda era poligonal, com centenas de pontos para arrastar um a um.'
+        + ' A média medida contra as fotos da fábrica é 21 nós por peça.',
       );
       const razao = area(pts) / area(casco(pts));
       assert.ok(
@@ -485,11 +650,76 @@ async function principal() {
       + ' do cabeçalho: página de papel faz o gabarito sair reduzido.',
     );
 
+    /*
+     * ---- 6. Reta sai como reta ----
+     *
+     * A camisa do teste tem lados retos de verdade — as duas laterais e a
+     * barra. Eles têm que sair como `L` no caminho, e não como `C` com as alças
+     * deitadas em cima dos nós.
+     *
+     * A diferença não aparece na tela: as duas desenham a mesma linha. Aparece
+     * em quem abre o arquivo, que num `C` ganha duas alças que não deviam
+     * existir num lado reto — e qualquer esbarrão nelas entorta a lateral do
+     * molde. É também de onde vem metade da economia de nós: sem detectar
+     * reta, o ajuste ia partindo a lateral até caber no erro.
+     */
+    const retas = retasDoSvg(svg);
+    assert.ok(
+      retas.every((q) => q >= 2),
+      `os lados retos da camisa não saíram como reta: trechos \`L\` por peça = ${retas.join(', ')}.`
+      + ' Cada camisa do teste tem duas laterais e a barra — se vier zero ou um, a varredura de'
+      + ' trechos retos parou de achá-los (ver `trechosRetos`, no ajusteDeCurvas).',
+    );
+
+    /*
+     * ---- 7. O traço em cima da forma ----
+     *
+     * Compara normalizado (as duas formas encaixadas numa caixa 0..1), porque o
+     * que se está conferindo é o DESENHO, não a escala nem a posição: a escala
+     * já é conferida pela medida, e a posição pelo arranjo.
+     *
+     * O limite de 2% do lado maior não é chute: com o ajuste bom, as peças do
+     * teste ficam em torno de 1%, e o defeito que motivou esta conferência
+     * passava de 4%.
+     */
+    const verdade = normalizar(camisaEmPontos(24));
+    const afastamentos = pecas.map((pts) => afastamento(normalizar(pts), verdade));
+    afastamentos.forEach((d, i) => {
+      assert.ok(
+        d < 0.02,
+        `a peça ${i + 1} se afasta ${(d * 100).toFixed(1)}% do lado maior da forma que pintou a foto.`
+        + ' Acima de 2% o traço deixou de acompanhar o papel — e o jeito de isso acontecer sem'
+        + ' aparecer é a curva passar pelos pontos medidos e estufar entre eles (ver o ponto 7 do'
+        + ' cabeçalho, e `maiorErro` no ajusteDeCurvas).',
+      );
+    });
+
+    // ---- 8. Nó empilhado em nó ----
+    const MINIMO_ENTRE_NOS_CM = 0.3;
+    posicoesDosNos(svg).forEach((nos, i) => {
+      let menor = Infinity;
+      let onde = -1;
+      for (let k = 0; k < nos.length; k++) {
+        const a = nos[k];
+        const b = nos[(k + 1) % nos.length];
+        const d = Math.hypot(b.x - a.x, b.y - a.y);
+        if (d < menor) { menor = d; onde = k; }
+      }
+      assert.ok(
+        menor >= MINIMO_ENTRE_NOS_CM,
+        `a peça ${i + 1} tem dois nós a ${menor.toFixed(2)} cm um do outro (no ${onde}).`
+        + ` Abaixo de ${MINIMO_ENTRE_NOS_CM} cm eles ficam empilhados: um esconde o outro, e quem`
+        + ' arrasta o de cima abre um bico sem entender por quê. Ver o ponto 8 do cabeçalho.',
+      );
+    });
+
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     const razoes = pecas.map((pts) => (area(pts) / area(casco(pts)) * 100).toFixed(1) + '%');
-    const contagem = nosDoSvg(svg).join(' e ');
-    console.log(`OK — duas peças claras achadas em fundo escuro, com ${contagem} nós de curva,`
+    const contagem = nosDoSvg(svg).map((q, i) => `${q} nós (${retas[i]} retos)`).join(' e ');
+    const fidelidade = afastamentos.map((d) => (d * 100).toFixed(1) + '%').join(' e ');
+    console.log(`OK — duas peças claras achadas em fundo escuro, com ${contagem},`
+      + ` a ${fidelidade} da forma de verdade,`
       + ` côncavas de verdade (${razoes.join(' e ')}`
       + ` do casco), a medida de uma calibrou a outra, o SVG declara centímetro e o PDF saiu`
       + ` com ${alturaPdf.toFixed(1)} cm de página (tamanho real).`);

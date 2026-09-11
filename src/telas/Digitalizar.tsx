@@ -78,7 +78,7 @@ import {
 
 type Lado = "largura" | "altura";
 type Ponto = { x: number; y: number };
-type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean };
+type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean };
 /** O que o ponteiro pegou: um nó, ou uma das alças dele. */
 type Pega = { peca: number; no: number; parte: "no" | "entrada" | "saida" };
 /** Onde o ponteiro caiu em cima do traço: que trecho, e em que ponto dele. */
@@ -170,7 +170,8 @@ export function Digitalizar() {
   const emCm = pecas.length > 0 && cm > 0 ? riscosEmCm(pecas, qual, lado, cm) : null;
 
   const clonar = (fonte: No[][]): No[][] => fonte.map((nos) => nos.map((n) => ({
-    x: n.x, y: n.y, entrada: { ...n.entrada }, saida: { ...n.saida }, canto: n.canto,
+    x: n.x, y: n.y, entrada: { ...n.entrada }, saida: { ...n.saida },
+    canto: n.canto, retaDepois: n.retaDepois,
   })));
 
   /** Guarda o estado atual na pilha do desfazer, antes de mexer. */
@@ -319,7 +320,12 @@ export function Digitalizar() {
     const contorno = edicao[qual];
     if (contorno && noAtivo !== null && contorno[noAtivo]) {
       const n = contorno[noAtivo]!;
+      const anterior = contorno[(noAtivo - 1 + contorno.length) % contorno.length]!;
       for (const parte of ["entrada", "saida"] as const) {
+        // Lado reto não tem alça para pegar: ela está em cima do nó, e deixar
+        // pegá-la roubaria o clique do próprio nó.
+        if (parte === "saida" && n.retaDepois) continue;
+        if (parte === "entrada" && anterior.retaDepois) continue;
         const a = n[parte];
         if (Math.hypot(a.x - alvo.x, a.y - alvo.y) < raio) return { peca: qual, no: noAtivo, parte };
       }
@@ -351,7 +357,9 @@ export function Digitalizar() {
         const passos = 16;
         for (let k = 0; k <= passos; k++) {
           const t = k / passos;
-          const q = naCurva(a, a.saida, b.entrada, b, t);
+          const q = a.retaDepois
+            ? { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+            : naCurva(a, a.saida, b.entrada, b, t);
           const d = Math.hypot(q.x - alvo.x, q.y - alvo.y);
           if (d < menor) { menor = d; melhor = { peca: p, no: i, t }; }
         }
@@ -440,6 +448,45 @@ export function Digitalizar() {
   }, [edicao, lembrar]);
 
   /**
+   * Troca um lado do nó entre reta e curva.
+   *
+   * `lado` é visto do nó: "depois" é o trecho até o nó seguinte, "antes" é o
+   * que vem do anterior. Quem guarda a informação é sempre o nó que COMEÇA o
+   * trecho, então mexer no lado "antes" mexe no nó anterior — é por isso que
+   * esta função existe em vez de a tela alterar o campo direto.
+   *
+   * Virando curva, as alças nascem a um terço do caminho, que é o palpite que o
+   * próprio ajuste usa: a curva começa idêntica à reta e só muda quando alguém
+   * arrasta. Virando reta, as alças desabam em cima dos nós.
+   */
+  const alternarLado = useCallback((peca: number, no: number, lado: "antes" | "depois") => {
+    const contorno = edicao[peca];
+    if (!contorno || contorno.length < 2) return;
+    const inicio = lado === "depois" ? no : (no - 1 + contorno.length) % contorno.length;
+    const fim = (inicio + 1) % contorno.length;
+    lembrar();
+    setEdicao((antes) => antes.map((c, pp) => {
+      if (pp !== peca) return c;
+      const a = c[inicio]!;
+      const b = c[fim]!;
+      const viraReta = !a.retaDepois;
+      const saida = c.slice();
+      if (viraReta) {
+        saida[inicio] = { ...a, retaDepois: true, saida: { x: a.x, y: a.y } };
+        saida[fim] = { ...b, entrada: { x: b.x, y: b.y } };
+      } else {
+        const terco = (de: Ponto, para: Ponto): Ponto => ({
+          x: de.x + (para.x - de.x) / 3,
+          y: de.y + (para.y - de.y) / 3,
+        });
+        saida[inicio] = { ...a, retaDepois: false, saida: terco(a, b) };
+        saida[fim] = { ...b, entrada: terco(b, a) };
+      }
+      return saida;
+    }));
+  }, [edicao, lembrar]);
+
+  /**
    * Dois cliques: em cima de um nó, apaga; em cima do traço, põe um nó novo
    * ali, sem mudar o desenho (ver `dividirCurva`).
    */
@@ -458,15 +505,28 @@ export function Digitalizar() {
       if (p !== noTraco.peca) return nos;
       const a = nos[noTraco.no]!;
       const b = nos[(noTraco.no + 1) % nos.length]!;
-      const corte = dividirCurva(a, a.saida, b.entrada, b, noTraco.t);
       const saida = nos.slice();
-      saida[noTraco.no] = { ...a, saida: corte.saidaDoAnterior };
       const seguinte = (noTraco.no + 1) % nos.length;
+
+      if (a.retaDepois) {
+        // Numa reta o nó novo entra em cima dela, e as DUAS metades continuam
+        // retas: partir uma reta não pode inventar curvatura.
+        const meio = { x: a.x + (b.x - a.x) * noTraco.t, y: a.y + (b.y - a.y) * noTraco.t };
+        saida.splice(noTraco.no + 1, 0, {
+          x: meio.x, y: meio.y,
+          entrada: { ...meio }, saida: { ...meio },
+          canto: false, retaDepois: true,
+        });
+        return saida;
+      }
+
+      const corte = dividirCurva(a, a.saida, b.entrada, b, noTraco.t);
+      saida[noTraco.no] = { ...a, saida: corte.saidaDoAnterior };
       saida[seguinte] = { ...b, entrada: corte.entradaDoSeguinte };
       saida.splice(noTraco.no + 1, 0, {
         x: corte.no.x, y: corte.no.y,
         entrada: corte.entradaDoNovo, saida: corte.saidaDoNovo,
-        canto: false,
+        canto: false, retaDepois: false,
       });
       return saida;
     }));
@@ -572,9 +632,13 @@ export function Digitalizar() {
       for (let k = 0; k < nos.length; k++) {
         const a = nos[k]!;
         const b = nos[(k + 1) % nos.length]!;
+        const fim = emTela(b);
+        if (a.retaDepois) {
+          ctx.lineTo(fim.x, fim.y);
+          continue;
+        }
         const c1 = emTela(a.saida);
         const c2 = emTela(b.entrada);
-        const fim = emTela(b);
         ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, fim.x, fim.y);
       }
       ctx.closePath();
@@ -608,10 +672,15 @@ export function Digitalizar() {
     // As alças, só do nó ativo, e por baixo dos nós.
     if (noAtivo !== null && escolhida[noAtivo]) {
       const n = escolhida[noAtivo]!;
+      const anterior = escolhida[(noAtivo - 1 + escolhida.length) % escolhida.length]!;
       const centro = emTela(n);
       ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
       ctx.lineWidth = 1.5;
       for (const parte of ["entrada", "saida"] as const) {
+        // Lado reto não tem alça: desenhar uma em cima do nó só esconderia o nó
+        // e daria a entender que há curvatura ali.
+        if (parte === "saida" && n.retaDepois) continue;
+        if (parte === "entrada" && anterior.retaDepois) continue;
         const a = emTela(n[parte]);
         ctx.beginPath();
         ctx.moveTo(centro.x, centro.y);
@@ -701,6 +770,19 @@ export function Digitalizar() {
   };
 
   const nosDaEscolhida = edicao[qual]?.length ?? 0;
+
+  /*
+   * Como estão os dois lados do nó marcado.
+   *
+   * O lado que SAI é o `retaDepois` do próprio nó; o que CHEGA é o do nó
+   * anterior — quem guarda a informação é sempre quem começa o trecho.
+   */
+  const ladosDoNo = (() => {
+    const contorno = edicao[qual];
+    if (!contorno || noAtivo === null || !contorno[noAtivo]) return null;
+    const anterior = contorno[(noAtivo - 1 + contorno.length) % contorno.length]!;
+    return { antes: !!anterior.retaDepois, depois: !!contorno[noAtivo]!.retaDepois };
+  })();
 
   return (
     <>
@@ -802,10 +884,32 @@ export function Digitalizar() {
                     <strong>Clique</strong> num nó para marcá-lo e aperte{" "}
                     <strong>Delete</strong> ou <strong>Backspace</strong> para apagar — ou{" "}
                     <strong>dois cliques</strong> em cima dele. Dois cliques no traço põem um nó
-                    novo sem mudar o desenho. Nó <strong>redondo</strong> é curva,{" "}
-                    <strong>quadrado</strong> é canto — e canto não arredonda ao mexer.{" "}
+                    novo sem mudar o desenho. Cada lado do nó pode ser <strong>reta</strong> ou{" "}
+                    <strong>curva</strong>, e os botões acima trocam um sem mexer no outro — é o
+                    nó em que a lateral reta encontra a curva do gancho. Nó{" "}
+                    <strong>redondo</strong> é curva, <strong>quadrado</strong> é canto.{" "}
                     <strong>Roda do mouse</strong> aproxima onde o ponteiro está.
                   </p>
+                  {ladosDoNo && (
+                    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-[8px] border border-linha bg-painel p-2">
+                      <span className="text-[0.8rem] font-semibold">Nó marcado:</span>
+                      {([
+                        ["antes", "lado que chega", ladosDoNo.antes],
+                        ["depois", "lado que sai", ladosDoNo.depois],
+                      ] as const).map(([lado, rotulo, ehReta]) => (
+                        <button
+                          key={lado}
+                          type="button"
+                          className="btn secondary"
+                          onClick={() => noAtivo !== null && alternarLado(qual, noAtivo, lado)}
+                          title={`Trocar o ${rotulo} entre reta e curva`}
+                        >
+                          {rotulo}: <strong className="ml-1">{ehReta ? "reta" : "curva"}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button" className="btn secondary"

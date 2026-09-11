@@ -93,7 +93,11 @@ function lerPecas(corpo) {
         const ay = numero(a && a.y);
         return { x: (ax === null ? x : ax) + emX, y: (ay === null ? y : ay) + emY };
       };
-      limpos.push({ x: x + emX, y: y + emY, entrada: alca(n.entrada), saida: alca(n.saida) });
+      limpos.push({
+        x: x + emX, y: y + emY,
+        entrada: alca(n.entrada), saida: alca(n.saida),
+        retaDepois: !!n.retaDepois,
+      });
     }
     pecas.push(limpos);
   }
@@ -103,9 +107,9 @@ function lerPecas(corpo) {
 /**
  * POST /api/risco/pdf
  *
- * Corpo: `{ nome?, pecas: [{ nos: [{x, y, entrada, saida}], emX?, emY? }] }`,
- * tudo em centímetros. `entrada` e `saida` são as alças da curva; sem elas o
- * trecho sai reto. `emX`/`emY` é onde a peça estava na foto — é o que faz o PDF
+ * Corpo: `{ nome?, pecas: [{ nos: [{x, y, entrada, saida, retaDepois}], emX?,
+ * emY? }] }`, tudo em centímetros. `entrada` e `saida` são as alças da curva;
+ * `retaDepois` diz que o trecho até o nó seguinte é reta. `emX`/`emY` é onde a peça estava na foto — é o que faz o PDF
  * sair com as peças no mesmo arranjo da mesa em vez de empilhadas na origem.
  */
 router.post("/pdf", express.json({ limit: "20mb" }), (req, res) => {
@@ -116,16 +120,43 @@ router.post("/pdf", express.json({ limit: "20mb" }), (req, res) => {
   }
   const { pecas } = lido;
 
-  // A caixa leva as ALÇAS junto: uma curva pode sair além do nó que a ancora,
-  // e cortar a página no nó deixaria a barriga da curva fora do papel.
+  /*
+   * A caixa sai da CURVA PERCORRIDA, não dos nós nem das alças.
+   *
+   * Pelos nós, a barriga da curva ficaria fora do papel. Pelas alças, o
+   * contrário, e foi o erro que estava aqui: alça é ponto de CONTROLE, não fica
+   * sobre a curva — ela só a limita, e de longe. Com o ajuste de curvas dando
+   * alças mais compridas, a página passou a sair 10 cm maior que o desenho, e a
+   * bancada pegou (78,8 cm num risco de 68).
+   *
+   * Percorrer é a conta certa e é barata: dezesseis passos por trecho num risco
+   * de poucas dezenas de nós.
+   */
+  const naCurva = (p0, p1, p2, p3, t) => {
+    const u = 1 - t;
+    const a = u * u * u;
+    const b = 3 * u * u * t;
+    const c = 3 * u * t * t;
+    const d = t * t * t;
+    return {
+      x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
+      y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
+    };
+  };
+
   let largura = 0;
   let altura = 0;
+  const olhar = (q) => {
+    if (q.x > largura) largura = q.x;
+    if (q.y > altura) altura = q.y;
+  };
   for (const nos of pecas) {
-    for (const n of nos) {
-      for (const q of [n, n.entrada, n.saida]) {
-        if (q.x > largura) largura = q.x;
-        if (q.y > altura) altura = q.y;
-      }
+    for (let i = 0; i < nos.length; i++) {
+      const a = nos[i];
+      const b = nos[(i + 1) % nos.length];
+      olhar(a);
+      if (a.retaDepois) continue;
+      for (let k = 1; k < 16; k++) olhar(naCurva(a, a.saida, b.entrada, b, k / 16));
     }
   }
   if (!(largura > 0) || !(altura > 0)) {
@@ -167,7 +198,10 @@ router.post("/pdf", express.json({ limit: "20mb" }), (req, res) => {
     for (let i = 0; i < nos.length; i++) {
       const a = nos[i];
       const b = nos[(i + 1) % nos.length];
-      doc.bezierCurveTo(pt(a.saida.x), pt(a.saida.y), pt(b.entrada.x), pt(b.entrada.y), pt(b.x), pt(b.y));
+      // Reta é reta também no PDF: uma cúbica com as alças em cima dos nós
+      // desenha igual, mas engorda o arquivo e mente sobre o que o trecho é.
+      if (a.retaDepois) doc.lineTo(pt(b.x), pt(b.y));
+      else doc.bezierCurveTo(pt(a.saida.x), pt(a.saida.y), pt(b.entrada.x), pt(b.entrada.y), pt(b.x), pt(b.y));
     }
     doc.closePath().stroke();
   }
