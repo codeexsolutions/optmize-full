@@ -64,23 +64,29 @@ app.use(express.json({ limit: "15mb" })); // dá folga para o contorno de um mol
 // do encaixe. Vêm primeiro porque as duas os pedem pelo mesmo caminho.
 app.use(express.static(path.join(PASTA_DO_APP, "estatico")));
 
-// O painel. Não precisa de rota-curinga: as telas moram no "#" do endereço,
-// que nunca chega ao servidor.
+// O painel compilado. Um arquivo que existe é servido como está.
 app.use(express.static(path.join(PASTA_DO_APP, "dist")));
 
 /*
- * `/app` foi o endereço do painel durante toda a migração, então ele continua
+ * `/app` foi o endereço do painel durante a migração, então ele continua
  * levando a algum lugar em vez de dar 404: são meses de link salvo, aba
  * aberta e atalho na área de trabalho da fábrica.
  *
- * O redirecionamento carrega o "#" adiante — `/app/#/moldes` vira `/#/moldes`
- * —, senão quem clicasse num link antigo cairia na tela inicial em vez da que
- * pediu. O "#" NÃO chega ao servidor, então quem o transporta é a página de
- * uma linha devolvida abaixo, já no navegador.
+ * Ele carrega adiante a tela que o link pedia, e essa tela pode vir das duas
+ * formas — `/app/#/moldes`, do tempo do "#", ou `/app/moldes`, de agora. O
+ * "#" NÃO chega ao servidor, então quem o traduz é a página de uma linha
+ * devolvida aqui, já dentro do navegador.
  */
 app.get(/^\/app(\/.*)?$/, (req, res) => {
-  res.type("html").send('<!doctype html><meta charset="utf-8">'
-    + '<script>location.replace("/" + location.hash)</script>');
+  // O caminho depois de `/app`, para o caso de o link antigo não ter "#".
+  const caminho = req.path.replace(/^\/app/, "") || "/";
+  res.type("html").send('<!doctype html><meta charset="utf-8"><script>'
+    // O "#" só existe aqui dentro do navegador; `slice(1)` tira o "#" e
+    // deixa o que vem depois, que já é o caminho da tela.
+    + 'var tela = location.hash.slice(1);'
+    + 'location.replace(tela ? (tela[0] === "/" ? tela : "/" + tela) : '
+    + JSON.stringify(caminho) + ');'
+    + '</script>');
 });
 
 app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
@@ -91,6 +97,32 @@ app.use("/api/projetos", projetosRouter);
 // As impressoras da produção: varredura da rede, histórico, ordens de
 // serviço, lista da calandra e os avisos no WhatsApp.
 app.use("/api/impressoras", criarRotasDeImpressoras(io));
+
+/*
+ * ===========================================================================
+ * A ROTA-CURINGA DO PAINEL
+ * ===========================================================================
+ *
+ * As telas passaram a morar no CAMINHO do endereço (`/encaixe`) em vez do "#"
+ * (`#/encaixe`), e a diferença cai toda aqui: o "#" nunca chegava ao
+ * servidor, e o caminho chega. Sem esta rota, abrir `/encaixe` direto,
+ * recarregar a página numa tela, ou dar um atalho na área de trabalho para
+ * uma tela daria 404 — no navegador E dentro do app instalado, que é o mesmo
+ * servidor (ver `src-tauri/src/main.rs`: a janela navega para a raiz dele).
+ *
+ * Vem DEPOIS de tudo, e é isso que a mantém inofensiva: arquivo que existe já
+ * foi servido pelo `express.static` acima, e rota de API que existe já
+ * respondeu. O que sobra é endereço de tela, e todo endereço de tela é o mesmo
+ * `index.html` — quem decide o que desenhar é o React, no navegador.
+ *
+ * `/api` e `/uploads` ficam de fora de propósito: um caminho de API que não
+ * existe tem que responder 404, e não devolver a página inteira do painel —
+ * senão um erro de digitação numa chamada vira um `JSON.parse` engasgando em
+ * "<!doctype html>", que é o pior jeito de contar que a rota está errada.
+ */
+app.get(/^\/(?!api\/|uploads\/).*/, (req, res) => {
+  res.sendFile(path.join(PASTA_DO_APP, "dist", "index.html"));
+});
 
 const PORT = process.env.PORT || 8000;
 

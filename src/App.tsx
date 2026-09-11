@@ -12,19 +12,24 @@
  * desconhecido caindo em algum lugar em vez de na primeira tela por acidente.
  *
  * ---------------------------------------------------------------------------
- * POR QUE `HashRouter`, E NÃO `BrowserRouter`
+ * O ENDEREÇO É `/encaixe`, SEM "#"
  * ---------------------------------------------------------------------------
  *
- * O endereço continua sendo `#/moldes`. Não é gosto: são meses de link salvo,
- * aba aberta e atalho na área de trabalho da fábrica apontando para o "#" — e
- * o `server.js` tem um redirecionamento de `/app` que carrega o "#" adiante,
- * escrito para essa forma.
+ * Já foi `#/encaixe`, e o motivo de ter sido era o servidor: o "#" nunca chega
+ * a ele, então o Express servia `dist/` como arquivo estático e pronto. O
+ * preço era o endereço — um "#" no meio, que não se lê nem se dita por
+ * telefone.
  *
- * Além disso o "#" nunca chega ao servidor, então o Express não precisa de
- * rota-curinga para o painel: ele serve `dist/` como arquivo estático e pronto.
- * Com `BrowserRouter`, abrir `/encaixe` direto (ou recarregar a página nela)
- * daria 404 no Express até alguém lembrar de acrescentar o curinga — e daria
- * 404 também no app instalado, onde o servidor é o mesmo.
+ * Agora o caminho chega ao servidor, e ele sabe responder: `servidor/server.js`
+ * tem uma rota-curinga que devolve o `index.html` para todo endereço que não
+ * seja `/api`, `/uploads` ou arquivo que exista. Isso vale para o navegador E
+ * para o app instalado, porque a janela do Tauri navega para esse MESMO
+ * servidor (ver `src-tauri/src/main.rs`) — não há um segundo caminho para
+ * manter em pé.
+ *
+ * Os endereços antigos continuam funcionando: quem abrir um `#/moldes` salvo é
+ * levado a `/moldes` na entrada (ver `main.tsx`), e o `/app` de antes da
+ * migração continua traduzindo os dois formatos.
  *
  * ---------------------------------------------------------------------------
  * AS ROTAS SAEM DA MESMA TABELA QUE O MENU
@@ -40,17 +45,17 @@
  * menu e o cabeçalho funcionarem como nas outras.
  */
 
-import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Casca } from "./casca/Casca";
 import { ehProducaoIntegrada } from "./producao/Producao";
 import { TELAS, TELA_PADRAO } from "./rotas";
 
 export function App() {
   return (
-    <HashRouter>
+    <BrowserRouter>
       <Routes>
         <Route element={<Casca />}>
-          {/* A raiz (`#/`) leva à tela inicial, sem deixar o endereço vazio. */}
+          {/* A raiz leva à tela inicial, sem deixar o endereço vazio. */}
           <Route index element={<Navigate to={`/${TELA_PADRAO}`} replace />} />
 
           {TELAS.map(({ nome, Componente }) => (
@@ -69,6 +74,6 @@ export function App() {
           <Route path="*" element={<Navigate to={`/${TELA_PADRAO}`} replace />} />
         </Route>
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
   );
 }
