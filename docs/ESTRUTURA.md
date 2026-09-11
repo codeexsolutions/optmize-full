@@ -82,10 +82,14 @@ pasta `public/`, com a tela antiga em `<script>` soltos; ela foi apagada, e
 redirecionamento que carrega o `#` adiante.)
 
 - `src/main.tsx`: a montagem do React e o CSS.
-- `src/App.tsx`: as rotas. A tabela de telas vira `react-router` aqui — em
-  `HashRouter`, porque o endereço do painel sempre foi `#/moldes` e o "#" nunca
-  chega ao Express, que por isso serve `dist/` como arquivo estático e não
-  precisa de rota-curinga.
+- `src/App.tsx`: as rotas. A tabela de telas vira `react-router` aqui, em
+  `BrowserRouter`: o endereço é `/moldes`, sem "#". Quem sustenta isso do outro
+  lado é a **rota-curinga** do `servidor/server.js`, que devolve o `index.html`
+  para todo endereço que não seja `/api`, `/uploads` ou arquivo existente —
+  sem ela, abrir `/encaixe` direto ou recarregar a página numa tela daria 404.
+  Vale igual no app instalado, porque a janela do Tauri navega para esse mesmo
+  servidor. Link antigo com "#" continua funcionando: `main.tsx` o traduz na
+  entrada, e `/app` também.
 - `src/rotas.ts`: a tabela das telas. **Uma linha por aba, e mais nada** — quem
   acrescenta uma tela mexe aqui e no arquivo dela. Cada tela chega ao navegador
   quando é aberta (`lazy`), e não toda vez que alguém abre o painel.

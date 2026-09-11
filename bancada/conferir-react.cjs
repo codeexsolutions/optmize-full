@@ -39,7 +39,7 @@ async function main() {
   // O bundle temporário encontra os mesmos pacotes React da aplicação.
   const Module = require('node:module');
   process.env.NODE_PATH = path.join(root,'node_modules'); Module._initPaths();
-  const dom = new JSDOM('<!doctype html><div id="raiz"></div>', { url:'http://localhost/#/moldes', pretendToBeVisual:true });
+  const dom = new JSDOM('<!doctype html><div id="raiz"></div>', { url:'http://localhost/moldes', pretendToBeVisual:true });
   for(const k of ['window','document','CustomEvent','Event','EventTarget','HTMLElement','Node','getComputedStyle','MouseEvent','File','Blob','location','history','navigator']) global[k]=dom.window[k];
   global.CSS = { escape: s=>s.replace(/[^\w-]/g,'\\$&') };
   global.requestAnimationFrame=dom.window.requestAnimationFrame.bind(dom.window);
@@ -59,10 +59,16 @@ async function main() {
   const {App}=require(bundle);
   const app=createRoot(document.getElementById('raiz'));
 
-  /** Navega como o menu navega: mexendo no `#` do endereco. */
+  /*
+   * Navega como o menu navega: mexendo no HISTORICO. O endereco nao tem mais
+   * "#" (ver o cabecalho de src/App.tsx), e o `BrowserRouter` escuta o
+   * `popstate` -- `pushState` sozinho nao avisa ninguem, entao o evento vai
+   * junto, que e o que o clique num <a> faria por dentro.
+   */
   const irPara = async pagina => {
     await act(async()=>{
-      dom.window.location.hash = '#/' + pagina;
+      dom.window.history.pushState({}, '', '/' + pagina);
+      dom.window.dispatchEvent(new dom.window.PopStateEvent('popstate'));
       // As telas de rota chegam por `import()` (o `lazy` de rotas.ts): sem esta
       // volta ao laco de eventos o `<Suspense>` ainda estaria na espera.
       await new Promise(r=>setTimeout(r,0));

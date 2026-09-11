@@ -148,7 +148,7 @@ async function principal() {
       if (r.url().includes('/api/') && r.status() >= 400) problemas.push(`${r.status()} ${r.url()}`);
     });
 
-    await p.goto(`http://127.0.0.1:${porta}/#/encaixe`, { waitUntil: 'networkidle2' });
+    await p.goto(`http://127.0.0.1:${porta}/encaixe`, { waitUntil: 'networkidle2' });
     await esperar(900);
 
     // ---- 1. os arquivos entram ----

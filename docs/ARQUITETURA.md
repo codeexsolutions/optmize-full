@@ -359,7 +359,7 @@ junto, e os links entre as cascas deixaram de existir porque só há uma.
   carregados pelo Node em execução — por isso não entram no instalador.
 - **A rota mora no `#`.** Sem rota-curinga no Express, e recarregar a página em
   qualquer tela funciona. **O grupo do menu não entra no endereço**: a rota
-  continua sendo só o nome da tela (`#/historico`), então mudar uma tela de
+  continua sendo só o nome da tela (`/historico`), então mudar uma tela de
   grupo não quebra link guardado nem favorito.
 - **Botão em `/app` precisa do reset de `#raiz`.** Sem o preflight do Tailwind,
   o navegador estiliza `<button>` como controle do sistema. O reset mínimo está

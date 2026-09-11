@@ -33,7 +33,7 @@
  * máquina, não em configuração.
  *
  * O grupo não entra no endereço. A rota continua sendo só o nome da tela
- * (`#/historico`), então mudar uma tela de grupo não quebra link guardado.
+ * (`/historico`), então mudar uma tela de grupo não quebra link guardado.
  */
 
 import { lazy, type ComponentType } from "react";
