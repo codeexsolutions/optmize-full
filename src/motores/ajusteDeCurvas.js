@@ -26,8 +26,27 @@
  * alça e a curva inteira acompanha.
  *
  * ---------------------------------------------------------------------------
- * PRIMEIRO OS CANTOS, DEPOIS AS CURVAS
+ * PRIMEIRO AS RETAS, DEPOIS OS CANTOS, E SÓ ENTÃO AS CURVAS
  * ---------------------------------------------------------------------------
+ *
+ * Molde tem lado reto — a lateral de uma calça, a barra, a dobra do meio. Se o
+ * ajuste de curva passar por cima deles, dois estragos saem juntos:
+ *
+ *   - **Nós à toa.** O Schneider ajusta a reta como se fosse curva e vai
+ *     partindo até caber no erro, sobrando quatro ou cinco nós num lado que
+ *     precisava de dois.
+ *   - **Reta que não é reta.** A cúbica ajustada a uma reta fica quase reta, e
+ *     "quase" num gabarito de corte é uma barriga de milímetros que ninguém
+ *     pediu.
+ *
+ * Então o contorno é varrido antes atrás dos TRECHOS RETOS, e eles saem como
+ * segmento de reta de verdade. O que sobra entre um reto e outro é que vai para
+ * o ajuste de curva.
+ *
+ * Disso cai de brinde a coisa que a fábrica pediu pelo nome: o NÓ MISTO. No
+ * ponto em que a lateral reta encontra a curva do gancho, o lado de cima é reta
+ * e o de baixo é curva — e agora isso é representável, porque reta e curva são
+ * propriedade do TRECHO (`retaDepois`), não do nó.
  *
  * O Schneider sozinho arredondaria os cantos de verdade — a ponta do gancho, o
  * bico da entreperna —, e num molde isso é estrago: aquele bico é ponto de
@@ -152,14 +171,63 @@ function cubicaPorMinimosQuadrados(pontos, t, tangenteInicial, tangenteFinal) {
   ];
 }
 
-/** O ponto que mais se afasta da curva, e o quanto. */
+/** Distância de um ponto ao segmento `u`-`v`. */
+function aoSegmento(p, u, v) {
+  const dx = v.x - u.x;
+  const dy = v.y - u.y;
+  const t2 = dx * dx + dy * dy;
+  const t = t2 > 0 ? Math.max(0, Math.min(1, ((p.x - u.x) * dx + (p.y - u.y) * dy) / t2)) : 0;
+  return Math.hypot(u.x + t * dx - p.x, u.y + t * dy - p.y);
+}
+
+/**
+ * O quanto a curva se afasta do trecho, e onde partir se for demais.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE A CONTA ÓBVIA NÃO SERVE
+ * ---------------------------------------------------------------------------
+ *
+ * O jeito clássico — e o que estava aqui — é medir, para cada ponto do trecho,
+ * a distância dele até o ponto da curva no seu `t`. É barato e está ERRADO de
+ * um jeito que não aparece: aquele `t` é um palpite (comprimento de corda), e
+ * quando ele erra, a curva passa perto de cada ponto NO PONTO MEDIDO e estufa
+ * ENTRE eles. A conta diz que caberia em 2 células enquanto o traço se afasta
+ * 8 — uns 18 mm numa manga, que foi o erro que apareceu nas fotos de
+ * `lazer/Nova pasta`.
+ *
+ * O Schneider original conserta isso reparametrizando por Newton. Aqui a saída
+ * é mais direta e não depende de o `t` estar certo: a curva é PERCORRIDA e
+ * comparada com a poligonal, nos dois sentidos. É o mesmo que se mede depois,
+ * por fora, para dizer se o risco ficou bom — então é o que vale como critério.
+ */
 function maiorErro(pontos, t, curva) {
-  let pior = Math.floor(pontos.length / 2);
+  const PASSOS = 24;
+  const naLinha = [];
+  for (let k = 0; k <= PASSOS; k++) naLinha.push(naCurva(curva, k / PASSOS));
+
+  // A curva se afasta da poligonal?
   let maior = 0;
-  for (let i = 1; i < pontos.length - 1; i++) {
-    const d = dist(naCurva(curva, t[i]), pontos[i]);
-    if (d > maior) { maior = d; pior = i; }
+  for (const q of naLinha) {
+    let menor = Infinity;
+    for (let i = 0; i < pontos.length - 1; i++) {
+      const d = aoSegmento(q, pontos[i], pontos[i + 1]);
+      if (d < menor) menor = d;
+    }
+    if (menor > maior) maior = menor;
   }
+
+  // E a poligonal se afasta da curva? O ponto que mais se afasta é por onde
+  // vale a pena partir, porque é ali que a curva não deu conta da forma.
+  let pior = Math.floor(pontos.length / 2);
+  for (let i = 1; i < pontos.length - 1; i++) {
+    let menor = Infinity;
+    for (let k = 0; k < naLinha.length - 1; k++) {
+      const d = aoSegmento(pontos[i], naLinha[k], naLinha[k + 1]);
+      if (d < menor) menor = d;
+    }
+    if (menor > maior) { maior = menor; pior = i; }
+  }
+  void t;
   return { pior, maior };
 }
 
@@ -198,6 +266,52 @@ function ajustarTrecho(pontos, tangenteInicial, tangenteFinal, erroMaximo, profu
   ajustarTrecho(pontos.slice(0, pior + 1), tangenteInicial, { x: -d.x, y: -d.y }, erroMaximo, profundidade + 1, saida);
   ajustarTrecho(pontos.slice(pior), d, tangenteFinal, erroMaximo, profundidade + 1, saida);
   void meio;
+}
+
+/**
+ * Os trechos que são reta.
+ *
+ * Varredura gulosa: de cada começo, estica enquanto todo ponto do caminho
+ * ficar a menos de `tolerancia` da corda que liga as duas pontas. O trecho que
+ * estica pouco não vale — dois ou três pontos quase sempre passam no teste da
+ * corda, e aceitá-los picaria a curva inteira em retinhas.
+ *
+ * Devolve pares `[inicio, fim]` em índices do contorno.
+ */
+function trechosRetos(pontos, tolerancia, minimoDePontos, minimoDeComprimento) {
+  const n = pontos.length;
+  const daReta = (p, a, b) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const t = Math.hypot(dx, dy);
+    if (t < 1e-9) return dist(p, a);
+    return Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / t;
+  };
+
+  const achados = [];
+  let i = 0;
+  while (i < n) {
+    let melhorFim = -1;
+    // Estica enquanto couber. Pára no primeiro que não couber: a reta é um
+    // trecho contínuo, e furar o teste no meio já quer dizer que ali dobrou.
+    for (let fim = i + minimoDePontos; fim < n; fim++) {
+      const a = pontos[i];
+      const b = pontos[fim];
+      let cabe = true;
+      for (let k = i + 1; k < fim; k++) {
+        if (daReta(pontos[k], a, b) > tolerancia) { cabe = false; break; }
+      }
+      if (!cabe) break;
+      melhorFim = fim;
+    }
+    if (melhorFim > 0 && dist(pontos[i], pontos[melhorFim]) >= minimoDeComprimento) {
+      achados.push([i, melhorFim]);
+      i = melhorFim;
+    } else {
+      i++;
+    }
+  }
+  return achados;
 }
 
 /**
@@ -246,13 +360,53 @@ function cantosDo(pontos, janela, grausMinimos) {
  *
  * O caminho é FECHADO: o último nó liga no primeiro.
  */
-export function curvasDoContorno(pontos, { erroMaximo = 1.2, janelaDeCanto = 6, grausDeCanto = 55 } = {}) {
+/*
+ * Os padrões saíram de medir, não de escolher.
+ *
+ * A varredura rodou contra `D:rte\photo da laser` comparando cada ajuste com
+ * uma referência bem apertada (erro 0,2 e sem trecho reto), e olhando as duas
+ * coisas juntas — quantos nós saem e o quanto o traço se afasta:
+ *
+ *   sem reta, erro 1,2   38,8 nós/peça    0%  retas   médio 0,31   pior 8,21
+ *   tol 1,0  erro 2,0    27,6 nós/peça   29%  retas   médio 0,43   pior 8,23
+ *   tol 1,5  erro 2,0    20,9 nós/peça   44%  retas   médio 0,37   pior 5,92  <-
+ *   tol 2,5  erro 2,5    15,4 nós/peça   56%  retas   médio 0,27   pior 8,75
+ *
+ * A linha escolhida corta os nós quase pela metade e tem o PIOR afastamento
+ * menor que o do ajuste antigo — ou seja, não é troca de fidelidade por
+ * contagem; é ganho nas duas. As de baixo dão menos nós ainda, e pagam no pior
+ * caso.
+ *
+ * Em medida de verdade, numa foto de mesa a célula vale uns 1,6 mm: a
+ * tolerância de 1,5 deixa uma reta desviar 2,5 mm, e o afastamento médio de
+ * 0,37 dá 0,6 mm. Quem for mexer nestes números: remeça contra a pasta inteira,
+ * e olhe as duas colunas.
+ *
+ * Aferido depois contra `lazer/Nova pasta` (a mesma blusa nos quatro tamanhos,
+ * 12 peças), medindo nos dois sentidos contra a borda do papel: erro médio de
+ * 0,4 a 0,8 mm, pior caso de 3,5 a 4,7 mm, com 14 a 35 nós por peça. É esse o
+ * padrão de qualidade a manter — e foi essa aferição que achou o erro de 18 mm
+ * que o `maiorErro` escondia.
+ */
+export function curvasDoContorno(pontos, {
+  erroMaximo = 2.0,
+  janelaDeCanto = 6,
+  grausDeCanto = 55,
+  toleranciaDeReta = 1.5,
+  minimoDePontosNaReta = 6,
+  minimoDeComprimentoDaReta = 25,
+  minimoEntreQuebras = 4,
+  minimoEntreNos = 4,
+} = {}) {
   const n = pontos.length;
   if (n < 4) {
-    return pontos.map((p) => ({ x: p.x, y: p.y, entrada: { ...p }, saida: { ...p }, canto: true }));
+    return pontos.map((p) => ({
+      x: p.x, y: p.y, entrada: { ...p }, saida: { ...p }, canto: true, retaDepois: true,
+    }));
   }
 
   const cantos = cantosDo(pontos, Math.min(janelaDeCanto, Math.floor(n / 6) || 1), grausDeCanto);
+  const retas = trechosRetos(pontos, toleranciaDeReta, minimoDePontosNaReta, minimoDeComprimentoDaReta);
 
   /*
    * As quebras precisam ser DUAS, no mínimo, e o motivo é a volta fechada: com
@@ -268,15 +422,91 @@ export function curvasDoContorno(pontos, { erroMaximo = 1.2, janelaDeCanto = 6, 
    * Zero canto (uma forma redonda) tem o mesmo problema, e a mesma saída: parte
    * no meio, e as duas metades se encontram nas pontas.
    */
-  const quebras = cantos.slice();
-  if (quebras.length === 0) quebras.push(0);
-  if (quebras.length === 1) quebras.push((quebras[0] + Math.floor(n / 2)) % n);
-  quebras.sort((a, b) => a - b);
+  // As quebras são os cantos MAIS as pontas de cada reta: é ali que um jeito de
+  // desenhar acaba e o outro começa.
+  const quebras = new Set(cantos);
+  for (const [a, b] of retas) { quebras.add(a); quebras.add(b); }
+  if (quebras.size === 0) quebras.add(0);
+  if (quebras.size === 1) {
+    const unico = [...quebras][0];
+    quebras.add((unico + Math.floor(n / 2)) % n);
+  }
+  /*
+   * Quebras quase no mesmo lugar viram uma só.
+   *
+   * Um canto que cai a um passo da ponta de uma reta gera duas quebras
+   * vizinhas, e entre elas sai um trecho de fração de célula — dois nós
+   * praticamente empilhados. Eles não desenham nada (a mediana dos trechos é
+   * 25 células; esses davam 0,2) e atrapalham de verdade na edição: a pessoa
+   * pega um nó e o outro fica embaixo, invisível.
+   *
+   * O mínimo é em DISTÂNCIA, não em índice: o contorno já vem aliviado, e a
+   * distância entre dois índices vizinhos varia bastante ao longo da volta.
+   */
+  const ordenadas = [...quebras].sort((a, b) => a - b);
+  const ordem = [];
+  for (const q of ordenadas) {
+    const anterior = ordem.length > 0 ? ordem[ordem.length - 1] : null;
+    if (anterior !== null && dist(pontos[q], pontos[anterior]) < minimoEntreQuebras) continue;
+    ordem.push(q);
+  }
+  // A última pode ter encostado na primeira dando a volta.
+  if (ordem.length > 2 && dist(pontos[ordem[ordem.length - 1]], pontos[ordem[0]]) < minimoEntreQuebras) {
+    ordem.pop();
+  }
+  if (ordem.length < 2) {
+    ordem.length = 0;
+    ordem.push(ordenadas[0] ?? 0, ((ordenadas[0] ?? 0) + Math.floor(n / 2)) % n);
+    ordem.sort((a, b) => a - b);
+  }
 
-  const curvas = [];
-  for (let k = 0; k < quebras.length; k++) {
-    const ini = quebras[k];
-    const fim = quebras[(k + 1) % quebras.length];
+  /*
+   * O teste da reta é feito na hora, contra a CORDA do trecho.
+   *
+   * Duas versões anteriores erraram aqui, cada uma para um lado:
+   *
+   *   1. Comparando as PONTAS do trecho com as pontas da reta achada. Errava
+   *      quando um canto caía dentro de uma reta: a reta era partida, nenhuma
+   *      metade batia com o par guardado, e as duas voltavam a ser curva.
+   *   2. Marcando índice por índice e perguntando "todos os pontos deste trecho
+   *      pertencem a alguma reta?". Parecia consertar a (1) e abriu um buraco
+   *      pior: DUAS retas seguidas, de ângulos diferentes, deixam todos os seus
+   *      índices marcados — então o trecho que abrange as duas passava no
+   *      teste, e a corda entre as pontas cortava o joelho entre elas. Numa
+   *      manga isso deu 8 células de erro, uns 18 mm, num traço cuja tolerância
+   *      era 1,5.
+   *
+   * Medir a corda na hora não tem como ser enganado: a pergunta passa a ser a
+   * única que importa — "a reta que EU VOU DESENHAR passa perto de todos os
+   * pontos que ela substitui?".
+   */
+  const daReta = (q, a, b) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const t = Math.hypot(dx, dy);
+    if (t < 1e-9) return dist(q, a);
+    return Math.abs(dy * q.x - dx * q.y + b.x * a.y - b.y * a.x) / t;
+  };
+
+  /** Conta os passos de `a` até `b` dando a volta. */
+  const passosEntre = (a, b) => (b - a + n) % n;
+
+  const ehReta = (a, b) => {
+    const quantos = passosEntre(a, b);
+    if (quantos < minimoDePontosNaReta) return false;
+    const de = pontos[a];
+    const ate = pontos[b];
+    if (dist(de, ate) < minimoDeComprimentoDaReta) return false;
+    for (let k = 1; k < quantos; k++) {
+      if (daReta(pontos[(a + k) % n], de, ate) > toleranciaDeReta) return false;
+    }
+    return true;
+  };
+
+  const partes = [];
+  for (let k = 0; k < ordem.length; k++) {
+    const ini = ordem[k];
+    const fim = ordem[(k + 1) % ordem.length];
     const trecho = [];
     let i = ini;
     for (;;) {
@@ -286,34 +516,96 @@ export function curvasDoContorno(pontos, { erroMaximo = 1.2, janelaDeCanto = 6, 
       if (trecho.length > n) break; // guarda contra volta infinita
     }
     if (trecho.length < 2) continue;
+
+    if (ehReta(ini, fim)) {
+      partes.push({ reta: true, de: trecho[0], ate: trecho[trecho.length - 1] });
+      continue;
+    }
+    const curvas = [];
     const d1 = direcao(trecho[0], trecho[1]) || { x: 1, y: 0 };
     const ultimo = trecho.length - 1;
     const d2 = direcao(trecho[ultimo], trecho[ultimo - 1]) || { x: -1, y: 0 };
     ajustarTrecho(trecho, d1, d2, erroMaximo, 0, curvas);
+    for (const c of curvas) partes.push({ reta: false, curva: c });
   }
 
-  if (curvas.length === 0) {
-    return pontos.map((p) => ({ x: p.x, y: p.y, entrada: { ...p }, saida: { ...p }, canto: true }));
+  if (partes.length === 0) {
+    return pontos.map((p) => ({
+      x: p.x, y: p.y, entrada: { ...p }, saida: { ...p }, canto: true, retaDepois: true,
+    }));
   }
 
-  // As cúbicas viram nós: o fim de uma é o começo da seguinte, então cada nó
-  // guarda a alça que chega (da cúbica anterior) e a que sai (da próxima).
-  const noEhCanto = new Set();
-  let acumulado = 0;
-  for (const c of curvas) { noEhCanto.add(acumulado); acumulado++; }
+  /*
+   * As partes viram nós: o fim de uma é o começo da seguinte, então cada nó
+   * guarda a alça que CHEGA (da parte anterior) e a que SAI (da próxima).
+   *
+   * Numa reta a alça fica em cima do próprio nó — é o que diz "deste lado não
+   * há curvatura". O `retaDepois` guarda a mesma informação de forma explícita,
+   * porque comparar dois flutuantes para saber se a alça "está em cima" do nó é
+   * o tipo de teste que um arrasto de meio pixel quebra.
+   *
+   * E é exatamente aqui que nasce o nó misto: a parte que chega pode ser curva
+   * e a que sai, reta.
+   */
+  const comeco = (parte) => (parte.reta ? parte.de : parte.curva[0]);
+  const fimDe = (parte) => (parte.reta ? parte.ate : parte.curva[3]);
+  const alcaQueSai = (parte) => (parte.reta ? parte.de : parte.curva[1]);
+  const alcaQueChega = (parte) => (parte.reta ? parte.ate : parte.curva[2]);
 
   const nos = [];
-  for (let k = 0; k < curvas.length; k++) {
-    const atual = curvas[k];
-    const anterior = curvas[(k - 1 + curvas.length) % curvas.length];
+  for (let k = 0; k < partes.length; k++) {
+    const atual = partes[k];
+    const anterior = partes[(k - 1 + partes.length) % partes.length];
+    const p = comeco(atual);
+    const chega = alcaQueChega(anterior);
+    const sai = alcaQueSai(atual);
     nos.push({
-      x: atual[0].x,
-      y: atual[0].y,
-      entrada: { x: anterior[2].x, y: anterior[2].y },
-      saida: { x: atual[1].x, y: atual[1].y },
+      x: p.x,
+      y: p.y,
+      entrada: { x: chega.x, y: chega.y },
+      saida: { x: sai.x, y: sai.y },
       canto: false,
+      retaDepois: !!atual.reta,
     });
   }
+  void fimDe;
+
+  /*
+   * Passada final: nó empilhado em nó vira um nó.
+   *
+   * Fundir as quebras vizinhas resolveu metade do problema. A outra metade vem
+   * da recursão do ajuste: quando ela parte num ponto colado na ponta do
+   * trecho, sai uma cúbica de fração de célula — e dois nós separados por 0,2
+   * célula, quando a mediana dos trechos é 25.
+   *
+   * Não é perfeccionismo. Nó invisível é nó que a pessoa não consegue pegar: ela
+   * arrasta um, o de baixo fica onde estava, e o traço abre um bico que ela não
+   * entende de onde veio.
+   *
+   * Quem sai é o nó da FRENTE, e quem fica herda a alça de saída e o
+   * `retaDepois` dele — assim o trecho seguinte continua indo para o mesmo
+   * lugar, do mesmo jeito.
+   */
+  const limpos = [];
+  for (const no of nos) {
+    const ultimo = limpos.length > 0 ? limpos[limpos.length - 1] : null;
+    if (ultimo && dist(ultimo, no) < minimoEntreNos) {
+      ultimo.saida = no.saida;
+      ultimo.retaDepois = no.retaDepois;
+      ultimo.canto = ultimo.canto || no.canto;
+      continue;
+    }
+    limpos.push(no);
+  }
+  // O primeiro e o último são vizinhos na volta fechada.
+  if (limpos.length > 3 && dist(limpos[0], limpos[limpos.length - 1]) < minimoEntreNos) {
+    const fora = limpos.pop();
+    const anterior = limpos[limpos.length - 1];
+    anterior.saida = fora.saida;
+    anterior.retaDepois = fora.retaDepois;
+    anterior.canto = anterior.canto || fora.canto;
+  }
+  if (limpos.length >= 3) return limpos;
 
   // Marca como canto os nós que caíram em cima de um canto detectado.
   if (cantos.length > 0) {
@@ -327,13 +619,23 @@ export function curvasDoContorno(pontos, { erroMaximo = 1.2, janelaDeCanto = 6, 
   return nos;
 }
 
-/** Achata o caminho de nós numa poligonal, para medir caixa e área. */
+/**
+ * Achata o caminho de nós numa poligonal, para medir caixa e área.
+ *
+ * Trecho reto entra com os dois pontos e nada mais: amostrar uma reta em doze
+ * pedaços é gastar doze pontos para dizer o que dois já diziam, e a caixa e a
+ * área saem idênticas.
+ */
 export function achatarCurvas(nos, porCurva = 12) {
   if (nos.length < 2) return nos.map((n) => ({ x: n.x, y: n.y }));
   const saida = [];
   for (let i = 0; i < nos.length; i++) {
     const a = nos[i];
     const b = nos[(i + 1) % nos.length];
+    if (a.retaDepois) {
+      saida.push({ x: a.x, y: a.y });
+      continue;
+    }
     const curva = [{ x: a.x, y: a.y }, a.saida, b.entrada, { x: b.x, y: b.y }];
     for (let k = 0; k < porCurva; k++) saida.push(naCurva(curva, k / porCurva));
   }
