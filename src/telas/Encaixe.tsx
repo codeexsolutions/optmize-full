@@ -156,7 +156,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <span className="menu-suspenso ml-auto" id="menu-exportar">
 
-<button id="btn-exportar" className="btn primary btn-sm inline-flex items-center gap-1.5" type="button" aria-haspopup="menu" aria-expanded="false">
+<button id="btn-exportar" className="btn primary btn-sm inline-flex items-center gap-1.5" type="button" aria-haspopup="menu" aria-expanded="false" disabled>
 
 <svg className="size-3.5" viewBox="0 0 24 24" aria-hidden="true">
 <use href="icones.svg#share-2">
@@ -193,7 +193,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 </b>
 
 <small >
-{"Tamanho real, gravado na pasta de saída"}
+{"Para imprimir e cortar na medida certa"}
 </small>
 
 </span>
@@ -215,7 +215,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 </b>
 
 <small >
-{"O risco como imagem, na pasta de saída"}
+{"O risco como imagem, para conferir ou mandar"}
 </small>
 
 </span>

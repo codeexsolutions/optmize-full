@@ -235,6 +235,30 @@ let pecasEncaixe = [];
 let proximoIdPeca = 1;
 let ultimoResultado = null;
 
+/**
+ * Guarda (ou joga fora) o risco atual — e acende ou apaga o Exportar com ele.
+ *
+ * O botão nasce apagado e só liga quando existe encaixe feito: exportar é
+ * exportar ALGUMA COISA, e antes do cálculo não há o que sair. Ele estava
+ * sempre aceso, e clicar nele com a mesa vazia abria um menu cujos três itens
+ * não faziam nada — cada um deles começa com `if (!ultimoResultado) return`.
+ * Um botão que não recusa o clique, só o ignora, ensina a pessoa a desconfiar
+ * da tela.
+ *
+ * Todo lugar que mexe no risco passa por aqui, e é por isso que isto é uma
+ * função e não uma atribuição solta: risco perdido (peça removida, grupo
+ * mudado, lista limpa) tem que apagar o botão junto, e um `= null` esquecido
+ * num canto deixaria o Exportar aceso prometendo um risco que já não existe.
+ */
+function guardarResultado(valor) {
+  ultimoResultado = valor;
+  if (!btnExportar) return valor;
+  btnExportar.disabled = !valor;
+  // Perder o risco com o menu aberto deixaria três itens mortos à vista.
+  if (!valor) fecharMenuExportar();
+  return valor;
+}
+
 // Uma vez que a pessoa mexe no campo "Procurar por" com a própria mão, ele é
 // dela: parar de sugerir sozinho, senão trocar de tamanho de lote no meio do
 // ajuste manual apagaria o que ela acabou de escrever.
@@ -896,7 +920,7 @@ escopo.ouvir(encaixeFilesInput, "change", async () => {
 
 escopo.ouvir(btnLimparPecas, "click", () => {
   pecasEncaixe = [];
-  ultimoResultado = null;
+  guardarResultado(null);
   encaixeResultado.classList.add("hidden");
   limparErroEncaixe();
   renderPecasEncaixe();
@@ -1036,7 +1060,7 @@ function atualizarBarraDeGrupo() {
 function grupoMudou(recado) {
   renderPecasEncaixe();
   if (!ultimoResultado) return;
-  ultimoResultado = null;
+  guardarResultado(null);
   encaixeResultado.classList.add("hidden");
   encaixeAndamento.textContent = recado;
   encaixeAndamento.classList.remove("hidden");
@@ -1428,7 +1452,7 @@ escopo.ouvir(encaixePecasBody, "click", (e) => {
   const tinhaRisco = !!ultimoResultado;
   pecasEncaixe = pecasEncaixe.filter((p) => p.id !== Number(id));
   if (tinhaRisco) {
-    ultimoResultado = null;
+    guardarResultado(null);
     encaixeResultado.classList.add("hidden");
     encaixeAndamento.textContent = pecasEncaixe.length
       ? "A peça saiu da lista, então o risco anterior não vale mais. Faça o encaixe de novo."
@@ -1585,7 +1609,7 @@ async function usarEncaixeGuardado(guardado) {
   }
 
   const areaTecido = (larguraTecido * guardado.consumo) / 10000;
-  ultimoResultado = {
+  guardarResultado({
     posicoes,
     naoEncaixadas: [],
     consumo: guardado.consumo,
@@ -1604,7 +1628,7 @@ async function usarEncaixeGuardado(guardado) {
     decorridoMs: 0,
     ganhos: [],
     placar: [],
-  };
+  });
 
   renderResultado();
   encaixeAndamento.textContent =
@@ -2047,7 +2071,7 @@ async function optmizar() {
     // A busca vai para os workers (encaixe-paralelo.js) e volta com o melhor
     // de todas as fatias. Sem worker disponível, ela mesma cai na busca de uma
     // thread só — daqui não muda nada: mesma chamada, mesmo resultado.
-    ultimoResultado = await buscarMelhorEncaixeEmParalelo(itens, {
+    guardarResultado(await buscarMelhorEncaixeEmParalelo(itens, {
       larguraTecido, espaco, comprimentoBancada, passo, alturaMax, motores,
       memoria: aprendido ? aprendido.memoria : null,
       // O RECORDE VEM DA CHAVE EXATA, NÃO DO BALDE.
@@ -2101,7 +2125,7 @@ async function optmizar() {
       tentativasPorLote: loteGrande ? 1 : 8,
       deveParar: () => pararBusca,
       aoProgredir: (estado) => mostrarAndamento(estado, aprendido),
-    });
+    }));
     resultadoGeradoNesteCarregamento = true;
 
     ultimoResultado.modoDeEncaixe = modoDeEncaixe;
@@ -2471,23 +2495,26 @@ function renderResultado() {
 
 escopo.ouvir(btnBaixarEncaixe, "click", async () => {
   if (!ultimoResultado) return;
-  // 4 px por cm dá um PNG legível para levar para a mesa de corte.
-  const temp = document.createElement("canvas");
-  desenharEncaixe(temp, ultimoResultado, { escala: 4, comLegenda: true });
 
   // Nome de arquivo, e não texto de tela: a vírgula aqui é só para o PNG sair
   // batendo com o PDF, que já se chamava "encaixe-5,32m.pdf".
   const nome = `encaixe-${(ultimoResultado.consumo / 100).toFixed(2).replace(".", ",")}m.png`;
 
-  // O PNG nasce aqui no canvas (o PDF nasce no servidor), então ele sobe para
-  // cair na mesma pasta de saída — é uma exportação só, com um lugar só.
-  const imagem = await new Promise((pronto) => temp.toBlob(pronto, "image/png"));
-  if (!imagem) return mostrarErroEncaixe("Não consegui montar o PNG do risco.");
+  // Onde salvar vem antes de desenhar, como no PDF.
+  const destino = await escolherOndeSalvar(nome, "Imagem do risco", "image/png");
+  if (!destino) return;
 
   btnExportar.disabled = true;
-  btnExportarRotulo.textContent = "Gravando na pasta…";
+  btnExportarRotulo.textContent = "Gravando…";
   try {
-    mostrarOndeSalvou(await encaixeApi.salvarNaSaida(nome, imagem), nome);
+    // 4 px por cm dá um PNG legível para levar para a mesa de corte.
+    const temp = document.createElement("canvas");
+    desenharEncaixe(temp, ultimoResultado, { escala: 4, comLegenda: true });
+    const imagem = await new Promise((pronto) => temp.toBlob(pronto, "image/png"));
+    if (!imagem) throw new Error("o desenho não virou imagem.");
+
+    await destino.gravar(imagem);
+    avisarQueSalvou(destino.nome);
   } catch (err) {
     console.error("[encaixe] falhou ao salvar o PNG:", err);
     mostrarErroEncaixe(`Não consegui salvar o PNG: ${err.message}`);
@@ -2508,43 +2535,95 @@ escopo.ouvir(btnBaixarEncaixe, "click", async () => {
  */
 /*
  * ===========================================================================
- * ONDE O ARQUIVO EXPORTADO FOI PARAR
+ * ONDE SALVAR: PERGUNTA-SE ANTES, NÃO DEPOIS
  * ===========================================================================
  *
- * Exportar era `<a download>`: o navegador escolhia a pasta e a tela ficava sem
- * ter o que dizer sobre o assunto. No aplicativo instalado é pior — a janela do
- * Tauri não tem barra de downloads, e o arquivo simplesmente desaparecia.
+ * Exportar era `<a download>`: o arquivo caía onde o navegador quisesse, sem
+ * perguntar e sem dizer. No aplicativo instalado é pior — a janela do Tauri não
+ * tem barra de downloads, e o arquivo simplesmente sumia.
  *
- * Agora quem grava é o servidor, numa pasta do programa, ele abre o Explorer
- * com o arquivo já selecionado, e a resposta traz o caminho para a tela
- * repetir aqui embaixo da barra. Ver `servidor/pasta-de-saida.js`.
+ * Agora a primeira coisa que acontece ao escolher um formato é a caixa de
+ * "salvar como": a pessoa escolhe a pasta e o nome, e SÓ ENTÃO o arquivo é
+ * gerado. Quem exporta um encaixe está mandando para uma pasta de trabalho
+ * combinada, não para "Downloads" — e desistir no meio não custa os vinte
+ * segundos de montagem de um PDF que ninguém vai querer.
+ *
+ * `showSaveFilePicker` é a caixa do próprio WebView (o Tauri aqui não tem
+ * plugin de diálogo: ver src-tauri/Cargo.toml). Onde ela não existe — navegador
+ * antigo, ou uma janela sem permissão para abri-la — a exportação volta a ser
+ * download, que é a entrega de sempre. É por isso que ela é chamada ANTES de
+ * qualquer `await`: a caixa só abre enquanto o clique ainda é recente.
  */
-function mostrarOndeSalvou(arquivo, nomeSugerido) {
-  /*
-   * Sem caminho, o arquivo veio pelo cano: é o painel aberto de outra máquina
-   * da rede, onde a pasta de saída seria o disco de quem serve. Aí não há o
-   * que mostrar — há o que entregar, e a entrega é o download de sempre.
-   */
-  if (!arquivo.caminho) {
-    if (!arquivo.blob) return;
-    const endereco = URL.createObjectURL(arquivo.blob);
-    const link = document.createElement("a");
-    link.href = endereco;
-    link.download = arquivo.nome || nomeSugerido;
-    link.click();
-    URL.revokeObjectURL(endereco);
-    return;
-  }
+function escolherOndeSalvar(nomeSugerido, descricao, tipo) {
+  const extensao = nomeSugerido.slice(nomeSugerido.lastIndexOf("."));
 
+  if (!window.showSaveFilePicker) return Promise.resolve(destinoDeDownload(nomeSugerido));
+
+  return window.showSaveFilePicker({
+    suggestedName: nomeSugerido,
+    types: [{ description: descricao, accept: { [tipo]: [extensao] } }],
+  }).then(
+    (arquivo) => ({
+      nome: arquivo.name,
+      /* O corpo pode ser um cano (o PDF, que escorre do servidor) ou um blob
+         pronto (o PNG, que sai do canvas aqui mesmo). */
+      async gravar(corpo) {
+        const cano = await arquivo.createWritable();
+        if (corpo instanceof ReadableStream) await corpo.pipeTo(cano);
+        else { await cano.write(corpo); await cano.close(); }
+      },
+    }),
+    (erro) => {
+      // Desistir na caixa é uma resposta, não um defeito: devolve `null` e a
+      // exportação para por aqui, calada.
+      if (erro && erro.name === "AbortError") return null;
+      console.warn("[encaixe] a caixa de salvar não abriu; vai como download:", erro);
+      return destinoDeDownload(nomeSugerido);
+    },
+  );
+}
+
+/** O plano B: o arquivo inteiro na memória e o download de sempre. */
+function destinoDeDownload(nome) {
+  return {
+    nome,
+    async gravar(corpo) {
+      const blob = corpo instanceof ReadableStream
+        ? await new Response(corpo).blob()
+        : corpo;
+      const endereco = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = endereco;
+      link.download = nome;
+      link.click();
+      URL.revokeObjectURL(endereco);
+    },
+  };
+}
+
+/** Confirma na barra da bancada que o arquivo saiu, e com que nome. */
+function avisarQueSalvou(nome) {
   if (!encaixeAndamento) return;
-  encaixeAndamento.textContent = `Salvo em ${arquivo.caminho}`;
-  encaixeAndamento.title = arquivo.caminho;
+  encaixeAndamento.textContent = `Salvo: ${nome}`;
+  encaixeAndamento.title = nome;
   encaixeAndamento.classList.remove("hidden");
 }
 
 async function baixarEncaixeEmPdf() {
   const r = ultimoResultado;
   if (!r || r.posicoes.length === 0) return;
+
+  const metros = (cm) => (cm / 100).toFixed(2).replace(".", ",");
+  const nome = `encaixe-${metros(r.consumo)}m`;
+
+  /*
+   * PRIMEIRO onde, depois o quê. A caixa de salvar é a primeira coisa que
+   * acontece — antes de qualquer `await`, senão ela já não abre (ver
+   * `escolherOndeSalvar`) — e desistir nela não custa os vinte segundos de
+   * montagem de um PDF que ninguém ia querer.
+   */
+  const destino = await escolherOndeSalvar(`${nome}.pdf`, "PDF em tamanho real", "application/pdf");
+  if (!destino) return;
 
   // O andamento vai no botão que ABRE o menu, e não no item lá dentro: o item
   // já sumiu da tela junto com o menu, e é para o botão que a pessoa olha.
@@ -2578,11 +2657,9 @@ async function baixarEncaixeEmPdf() {
       bancada: p.bancada || 0,
     }));
 
-    const metros = (cm) => (cm / 100).toFixed(2).replace(".", ",");
-    const nome = `encaixe-${metros(r.consumo)}m`;
-
-    btnExportarRotulo.textContent = "Gravando na pasta…";
-    const arquivo = await encaixeApi.pdf({
+    // O PDF escorre do servidor direto para o arquivo escolhido: ele não passa
+    // inteiro pela memória do navegador em nenhum momento.
+    const cano = await encaixeApi.pdf({
       sessao,
       larguraTecido: r.larguraTecido,
       consumo: r.consumo,
@@ -2591,7 +2668,9 @@ async function baixarEncaixeEmPdf() {
       posicoes,
     });
 
-    mostrarOndeSalvou(arquivo, `${nome}.pdf`);
+    btnExportarRotulo.textContent = "Gravando…";
+    await destino.gravar(cano);
+    avisarQueSalvou(destino.nome);
 
   } catch (err) {
     // O recado amigável não pode ser o fim da linha: erro de programa aqui

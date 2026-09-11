@@ -79,9 +79,6 @@ const router = express.Router();
  * A pasta é apagada quando o PDF sai, e um relógio recolhe o que ficou para
  * trás quando alguém desiste no meio.
  */
-const { guardarNaSaida, pastaDeSaida, nomeLivre, nomeLimpo, revelar, pedidoDaMesmaMaquina }
-  = require("./pasta-de-saida");
-
 const artesGuardadas = new Map();
 const VALIDADE_MS = 10 * 60 * 1000;
 
@@ -378,94 +375,22 @@ router.post("/pdf", (req, res) => {
     }
   };
 
-  /*
-   * O PDF VAI PARA A PASTA DE SAÍDA, E NÃO PARA O NAVEGADOR.
-   *
-   * Ele já nasce aqui no servidor, e o caminho antigo o mandava de volta pelo
-   * cano só para o navegador gravá-lo em algum lugar que a tela não conhece —
-   * um encaixe de 11 metros atravessando a rede local duas vezes para acabar
-   * perdido em "Downloads". Agora ele é escrito direto, o Explorer abre com o
-   * arquivo selecionado, e a resposta diz o endereço para a tela repetir.
-   *
-   * Só que isto vale para quem está NESTA máquina. O servidor escuta a rede, e
-   * do computador do lado a pasta de saída seria o disco errado — lá a entrega
-   * volta a ser pelo cano, que é a única que atravessa a rede. Ver
-   * `pedidoDaMesmaMaquina`.
-   */
-  const paraAPasta = pedidoDaMesmaMaquina(req);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${nome || "encaixe"}.pdf"`);
 
-  if (!paraAPasta) {
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${nome || "encaixe"}.pdf"`);
-
-    // `montarPdf` é assíncrona (ela cede a vez para o PDF escoar). O cabeçalho
-    // já foi mandado a esta altura, então não dá para responder um JSON de
-    // erro: o que resta é encerrar a resposta e deixar o registro.
-    montarPdf({ larguraTecido, consumo, posicoes, lerArte }, res).catch((erro) => {
-      console.error("[encaixe-pdf] falhou ao montar o PDF:", erro);
-      res.destroy(erro);
-    });
-
-    // O rolo sai num arquivo só (com uma página por bancada), então este pedido
-    // é o último: as artes desta sessão já cumpriram o que tinham para cumprir.
-    // A limpeza espera o fim da resposta porque `montarPdf` ainda está lendo os
-    // arquivos enquanto o PDF sai pelo cano.
-    if (sessao) res.on("close", () => apagarSessao(sessao));
-    return;
-  }
-
-  const destino = nomeLivre(pastaDeSaida(), nomeLimpo(nome || "encaixe", "pdf"));
-  const arquivo = fs.createWriteStream(destino);
-
-  // Aqui o cabeçalho ainda não saiu, então uma falha no meio PODE virar um JSON
-  // de erro — e vira. O arquivo pela metade é apagado: meio PDF na pasta de
-  // saída é pior do que PDF nenhum, porque parece pronto.
-  const pronto = new Promise((resolver, recusar) => {
-    arquivo.on("error", recusar);
-    arquivo.on("finish", resolver);
+  // `montarPdf` é assíncrona (ela cede a vez para o PDF escoar). O cabeçalho já
+  // foi mandado a esta altura, então não dá para responder um JSON de erro: o
+  // que resta é encerrar a resposta e deixar o registro.
+  montarPdf({ larguraTecido, consumo, posicoes, lerArte }, res).catch((erro) => {
+    console.error("[encaixe-pdf] falhou ao montar o PDF:", erro);
+    res.destroy(erro);
   });
 
-  montarPdf({ larguraTecido, consumo, posicoes, lerArte }, arquivo)
-    .then(() => pronto)
-    .then(() => {
-      revelar(destino);
-      res.json({ ok: true, caminho: destino, pasta: pastaDeSaida(), nome: path.basename(destino) });
-    })
-    .catch((erro) => {
-      console.error("[encaixe-pdf] falhou ao montar o PDF:", erro);
-      try { fs.rmSync(destino, { force: true }); } catch { /* já não estava lá */ }
-      res.status(500).json({ error: `Não deu para gravar o PDF: ${erro.message}` });
-    })
-    .finally(() => {
-      if (sessao) apagarSessao(sessao);
-    });
-});
-
-/**
- * Guarda na pasta de saída um arquivo que a TELA montou — hoje, o PNG do risco.
- *
- * O PDF nasce no servidor e por isso nem passa por aqui; o PNG sai do canvas,
- * então ele sobe em binário puro (mesma razão do `/arte`: base64 dentro de
- * JSON engorda um terço à toa).
- */
-router.post("/salvar", express.raw({ limit: "400mb", type: () => true }), (req, res) => {
-  if (!req.body || !req.body.length) {
-    return res.status(400).json({ error: "Não chegou arquivo nenhum para salvar." });
-  }
-  // Pela rede não há pasta de saída que sirva: o arquivo volta como download.
-  // Mesma regra do PDF, acima.
-  if (!pedidoDaMesmaMaquina(req)) {
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Disposition",
-      `attachment; filename="${nomeLimpo(String(req.query.nome || ""), "png")}"`);
-    return res.end(req.body);
-  }
-
-  try {
-    res.json({ ok: true, ...guardarNaSaida(String(req.query.nome || ""), req.body, "png") });
-  } catch (erro) {
-    res.status(500).json({ error: `Não deu para gravar na pasta de saída: ${erro.message}` });
-  }
+  // O rolo sai num arquivo só (com uma página por bancada), então este pedido é
+  // o último: as artes desta sessão já cumpriram o que tinham para cumprir. A
+  // limpeza espera o fim da resposta porque `montarPdf` ainda está lendo os
+  // arquivos enquanto o PDF sai pelo cano.
+  if (sessao) res.on("close", () => apagarSessao(sessao));
 });
 
 module.exports = router;
