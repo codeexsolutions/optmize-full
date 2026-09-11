@@ -146,15 +146,24 @@ async function main() {
     'com o nome do projeto no topo');
   const campoDoRotulo = texto =>
     [...editor().querySelectorAll('label')].find(l=>l.textContent.includes(texto)).querySelector('input,select');
-  assert.equal(campoDoRotulo('Folga entre peças').value,'5');
   assert.equal(campoDoRotulo('Largura do tecido').value,'160');
+  // A folga saiu da tela: quem a decide e o confere do Optmizar.
+  assert.equal([...editor().querySelectorAll('label')]
+    .some(l=>/Folga entre peças/.test(l.textContent)),false,
+    'a folga nao e mais perguntada aqui');
 
   // "Salvar", e nao "Levar pro Encaixe": os dois comecam com a mesma palavra
   // em telas diferentes, e o primeiro que casa e o que se quer aqui.
   await click([...editor().querySelectorAll('button')].find(b=>b.textContent.trim() === 'Salvar'));
   const gravacoes=requests.filter(r=>r[0]==='/api/projetos/2' && r[1]==='PUT');
   assert.equal(gravacoes.length,1,'StrictMode não duplica a gravação');
-  assert.equal(JSON.parse(gravacoes[0][2]).espaco,5,'Espaçamento salvo continua em milímetros');
+  /*
+   * A folga saiu da TELA, nao do BANCO. Esta linha e a trava disso: gravar um
+   * projeto antigo tem que devolver o numero que ele ja tinha, em milimetro.
+   * Zera-lo seria perder, na primeira gravacao, um valor que alguem escolheu.
+   */
+  assert.equal(JSON.parse(gravacoes[0][2]).espaco,5,
+    'o espacamento guardado sobrevive a saida do campo, e em milimetros');
 
   // ---------- Encaixe: o trabalho sobrevive a troca de aba ----------
   await irPara('encaixe');

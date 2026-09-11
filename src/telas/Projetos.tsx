@@ -55,6 +55,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useDialogo } from "../casca/Dialogo";
 import { Icone } from "../casca/Icone";
 import { Botao, BotaoDeIcone } from "../casca/Botao";
+import { Modal } from "../casca/Modal";
 import { projetosApi, type Cliente, type Projeto, type ProjetoNaLista } from "../api/projetos";
 import { medidasDoArquivo, pixelsPorCmDoArquivo, PPCM_PADRAO } from "../motores/medidaDoArquivo";
 import { useLigacao } from "../producao/ligacao";
@@ -438,10 +439,11 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
   const [nome, setNome] = useState(projeto.nome);
   const [observacoes, setObservacoes] = useState(projeto.observacoes || "");
   const [larguraTecido, setLarguraTecido] = useState(projeto.largura_tecido?.toString() ?? "");
-  const [espaco, setEspaco] = useState(projeto.espaco?.toString() ?? "");
   const [comprimento, setComprimento] = useState(projeto.comprimento_bancada?.toString() ?? "");
   const [giro, setGiro] = useState(projeto.giro || "180");
   const [unidades, setUnidades] = useState("1");
+  /** A caixa que pergunta quantas unidades, no caminho para o Encaixe. */
+  const [perguntandoQuantas, setPerguntandoQuantas] = useState(false);
   const [pecas, setPecas] = useState<Peca[]>(projeto.pecas);
   const [erro, setErro] = useState("");
   const [status, setStatus] = useState("");
@@ -536,7 +538,13 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
         nome: nome.trim(),
         observacoes: observacoes.trim(),
         larguraTecido: larguraTecido === "" ? null : Number(larguraTecido),
-        espaco: espaco === "" ? null : Number(espaco),
+        /*
+         * A folga saiu da tela, mas NÃO do banco: quem decide a folga é o
+         * confere do Optmizar, com o padrão dele. O valor que o projeto já
+         * tinha vai de volta como veio — apagá-lo seria perder, na primeira
+         * gravação de um projeto antigo, um número que alguém escolheu.
+         */
+        espaco: projeto.espaco,
         comprimentoBancada: comprimento === "" ? null : Number(comprimento),
         giro,
         pecas: pecas.map((peca) => ({
@@ -567,6 +575,7 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
     if (pecas.length === 0) { setErro("O projeto não tem nenhuma arte para encaixar."); return; }
     if (!ligacao) { setErro("O editor de produção não está montado."); return; }
     if (!await salvar()) return;
+    setPerguntandoQuantas(false);
 
     const quantas = Math.max(1, Math.floor(Number(unidades) || 1));
     const paraEnviar = pecas.slice();
@@ -588,13 +597,14 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
         ajustes: {
           larguraTecido: larguraTecido === "" ? null : Number(larguraTecido),
           /*
-           * O projeto guarda a folga em MILÍMETRO (é o que o campo desta tela
-           * pergunta) e o Encaixe trabalha em CENTÍMETRO. A conversão é aqui,
-           * na passagem, e não no que está gravado: mexer na unidade do banco
-           * reinterpretaria todo projeto já salvo — 5 viraria 5 cm, dez vezes
-           * a folga, e o tecido a mais só apareceria depois de imprimir.
+           * A FOLGA NÃO VAI DAQUI. Ela é do confere do Optmizar, e vale o
+           * padrão dele — `null` quer dizer "não mexa no que está lá".
+           *
+           * O projeto continua guardando o número que tinha (ver `salvar`),
+           * mas a tela parou de perguntá-lo: eram dois lugares decidindo a
+           * mesma coisa, e o que valia era o último a escrever no campo.
            */
-          espaco: espaco === "" ? null : Number(espaco) / 10,
+          espaco: null,
           comprimentoBancada: comprimento === "" ? null : Number(comprimento),
           giro,
         },
@@ -648,6 +658,11 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
           />
         </div>
 
+        {/*
+          Aqui em cima ficam só as ações do CADASTRO. O que leva o trabalho
+          adiante mora no pé da tela, onde o olho termina de ler o projeto —
+          ver o rodapé.
+        */}
         <span className="flex shrink-0 items-center gap-2">
           <BotaoDeIcone title="Excluir projeto" perigoso onClick={() => void excluir()}>
             <Icone referencia="icones.svg#trash-2" className="size-3.5" />
@@ -659,14 +674,6 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
             }}
           >
             Salvar
-          </Botao>
-          <Botao
-            jeito="primario"
-            tamanho="pequeno"
-            onClick={() => void mandarParaOEncaixe()}
-            icone={<Icone referencia="icones.svg#blocks" className="size-3.5" />}
-          >
-            Levar pro Encaixe
           </Botao>
         </span>
       </header>
@@ -794,19 +801,16 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
         <p className="mt-6 mb-1 text-[10px] font-bold tracking-widest text-tinta-fraca uppercase">
           Ajustes do encaixe
         </p>
-        <p className="mt-0 mb-3 text-xs text-tinta-apagada">
+        <p className="mt-0 mb-3 text-xs leading-relaxed text-tinta-apagada">
           Guardados com o projeto, para a repetição já sair calculada do mesmo jeito.
+          A <strong className="font-semibold text-tinta-fraca">folga entre as peças</strong> não
+          está aqui de propósito: quem a decide é o confere do Optmizar, com o padrão dele.
         </p>
 
         <div className="flex flex-wrap gap-3">
           <CampoDoAjuste rotulo="Largura do tecido (cm)">
             <input type="number" min="10" step="1" placeholder="160"
               value={larguraTecido} onChange={(e) => setLarguraTecido(e.target.value)} className={CAMPO} />
-          </CampoDoAjuste>
-
-          <CampoDoAjuste rotulo="Folga entre peças (mm)">
-            <input type="number" min="0" max="100" step="1" placeholder="5"
-              value={espaco} onChange={(e) => setEspaco(e.target.value)} className={CAMPO} />
           </CampoDoAjuste>
 
           <CampoDoAjuste rotulo="Comprimento da bancada (cm)">
@@ -831,29 +835,90 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
         )}
       </div>
 
-      {/* ------------------------------------------------- a conta, no pé */}
-      <footer className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-linha bg-painel-suave px-4 py-2.5">
-        <label className="flex shrink-0 items-center gap-2">
-          <span className="text-[10px] font-bold tracking-widest text-tinta-fraca uppercase">Unidades</span>
+      {/*
+        ---------------------------------------------------------------------
+        O PÉ: É DAQUI QUE O TRABALHO SAI
+        ---------------------------------------------------------------------
+
+        O botão estava no canto superior direito, do tamanho dos outros dois, e
+        é o mais importante da tela — o que leva o pedido para o tecido. Agora
+        ele fecha a leitura: o projeto é lido de cima para baixo e, no fim,
+        está a saída, grande e sozinha, sem disputar com "Salvar".
+
+        Ele não vai direto: abre o confere das unidades, que é onde a
+        quantidade é decidida.
+      */}
+      <footer className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-linha bg-painel-suave px-4 py-3">
+        <span className="min-w-0 flex-1 text-xs leading-relaxed text-tinta-apagada">
+          {pecas.length === 0
+            ? "Mande as artes acima para poder encaixar."
+            : <>
+                {porUnidade} peça(s) por unidade pronta. O cálculo não começa sozinho: no Encaixe
+                você escolhe o tempo de procura e aperta{" "}
+                <strong className="font-semibold text-tinta-fraca">Optmizar</strong>.
+              </>}
+        </span>
+
+        <Botao
+          jeito="primario"
+          tamanho="grande"
+          disabled={pecas.length === 0}
+          onClick={() => setPerguntandoQuantas(true)}
+          icone={<Icone referencia="icones.svg#blocks" className="size-4" />}
+          className="px-7 text-base"
+        >
+          Levar pro Encaixe
+        </Botao>
+      </footer>
+
+      {/*
+        O confere das unidades. Uma coisa só é perguntada aqui — quantas peças
+        prontas —, porque é a única que muda de um pedido para o outro: as
+        artes e a largura do tecido ficam guardadas no projeto, a quantidade
+        não.
+      */}
+      <Modal
+        aberto={perguntandoQuantas}
+        aoFechar={() => setPerguntandoQuantas(false)}
+        titulo="Levar pro Encaixe"
+        icone="icones.svg#blocks"
+        rodape={
+          <>
+            <Botao onClick={() => setPerguntandoQuantas(false)}>Cancelar</Botao>
+            <Botao
+              jeito="primario"
+              onClick={() => void mandarParaOEncaixe()}
+              icone={<Icone referencia="icones.svg#blocks" className="size-4" />}
+            >
+              Levar
+            </Botao>
+          </>
+        }
+      >
+        <label className="block">
+          <span className="mb-1.5 block text-[10px] font-bold tracking-widest text-tinta-fraca uppercase">
+            Quantas peças prontas
+          </span>
           <input
             type="number" min="1" step="1"
-            value={unidades} onChange={(e) => setUnidades(e.target.value)}
-            className="w-20 rounded-lg border border-linha bg-painel px-2 py-1 text-center font-mono text-sm text-tinta focus:border-[var(--accent-line)] focus:outline-none"
+            autoFocus
+            value={unidades}
+            onChange={(e) => setUnidades(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void mandarParaOEncaixe(); }}
+            className="h-12 w-full rounded-xl border border-linha bg-painel px-3.5 text-center font-mono text-xl text-tinta focus:border-[var(--accent-line)] focus:outline-none"
           />
         </label>
 
-        {/* A conta que a pessoa faria de cabeça: quantas peças vão ao encaixe. */}
-        <span className="font-mono text-xs text-tinta-fraca">
-          {pecas.length === 0
-            ? ""
-            : `${porUnidade} peça(s) por unidade × ${quantas} = ${porUnidade * quantas} peça(s) no encaixe`}
-        </span>
+        {/* A conta que a pessoa faria de cabeça, feita à vista dela. */}
+        <p className="mt-3 mb-0 font-mono text-xs text-tinta-fraca">
+          {porUnidade} peça(s) por unidade × {quantas} ={" "}
+          <strong className="font-semibold text-ambar">{porUnidade * quantas} peça(s)</strong> no encaixe
+        </p>
 
-        <span className="ml-auto text-xs text-tinta-apagada">
-          O cálculo não começa sozinho: no Encaixe você escolhe o tempo de procura e aperta{" "}
-          <strong className="font-semibold text-tinta-fraca">Optmizar</strong>.
-        </span>
-      </footer>
+        <p className="mt-2 mb-0 text-xs leading-relaxed text-tinta-apagada">
+          O projeto é salvo antes de ir. A folga entre as peças é a do confere do Optmizar.
+        </p>
+      </Modal>
     </section>
   );
 }
