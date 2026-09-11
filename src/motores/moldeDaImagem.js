@@ -114,11 +114,12 @@ export const SUAVIZACAO_PADRAO = 2;
 /**
  * Quanto a curva pode se afastar do contorno, em células.
  *
- * É a régua entre fidelidade e quantidade de nós. Em 1,2 células — uns 2 mm
- * numa foto de mesa inteira — uma calça sai com cerca de 30 nós em vez dos 377
- * pontos que a poligonal tinha, e o desenho continua em cima do papel.
+ * É a régua entre fidelidade e quantidade de nós, e o número saiu de medir
+ * contra as fotos da fábrica — a tabela está no `ajusteDeCurvas.js`, junto dos
+ * outros padrões do ajuste. Com ele, e com os trechos retos saindo como reta,
+ * uma calça que tinha 377 pontos de poligonal sai com 16 nós.
  */
-export const ERRO_DE_CURVA_PADRAO = 1.2;
+export const ERRO_DE_CURVA_PADRAO = 2.0;
 
 /** Mancha menor que isto (fração da imagem) é sujeira. */
 const AREA_MINIMA_DA_IMAGEM = 0.005;
@@ -305,7 +306,18 @@ function pareceFolhaInteira(risco, total) {
  * @param {number} rows
  * @param {{ alivio?: number, suavizacao?: number, erroDeCurva?: number, contornar: Function, aliviar: Function }} opcoes
  */
-export function riscosDosPixels(dados, cols, rows, { alivio = ALIVIO_PADRAO, suavizacao = SUAVIZACAO_PADRAO, erroDeCurva = ERRO_DE_CURVA_PADRAO, contornar, aliviar } = {}) {
+export function riscosDosPixels(dados, cols, rows, {
+  alivio = ALIVIO_PADRAO,
+  suavizacao = SUAVIZACAO_PADRAO,
+  erroDeCurva = ERRO_DE_CURVA_PADRAO,
+  toleranciaDeReta,
+  minimoDePontosNaReta,
+  minimoDeComprimentoDaReta,
+  minimoEntreQuebras,
+  minimoEntreNos,
+  contornar,
+  aliviar,
+} = {}) {
   const passadasDeSuavizacao = Math.max(0, Math.min(4, Math.round(suavizacao)));
   if (typeof contornar !== "function" || typeof aliviar !== "function") {
     throw new Error("riscosDosPixels precisa de `contornar` e `aliviar`.");
@@ -364,9 +376,18 @@ export function riscosDosPixels(dados, cols, rows, { alivio = ALIVIO_PADRAO, sua
       // E só então as curvas. O ajuste precisa de um contorno JÁ alisado: em
       // cima da escada crua, cada degrau viraria um canto e não sobraria curva
       // nenhuma para ajustar (ver `cantosDo`, no ajusteDeCurvas).
-      const nos = curvasDoContorno(contorno, { erroMaximo: erroDeCurva });
+      const encostaNaBorda = m.caixa.minX <= 1 || m.caixa.minY <= 1
+        || m.caixa.maxX >= cols - 2 || m.caixa.maxY >= rows - 2;
+      const nos = curvasDoContorno(contorno, {
+        erroMaximo: erroDeCurva,
+        ...(toleranciaDeReta === undefined ? {} : { toleranciaDeReta }),
+        ...(minimoDePontosNaReta === undefined ? {} : { minimoDePontosNaReta }),
+        ...(minimoDeComprimentoDaReta === undefined ? {} : { minimoDeComprimentoDaReta }),
+        ...(minimoEntreQuebras === undefined ? {} : { minimoEntreQuebras }),
+        ...(minimoEntreNos === undefined ? {} : { minimoEntreNos }),
+      });
       const achatado = achatarCurvas(nos);
-      return { nos, caixa: caixaDo(achatado), area: areaDo(achatado) };
+      return { nos, caixa: caixaDo(achatado), area: areaDo(achatado), naBorda: encostaNaBorda };
     })
     .filter(Boolean);
 
@@ -382,6 +403,36 @@ export function riscosDosPixels(dados, cols, rows, { alivio = ALIVIO_PADRAO, sua
   // Da esquerda para a direita, de cima para baixo — a ordem em que a pessoa
   // lê a mesa, para a peça 3 da tela ser a terceira que ela vê na foto.
   riscos.sort((a, b) => (a.caixa.minY - b.caixa.minY) || (a.caixa.minX - b.caixa.minX));
+
+  /*
+   * Peça que encosta na borda da foto quase sempre está CORTADA pelo quadro, e
+   * este é o aviso mais importante da tela inteira.
+   *
+   * O motivo é a escala: uma peça cortada sai com a medida menor do que é, e
+   * quem a escolher para medir com a fita vai digitar o tamanho da peça
+   * INTEIRA. A conta então divide o tamanho real pelo contorno truncado, e o
+   * erro se espalha para TODAS as outras peças da foto de uma vez — forma
+   * certa, tamanho errado, que é o jeito de errar que não aparece até o tecido
+   * estar cortado.
+   *
+   * O aviso vem depois da ordenação de propósito: os números que ele cita
+   * precisam ser os mesmos que a tela desenha em cima de cada peça.
+   *
+   * Isto existia na primeira versão, para uma peça só, e eu o perdi ao passar
+   * para várias. Quem trouxe de volta foram as fotos de `lazer/Nova pasta`, em
+   * que as duas peças de corpo saem cortadas embaixo em todos os quatro
+   * tamanhos.
+   */
+  const cortadas = riscos
+    .map((r, i) => (r.naBorda ? i + 1 : 0))
+    .filter(Boolean);
+  if (cortadas.length > 0) {
+    avisos.push(
+      `A peça ${cortadas.join(", ")} encosta na borda da foto e pode estar cortada pelo quadro.`
+      + " NÃO use uma dessas para informar a medida: se ela estiver cortada, a escala sai errada"
+      + " para todas as peças da foto. Refaça a foto com os moldes inteiros dentro do quadro.",
+    );
+  }
 
   return { riscos, fundoEhClaro, limiar, descartadas, avisos };
 }
@@ -436,6 +487,7 @@ export function riscosEmCm(riscos, indice, lado, cm) {
         entrada: paraCm(r)(n.entrada),
         saida: paraCm(r)(n.saida),
         canto: !!n.canto,
+        retaDepois: !!n.retaDepois,
       })),
       // Onde a peça está no conjunto, já em centímetros — a posição dela na
       // mesa, com a moldura de sobra da foto descontada (ver acima). É o que
@@ -465,15 +517,20 @@ export function svgDosRiscos(emCm, nome = "molde") {
   }
   const traco = casas(Math.max(largura, altura) / 500);
   const caminhos = emCm.pecas.map((p) => {
-    // `C` e não `L`: o risco sai como curva de verdade, então quem abrir no
-    // CorelDRAW recebe os mesmos poucos nós que a tela mostrou, e não uma
-    // poligonal de trezentos pontos para mexer um a um.
+    /*
+     * `C` onde é curva e `L` onde é reta, e não `C` em tudo.
+     *
+     * Um `C` com as alças em cima dos nós desenha a mesma reta na tela, mas
+     * chega no CorelDRAW como um segmento de CURVA: quem for mexer ganha duas
+     * alças que não deviam existir num lado reto, e qualquer esbarrão nelas
+     * entorta a lateral do molde. `L` diz o que é.
+     */
     const em = (q) => `${casas(q.x + p.emX)} ${casas(q.y + p.emY)}`;
     const partes = [`M${em(p.nos[0])}`];
     for (let i = 0; i < p.nos.length; i++) {
       const a = p.nos[i];
       const b = p.nos[(i + 1) % p.nos.length];
-      partes.push(`C${em(a.saida)} ${em(b.entrada)} ${em(b)}`);
+      partes.push(a.retaDepois ? `L${em(b)}` : `C${em(a.saida)} ${em(b.entrada)} ${em(b)}`);
     }
     const d = partes.join(" ") + " Z";
     return `  <path d="${d}" fill="none" stroke="#000" stroke-width="${traco}"/>`;
