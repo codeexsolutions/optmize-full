@@ -32,6 +32,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
 import { ProvedorDeDialogo } from "./Dialogo";
 import { Cabecalho } from "./Cabecalho";
+import { Icone } from "./Icone";
 import { Producao } from "../producao/Producao";
 import { useTelaAtual, type NomeDeTela } from "../rotas";
 
@@ -43,33 +44,29 @@ export function Casca() {
   const irPara = (nome: NomeDeTela) => navegar(`/${nome}`);
 
   /*
-   * O ENCAIXE NÃO TEM CABEÇALHO, E NÃO TEM FOLGA.
+   * ===========================================================================
+   * AS TELAS DE BANCADA: SEM CABEÇALHO E SEM FOLGA
+   * ===========================================================================
    *
-   * É a tela em que a pessoa passa a tarde, e é a única em que o conteúdo é
-   * uma BANCADA: a lista de peças de um lado, a mesa do outro, as duas
-   * medindo-se pela janela. Um cabeçalho ali cobra 57px de altura para repetir
-   * a palavra que o menu já mostra acesa, e a folga em volta rouba mais 30 de
-   * cada lado do risco.
+   * Duas telas não são documento, são BANCADA — uma coluna de um lado, a área
+   * de trabalho do outro, as duas medindo-se pela janela:
    *
-   * Sem eles, o que sobra para a bancada é a janela inteira, sem `calc()`
-   * nenhum. E sem rolagem: o que não couber é problema de quem está dentro —
-   * a lista de peças rola sozinha, a mesa se ajusta —, nunca da página.
+   *   ENCAIXE    a lista de peças e a mesa do risco;
+   *   PROJETOS   a árvore de clientes e o projeto aberto.
    *
-   * Era assim na casca antiga (`.producao[data-tela="encaixe"] .pageheader`,
-   * em producao.css) e voltou a ser aqui.
+   * Num arranjo desses o cabeçalho cobra 57px de altura para repetir a palavra
+   * que o menu já mostra acesa, e a folga em volta rouba mais 30 de cada lado
+   * — com ela, a coluna da esquerda pareceria um cartão solto no meio da tela
+   * em vez da lateral que ela é.
+   *
+   * Sem os dois, o que sobra para a bancada é a janela inteira, sem `calc()`
+   * nenhum. E sem rolagem de página: o que não couber é problema de quem está
+   * dentro — a lista rola sozinha, a mesa se ajusta —, nunca da página.
+   *
+   * Era assim na casca antiga, para o Encaixe
+   * (`.producao[data-tela="encaixe"] .pageheader`, em producao.css).
    */
-  const bancada = tela.nome === "encaixe";
-
-  /*
-   * Telas que vão de ponta a ponta, sem a folga do miolo.
-   *
-   * A de Projetos tem a árvore encostada na borda esquerda e o editor
-   * ocupando o resto — é o desenho do Optmize Lite, e uma faixa de 30px em
-   * volta o desmancharia: a árvore pareceria um cartão solto no meio da tela
-   * em vez da lateral que ela é. O Encaixe é o mesmo caso, e ainda dispensa o
-   * cabeçalho (ver acima).
-   */
-  const semFolga = bancada || tela.nome === "projetos";
+  const bancada = tela.nome === "encaixe" || tela.nome === "projetos";
 
   /*
    * O provedor do diálogo envolve a casca inteira: a caixa de confirmar e a de
@@ -87,7 +84,30 @@ export function Casca() {
         recebe pronta, em vez de descontar o topo numa conta de viewport.
       */}
       <main className="flex h-screen flex-col overflow-hidden tela:ml-[244px] tela:max-[1100px]:ml-[78px]">
-        {!bancada && <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />}
+        {bancada ? (
+          /*
+           * O BOTÃO FLUTUANTE DA GAVETA.
+           *
+           * No celular o menu lateral é uma gaveta, e quem a abre é o botão do
+           * cabeçalho. Nas telas que não têm cabeçalho, ele precisa existir de
+           * outro jeito — senão, num telefone, dá para ENTRAR no Encaixe e não
+           * dar para sair dele.
+           *
+           * Some no `tela:` (801px para cima), onde o menu está sempre à vista.
+           * A casca antiga tinha o mesmo botão, na mesma posição, pelo mesmo
+           * motivo (`.mobile-menu-btn`, em producao.css).
+           */
+          <button
+            type="button"
+            onClick={() => setMenuAberto(true)}
+            aria-label="Abrir menu"
+            className="fixed top-2 left-2 z-60 grid size-10 place-items-center rounded-[9px] border border-linha bg-painel text-tinta shadow-lg shadow-black/40 tela:hidden"
+          >
+            <Icone referencia="icones.svg#menu" className="size-5" />
+          </button>
+        ) : (
+          <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />
+        )}
 
         {/*
           O miolo é uma COLUNA de altura total. Quem rola, no caso comum, é a
@@ -107,12 +127,12 @@ export function Casca() {
         <div
           className={[
             "flex min-h-0 flex-1 flex-col",
-            semFolga ? "overflow-hidden" : "overflow-y-auto px-3 pb-6 tela:px-[30px]",
-            // `pt-[52px]` só no celular, e só na bancada: lá o botão do menu é
-            // fixo no canto de cima e não some com o cabeçalho — sem a faixa
-            // ele cairia em cima da barra "Arquivos", que é a única saída da
-            // tela. As outras telas têm o cabeçalho, que já o acomoda.
-            bancada ? "pt-[52px] tela:pt-0" : "",
+            bancada
+              // `pt-[52px]` só no celular: sem o cabeçalho, quem abre a gaveta
+              // é o botão flutuante (abaixo), e sem esta faixa ele cairia em
+              // cima da primeira barra da tela.
+              ? "overflow-hidden pt-[52px] tela:pt-0"
+              : "overflow-y-auto px-3 pb-6 tela:px-[30px]",
           ].join(" ")}
         >
           {/*
