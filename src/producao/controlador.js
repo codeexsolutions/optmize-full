@@ -5,6 +5,7 @@
  */
 import { arredondar } from "../utils/geometria";
 import { moldeParaImagem, ehArquivoDeMolde, FORMATOS_DE_MOLDE, lerMoldeVetorial } from "../motores/moldes";
+import { ehArquivoPDF, lerArteDoPDF } from "../motores/pdfParaArte";
 import { COR_SEGURA, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
 import { encaixar, posicoesDasColocacoes, assinaturaDoTrabalho, buscarMelhorEncaixe } from "../motores/encaixeMotor";
@@ -458,6 +459,54 @@ async function montarPecaDaImagem(cru, semFundo, imagemPronta = null) {
   };
 }
 
+/**
+ * Carrega um PDF de arte: a página desenhada vira UMA peça, com a arte
+ * inteira e a medida exata que o arquivo declara.
+ *
+ * O PDF já entrava aqui antes, mas pelo caminho do molde vetorial — e lá ele
+ * era lido como MARCADOR, o que quebrava o trabalho em dezenas de peças (uma
+ * por contorno fechado do desenho) e descartava a arte, porque daquele caminho
+ * só sai geometria. Ver o cabeçalho de `pdfParaArte.js` para o estrago inteiro.
+ *
+ * Daqui pra frente a peça é indistinguível de uma que veio de PNG: mesma
+ * miniatura, mesmo `contorno: "auto"` lendo a silhueta, mesmo encaixe. Duas
+ * coisas só é que são melhores, e as duas vêm de o PDF medir em pontos:
+ *
+ *   - a largura e a altura em centímetros são exatas, sem o `(suposto)` que a
+ *     imagem sem dpi no cabeçalho carrega;
+ *   - não há fundo para tirar. A página foi desenhada com fundo transparente,
+ *     então a silhueta já nasce certa e a peça não passa pelo `tirarFundoDepois`.
+ */
+async function lerArtePDFdoArquivo(file) {
+  const arte = await lerArteDoPDF(file, { tetoDeLado: ladoDeTrabalho });
+
+  const avisos = [];
+  if (arte.paginas > 1) {
+    avisos.push(`o arquivo tem ${arte.paginas} páginas; entrou só a primeira, que é a arte da peça.`);
+  }
+
+  const doNome = lerQuantidadeDoNome(file.name.replace(/\.[^.]+$/, ""));
+  const peca = {
+    id: proximoIdPeca++,
+    nome: doNome.nome,
+    src: arte.endereco,
+    miniatura: miniaturaDaArte(arte.bitmap),
+    img: arte.bitmap,
+    pxW: arte.bitmap.width,
+    pxH: arte.bitmap.height,
+    largura: arredondar(arte.larguraCm),
+    altura: arredondar(arte.alturaCm),
+    qtd: doNome.qtd,
+    qtdDoArquivo: doNome.veioDoArquivo,
+    giro: giroPadrao(),
+    contorno: "auto", // "auto" lê a silhueta da arte; "caixa" usa o retângulo
+    // Sem "(suposto)": o dpi aqui é o que a página foi desenhada, e o tamanho
+    // em centímetros veio do próprio PDF.
+    origem: `PDF · ${Math.round(arte.ppcm * 2.54)} dpi · tamanho da página`,
+  };
+  return { pecas: [peca], avisos };
+}
+
 // Quem sabe abrir cada formato é o `moldes.js`; aqui só interessa saber se o
 // arquivo é vetorial (a leitura em si passa por `lerMoldeVetorial`).
 
@@ -851,7 +900,15 @@ async function adicionarArquivos(files) {
     await emParalelo(files.length, juntasNaLeitura(files.length), async (indice) => {
       const file = files[indice];
       try {
-        if (ehMoldeVetorial(file)) {
+        if (ehArquivoPDF(file)) {
+          // O PDF vem ANTES do molde vetorial de propósito: `ehArquivoDeMolde`
+          // também diz sim para .pdf, e era por essa porta que ele entrava e se
+          // desfazia. Na tela de Moldes a leitura como marcador continua
+          // valendo — lá um PDF pode mesmo ser um marcador.
+          const lido = await lerArtePDFdoArquivo(file);
+          prontas[indice] = lido.pecas;
+          lido.avisos.forEach((a) => recados.push(`"${file.name}": ${a}`));
+        } else if (ehMoldeVetorial(file)) {
           const lido = await lerMoldesDoArquivo(file);
           prontas[indice] = lido.pecas;
           lido.avisos.forEach((a) => recados.push(`"${file.name}": ${a}`));
