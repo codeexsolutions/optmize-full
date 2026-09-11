@@ -2469,18 +2469,32 @@ function renderResultado() {
 
 // ==================== DESENHO ====================
 
-escopo.ouvir(btnBaixarEncaixe, "click", () => {
+escopo.ouvir(btnBaixarEncaixe, "click", async () => {
   if (!ultimoResultado) return;
   // 4 px por cm dá um PNG legível para levar para a mesa de corte.
   const temp = document.createElement("canvas");
   desenharEncaixe(temp, ultimoResultado, { escala: 4, comLegenda: true });
 
-  const link = document.createElement("a");
   // Nome de arquivo, e não texto de tela: a vírgula aqui é só para o PNG sair
   // batendo com o PDF, que já se chamava "encaixe-5,32m.pdf".
-  link.download = `encaixe-${(ultimoResultado.consumo / 100).toFixed(2).replace(".", ",")}m.png`;
-  link.href = temp.toDataURL("image/png");
-  link.click();
+  const nome = `encaixe-${(ultimoResultado.consumo / 100).toFixed(2).replace(".", ",")}m.png`;
+
+  // O PNG nasce aqui no canvas (o PDF nasce no servidor), então ele sobe para
+  // cair na mesma pasta de saída — é uma exportação só, com um lugar só.
+  const imagem = await new Promise((pronto) => temp.toBlob(pronto, "image/png"));
+  if (!imagem) return mostrarErroEncaixe("Não consegui montar o PNG do risco.");
+
+  btnExportar.disabled = true;
+  btnExportarRotulo.textContent = "Gravando na pasta…";
+  try {
+    mostrarOndeSalvou(await encaixeApi.salvarNaSaida(nome, imagem), nome);
+  } catch (err) {
+    console.error("[encaixe] falhou ao salvar o PNG:", err);
+    mostrarErroEncaixe(`Não consegui salvar o PNG: ${err.message}`);
+  } finally {
+    btnExportar.disabled = false;
+    btnExportarRotulo.textContent = "Exportar";
+  }
 });
 
 /**
@@ -2492,14 +2506,40 @@ escopo.ouvir(btnBaixarEncaixe, "click", () => {
  * onde um sinal trocado passa despercebido até alguém imprimir 12 metros de
  * tecido com as peças de cabeça para baixo.
  */
-/** Manda o arquivo para o disco de quem está usando. */
-function baixarArquivo(blob, nome) {
-  const endereco = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = endereco;
-  link.download = nome;
-  link.click();
-  URL.revokeObjectURL(endereco);
+/*
+ * ===========================================================================
+ * ONDE O ARQUIVO EXPORTADO FOI PARAR
+ * ===========================================================================
+ *
+ * Exportar era `<a download>`: o navegador escolhia a pasta e a tela ficava sem
+ * ter o que dizer sobre o assunto. No aplicativo instalado é pior — a janela do
+ * Tauri não tem barra de downloads, e o arquivo simplesmente desaparecia.
+ *
+ * Agora quem grava é o servidor, numa pasta do programa, ele abre o Explorer
+ * com o arquivo já selecionado, e a resposta traz o caminho para a tela
+ * repetir aqui embaixo da barra. Ver `servidor/pasta-de-saida.js`.
+ */
+function mostrarOndeSalvou(arquivo, nomeSugerido) {
+  /*
+   * Sem caminho, o arquivo veio pelo cano: é o painel aberto de outra máquina
+   * da rede, onde a pasta de saída seria o disco de quem serve. Aí não há o
+   * que mostrar — há o que entregar, e a entrega é o download de sempre.
+   */
+  if (!arquivo.caminho) {
+    if (!arquivo.blob) return;
+    const endereco = URL.createObjectURL(arquivo.blob);
+    const link = document.createElement("a");
+    link.href = endereco;
+    link.download = arquivo.nome || nomeSugerido;
+    link.click();
+    URL.revokeObjectURL(endereco);
+    return;
+  }
+
+  if (!encaixeAndamento) return;
+  encaixeAndamento.textContent = `Salvo em ${arquivo.caminho}`;
+  encaixeAndamento.title = arquivo.caminho;
+  encaixeAndamento.classList.remove("hidden");
 }
 
 async function baixarEncaixeEmPdf() {
@@ -2541,6 +2581,7 @@ async function baixarEncaixeEmPdf() {
     const metros = (cm) => (cm / 100).toFixed(2).replace(".", ",");
     const nome = `encaixe-${metros(r.consumo)}m`;
 
+    btnExportarRotulo.textContent = "Gravando na pasta…";
     const arquivo = await encaixeApi.pdf({
       sessao,
       larguraTecido: r.larguraTecido,
@@ -2550,7 +2591,7 @@ async function baixarEncaixeEmPdf() {
       posicoes,
     });
 
-    baixarArquivo(arquivo, `${nome}.pdf`);
+    mostrarOndeSalvou(arquivo, `${nome}.pdf`);
 
   } catch (err) {
     // O recado amigável não pode ser o fim da linha: erro de programa aqui

@@ -115,7 +115,7 @@ async function principal() {
   const porta = await portaLivre();
   // Pasta de dados descartável: esta bancada nunca encosta no `dados.db` de quem roda.
   const servidor = spawn(process.execPath, [path.join(RAIZ, 'servidor', 'server.js')], {
-    env: { ...process.env, PORT: String(porta), OPTIMIZE_DADOS: pasta },
+    env: { ...process.env, PORT: String(porta), OPTIMIZE_DADOS: pasta, OPTIMIZE_SEM_EXPLORER: '1' },
     stdio: 'ignore',
   });
 
@@ -209,12 +209,26 @@ async function principal() {
 
     const aviso = await p.$eval('#encaixe-error', (n) => (n.classList.contains('hidden') ? '' : n.textContent));
     assert.equal(aviso, '', `a exportação reclamou: ${aviso}`);
-    assert.deepEqual(respostasDoPdf, [200], 'o servidor tinha que devolver o PDF');
+    assert.deepEqual(respostasDoPdf, [200], 'o servidor tinha que aceitar o pedido do PDF');
+
+    /*
+     * O PDF NÃO VOLTA PELO CANO: ele é gravado na pasta de saída, e a tela diz
+     * onde. Conferir o arquivo no disco é o que prova a exportação inteira —
+     * o 200 sozinho não diz se sobrou um PDF de zero byte.
+     */
+    const recado = await p.$eval('#encaixe-andamento', (n) => n.textContent);
+    assert.match(recado, /^Salvo em .+\.pdf$/, `a tela tinha que dizer onde salvou (veio "${recado}")`);
+
+    const saida = path.join(pasta, 'exportado');
+    const gravados = fs.readdirSync(saida).filter((n) => n.endsWith('.pdf'));
+    assert.equal(gravados.length, 1, `tinha que sobrar um PDF em ${saida} (veio ${gravados.length})`);
+    const tamanho = fs.statSync(path.join(saida, gravados[0])).size;
+    assert.ok(tamanho > 5000, `o PDF saiu pequeno demais para ter as artes (${tamanho} bytes)`);
 
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
-      + ` (${risco}) e o PDF veio do servidor.`);
+      + ` (${risco}) e o PDF ficou gravado na pasta de saída.`);
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();
