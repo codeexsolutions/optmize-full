@@ -64,6 +64,7 @@ import { Cor } from "./telas/Cor";
 const Moldes = lazy(() => import("./telas/Moldes").then((m) => ({ default: m.Moldes })));
 const Projetos = lazy(() => import("./telas/Projetos").then((m) => ({ default: m.Projetos })));
 const Vetor = lazy(() => import("./telas/Vetor").then((m) => ({ default: m.Vetor })));
+const Digitalizar = lazy(() => import("./telas/Digitalizar").then((m) => ({ default: m.Digitalizar })));
 const Imagem = lazy(() => import("./telas/Imagem").then((m) => ({ default: m.Imagem })));
 const Macros = lazy(() => import("./telas/Macros").then((m) => ({ default: m.Macros })));
 const Impressoras = lazy(() => import("./telas/Impressoras").then((m) => ({ default: m.Impressoras })));
@@ -74,7 +75,7 @@ const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default:
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
 
 export type NomeDeTela =
-  | "cor" | "moldes" | "projetos" | "encaixe" | "vetor" | "imagem" | "macros"
+  | "cor" | "moldes" | "projetos" | "encaixe" | "vetor" | "digitalizar" | "imagem" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
   | "historico" | "reposicao";
 
@@ -143,6 +144,15 @@ export const TELAS: readonly Tela[] = [
     apoioTopo: "Transforme uma imagem em desenho vetorial para corte e impressão.",
     icone: "icones.svg#spline",
     Componente: Vetor,
+  },
+  {
+    nome: "digitalizar",
+    grupo: "producao",
+    rotulo: "Digitalizar",
+    apoioMenu: "Molde a partir da foto",
+    apoioTopo: "Mande a imagem do molde e tire o risco dele, na medida que você informar.",
+    icone: "icones.svg#scan-line",
+    Componente: Digitalizar,
   },
 
   // ------------------------------------------------------------ Impressão
