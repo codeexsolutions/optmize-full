@@ -322,22 +322,6 @@
   :where(.producao) .encaixe-stats .stat-valor, :where(.producao) .encaixe-stats .stat-label { color: #000; }
 }
 
-:where(.producao) .tempo-de-procura {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 0 auto;
-  font-size: 0.82rem;
-  color: var(--text-dim);
-  white-space: nowrap;
-}
-
-:where(.producao) .tempo-de-procura input {
-  width: 68px;
-  padding: 6px 8px;
-  text-align: center;
-}
-
 :where(.producao) .etiqueta-tamanho {
   display: inline-block;
   padding: 2px 8px;

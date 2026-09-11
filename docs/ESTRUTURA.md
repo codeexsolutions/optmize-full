@@ -82,10 +82,14 @@ pasta `public/`, com a tela antiga em `<script>` soltos; ela foi apagada, e
 redirecionamento que carrega o `#` adiante.)
 
 - `src/main.tsx`: a montagem do React e o CSS.
-- `src/App.tsx`: as rotas. A tabela de telas vira `react-router` aqui — em
-  `HashRouter`, porque o endereço do painel sempre foi `#/moldes` e o "#" nunca
-  chega ao Express, que por isso serve `dist/` como arquivo estático e não
-  precisa de rota-curinga.
+- `src/App.tsx`: as rotas. A tabela de telas vira `react-router` aqui, em
+  `BrowserRouter`: o endereço é `/moldes`, sem "#". Quem sustenta isso do outro
+  lado é a **rota-curinga** do `servidor/server.js`, que devolve o `index.html`
+  para todo endereço que não seja `/api`, `/uploads` ou arquivo existente —
+  sem ela, abrir `/encaixe` direto ou recarregar a página numa tela daria 404.
+  Vale igual no app instalado, porque a janela do Tauri navega para esse mesmo
+  servidor. Link antigo com "#" continua funcionando: `main.tsx` o traduz na
+  entrada, e `/app` também.
 - `src/rotas.ts`: a tabela das telas. **Uma linha por aba, e mais nada** — quem
   acrescenta uma tela mexe aqui e no arquivo dela. Cada tela chega ao navegador
   quando é aberta (`lazy`), e não toda vez que alguém abre o painel.
@@ -100,10 +104,11 @@ redirecionamento que carrega o `#` adiante.)
   útil), e as telas que ainda usam a folha antiga fazem o mesmo pela classe
   `tela-cheia` (ver o fim de `producao.css`).
 
-  **O Encaixe não tem cabeçalho nem folga.** É a única tela cujo conteúdo é uma
-  bancada — lista de peças de um lado, mesa do outro, as duas medindo-se pela
-  janela —, e ali o cabeçalho cobraria 57px de altura para repetir o que o
-  menu já mostra aceso. Sem ele e sem a folga, o que sobra para a bancada é a
+  **O Encaixe e o Projetos não têm cabeçalho nem folga.** São as telas cujo
+  conteúdo é uma bancada — uma coluna de um lado, a área de trabalho do outro,
+  as duas medindo-se pela janela —, e ali o cabeçalho cobraria 57px de altura
+  para repetir o que o menu já mostra aceso. Sem cabeçalho, quem abre a gaveta
+  no celular é um botão flutuante no canto (a casca antiga tinha o mesmo). Sem ele e sem a folga, o que sobra para a bancada é a
   janela inteira, sem `calc()` nenhum, e sem rolagem de página: o que não
   couber é problema de quem está dentro. Era assim na casca antiga e voltou a
   ser (ver `bancada` em `casca/Casca.tsx`).
@@ -114,7 +119,10 @@ redirecionamento que carrega o `#` adiante.)
   em `estilo/entrada.css`: a linha de apoio sai, o item aperta e o ícone
   encolhe, o que faz as treze telas caberem num monitor de 1366x768 e de
   1280x720 sem cortar nem rolar.
-- `src/telas/`: uma por aba.
+- `src/telas/`: uma por aba. A de **Projetos** usa o desenho do Optmize Lite —
+  árvore de clientes à esquerda, projeto aberto à direita —, e só o desenho: a
+  estrutura continua Cliente → Projeto → peças, no `dados.db` desta máquina,
+  com o "levar pro Encaixe" de sempre. Ver o cabeçalho de `telas/Projetos.tsx`.
 - `src/motores/`: o domínio — sem React e sem a tela. Ver a regra em
   `ARQUITETURA.md`.
 - `src/utils/`: a ajuda sem dono — `geometria.ts`, `numero.ts`, `formato.ts`,

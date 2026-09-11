@@ -39,7 +39,7 @@ async function main() {
   // O bundle temporário encontra os mesmos pacotes React da aplicação.
   const Module = require('node:module');
   process.env.NODE_PATH = path.join(root,'node_modules'); Module._initPaths();
-  const dom = new JSDOM('<!doctype html><div id="raiz"></div>', { url:'http://localhost/#/moldes', pretendToBeVisual:true });
+  const dom = new JSDOM('<!doctype html><div id="raiz"></div>', { url:'http://localhost/moldes', pretendToBeVisual:true });
   for(const k of ['window','document','CustomEvent','Event','EventTarget','HTMLElement','Node','getComputedStyle','MouseEvent','File','Blob','location','history','navigator']) global[k]=dom.window[k];
   global.CSS = { escape: s=>s.replace(/[^\w-]/g,'\\$&') };
   global.requestAnimationFrame=dom.window.requestAnimationFrame.bind(dom.window);
@@ -59,10 +59,16 @@ async function main() {
   const {App}=require(bundle);
   const app=createRoot(document.getElementById('raiz'));
 
-  /** Navega como o menu navega: mexendo no `#` do endereco. */
+  /*
+   * Navega como o menu navega: mexendo no HISTORICO. O endereco nao tem mais
+   * "#" (ver o cabecalho de src/App.tsx), e o `BrowserRouter` escuta o
+   * `popstate` -- `pushState` sozinho nao avisa ninguem, entao o evento vai
+   * junto, que e o que o clique num <a> faria por dentro.
+   */
   const irPara = async pagina => {
     await act(async()=>{
-      dom.window.location.hash = '#/' + pagina;
+      dom.window.history.pushState({}, '', '/' + pagina);
+      dom.window.dispatchEvent(new dom.window.PopStateEvent('popstate'));
       // As telas de rota chegam por `import()` (o `lazy` de rotas.ts): sem esta
       // volta ao laco de eventos o `<Suspense>` ainda estaria na espera.
       await new Promise(r=>setTimeout(r,0));
@@ -97,8 +103,14 @@ async function main() {
   // tras, a tela seguinte simplesmente nao rolava -- ja aconteceu.
   assert.equal(document.body.classList.contains('modal-aberto'),false,
     'e devolve a rolagem da pagina');
-  const estante = () => document.querySelector('.projeto-lista');
-  assert.match(estante().textContent,/Cliente de teste/);
+  // A tela de Projetos ganhou o desenho do Optmize Lite: a arvore de clientes
+  // fica numa <aside>, e o projeto aberto ocupa a area principal.
+  const arvore = () => [...document.querySelectorAll('aside')].find(a=>/CLIENTES|Clientes/.test(a.textContent));
+  // A arvore chega depois do pedido ao servidor: sem esta volta ao laco, ela
+  // ainda estaria em "Carregando...".
+  await act(async()=>{ await new Promise(r=>setTimeout(r,30)); });
+  assert.ok(arvore(),'a arvore de clientes apareceu');
+  assert.match(arvore().textContent,/Cliente de teste/);
 
   // ---------- A caixa de dialogo React ----------
   //
@@ -115,25 +127,48 @@ async function main() {
   await act(async()=>{ await new Promise(r=>setTimeout(r,200)); });
   assert.equal(document.querySelector('.ui-dialog-backdrop:not([id])'),null,'e fecha no Cancelar');
 
-  await click('.projeto-pasta');
-  assert.match(estante().textContent,/Uniforme/);
-  await click(botao('Abrir',estante()));
+  // Clicar no cliente abre a pasta dele na arvore; o projeto aparece dentro.
+  await click(botao('Cliente de teste',arvore()));
+  await act(async()=>{ await new Promise(r=>setTimeout(r,50)); });
+  assert.match(arvore().textContent,/Uniforme/);
+  await click(botao('Uniforme',arvore()));
+  await act(async()=>{ await new Promise(r=>setTimeout(r,50)); });
 
-  const editor = () => document.querySelector('.modal-projeto');
+  // O editor e a area principal, e nao mais um modal por cima da lista.
+  // O editor e a secao que tem o nome do projeto no topo -- procurar por
+  // `main section` acharia a bancada do Encaixe, que fica montada escondida.
+  const editor = () => {
+    const campo = document.querySelector('input[aria-label="Nome do projeto"]');
+    return campo ? campo.closest('section') : null;
+  };
   assert.ok(editor(),'o editor do projeto abriu');
+  assert.equal(document.querySelector('input[aria-label="Nome do projeto"]').value,'Uniforme',
+    'com o nome do projeto no topo');
   const campoDoRotulo = texto =>
     [...editor().querySelectorAll('label')].find(l=>l.textContent.includes(texto)).querySelector('input,select');
-  assert.equal(campoDoRotulo('Folga entre peças').value,'5');
   assert.equal(campoDoRotulo('Largura do tecido').value,'160');
+  // A folga saiu da tela: quem a decide e o confere do Optmizar.
+  assert.equal([...editor().querySelectorAll('label')]
+    .some(l=>/Folga entre peças/.test(l.textContent)),false,
+    'a folga nao e mais perguntada aqui');
 
-  await click(botao('Salvar',editor()));
+  // "Salvar", e nao "Levar pro Encaixe": os dois comecam com a mesma palavra
+  // em telas diferentes, e o primeiro que casa e o que se quer aqui.
+  await click([...editor().querySelectorAll('button')].find(b=>b.textContent.trim() === 'Salvar'));
   const gravacoes=requests.filter(r=>r[0]==='/api/projetos/2' && r[1]==='PUT');
   assert.equal(gravacoes.length,1,'StrictMode não duplica a gravação');
-  assert.equal(JSON.parse(gravacoes[0][2]).espaco,5,'Espaçamento salvo continua em milímetros');
+  /*
+   * A folga saiu da TELA, nao do BANCO. Esta linha e a trava disso: gravar um
+   * projeto antigo tem que devolver o numero que ele ja tinha, em milimetro.
+   * Zera-lo seria perder, na primeira gravacao, um valor que alguem escolheu.
+   */
+  assert.equal(JSON.parse(gravacoes[0][2]).espaco,5,
+    'o espacamento guardado sobrevive a saida do campo, e em milimetros');
 
   // ---------- Encaixe: o trabalho sobrevive a troca de aba ----------
   await irPara('encaixe');
-  assert.equal(document.querySelector('.modal-projeto'),null,'sair de Projetos fecha o editor');
+  assert.equal(document.querySelector('input[aria-label="Nome do projeto"]'),null,
+    'sair de Projetos larga o editor');
   assert.equal(document.body.classList.contains('dialog-open'),false);
   document.getElementById('encaixe-largura').value='179';
 

@@ -91,8 +91,15 @@ export const encaixeApi = {
     if (!envio.ok) throw new Error("o servidor não aceitou uma das artes.");
   },
 
-  /** Monta o PDF com as artes já enviadas nesta sessão, e devolve o arquivo. */
-  async pdf(corpo: unknown): Promise<Blob> {
+  /**
+   * Monta o PDF com as artes já enviadas nesta sessão e devolve o CANO dele.
+   *
+   * O corpo vem como fluxo, e não como `Blob`, porque quem grava é o arquivo
+   * que a pessoa escolheu antes de exportar (ver `escolherOndeSalvar`, na
+   * tela): o PDF escorre do servidor direto para o disco, sem passar inteiro
+   * pela memória do navegador. Um encaixe de 11 metros não é pequeno.
+   */
+  async pdf(corpo: unknown): Promise<ReadableStream<Uint8Array>> {
     const resposta = await fetch("/api/encaixe/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -102,7 +109,8 @@ export const encaixeApi = {
       const erro = await resposta.json().catch(() => ({}));
       throw new Error(erro.error || "O servidor não conseguiu gerar o PDF.");
     }
-    return resposta.blob();
+    if (!resposta.body) throw new Error("O servidor não mandou o PDF.");
+    return resposta.body;
   },
 };
 

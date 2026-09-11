@@ -235,3 +235,32 @@
   --font-titulo: var(--font-display);
   --font-texto: var(--font-body);
 }
+
+/*
+ * ===========================================================================
+ * A ENTRADA DE UM ITEM DE LISTA
+ * ===========================================================================
+ *
+ * A tela de Projetos veio do Optmize Lite, e lá cada item da árvore entra
+ * deslizando da esquerda — é `framer-motion` naquele projeto.
+ *
+ * Aqui é CSS: o que se anima é a entrada de um item, uma transição de 150ms
+ * que ninguém interrompe no meio. Trazer a biblioteca custaria ~35 kB dentro
+ * do instalador para fazer exatamente isto.
+ *
+ * `prefers-reduced-motion` desliga: quem pediu ao sistema para parar de mexer
+ * as coisas tem motivo, e uma lista que salta é justamente o tipo de coisa que
+ * incomoda.
+ */
+@keyframes animar-entrada {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.animar-entrada {
+  animation: animar-entrada 0.15s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animar-entrada { animation: none; }
+}
