@@ -266,9 +266,8 @@ programa, não de tela.
 A casca nova nasceu como um REDESENHO da antiga, e enquanto as duas conviveram
 isso era defeito, não melhoria. Então `src/casca/Menu.tsx` e `Cabecalho.tsx`
 copiaram as medidas de `public/style.css` e `public/interface.css`: largura de
-252px, os recuos, o `logo.png` (que passou a morar em `estatico/`, servido
-pelas duas), o ativo com borda âmbar e a barrinha de 3px, e o relógio no pé do
-menu — onde a casca antiga já o tinha posto, e pelo motivo dela: o cabeçalho
+252px, os recuos, o ativo com borda âmbar e a barrinha de 3px, e o relógio no
+pé do menu — onde a casca antiga já o tinha posto, e pelo motivo dela: o cabeçalho
 some na tela de encaixe e levava o relógio junto.
 
 Até a ORDEM dos itens é a mesma, e foi a antiga que cedeu: Cor saiu do meio da
@@ -359,7 +358,7 @@ junto, e os links entre as cascas deixaram de existir porque só há uma.
   carregados pelo Node em execução — por isso não entram no instalador.
 - **A rota mora no `#`.** Sem rota-curinga no Express, e recarregar a página em
   qualquer tela funciona. **O grupo do menu não entra no endereço**: a rota
-  continua sendo só o nome da tela (`#/historico`), então mudar uma tela de
+  continua sendo só o nome da tela (`/historico`), então mudar uma tela de
   grupo não quebra link guardado nem favorito.
 - **Botão em `/app` precisa do reset de `#raiz`.** Sem o preflight do Tailwind,
   o navegador estiliza `<button>` como controle do sistema. O reset mínimo está

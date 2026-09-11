@@ -98,14 +98,6 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 {"Optmizar"}
 </button>
 
-<label className="tempo-de-procura mt-0! w-full justify-center">
-{"Procurar por\n                  "}
-
-
-<input type="number" id="encaixe-tempo" min="1" max="300" step="1" defaultValue="10" />
-{"\n                  segundos\n                "}
-</label>
-
 </div>
 
 </aside>
@@ -164,7 +156,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <span className="menu-suspenso ml-auto" id="menu-exportar">
 
-<button id="btn-exportar" className="btn primary btn-sm inline-flex items-center gap-1.5" type="button" aria-haspopup="menu" aria-expanded="false">
+<button id="btn-exportar" className="btn primary btn-sm inline-flex items-center gap-1.5" type="button" aria-haspopup="menu" aria-expanded="false" disabled>
 
 <svg className="size-3.5" viewBox="0 0 24 24" aria-hidden="true">
 <use href="icones.svg#share-2">
@@ -644,6 +636,8 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </div>
 
+<div className="campo-par">
+
 <label className="campo-medida">
 
 <span className="campo-rotulo">
@@ -661,6 +655,26 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 </span>
 
 </label>
+
+<label className="campo-medida">
+
+<span className="campo-rotulo">
+{"Tempo de procura"}
+</span>
+
+<span className="campo-caixa">
+
+<input type="number" id="encaixe-tempo" min="1" max="300" step="1" defaultValue="10" />
+
+<span className="campo-unidade">
+{"s"}
+</span>
+
+</span>
+
+</label>
+
+</div>
 
 <label className="campo-medida">
 
