@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Sonda do Optimize</title>
+
+<!--
+  ===========================================================================
+  SONDA - o que roda dentro de um docker do CorelDRAW?
+  ===========================================================================
+
+  Uma pergunta so: o controle de navegador do docker e moderno (Chromium /
+  WebView2) ou e o Internet Explorer embutido de sempre (MSHTML)?
+
+  Disso depende a arquitetura inteira da macro de encaixe:
+
+    moderno  -> a tela de Encaixe do Optimize, que ja e React + WASM + Workers,
+                roda DENTRO do Corel. O motor nao sai do lugar.
+    antigo   -> nada disso carrega, e o encaixe tem que virar um endpoint em
+                Node, com o motor portado para fora do navegador.
+
+  ---------------------------------------------------------------------------
+  POR QUE ESTE ARQUIVO E ESCRITO EM JAVASCRIPT ANTIGO
+  ---------------------------------------------------------------------------
+
+  Isto aqui e ES5: var, function, nada de const, arrow, class ou crase.
+
+  Nao e desleixo, e o ponto todo. Se a pagina que TESTA se o motor e velho for
+  escrita em JavaScript novo, e o motor for velho, ela morre com erro de
+  sintaxe ANTES de rodar a primeira linha - e o docker abre em branco. Branco
+  nao responde a pergunta: pode ser IE, pode ser caminho errado, pode ser o
+  addon nao ter carregado.
+
+  Escrita em ES5, ela roda nos dois mundos e SEMPRE mostra o resultado. O teste
+  de ES6 e feito com eval dentro de try, que e a unica forma de perguntar
+  "voce entende esta sintaxe?" sem que a pergunta derrube quem nao entende.
+
+  O X-UA-Compatible IE=edge la em cima existe pela mesma razao: o IE embutido
+  costuma abrir em modo de compatibilidade antigo (IE7) mesmo em maquina com
+  IE11. Sem essa linha, a sonda mediria um IE artificialmente pior que o de
+  verdade, e a resposta sairia errada para o lado pessimista.
+
+  O CSS tambem evita flexbox e grid, pelo mesmo motivo.
+-->
+
+<style>
+  body {
+    background: #0a0a0a; color: #ffb300;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 12px; margin: 0; padding: 12px;
+  }
+  h1 { font-size: 14px; margin: 0 0 10px 0; color: #ffd54f; }
+  .veredito { padding: 10px; margin-bottom: 12px; border: 1px solid #ffb300; }
+  .bom { background: #10240f; border-color: #6abf40; color: #9ccc65; }
+  .ruim { background: #2a0f0f; border-color: #e05252; color: #ef9a9a; }
+  .neutro { background: #1a1a1a; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+  td { border-bottom: 1px solid #332a12; padding: 4px 6px; vertical-align: top; }
+  td.rotulo { color: #8d7a4a; width: 38%; }
+  td.sim { color: #9ccc65; }
+  td.nao { color: #ef9a9a; }
+  textarea {
+    width: 97%; height: 150px; background: #000; color: #ffb300;
+    border: 1px solid #332a12; font-family: Consolas, "Courier New", monospace;
+    font-size: 11px; padding: 6px;
+  }
+  button {
+    background: #1a1a1a; color: #ffb300; border: 1px solid #ffb300;
+    padding: 5px 10px; margin: 0 6px 8px 0; cursor: pointer; font-size: 11px;
+    font-family: Consolas, "Courier New", monospace;
+  }
+  p.dica { color: #8d7a4a; margin: 8px 0; }
+</style>
+</head>
+<body>
+
+<h1 id="titulo">Sonda do Optimize &mdash; o que roda aqui dentro?</h1>
+
+<div id="veredito" class="veredito neutro">medindo...</div>
+
+<table id="tabela"></table>
+
+<button onclick="testarServidor()">Testar servidor (localhost:8000)</button>
+<button onclick="testarVBA()">Acordar o VBA e ler o Application</button>
+<button onclick="procurarPonte()">Procurar a ponte com o Corel</button>
+
+<p class="dica">Selecione o texto abaixo e mande para o Claude:</p>
+<textarea id="relatorio" readonly></textarea>
+
+<script type="text/javascript">
+/* ES5 daqui para baixo. Ver o comentario no topo do arquivo. */
+
+var achados = [];
+
+/*
+ * Em qual controle esta pagina esta rodando?
+ *
+ * Isto ja foi um `?tipo=` no endereco, escrito pelo AppUI.xslt. Saiu de la
+ * porque a query string e uma das duas suspeitas do ERR_FILE_NOT_FOUND que o
+ * `browserEdge` deu na primeira tentativa (a outra e o token
+ * `[VGAppAddonsDir]`), e o endereco agora e absoluto e limpo.
+ *
+ * De todo jeito perguntar ao endereco era a maneira torta de saber. A direta
+ * e perguntar ao motor: so o Trident tem `document.documentMode`. Se ele
+ * existe, estamos no controle antigo; se nao, no novo. Alem de nao depender
+ * do endereco, isto nao tem como mentir - o `type` do XSLT diz o que foi
+ * PEDIDO, e o motor diz o que de fato subiu.
+ */
+var tipoDoDocker = (typeof document.documentMode !== "undefined")
+  ? 'type="browser" (Trident/IE)'
+  : 'type="browserEdge" (Chromium)';
+
+try {
+  document.getElementById("titulo").innerHTML =
+    'Sonda do Optimize &mdash; docker <b>' + tipoDoDocker + '</b>';
+} catch (e) {}
+
+/* bom: true verde, false vermelho, null sem cor (informativo). */
+function anotar(rotulo, valor, bom) {
+  achados.push({ rotulo: rotulo, valor: String(valor), bom: bom });
+  desenhar();
+}
+
+function escapar(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function desenhar() {
+  var tabela = document.getElementById("tabela");
+  var html = "";
+  var texto = "";
+  for (var i = 0; i < achados.length; i++) {
+    var a = achados[i];
+    var classe = a.bom === true ? "sim" : (a.bom === false ? "nao" : "");
+    html += '<tr><td class="rotulo">' + a.rotulo + '</td>';
+    html += '<td class="' + classe + '">' + escapar(a.valor) + '</td></tr>';
+    texto += a.rotulo + ": " + a.valor + "\n";
+  }
+  tabela.innerHTML = html;
+  document.getElementById("relatorio").value = texto;
+}
+
+/* ---------- os testes ---------- */
+
+/* Qual controle subiu de verdade - a linha mais importante do relatorio */
+anotar("controle do docker", tipoDoDocker, typeof document.documentMode === "undefined");
+
+/* Quem e voce */
+anotar("navigator.userAgent", navigator.userAgent, null);
+
+/* Em IE isto e um numero (7, 8, ... 11). Em Chromium e undefined. */
+var ehIE = (typeof document.documentMode !== "undefined");
+var modoDoc = ehIE ? document.documentMode : "undefined (nao e IE)";
+anotar("document.documentMode", modoDoc, !ehIE);
+
+/* WebView2 se anuncia assim */
+var ehWebView2 = false;
+try { ehWebView2 = !!(window.chrome && window.chrome.webview); } catch (e) {}
+anotar("window.chrome.webview (WebView2)", ehWebView2 ? "presente" : "ausente", ehWebView2);
+
+/*
+ * O teste que importa. eval dentro de try: sintaxe que o motor nao entende
+ * vira excecao capturavel em vez de morte da pagina.
+ */
+var temES6 = false;
+try {
+  eval("var _f = function(x){return x;}; var _g = (x) => x * 2; class _C {}");
+  temES6 = true;
+} catch (e) { temES6 = false; }
+anotar("sintaxe ES6 (arrow, class)", temES6 ? "entende" : "NAO entende", temES6);
+
+/* WASM de verdade: valida um modulo vazio, que e o menor binario legal. */
+var wasmOk = false;
+var wasmNota = "ausente";
+try {
+  if (typeof WebAssembly !== "undefined" && WebAssembly.validate) {
+    wasmOk = WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+    wasmNota = wasmOk ? "valida modulo" : "existe mas recusou o modulo";
+  }
+} catch (e) { wasmNota = "erro: " + e.message; }
+anotar("WebAssembly", wasmNota, wasmOk);
+
+/* O motor usa um worker por nucleo */
+var temWorker = (typeof Worker !== "undefined");
+anotar("Web Worker", temWorker ? "presente" : "ausente", temWorker);
+
+var temPromise = (typeof Promise !== "undefined");
+anotar("Promise", temPromise ? "presente" : "ausente", temPromise);
+
+var temFetch = (typeof fetch !== "undefined");
+anotar("fetch", temFetch ? "presente" : "ausente", temFetch);
+
+var temModulo = false;
+try {
+  var s = document.createElement("script");
+  temModulo = ("noModule" in s);
+} catch (e) {}
+anotar("modulos ES (import/export)", temModulo ? "suportado" : "NAO suportado", temModulo);
+
+var nucleos = "desconhecido";
+try {
+  if (navigator.hardwareConcurrency) nucleos = navigator.hardwareConcurrency;
+} catch (e) {}
+anotar("navigator.hardwareConcurrency", nucleos, null);
+
+/* A ponte com o Corel */
+var temExternal = false;
+try { temExternal = (typeof window.external !== "undefined" && window.external !== null); } catch (e) {}
+anotar("window.external", temExternal ? "presente" : "ausente", temExternal);
+
+anotar("endereco desta pagina", location.href, null);
+
+/* ---------- veredito ---------- */
+
+function concluir() {
+  var caixa = document.getElementById("veredito");
+  if (temES6 && wasmOk && temWorker) {
+    caixa.className = "veredito bom";
+    caixa.innerHTML = "<b>NAVEGADOR MODERNO.</b> Entende ES6, roda WebAssembly e "
+      + "tem Worker. A tela de Encaixe do Optimize pode rodar aqui dentro, "
+      + "com o motor onde ele ja esta.";
+  } else if (temES6 && !wasmOk) {
+    caixa.className = "veredito neutro";
+    caixa.innerHTML = "<b>MEIO TERMO.</b> Entende JavaScript novo, mas o "
+      + "WebAssembly nao respondeu. O motor roda em JS puro (mais lento); "
+      + "vale investigar o porque do WASM.";
+  } else {
+    caixa.className = "veredito ruim";
+    caixa.innerHTML = "<b>NAVEGADOR ANTIGO (MSHTML/IE).</b> Nao entende a "
+      + "sintaxe nova. A tela do Optimize nao carrega aqui: o encaixe tem que "
+      + "virar endpoint em Node, e a macro conversa por HTTP.";
+  }
+}
+concluir();
+
+/* ---------- os dois botoes ---------- */
+
+/*
+ * O servidor esta de pe E alcancavel daqui?
+ *
+ * Sao duas perguntas numa: a porta responde, e o navegador do docker DEIXA
+ * esta pagina falar com ela. Como a pagina mora em file:// (ou num esquema
+ * interno do Corel) e o servidor em http://localhost:8000, o pedido e de
+ * origem cruzada - pode esbarrar em CORS mesmo com o servidor no ar. Se
+ * esbarrar, o conserto e no servidor, e e bom saber disso agora.
+ */
+function testarServidor() {
+  anotar("servidor", "perguntando...", null);
+  try {
+    var x = new XMLHttpRequest();
+    x.open("GET", "http://localhost:8000/api/encaixe/guardado?chave=macro-corel", true);
+    try { x.timeout = 4000; } catch (e) {}
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      if (x.status === 200) {
+        var amostra = String(x.responseText).substring(0, 60);
+        anotar("servidor", "respondeu 200: " + amostra, true);
+      } else if (x.status === 0) {
+        anotar("servidor", "status 0 - servidor fora do ar OU bloqueio de origem cruzada (CORS)", false);
+      } else {
+        anotar("servidor", "respondeu " + x.status, false);
+      }
+    };
+    x.send();
+  } catch (e) {
+    anotar("servidor", "erro: " + e.message, false);
+  }
+}
+
+/*
+ * ===========================================================================
+ * A PROCURA DA PONTE
+ * ===========================================================================
+ *
+ * No controle antigo (IE) a ponte com o Corel era `window.external.Application`
+ * - o objeto Application do VGCore inteiro, alcancavel do JavaScript. Foi
+ * medido funcionando: versao 26.2.0.170, nome do documento, contagem da
+ * selecao.
+ *
+ * No `browserEdge` esse caminho morreu: `window.external` existe, mas
+ * `.Application` vem `undefined`. Nao e surpresa - `window.external` e coisa
+ * da era IE, e o WebView2 tem o proprio mecanismo para o hospedeiro entregar
+ * objetos ao JavaScript:
+ *
+ *     chrome.webview.hostObjects.<nome>          (proxy assincrono)
+ *     chrome.webview.hostObjects.sync.<nome>     (o mesmo, sincrono)
+ *
+ * Mas so aparece ali o que o hospedeiro registrou com
+ * `AddHostObjectToScript`. Se a Corel nao registrou nada, nao ha nada - e o
+ * docker moderno vira uma tela bonita sem acesso ao desenho.
+ *
+ * Esta funcao varre o que existe, sem chutar: lista as chaves de
+ * `window.external`, de `chrome.webview` e de `hostObjects`, e so depois
+ * tenta alguns nomes provaveis. Tudo dentro de `try` - tocar num proxy que
+ * nao existe costuma lancar.
+ */
+function listarChaves(obj) {
+  var nomes = [];
+  try {
+    for (var k in obj) { nomes.push(k); }
+  } catch (e) { return "erro ao listar: " + e.message; }
+  try {
+    var proprias = Object.getOwnPropertyNames(obj);
+    for (var i = 0; i < proprias.length; i++) {
+      if (nomes.indexOf(proprias[i]) < 0) nomes.push(proprias[i]);
+    }
+  } catch (e) { /* objeto exotico; fica so com o for..in */ }
+  return nomes.length ? nomes.join(", ") : "(nenhuma)";
+}
+
+function procurarPonte() {
+  /* 1. O que window.external realmente tem */
+  try {
+    anotar("external: tipo", typeof window.external, null);
+    anotar("external: chaves", listarChaves(window.external), null);
+  } catch (e) {
+    anotar("external", "erro: " + e.message, false);
+  }
+
+  /* 2. O canal do WebView2 */
+  var wv = null;
+  try { wv = window.chrome && window.chrome.webview; } catch (e) {}
+  if (!wv) {
+    anotar("chrome.webview", "ausente - nao e WebView2", false);
+    return;
+  }
+  anotar("chrome.webview: chaves", listarChaves(wv), null);
+
+  /* 3. Os objetos que o hospedeiro registrou - o que decide tudo */
+  var ho = null;
+  try { ho = wv.hostObjects; } catch (e) {}
+  if (!ho) {
+    anotar("hostObjects", "AUSENTE - a Corel nao registrou objeto nenhum", false);
+  } else {
+    anotar("hostObjects: chaves", listarChaves(ho), true);
+    try { anotar("hostObjects.sync: chaves", listarChaves(ho.sync), null); } catch (e) {}
+
+    /*
+     * Nomes provaveis. Chutar so faz sentido DEPOIS de listar, e serve para o
+     * caso de o proxy nao entregar as chaves no for..in - que acontece,
+     * porque hostObjects e um Proxy e pode nao ser enumeravel.
+     */
+    var tentativas = ["Application", "application", "app", "Corel", "corel",
+                      "CorelDRAW", "VGCore", "vgcore", "host", "Host"];
+    for (var i = 0; i < tentativas.length; i++) {
+      var nome = tentativas[i];
+      try {
+        var alvo = ho.sync ? ho.sync[nome] : ho[nome];
+        if (alvo !== undefined && alvo !== null) {
+          anotar("hostObjects." + nome, "EXISTE (" + typeof alvo + ")", true);
+          try { anotar("  -> " + nome + ".Version", alvo.Version, true); } catch (e) {}
+          try { anotar("  -> " + nome + ".Name", alvo.Name, true); } catch (e) {}
+        }
+      } catch (e) {
+        /* Proxy que lanca ao tocar num nome inexistente: silencio proposital,
+           senao o relatorio vira dez linhas de erro identico. */
+      }
+    }
+  }
+
+  /* 4. Da para pelo menos MANDAR mensagem para o hospedeiro? */
+  try {
+    anotar("chrome.webview.postMessage", typeof wv.postMessage, typeof wv.postMessage === "function");
+  } catch (e) {}
+}
+
+/*
+ * O objeto Application do VGCore, alcancado do JavaScript.
+ *
+ * Se isto funcionar, a pagina consegue ler e mexer no documento do Corel
+ * direto - que e como as pecas sairiam e voltariam sem passar por arquivo.
+ *
+ * O InitializeVBA fica aqui dentro, e nao no carregamento da pagina, de
+ * proposito: se ele travar ou reclamar, o resto do diagnostico ja esta na
+ * tela em vez de sumir junto.
+ */
+function testarVBA() {
+  try {
+    window.external.Application.InitializeVBA();
+    anotar("InitializeVBA()", "chamou sem erro", true);
+  } catch (e) {
+    anotar("InitializeVBA()", "erro: " + e.message, false);
+  }
+
+  var app = null;
+  try {
+    app = window.external.Application;
+    anotar("window.external.Application", app ? "alcancavel" : "nulo", !!app);
+  } catch (e) {
+    anotar("window.external.Application", "erro: " + e.message, false);
+    return;
+  }
+  if (!app) return;
+
+  var propriedades = ["Version", "VersionMajor", "Name"];
+  for (var i = 0; i < propriedades.length; i++) {
+    var nome = propriedades[i];
+    try {
+      var v = app[nome];
+      anotar("Application." + nome, (typeof v === "object" ? "objeto" : v), true);
+    } catch (e) {
+      anotar("Application." + nome, "erro: " + e.message, false);
+    }
+  }
+
+  /* O documento aberto: o alvo real da macro de encaixe. */
+  try {
+    var doc = app.ActiveDocument;
+    if (!doc) {
+      anotar("ActiveDocument", "nenhum documento aberto", null);
+    } else {
+      anotar("ActiveDocument.Name", doc.Name, true);
+      try {
+        anotar("selecao (quantas formas)", doc.SelectionRange.Count, true);
+      } catch (e) {
+        anotar("selecao", "erro: " + e.message, false);
+      }
+    }
+  } catch (e) {
+    anotar("ActiveDocument", "erro: " + e.message, false);
+  }
+}
+</script>
+
+</body>
+</html>
