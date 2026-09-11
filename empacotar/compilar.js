@@ -70,6 +70,22 @@ const ENTRADA = "server.js";
  * a central das impressoras lê são os arquivos DAS MÁQUINAS, pela rede, e a
  * configuração do WhatsApp, que mora na pasta de dados.
  */
+/*
+ * Uma nota sobre o `motor-encaixe.js`, que é gerado e não escrito à mão.
+ *
+ * Ele é o motor de encaixe de `src/motores/` empacotado para o servidor (ver
+ * `empacotar/motor.js`), e chega aqui como qualquer outro arquivo do backend:
+ * o `encaixe-resolver.js` o carrega com `require("./motor-encaixe")`, o
+ * caminho é literal, e por isso o esbuild logo abaixo o embute no bundle. Vai
+ * para dentro do `.jsc` junto com o resto, e a fonte é apagada no passo 4.
+ *
+ * Isto foi de propósito e custou uma medição. A primeira versão gerava ESM e
+ * o servidor a carregava com `import()` dinâmico — que funciona em
+ * desenvolvimento e morre aqui, porque código vindo de bytecode não tem
+ * callback de import ("A dynamic import callback was not specified"). Além de
+ * quebrar, aquilo obrigaria a poupar o arquivo desta limpeza, e o motor
+ * ficaria em texto ao lado do bytecode: justamente o que este script evita.
+ */
 function fontesDoServidor() {
   return fs.readdirSync(DESTINO, { withFileTypes: true })
     .filter((item) => item.name !== ENTRADA && item.name !== "servidor.jsc")

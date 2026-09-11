@@ -46,3 +46,10 @@ bancada/.saida-*.txt
 # O MODELO fica versionado, ao contrário: ele não vem de pacote nenhum, e sem
 # ele a tela não existe.
 estatico/ia/ort*
+
+# Encaixe no servidor: o motor de `src/motores/` empacotado num arquivo só,
+# para o Node conseguir importar (ver `empacotar/motor.js`). Gerado por
+# `npm run motor`, que o `npm run front` já chama — versionar seria guardar
+# uma cópia do que o esbuild refaz em meio segundo, com o risco de ela
+# envelhecer em silêncio enquanto o motor de verdade muda.
+servidor/motor-encaixe.js

@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "icones": "node empacotar/icones.js",
-    "front": "npm run icones && npm run ia && vite build",
+    "front": "npm run icones && npm run ia && npm run motor && vite build",
     "dev:app": "vite",
     "prestart": "npm run front",
     "start": "node servidor/server.js",
@@ -30,7 +30,8 @@
     "build:app": "npm run front && tauri build",
     "tauri": "tauri",
     "build:wasm": "cd wasm && cargo build --release --target wasm32-unknown-unknown && cd .. && node -e \"require('fs').copyFileSync('wasm/target/wasm32-unknown-unknown/release/encaixe.wasm','estatico/encaixe.wasm')\"",
-    "ia": "node empacotar/ia.js"
+    "ia": "node empacotar/ia.js",
+    "motor": "node empacotar/motor.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
