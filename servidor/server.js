@@ -34,6 +34,7 @@ const encaixePdfRouter = require("./encaixe-pdf");
 const macrosRouter = require("./macros-api");
 const encaixeMemoriaRouter = require("./encaixe-memoria");
 const encaixeResolverRouter = require("./encaixe-resolver");
+const riscoPdfRouter = require("./risco-pdf");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
 const corRouter = require("./cor-api");
@@ -67,6 +68,10 @@ app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixeResolverRouter);
 // A conversão de cor recebe a arte crua, e arte de produção passa de 15 MB com
 // frequência. Como o PDF acima, precisa vir antes do express.json geral.
 app.use("/api/cor", corRouter);
+
+// O PDF do risco que a tela Digitalizar achou. Linha, e só linha — não sobe
+// arte nenhuma —, então o limite dele mora dentro da própria rota, e não aqui.
+app.use("/api/risco", riscoPdfRouter);
 
 app.use(express.json({ limit: "15mb" })); // dá folga para o contorno de um molde com muitas peças
 

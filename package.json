@@ -19,6 +19,7 @@
     "bancada:whatsapp": "node bancada/conferir-whatsapp.js",
     "bancada:pdf": "node bancada/conferir-pdf.js",
     "bancada:pdf-entrada": "node bancada/conferir-pdf-entrada.cjs",
+    "bancada:molde-imagem": "node bancada/conferir-molde-da-imagem.cjs",
     "bancada:arte": "node bancada/conferir-arte.js",
     "bancada:grupos": "node bancada/conferir-grupos.js",
     "bancada:corte": "node bancada/conferir-bancada.js",
