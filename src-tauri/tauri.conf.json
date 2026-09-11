@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Optimize",
-  "version": "1.0.20",
+  "version": "1.0.26",
   "identifier": "br.com.optimize.desktop",
   "build": {
     "frontendDist": "../empacotar/janela",
