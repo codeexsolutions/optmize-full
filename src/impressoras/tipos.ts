@@ -15,7 +15,7 @@
  */
 
 /** O tipo de software que a impressora usa, e que decide como o histórico é lido. */
-export type TipoDeMaquina = "csv" | "xml" | "at-binary";
+export type TipoDeMaquina = "csv" | "xml" | "at-binary" | "printexp";
 
 /**
  * O resumo de um conjunto de trabalhos.

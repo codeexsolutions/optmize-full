@@ -1,6 +1,7 @@
 const xml = require("./xmlHistory");
 const csv = require("./csvHistory");
 const at = require("./atBinary");
+const printExp = require("./printExp");
 const { enrichAtInkChannels } = require("../services/atInkChannels");
 const { enrichXmlInkChannels } = require("../services/xmlInkChannels");
 
@@ -8,6 +9,7 @@ function driver(machine) {
   if (machine.type === "xml") return xml;
   if (machine.type === "csv") return csv;
   if (machine.type === "at-binary") return at;
+  if (machine.type === "printexp") return printExp;
   throw new Error(`Tipo de máquina não suportado: ${machine.type}`);
 }
 

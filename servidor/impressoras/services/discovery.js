@@ -54,6 +54,10 @@ function run(command, args, timeout = 6000) {
 
 const unc = (...parts) => "\\\\" + parts.filter(Boolean).join("\\");
 
+// Desce um nível a partir de uma base. A barra do fim é aparada porque a raiz
+// de um disco vem como "C:\" e "C:\" + "\Users" daria "C:\\Users".
+const sub = (base, ...parts) => String(base).replace(/\\+$/, "") + "\\" + parts.join("\\");
+
 async function statPath(target) {
   return withTimeout(fs.stat(target).then(s => ({ isFile: s.isFile(), isDir: s.isDirectory() })), FS_TIMEOUT_MS, null);
 }
@@ -210,6 +214,43 @@ async function detectAtBinary(host, share, root, shares) {
   return { type: "at-binary", historyPath, previewDir, share };
 }
 
+// PrintExp (Hosonsoft): o histórico fica em Usage\<serial da placa>\PrintData.xml
+// e o binário com os previews em Data\HistoryTask.tf. O `historyPath` aponta
+// para a pasta Usage inteira, porque o serial muda quando trocam a placa.
+async function detectPrintExp(host, share, root) {
+  if (!(await isFile(`${root}\\Data\\HistoryTask.tf`))) return null;
+
+  const usage = `${root}\\Usage`;
+  if (!(await isDir(usage))) return null;
+
+  // Uma pasta de serial sem XML é placa que nunca imprimiu; sem nenhum XML,
+  // isto é uma cópia parada do programa e não uma impressora.
+  const seriais = await readDir(usage);
+  let temHistorico = false;
+  for (const entry of seriais) {
+    if (!entry.isDirectory()) continue;
+    if (await isFile(`${usage}\\${entry.name}\\PrintData.xml`)) { temHistorico = true; break; }
+  }
+  if (!temHistorico) return null;
+
+  const pick = async (candidate, checker) => (await checker(`${root}\\${candidate}`)) ? `${root}\\${candidate}` : undefined;
+
+  return {
+    type: "printexp",
+    historyPath: usage,
+    // O preview do PrintExp não tem pasta própria: cada .bmp nasce ao lado do
+    // .prt, na pasta do RIP do dia, e só o Data\HistoryTask.tf sabe onde.
+    previewDir: undefined,
+    liveLogDir: await pick("Log\\main", isDir),
+    // O progresso do trabalho em andamento, em 89 bytes. É o "arquivo do vivo"
+    // desta máquina, e o services/printExpLive.js o lê a cada tick.
+    liveLogFile: await pick("Data\\PrintInfo.ini", isFile),
+    statusLogDir: await pick("Log", isDir),
+    inkStatsPath: await pick("Data\\HistoryTask.tf", isFile),
+    share
+  };
+}
+
 // Raízes onde o PrinterManager costuma ficar: na raiz do compartilhamento,
 // uma pasta abaixo, ou no Desktop de um usuário (caso do compartilhamento Users).
 async function candidateRoots(host, share) {
@@ -226,6 +267,40 @@ async function candidateRoots(host, share) {
   return roots;
 }
 
+// O PrintExp não fica num lugar previsível: ele roda da pasta onde foi
+// descompactado, em geral no Desktop ou no Downloads de alguém, e o zip traz a
+// pasta repetida dentro dela mesma (PrintExp_X64_5.8...\PrintExp_X64_5.8...).
+// Procurar por nome em poucos lugares certos sai mais barato que varrer.
+const PRINTEXP_DIR = /printexp/i;
+
+async function printExpRoots(baseRoot) {
+  const parents = [baseRoot];
+  const pastasDeUsuario = async base => {
+    for (const entry of await readDir(base)) {
+      if (entry.isDirectory()) parents.push(sub(base, entry.name, "Desktop"), sub(base, entry.name, "Downloads"));
+    }
+  };
+
+  // Serve para o compartilhamento "Users", para um "C" que expõe o disco
+  // inteiro e para a raiz de um disco local — nos três, as contas ficam uma
+  // pasta mais fundo.
+  await pastasDeUsuario(baseRoot);
+  if (await isDir(sub(baseRoot, "Users"))) await pastasDeUsuario(sub(baseRoot, "Users"));
+
+  const roots = [];
+  for (const parent of parents.slice(0, 60)) {
+    for (const entry of await readDir(parent)) {
+      if (!entry.isDirectory() || !PRINTEXP_DIR.test(entry.name)) continue;
+      const dir = sub(parent, entry.name);
+      roots.push(dir);
+      for (const inner of await readDir(dir)) {
+        if (inner.isDirectory() && PRINTEXP_DIR.test(inner.name)) roots.push(sub(dir, inner.name));
+      }
+    }
+  }
+  return roots;
+}
+
 // Compartilhamentos com nome conhecido primeiro: evita varrer "Users" inteiro
 // (e o Desktop de cada conta) quando o PrinterManager está logo na raiz.
 const SHARE_PRIORITY = [/^printermanager/i, /^temp$/i, /^at[._ ]?printer/i, /^users$/i];
@@ -238,16 +313,98 @@ function orderShares(shares) {
   return [...shares].sort((a, b) => rank(a) - rank(b));
 }
 
+// Ordem importa: o AT usa a pasta "PrintHistory", que o detector XML também
+// aceita. O binário é o teste mais específico, então vem antes.
+async function detectAtRoot(host, share, root, shares) {
+  return await detectCsv(host, share, root)
+    || await detectAtBinary(host, share, root, shares)
+    || await detectXml(host, share, root);
+}
+
 async function fingerprintHost(host, shares) {
   for (const share of orderShares(shares)) {
-    const roots = await candidateRoots(host, share);
-    for (const root of roots) {
-      // Ordem importa: o AT usa a pasta "PrintHistory", que o detector XML
-      // também aceita. O binário é o teste mais específico, então vem antes.
-      const found = await detectCsv(host, share, root)
-        || await detectAtBinary(host, share, root, shares)
-        || await detectXml(host, share, root);
+    for (const root of await candidateRoots(host, share)) {
+      const found = await detectAtRoot(host, share, root, shares);
       if (found) return { ...found, root };
+    }
+  }
+
+  // Segunda passada, só se nada apareceu: o PrintExp mora fundo e achá-lo
+  // custa vários readdir pela rede. Quem já é PrinterManager ou AT não paga.
+  for (const share of orderShares(shares)) {
+    for (const root of await printExpRoots(unc(host, share))) {
+      const found = await detectPrintExp(host, share, root);
+      if (found) return { ...found, root };
+    }
+  }
+  return null;
+}
+
+// ------------------------------------------------------- a própria máquina
+
+/**
+ * O mesmo reconhecimento, mas no disco desta máquina.
+ *
+ * A varredura da rede pula o próprio endereço de propósito, e faz sentido: ela
+ * fala SMB, e uma máquina não se enxerga pelos próprios compartilhamentos.
+ * Só que o lugar mais provável para instalarem o Optmize é justamente o PC que
+ * já roda o software da impressora — e ali a impressora ficaria invisível,
+ * calada, como se não existisse na rede.
+ *
+ * Aqui não há compartilhamento nem UNC: os caminhos saem como "C:\...", que o
+ * `fs` lê igual. Por isso o `share` vem nulo.
+ */
+async function localDrives() {
+  const drives = [];
+  // Letras prováveis de disco fixo. Testar de A a Z acordaria leitor de
+  // disquete e unidade de rede desconectada, cada uma com sua espera.
+  for (const letter of "CDEFGH") {
+    const drive = `${letter}:\\`;
+    if (await isDir(drive)) drives.push(drive);
+  }
+  return drives;
+}
+
+async function localCandidateRoots(drive) {
+  const roots = [drive];
+  for (const candidate of ["PrinterManager", "temp"]) {
+    if (await isDir(sub(drive, candidate))) roots.push(sub(drive, candidate));
+  }
+
+  const users = await readDir(sub(drive, "Users"));
+  for (const entry of users.filter(item => item.isDirectory()).slice(0, 40)) {
+    for (const candidate of [["Desktop", "PrinterManager"], ["Desktop"], ["Downloads"]]) {
+      const dir = sub(drive, "Users", entry.name, ...candidate);
+      if (await isDir(dir)) roots.push(dir);
+    }
+  }
+  return roots;
+}
+
+async function fingerprintLocal() {
+  const drives = await localDrives();
+
+  for (const drive of drives) {
+    for (const root of await localCandidateRoots(drive)) {
+      const found = await detectAtRoot(null, null, root, []);
+      if (found) return { ...found, root };
+    }
+  }
+
+  for (const drive of drives) {
+    for (const root of await printExpRoots(drive)) {
+      const found = await detectPrintExp(null, null, root);
+      if (found) return { ...found, root };
+    }
+  }
+  return null;
+}
+
+/** O endereço IPv4 desta máquina, só para a linha da tela ficar completa. */
+function localAddress() {
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const iface of list || []) {
+      if (iface.family === "IPv4" && !iface.internal) return iface.address;
     }
   }
   return null;
@@ -255,7 +412,7 @@ async function fingerprintHost(host, shares) {
 
 // ------------------------------------------------------------------ identidade
 
-const TYPE_LABEL = { csv: "PrinterManager (CSV)", xml: "PrinterManager (XML)", "at-binary": "AT Printer (binário)" };
+const TYPE_LABEL = { csv: "PrinterManager (CSV)", xml: "PrinterManager (XML)", "at-binary": "AT Printer (binário)", printexp: "PrintExp (XML)" };
 
 function suggestIdentity(host, takenIds) {
   const numbered = /impressora[^0-9]*(\d{1,2})/i.exec(host);
@@ -278,6 +435,27 @@ function suggestIdentity(host, takenIds) {
 async function scanNetwork({ hosts = [], onProgress = () => {}, signal } = {}) {
   const aborted = () => signal && signal.aborted;
   let reachable;
+
+  // Esta máquina primeiro, e sem falar rede: é leitura de disco, custa
+  // milissegundos, e é o único jeito de achar a impressora quando o Optmize
+  // foi instalado no mesmo PC que roda o software dela.
+  let local = null;
+  onProgress({ phase: "starting", message: "Procurando neste computador..." });
+  try {
+    const print = await fingerprintLocal();
+    if (print) {
+      local = {
+        host: os.hostname(),
+        ip: localAddress(),
+        shares: [],
+        typeLabel: TYPE_LABEL[print.type] || print.type,
+        ...print
+      };
+      onProgress({ phase: "starting", message: `Neste computador: ${local.typeLabel}` });
+    }
+  } catch (error) {
+    onProgress({ phase: "starting", message: `Falha ao ler este computador: ${error.message}` });
+  }
 
   if (hosts.length) {
     onProgress({ phase: "hosts", message: `Testando ${hosts.length} host(s) informado(s)...`, scanned: 0, total: hosts.length });
@@ -346,7 +524,22 @@ async function scanNetwork({ hosts = [], onProgress = () => {}, signal } = {}) {
     return candidate;
   });
 
-  return { reachable: reachable.length, found: results.filter(Boolean) };
+  const found = results.filter(Boolean);
+
+  // A máquina local entra na frente, e só se a rede já não a tiver trazido:
+  // um PC que compartilha a própria pasta responde às duas buscas, e a mesma
+  // impressora apareceria duas vezes na tela, pedindo nome duas vezes.
+  if (local && !found.some(item => String(item.host).toLowerCase() === local.host.toLowerCase())) {
+    found.unshift(local);
+  }
+
+  return { reachable: reachable.length, found };
 }
 
-module.exports = { scanNetwork, suggestIdentity, resolveHostName, listShares, fingerprintHost, TYPE_LABEL };
+module.exports = {
+  scanNetwork, suggestIdentity, resolveHostName, listShares,
+  fingerprintHost, fingerprintLocal, TYPE_LABEL,
+  // Expostos para conferir a varredura contra uma pasta montada à mão, sem
+  // depender de haver uma impressora ligada na rede.
+  detectPrintExp, printExpRoots, localDrives, localCandidateRoots
+};
