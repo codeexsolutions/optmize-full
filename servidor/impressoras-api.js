@@ -63,6 +63,7 @@ const { previewInfo, readPreview } = require("./impressoras/services/preview");
 const { startRealtime, getActiveAtProgress } = require("./impressoras/services/realtime");
 const { startLiveLog, getLiveLogSnapshot } = require("./impressoras/services/liveLog");
 const { startPrinter2Live, getPrinter2LiveSnapshot } = require("./impressoras/services/printer2Live");
+const { startPrintExpLive, getPrintExpLiveSnapshot } = require("./impressoras/services/printExpLive");
 const { getPrinter2DetailedSnapshot } = require("./impressoras/services/printer2Cancel");
 const { tapIo } = require("./impressoras/services/printEvents");
 const { getStatus } = require("./impressoras/services/machineStatus");
@@ -108,7 +109,7 @@ function criarRotasDeImpressoras(io) {
 
   router.get("/live-progress", (_req, res) => {
     try {
-      const items = [...getActiveAtProgress(), ...getLiveLogSnapshot(), ...getPrinter2LiveSnapshot(), ...getPrinter2DetailedSnapshot()];
+      const items = [...getActiveAtProgress(), ...getLiveLogSnapshot(), ...getPrintExpLiveSnapshot(), ...getPrinter2LiveSnapshot(), ...getPrinter2DetailedSnapshot()];
       // Cada impressora só executa um trabalho por vez. Algumas fontes AT
       // mantêm registros antigos com estado "printing"; escolhemos somente o
       // registro cronologicamente mais recente de cada máquina.
@@ -754,6 +755,9 @@ function iniciarImpressoras(io) {
   // Este também levanta a detecção de cancelamento e o aviso de tinta baixa
   // das máquinas CSV (ver o fim de services/printer2Live.js).
   startPrinter2Live(ioTap, loadMachines);
+  // O PrintExp tem log próprio (chinês, em GBK) e o progresso num .ini de 89
+  // bytes; o liveLog.js não fala esse dialeto.
+  startPrintExpLive(ioTap, loadMachines);
 
   backfillHistory(loadMachines).catch(error =>
     console.error("[impressoras] backfill falhou:", error.message));

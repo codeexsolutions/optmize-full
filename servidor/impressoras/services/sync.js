@@ -6,10 +6,11 @@ const { localIsoDate, addDays } = require("../utils/date");
 const BACKFILL_DAYS = Number(process.env.HISTORY_BACKFILL_DAYS || 400);
 
 // Quanto histórico dá pra puxar depende do custo da fonte:
-// - at-binary e csv são um arquivo só, lido de uma vez — puxa tudo que existe.
+// - at-binary, csv e printexp são um arquivo só, lido de uma vez — puxa tudo
+//   que existe.
 // - xml é uma pasta por dia: cada dia a mais é uma leitura de rede (~0,1s),
 //   então a janela fica no padrão.
-const DAYS_BY_TYPE = { "at-binary": 3650, csv: 3650 };
+const DAYS_BY_TYPE = { "at-binary": 3650, csv: 3650, printexp: 3650 };
 
 function backfillWindow(days) {
   const end = localIsoDate();

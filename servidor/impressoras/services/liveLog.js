@@ -366,7 +366,10 @@ function startLiveLog(io, loadMachines) {
         console.warn(`[live-log] falha ao carregar máquinas: ${error.message}`);
         return;
       }
-      const withLiveLog = machines.filter(m => m.liveLogDir);
+      // O PrintExp também tem liveLogDir, mas o log dele é chinês em GBK e
+      // marca progresso por passada — outro idioma, não outra configuração.
+      // Quem o lê é o services/printExpLive.js.
+      const withLiveLog = machines.filter(m => m.liveLogDir && m.type !== "printexp");
       for (const machine of withLiveLog) {
         try {
           await tickMachine(machine);
@@ -381,7 +384,7 @@ function startLiveLog(io, loadMachines) {
 
   loadMachines()
     .then(machines => {
-      const withLiveLog = machines.filter(m => m.liveLogDir);
+      const withLiveLog = machines.filter(m => m.liveLogDir && m.type !== "printexp");
       if (!withLiveLog.length) {
         console.log("[live-log] nenhuma máquina com liveLogDir configurado — nada a observar.");
       } else {
