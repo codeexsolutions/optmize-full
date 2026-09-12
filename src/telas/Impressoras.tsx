@@ -34,12 +34,13 @@
  * operador lê o canal pela letra, que é como ele já o chama.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { api } from "../api/cliente";
 import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { useEventos, useRecarregarComEventos } from "../impressoras/socket";
+import { SemImpressoras } from "../impressoras/SemImpressoras";
 import {
   falar, gravarPreferencias, lerPreferencias, notificar,
   pedirPermissaoDeNotificacao, prepararSom, tocarBipe,
@@ -97,6 +98,27 @@ export function Impressoras() {
   const dados = painel.dados;
   const semMaquinas = dados && dados.machines.length === 0;
 
+  /*
+   * ---------------------------------------------------------------------
+   * SEM NENHUMA MÁQUINA, O PAINEL NÃO É UM PAINEL VAZIO: É UMA PORTA
+   * ---------------------------------------------------------------------
+   *
+   * Este é o estado de quem acabou de instalar o sistema, e era uma frase
+   * cinza dentro de um cartão vazio mandando abrir outra tela e clicar num
+   * botão. Não há OUTRA coisa a fazer aqui: sem máquina cadastrada, nenhum
+   * dos cartões abaixo tem o que mostrar.
+   *
+   * Então o painel vira o radar e um botão no meio da janela — ver
+   * `impressoras/SemImpressoras.tsx`. O endereço continua sendo
+   * `/impressoras` de propósito: não é uma mudança de tela, é o que esta tela
+   * é enquanto não conhece ninguém. Cadastrada a primeira impressora, o
+   * painel de verdade aparece no lugar e este desvio deixa de acontecer.
+   */
+  if (semMaquinas) return <SemImpressoras />;
+
+  /* A primeira carga do painel. Ver `PainelCarregando`, no fim do arquivo. */
+  if (!dados && painel.carregando) return <PainelCarregando />;
+
   return (
     <>
       {aoVivo.dados && aoVivo.dados.length > 0 && (
@@ -115,11 +137,7 @@ export function Impressoras() {
         titulo="Hoje"
         icone="icones.svg#printer"
         apoio={dados ? dataBr(dados.date) : "Carregando..."}
-        /* Sem máquina cadastrada, os cartões de baixo não existem e é este que
-           ocupa a janela — é também onde está o recado de como cadastrar. */
-        preencher={!!semMaquinas}
       >
-        {painel.carregando && !dados && <p className="m-0 text-[0.85rem] text-tinta-fraca">Carregando o painel...</p>}
         {painel.erro && (
           <p className="m-0 flex items-center gap-2 text-[0.85rem] text-alerta">
             <Icone referencia="icones.svg#triangle-alert" className="size-4 shrink-0" />
@@ -127,15 +145,7 @@ export function Impressoras() {
           </p>
         )}
 
-        {semMaquinas && (
-          <p className="m-0 text-[0.85rem] text-tinta-fraca">
-            Nenhuma impressora cadastrada. Abra <strong className="text-tinta">Máquinas</strong> e
-            clique em <strong className="text-tinta">Procurar máquinas</strong> — elas são achadas na
-            rede sozinhas, com os caminhos e o histórico.
-          </p>
-        )}
-
-        {dados && !semMaquinas && (
+        {dados && (
           <>
             {/*
               O número que a fábrica pergunta primeiro é "quantos metros hoje".
@@ -160,7 +170,7 @@ export function Impressoras() {
         )}
       </Cartao>
 
-      {dados && !semMaquinas && (
+      {dados && (
         <Cartao
           titulo="Produção por dia"
           icone="icones.svg#chart-line"
@@ -204,7 +214,7 @@ export function Impressoras() {
         aoMudar={(proximo) => { setAvisos(proximo); gravarPreferencias(proximo); }}
       />
 
-      {dados && !semMaquinas && (
+      {dados && (
         <Cartao
           titulo="Máquinas"
           icone="icones.svg#server"
@@ -659,5 +669,74 @@ function CartaoAoVivo({ item }: { item: AoVivo }) {
               : "em impressão"}
       </p>
     </li>
+  );
+}
+
+/**
+ * ===========================================================================
+ * A PRIMEIRA CARGA DO PAINEL
+ * ===========================================================================
+ *
+ * Era uma linha: "Carregando o painel...". Funciona, e some rápido quando o
+ * banco é pequeno — mas este painel é o que fica aberto num monitor da
+ * produção, e quem tem meses de histórico e cinco máquinas espera ver a tela
+ * inteira nascer do nada depois de um segundo de vazio.
+ *
+ * O esqueleto desenha o painel que está vindo: a figura grande dos metros de
+ * hoje, os quatro ladrilhos e o gráfico. Não é enfeite — é a diferença entre
+ * "está carregando alguma coisa" e "está carregando ISTO", e faz a espera
+ * parecer mais curta do que é sem mentir sobre o que vem.
+ *
+ * Só vale para a PRIMEIRA carga. Recarga com dados na tela não troca nada
+ * por esqueleto: os números já estão lá, e piscá-los a cada evento do socket
+ * seria pior que a espera.
+ */
+function PainelCarregando() {
+  return (
+    <>
+      <Cartao titulo="Hoje" icone="icones.svg#printer" apoio="Carregando o painel...">
+        <Esqueleto className="h-[2.6rem] w-[180px]" />
+        <Esqueleto className="mt-2.5 mb-4 h-[0.8rem] w-[220px]" />
+
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="rounded-[10px] border border-linha bg-painel-suave px-3.5 py-3">
+              <Esqueleto className="h-[0.7rem] w-[70%]" />
+              <Esqueleto className="mt-2 h-[1.1rem] w-[50%]" />
+            </div>
+          ))}
+        </div>
+      </Cartao>
+
+      <Cartao titulo="Produção por dia" icone="icones.svg#chart-line" apoio="Carregando a série...">
+        {/*
+          As barras entram com alturas fixas e defasadas: o olho lê "gráfico"
+          na hora, e a defasagem do brilho corre da esquerda para a direita,
+          que é o sentido em que a série vai ser lida.
+        */}
+        <div className="flex h-[140px] items-end gap-1.5">
+          {ALTURAS_FALSAS.map((altura, i) => (
+            <Esqueleto
+              key={i}
+              className="min-w-0 flex-1 rounded-t-[4px] rounded-b-none"
+              style={{ height: `${altura}%`, animationDelay: `${i * 90}ms` }}
+            />
+          ))}
+        </div>
+      </Cartao>
+    </>
+  );
+}
+
+/** As alturas do gráfico fantasma. Fixas, para não dançar a cada repintura. */
+const ALTURAS_FALSAS = [38, 62, 47, 78, 55, 88, 40, 66, 52, 72, 45, 60];
+
+function Esqueleto({ className = "", style }: { className?: string; style?: CSSProperties }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={style}
+      className={`block animate-pulse rounded-[6px] bg-[var(--surface-hover)] ${className}`}
+    />
   );
 }

@@ -51,6 +51,7 @@ const os = require('node:os');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const licencaDeTeste = require('./licenca-de-teste.cjs');
 
 const RAIZ = path.join(__dirname, '..');
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -122,6 +123,16 @@ async function principal() {
   let navegador = null;
   try {
     if (!await esperarServidor(porta)) throw new Error('o servidor não subiu.');
+
+    /*
+     * A instalação nasce sem licença e a API inteira responde 402 até alguém
+     * ativar — inclusive aqui. Ver `bancada/licenca-de-teste.cjs`.
+     */
+    if (!licencaDeTeste.temChave()) {
+      console.log(`${path.basename(__filename, '.cjs')}: ${licencaDeTeste.SEM_CHAVE}`);
+      return;
+    }
+    await licencaDeTeste.ativar(`http://127.0.0.1:${porta}`);
 
     navegador = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
     const p = await navegador.newPage();

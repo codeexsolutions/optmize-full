@@ -322,11 +322,13 @@ export function desenharEncaixe(canvas, r, {
       ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5);
     }
 
-    // Seleção: âmbar por cima da peça, só na tela.
+    // Seleção: o laranja da marca por cima da peça, só na tela. O hex vem
+    // escrito porque canvas não lê variável de CSS; o valor é o do
+    // `--accent` (ver `estilo/tokens.css`) e precisa acompanhá-lo.
     if (!escala && selecao.has(p.item.indice)) {
-      ctx.fillStyle = "rgba(249, 115, 22, 0.22)";
+      ctx.fillStyle = "rgba(255, 83, 31, 0.22)";
       ctx.fillRect(x, y, w, h);
-      ctx.strokeStyle = "#ffa04d";
+      ctx.strokeStyle = "#ff8556";
       ctx.lineWidth = 2;
       ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
     }
@@ -343,7 +345,7 @@ export function desenharEncaixe(canvas, r, {
   const faixasDeBancada = bancadasDoResultado(r);
   if (faixasDeBancada.length > 1) {
     ctx.save();
-    ctx.strokeStyle = "#f97316";
+    ctx.strokeStyle = "#ff531f";
     ctx.lineWidth = 2;
     ctx.setLineDash([10, 6]);
     cortesEntreBancadas(faixasDeBancada).forEach((cm) => {

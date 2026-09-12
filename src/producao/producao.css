@@ -17,7 +17,9 @@
   color: var(--text);
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  background-image: radial-gradient(circle at 78% -10%, rgba(249, 115, 22, .05), transparent 32%);
+  /* O brilho do canto: o mesmo laranja da marca, bem apagado. Escrito em
+     rgba porque precisa de alfa; o valor acompanha o `--accent`. */
+  background-image: radial-gradient(circle at 78% -10%, rgba(255, 83, 31, .05), transparent 32%);
 }
 
 
@@ -160,6 +162,39 @@
 :where(.producao) .file-label { position: relative; }
 
 :where(.producao) .hidden { display: none !important; }
+
+/* O pé da mesa só existe quando tem recado: ele guarda o aviso das peças que
+   não couberam e a oferta do encaixe guardado, e os dois passam a maior parte
+   do tempo escondidos. Sem isto sobrava uma tira vazia com um traço em cima,
+   colada na faixa dos números. */
+:where(.producao) .mesa-rodape:not(:has(> :not(.hidden))) {
+  display: none;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * A DICA DA MESA — o recado que nunca aparecia
+ * ---------------------------------------------------------------------------
+ *
+ * "Arraste seus arquivos aqui", no meio da área de trabalho, estava no HTML
+ * desde sempre e NUNCA foi desenhado uma vez: a mesa vazia era um retângulo
+ * preto de mil pixels sem uma palavra.
+ *
+ * A culpa é da linha logo acima. A dica se acendia por uma regra de Tailwind
+ * (`peer-[.hidden]:grid`, "fique visível enquanto o risco estiver escondido"),
+ * que nasce dentro da camada `utilities` — e `!important` fora de camada ganha
+ * de qualquer coisa dentro dela. O `display: none` da própria dica vencia a
+ * regra que deveria revogá-lo, calado.
+ *
+ * O conserto é no mesmo terreno: a regra que acende a dica mora AQUI, fora de
+ * camada e com `!important` também, e ganha por especificidade (id + duas
+ * classes contra uma). Tirar o `!important` da linha de cima resolveria
+ * igual, mas ele é o que segura o `.hidden` contra todo o CSS à mão desta
+ * folha — não é uma linha para mexer por causa de um recado.
+ */
+:where(.producao) #encaixe-resultado.hidden + .mesa-dica {
+  display: grid !important;
+}
 
 
 :where(.producao) .table-wrap.auto {
@@ -1031,21 +1066,133 @@
   color: var(--text-dim);
 }
 
+/*
+ * ===========================================================================
+ * A ESPERA DO ENCAIXE — no meio da tela, e com as peças caindo
+ * ===========================================================================
+ *
+ * Era um aviso encostado num canto da janela, com uma rodinha girando. Dois
+ * problemas, e o segundo é o que importa:
+ *
+ *   1. Num canto, ele disputava atenção com a mesa — que durante o cálculo
+ *      não tem nada para mostrar. A pessoa ficava olhando para o lugar errado.
+ *
+ *   2. A rodinha não dizia nada. Um encaixe pode levar de dois a trezentos
+ *      segundos, e nesse tempo o que o sistema faz é EMPILHAR PEÇAS. A
+ *      rodinha é a mesma de qualquer tela de qualquer programa.
+ *
+ * Agora é uma caixa no meio da tela, sobre um véu escuro, e dentro dela um
+ * poço onde as peças caem e se encaixam uma na outra até fechar o risco — que
+ * é, desenhado, exatamente o trabalho que está acontecendo por baixo. Quando
+ * termina, a animação PARA COM O POÇO CHEIO: o desenho do fim é o encaixe
+ * pronto, e não uma rodinha que some.
+ *
+ * O véu cobre a tela inteira de propósito. Enquanto calcula, o sistema já
+ * avisa que pausou as outras telas; deixar a mesa clicável no meio disso só
+ * abriria caminho para mudar a lista de peças debaixo do cálculo que está
+ * rodando em cima dela. O único controle que continua de pé é o "Parar e usar
+ * este", que mora dentro da caixa.
+ */
 :where(.producao) .encaixe-carregamento {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
   z-index: 80;
-  width: min(580px, calc(100vw - 48px));
+  display: grid;
+  padding: 20px;
+  inset: 0;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(6px);
+  animation: encaixe-veu-entra .18s ease both;
+}
+
+@keyframes encaixe-veu-entra {
+  from { opacity: 0; }
+}
+
+:where(.producao) .encaixe-loading-caixa {
+  width: min(440px, 100%);
   overflow: hidden;
-  margin-top: 16px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border));
-  border-radius: 11px;
+  padding: 22px 20px 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border-radius: 18px;
   background:
-    linear-gradient(135deg, var(--accent-soft), transparent 58%),
-    var(--card-bg-soft);
-  box-shadow: inset 3px 0 0 var(--accent), 0 18px 48px rgba(0, 0, 0, .28);
+    radial-gradient(120% 80% at 50% -10%, var(--accent-soft), transparent 62%),
+    var(--card-bg);
+  box-shadow: 0 28px 70px -20px rgba(0, 0, 0, .8);
+  animation: encaixe-caixa-entra .22s cubic-bezier(.2, .8, .3, 1) both;
+}
+
+@keyframes encaixe-caixa-entra {
+  from { transform: translateY(10px) scale(.97); opacity: 0; }
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * O POÇO
+ * ---------------------------------------------------------------------------
+ *
+ * Sete peças, cada uma com seu lugar final já escrito aqui embaixo: o que a
+ * animação faz é trazê-las de cima até ele, uma a cada 0,28s. Elas NÃO se
+ * movem depois de encostar — como no risco de verdade, peça encaixada não
+ * anda mais.
+ *
+ * As cores são as mesmas com que a mesa identifica as peças (`--peca-*`, em
+ * `estilo/tokens.css`): quem está esperando vê, em miniatura, o desenho que
+ * vai receber.
+ *
+ * A queda é `ease-in` de propósito — é a curva da gravidade. Nos últimos
+ * milímetros a peça achata um pouco e volta, que é o que faz o olho ler
+ * "encostou" em vez de "parou no ar".
+ */
+:where(.producao) .encaixe-tetris {
+  position: relative;
+  width: 145px;
+  height: 121px;
+  overflow: hidden;
+  margin: 2px auto 20px;
+  padding: 0;
+  border-radius: 10px;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 1px);
+  background-size: 37px 31px;
+  background-position: -1px -1px;
+}
+
+:where(.producao) .encaixe-tetris > span {
+  position: absolute;
+  border: 1px solid;
+  border-radius: 4px;
+  animation: encaixe-peca-cai 3.6s linear infinite both;
+}
+
+/* Lugar final, tamanho e cor de cada peça. Juntas elas fecham o poço. */
+:where(.producao) .encaixe-tetris > span:nth-child(1) { left: 0;     top: 93px; width: 71px;  height: 28px; animation-delay: 0s;    background: color-mix(in srgb, var(--peca-1) 20%, transparent); border-color: color-mix(in srgb, var(--peca-1) 72%, transparent); }
+:where(.producao) .encaixe-tetris > span:nth-child(2) { left: 74px;  top: 93px; width: 71px;  height: 28px; animation-delay: .28s;  background: color-mix(in srgb, var(--peca-2) 20%, transparent); border-color: color-mix(in srgb, var(--peca-2) 72%, transparent); }
+:where(.producao) .encaixe-tetris > span:nth-child(3) { left: 0;     top: 31px; width: 34px;  height: 59px; animation-delay: .56s;  background: color-mix(in srgb, var(--peca-3) 20%, transparent); border-color: color-mix(in srgb, var(--peca-3) 72%, transparent); }
+:where(.producao) .encaixe-tetris > span:nth-child(4) { left: 37px;  top: 62px; width: 108px; height: 28px; animation-delay: .84s;  background: color-mix(in srgb, var(--peca-4) 20%, transparent); border-color: color-mix(in srgb, var(--peca-4) 72%, transparent); }
+:where(.producao) .encaixe-tetris > span:nth-child(5) { left: 37px;  top: 31px; width: 71px;  height: 28px; animation-delay: 1.12s; background: color-mix(in srgb, var(--peca-5) 20%, transparent); border-color: color-mix(in srgb, var(--peca-5) 72%, transparent); }
+:where(.producao) .encaixe-tetris > span:nth-child(6) { left: 111px; top: 31px; width: 34px;  height: 28px; animation-delay: 1.4s;  background: color-mix(in srgb, var(--peca-6) 20%, transparent); border-color: color-mix(in srgb, var(--peca-6) 72%, transparent); }
+:where(.producao) .encaixe-tetris > span:nth-child(7) { left: 0;     top: 0;    width: 145px; height: 28px; animation-delay: 1.68s; background: color-mix(in srgb, var(--peca-7) 20%, transparent); border-color: color-mix(in srgb, var(--peca-7) 72%, transparent); }
+
+@keyframes encaixe-peca-cai {
+  0%   { transform: translateY(-132px); opacity: 0; animation-timing-function: cubic-bezier(.4, 0, .8, .2); }
+  4%   { opacity: 1; }
+  16%  { transform: translateY(0) scaleY(1); animation-timing-function: cubic-bezier(.3, 0, .3, 1); }
+  19%  { transform: translateY(2px) scaleY(.86); }
+  23%  { transform: translateY(0) scaleY(1); }
+  90%  { opacity: 1; }
+  100% { transform: translateY(0); opacity: 0; }
+}
+
+/* Quem pediu ao sistema para parar de mexer as coisas recebe o poço cheio,
+   parado — que é o mesmo desenho, sem a queda. */
+@media (prefers-reduced-motion: reduce) {
+  :where(.producao) .encaixe-carregamento,
+  :where(.producao) .encaixe-loading-caixa,
+  :where(.producao) .encaixe-tetris > span {
+    animation: none;
+  }
 }
 
 :where(.producao) .file-label.carregando-arquivos {
@@ -1053,25 +1200,19 @@
   opacity: .68;
 }
 
+/*
+ * O texto da caixa é centrado, embaixo do poço — a caixa inteira é uma coisa
+ * só, e não um cartão com uma coluna de cada lado.
+ *
+ * Nada aqui pode MUDAR DE ALTURA enquanto o cálculo roda: o detalhe é
+ * reescrito várias vezes por segundo com a linha de andamento ("tentativa
+ * 652 · 12,3s de 30s · melhor: 5,4 m · 8 núcleos"), e sem uma altura mínima a
+ * caixa cresceria e encolheria no meio da tela a cada frase. Daí o
+ * `min-height` de duas linhas no detalhe e o de duas no título.
+ */
 :where(.producao) .encaixe-loading-topo {
   position: relative;
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
-  gap: 13px;
-  align-items: center;
-}
-
-:where(.producao) .encaixe-spinner {
-  width: 34px;
-  height: 34px;
-  border: 3px solid color-mix(in srgb, var(--accent) 18%, var(--border));
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: encaixe-girar .8s linear infinite;
-}
-
-@keyframes encaixe-girar {
-  to { transform: rotate(360deg); }
+  text-align: center;
 }
 
 :where(.producao) .encaixe-loading-copy {
@@ -1080,36 +1221,38 @@
 
 :where(.producao) .encaixe-loading-copy .eyebrow {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 5px;
+  color: var(--accent);
 }
 
 :where(.producao) .encaixe-loading-copy strong {
   display: block;
-  overflow: hidden;
+  min-height: 1.25em;
   font-family: var(--font-display);
-  font-size: 15px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 16px;
+  line-height: 1.25;
 }
 
 :where(.producao) .encaixe-loading-copy p {
-  margin: 3px 0 0;
+  min-height: 2.9em;
+  margin: 5px auto 0;
+  max-width: 34ch;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 11.5px;
+  line-height: 1.45;
 }
 
+/* O relógio vira uma pastilha embaixo do texto. Era uma caixa na ponta
+   direita, que só fazia sentido quando o painel era largo e deitado. */
 :where(.producao) .encaixe-loading-tempo {
-  min-width: 82px;
-  padding: 8px 11px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 4px;
+  padding: 4px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card-bg);
-  text-align: right;
-}
-
-:where(.producao) .encaixe-loading-tempo span,
-:where(.producao) .encaixe-loading-tempo strong {
-  display: block;
+  border-radius: 999px;
+  background: var(--card-bg-soft);
 }
 
 :where(.producao) .encaixe-loading-tempo span {
@@ -1121,10 +1264,10 @@
 }
 
 :where(.producao) .encaixe-loading-tempo strong {
-  margin-top: 2px;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 :where(.producao) .encaixe-loading-barra {
@@ -1146,11 +1289,10 @@
 }
 
 :where(.producao) .encaixe-loading-rodape {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 12px;
+  display: grid;
+  gap: 11px;
+  justify-items: center;
+  margin-top: 14px;
   color: var(--text-dim);
   font-size: 10px;
 }
@@ -1160,6 +1302,13 @@
   flex-wrap: wrap;
   gap: 7px;
   align-items: center;
+  justify-content: center;
+}
+
+/* O único controle da caixa: largo, e no fim de tudo. */
+:where(.producao) .encaixe-loading-rodape .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 :where(.producao) .encaixe-prioridade-badge {
@@ -1175,47 +1324,51 @@
   letter-spacing: .02em;
 }
 
-:where(.producao) .encaixe-carregamento.concluido {
+/*
+ * O FIM, NOS TRÊS JEITOS QUE ELE ACONTECE.
+ *
+ * Em todos, a primeira coisa que muda é o poço: as peças param onde estão,
+ * cheias e no lugar. É o desenho do trabalho terminado — e é por isso que a
+ * animação foi montada com o lugar final de cada peça escrito no CSS, e não
+ * sorteado: parada, ela tem que ser um encaixe que fecha.
+ */
+:where(.producao) .encaixe-carregamento.concluido .encaixe-tetris > span,
+:where(.producao) .encaixe-carregamento.interrompido .encaixe-tetris > span,
+:where(.producao) .encaixe-carregamento.com-erro .encaixe-tetris > span {
+  transform: none;
+  opacity: 1;
+  animation: none;
+}
+
+:where(.producao) .encaixe-carregamento.concluido .encaixe-loading-caixa {
   border-color: color-mix(in srgb, var(--success) 50%, var(--border));
-  box-shadow: inset 3px 0 0 var(--success);
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--success) 12%, transparent), transparent 62%),
+    var(--card-bg);
 }
 
-:where(.producao) .encaixe-carregamento.concluido .encaixe-spinner {
-  border-color: var(--success);
-  animation: none;
-}
-
-:where(.producao) .encaixe-carregamento.concluido .encaixe-spinner::after {
-  content: "✓";
-  display: grid;
-  height: 100%;
-  place-items: center;
-  color: var(--success);
-  font-weight: 900;
-}
-
-:where(.producao) .encaixe-carregamento.interrompido {
+:where(.producao) .encaixe-carregamento.interrompido .encaixe-loading-caixa {
   border-color: color-mix(in srgb, var(--warn) 50%, var(--border));
-  box-shadow: inset 3px 0 0 var(--warn);
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--warn) 12%, transparent), transparent 62%),
+    var(--card-bg);
 }
 
-:where(.producao) .encaixe-carregamento.com-erro {
+:where(.producao) .encaixe-carregamento.com-erro .encaixe-loading-caixa {
   border-color: color-mix(in srgb, var(--danger) 52%, var(--border));
-  box-shadow: inset 3px 0 0 var(--danger);
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--danger) 12%, transparent), transparent 62%),
+    var(--card-bg);
 }
 
-:where(.producao) .encaixe-carregamento.interrompido .encaixe-spinner,
-:where(.producao) .encaixe-carregamento.com-erro .encaixe-spinner {
-  animation: none;
-}
+/* O título do fim acompanha a cor do estado — é a linha que se lê primeiro. */
+:where(.producao) .encaixe-carregamento.concluido .encaixe-loading-copy strong { color: var(--success); }
+:where(.producao) .encaixe-carregamento.interrompido .encaixe-loading-copy strong { color: var(--warn); }
+:where(.producao) .encaixe-carregamento.com-erro .encaixe-loading-copy strong { color: var(--danger); }
 
-:where(.producao) .encaixe-carregamento.interrompido .encaixe-spinner {
-  border-color: var(--warn);
-}
-
-:where(.producao) .encaixe-carregamento.com-erro .encaixe-spinner {
-  border-color: var(--danger);
-}
+:where(.producao) .encaixe-carregamento.concluido .encaixe-loading-barra > span { background: var(--success); box-shadow: none; }
+:where(.producao) .encaixe-carregamento.interrompido .encaixe-loading-barra > span { background: var(--warn); box-shadow: none; }
+:where(.producao) .encaixe-carregamento.com-erro .encaixe-loading-barra > span { background: var(--danger); box-shadow: none; }
 
 :where(.producao) .abas-tamanho {
   border-color: var(--border-soft);
@@ -1831,17 +1984,22 @@
 
 @media (max-width: 560px) {
 
-  :where(.producao) .encaixe-loading-topo {
-    grid-template-columns: 34px minmax(0, 1fr);
+  /* No telefone a caixa encosta nas bordas e o poço encolhe: ele é o que dá
+     para apertar sem perder o desenho. */
+  :where(.producao) .encaixe-carregamento {
+    padding: 12px;
   }
 
-  :where(.producao) .encaixe-carregamento {
-    right: 12px;
-    bottom: 12px;
-    left: 12px;
-    width: auto;
+  :where(.producao) .encaixe-loading-caixa {
     max-height: calc(100vh - 24px);
     overflow-y: auto;
+    padding: 16px;
+  }
+
+  :where(.producao) .encaixe-tetris {
+    margin-bottom: 16px;
+    transform: scale(.86);
+    transform-origin: top center;
   }
 
   :where(.producao) .encaixe-loading-tempo {
@@ -1901,26 +2059,39 @@
 
 /* O selo na linha da peça: só o suficiente para o olho parar ali. O detalhe
    fica no `title` e no painel de cima, com a imagem junto. */
+/* O selo mora no canto de cima da miniatura (ver `seloDeCor`, no
+   controlador). Fundo opaco de propósito: ele cai em cima da arte, e translúcido
+   sumiria numa imagem clara. */
+/* A faixa do aviso de cor, no alto do retângulo da peça (ver `seloDeCor`, no
+   controlador). Ela só existe na peça que tem aviso: nas outras, a linha
+   começa direto na miniatura. */
+:where(.producao) .peca-selo-topo {
+  display: block;
+  margin-bottom: 5px;
+}
+
 :where(.producao) .selo-cor {
-  flex-shrink: 0;
-  padding: 1px 5px;
+  display: inline-block;
+  padding: 1px 6px;
   border-radius: 4px;
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.04em;
+  line-height: 1.5;
   text-transform: uppercase;
   white-space: nowrap;
+  cursor: help;
 }
 
 :where(.producao) .selo-cor-cmyk {
-  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
-  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+  background: color-mix(in srgb, var(--danger) 16%, var(--card-bg));
   color: var(--danger);
 }
 
 :where(.producao) .selo-cor-perfil {
-  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
-  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent);
+  background: color-mix(in srgb, var(--warn) 14%, var(--card-bg));
   color: var(--warn);
 }
 
@@ -2119,6 +2290,21 @@
   animation: menu-descer .15s cubic-bezier(.16, 1, .3, 1) both;
 }
 
+/* Aberto a partir da barra DE BAIXO, o painel sobe: para baixo ele cairia
+   fora da janela. Cresce da base, pelo mesmo motivo que o outro cresce do
+   topo — parecer que saiu do botão que foi clicado. */
+:where(.producao) .menu-painel.para-cima {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform-origin: bottom;
+  animation-name: menu-subir;
+}
+
+@keyframes menu-subir {
+  from { opacity: 0; transform: translateY(6px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+
 :where(.producao) .menu-painel.direita { right: 0; }
 :where(.producao) .menu-painel.esquerda { left: 0; }
 
@@ -2191,6 +2377,81 @@
 
 /* O vão entre a coluna e a mesa fecha. O que separa as duas passa a ser uma
    linha de 1px — o mesmo desenho, um traço em vez de um corredor. */
+/*
+ * A LINHA DA PEÇA É O ALVO DE MARCAR.
+ *
+ * Saiu a caixinha de 14px da ponta esquerda; entrou a linha inteira (ver o
+ * ouvinte de `click` em `controlador.js`). Marcada, ela ganha fundo âmbar e um
+ * traço de 3px na borda esquerda — o mesmo par que o menu lateral usa para a
+ * tela aberta, que é o sinal de "este aqui está ligado" que esta casca já
+ * ensinou a ler.
+ *
+ * `cursor: pointer` e o realce de passagem porque agora ela É um botão: sem
+ * isso, ninguém descobre que dá para clicar.
+ */
+:where(.producao) .peca-linha {
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  padding-left: 9px;
+  transition: background-color .12s, border-color .12s;
+}
+
+:where(.producao) .peca-linha:hover {
+  background: var(--card-bg-soft);
+}
+
+:where(.producao) .peca-linha.marcada {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+:where(.producao) .peca-linha.marcada:hover {
+  background: color-mix(in srgb, var(--accent) 18%, var(--card-bg));
+}
+
+:where(.producao) .peca-linha:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* O campo de cópias, a setinha e o × vivem dentro do alvo de marcar, mas o
+   que eles fazem é outra coisa — o cursor precisa dizer isso. */
+:where(.producao) .peca-linha input[data-campo],
+:where(.producao) .peca-linha button {
+  cursor: auto;
+}
+
+:where(.producao) .peca-linha button {
+  cursor: pointer;
+}
+
+/*
+ * O NOME DA PEÇA NA LINHA — cortado por padrão, inteiro com dois cliques.
+ *
+ * O corte é o estado normal: a coluna tem 320px e o nome vem do arquivo, com
+ * tamanho, versão e extensão dentro. Dois cliques trocam o corte por quebra
+ * de linha (ver o ouvinte de `click` em `controlador.js`), e a linha da peça
+ * cresce junto — por isso o `items-start` lá: com o perfil preso no topo, o
+ * nome pode ocupar duas ou três linhas sem empurrar a miniatura para baixo.
+ *
+ * `break-all` e não `break-word`: nome de arquivo não tem espaço para quebrar,
+ * e sem isso uma palavra de 40 caracteres estoura a coluna do mesmo jeito.
+ */
+:where(.producao) .nome-da-peca {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(.producao) .nome-da-peca.nome-inteiro {
+  overflow: visible;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-all;
+}
+
 :where(.producao) .bancada-encaixe {
   gap: 0;
 }

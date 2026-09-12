@@ -3,10 +3,12 @@
  * TOKENS — a paleta Optimize, num arquivo só
  * ===========================================================================
  *
- * Âmbar sobre preto, num tema só. Este é o ÚNICO lugar do projeto onde um hex
- * é escrito: o `estilo/entrada.css` traduz cada token daqui num utilitário do
- * Tailwind (`bg-topo`, `text-ambar`), e o CSS à mão das telas antigas lê as
- * mesmas variáveis. Mudar o âmbar continua sendo mudar uma linha.
+ * O laranja da marca sobre preto, num tema só. Este é o ÚNICO lugar do
+ * projeto onde um hex é escrito: o `estilo/entrada.css` traduz cada token
+ * daqui num utilitário do Tailwind (`bg-topo`, `text-ambar`), e o CSS à mão
+ * das telas antigas lê as mesmas variáveis. Mudar a cor da marca continua
+ * sendo mudar uma linha — foi exatamente o que aconteceu quando o logo
+ * entrou na barra e o acento passou a ser o dele.
  *
  * Ele vivia dentro do `public/interface.css`, que é a folha da tela antiga.
  * Saiu de lá quando a tela nova (React) passou a precisar da mesma paleta sem
@@ -31,17 +33,59 @@
   --text-dim: #a09a93;
   --text-faint: #857e76;
 
-  /* Âmbar da marca. --accent-ink é o que se escreve EM CIMA do âmbar:
-     branco sobre laranja dá 2.8:1 e reprova, preto-queimado dá 6.7:1. */
-  --accent: #f97316;
-  --accent-dark: #ea6a0a;
-  --accent-bright: #ffa04d;
-  --accent-soft: rgba(249, 115, 22, 0.12);
-  --accent-line: rgba(249, 115, 22, 0.3);
+  /*
+   * -------------------------------------------------------------------------
+   * O LARANJA É O DA MARCA, MEDIDO NO ARQUIVO DO LOGO
+   * -------------------------------------------------------------------------
+   *
+   * `#ff531f` não foi escolhido: foi LIDO. O logo (`public/icone.png`, e as
+   * cópias servidas em `estatico/`) tem duas cores e mais nada — branco puro e
+   * este laranja, 190 mil pixels dele. O acento do sistema era `#f97316`, um
+   * âmbar mais amarelo; lado a lado com a marca no pé do menu, eram duas
+   * laranjas diferentes na mesma tela, e a tela parecia a de outro programa.
+   *
+   * Como TUDO no sistema aponta para `--accent` — o item aceso do menu, o
+   * botão primário, o selo do cabeçalho, a seleção do encaixe, o gráfico do
+   * painel —, trocar aqui alinhou as dezenove telas de uma vez.
+   *
+   * O nome `ambar` continua sendo o do utilitário do Tailwind
+   * (`bg-ambar`, `text-ambar`, em `estilo/entrada.css`) e das ~100 classes
+   * espalhadas pelas telas. Ele virou só um nome: quem quiser o valor, olha
+   * aqui. Renomear para `laranja` é uma varredura de 23 arquivos que não muda
+   * um pixel, e fica para quando houver outro motivo de mexer neles.
+   *
+   * Os números, conferidos sobre `--bg`:
+   *
+   *   --accent          6,10:1   (texto e ícone acesos passam AA)
+   *   --accent-bright   8,19:1   (realce e hover)
+   *   --accent-dark     4,91:1   (o botão pressionado)
+   *   --accent-ink em cima do --accent: 5,96:1 — é o que se escreve DENTRO do
+   *   botão laranja. Branco ali dá 3,2:1 e reprova; por isso a tinta é o
+   *   preto-queimado, e não o branco do logo.
+   */
+  --accent: #ff531f;
+  --accent-dark: #e8430f;
+  --accent-bright: #ff8556;
+  --accent-soft: rgba(255, 83, 31, 0.12);
+  --accent-line: rgba(255, 83, 31, 0.3);
   --accent-ink: #180c02;
 
-  --danger: #f26d6d;
-  --danger-dark: #d44949;
+  /*
+   * O ALERTA TEVE QUE SAIR DE PERTO DO LARANJA.
+   *
+   * Era `#f26d6d`, um vermelho-tijolo que convivia bem com o âmbar amarelado
+   * (ΔE2000 20,6). Com o laranja da marca a distância caiu para 14,7 — abaixo
+   * de 15, que é o piso que este projeto usa para dizer que duas cores são
+   * distinguíveis por quem enxerga todas elas (a mesma régua da nota sobre os
+   * canais de tinta, em `telas/Impressoras.tsx`). "Excluir" em vermelho ao
+   * lado de "Cadastrar" em laranja viraria a mesma cor de longe.
+   *
+   * O novo puxa para o rosado, que é para onde dá para ir sem encostar no
+   * laranja: ΔE 22,9 do acento, 7,23:1 sobre o fundo, e continua lendo como
+   * vermelho de perigo. Longe também do atenção (ΔE 44,6) e do certo (74,0).
+   */
+  --danger: #ff6b8a;
+  --danger-dark: #e04c6d;
   --warn: #f5b740;
   --success: #4ed18a;
 

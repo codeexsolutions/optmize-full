@@ -23,8 +23,13 @@
  *
  * A divisão é por **momento do trabalho**, e não por parentesco técnico:
  *
- *   - **Produção** — o que se faz ANTES de imprimir: o molde, o projeto, o
- *     encaixe, o vetor.
+ *   - **Produção** — o molde e o trabalho: a biblioteca, o projeto do cliente,
+ *     o encaixe no tecido e as macros do Corel.
+ *   - **Design** — o que se faz com a ARTE antes de ela virar trabalho:
+ *     vetorizar um desenho, tirar o molde de uma foto, aumentar a resolução e
+ *     acertar a cor. Eram quatro telas soltas dentro de Produção, e Produção
+ *     tinha oito itens — quase o menu inteiro num grupo só, que é o mesmo que
+ *     não ter grupo nenhum.
  *   - **Impressão** — o que acontece ENQUANTO se imprime, e as máquinas em si.
  *   - **Relatórios** — o que se olha DEPOIS, para conferir e comparar.
  *
@@ -73,20 +78,23 @@ const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m
 const Whatsapp = lazy(() => import("./telas/Whatsapp").then((m) => ({ default: m.Whatsapp })));
 const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default: m.Historico })));
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
+const Licenca = lazy(() => import("./telas/Licenca").then((m) => ({ default: m.Licenca })));
 
 export type NomeDeTela =
   | "cor" | "moldes" | "projetos" | "encaixe" | "vetor" | "digitalizar" | "imagem" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
-  | "historico" | "reposicao";
+  | "historico" | "reposicao" | "licenca";
 
-export type NomeDeGrupo = "producao" | "impressao" | "relatorios";
+export type NomeDeGrupo = "producao" | "design" | "impressao" | "relatorios";
 
 /**
  * Os grupos, na ordem em que aparecem no menu — que é a ordem do trabalho:
- * primeiro se prepara, depois se imprime, por último se confere.
+ * primeiro se prepara o molde, depois se trata a arte, depois se imprime, por
+ * último se confere.
  */
 export const GRUPOS: readonly { nome: NomeDeGrupo; rotulo: string }[] = [
   { nome: "producao", rotulo: "Produção" },
+  { nome: "design", rotulo: "Design" },
   { nome: "impressao", rotulo: "Impressão" },
   { nome: "relatorios", rotulo: "Relatórios" },
 ];
@@ -104,6 +112,20 @@ export interface Tela {
   apoioTopo: string;
   /** Referência ao sprite: `icones.svg#nome-do-icone`. */
   icone: string;
+  /**
+   * A tela existe, tem endereço e cabeçalho — mas não aparece no menu.
+   *
+   * É o caso de **Máquinas**: ela é uma porta, não um lugar onde se trabalha.
+   * Quem precisa dela ou não tem impressora nenhuma (e aí é o painel de
+   * Impressoras que leva para lá sozinho), ou vai trocar o nome de uma
+   * máquina e apagar outra — uma vez por ano. Num menu de treze itens, ela
+   * cobrava uma linha permanente ao lado de "Impressoras" para dizer quase a
+   * mesma palavra, e a dupla obrigava a escolher entre as duas toda vez.
+   *
+   * `/maquinas` continua funcionando inteiro: link guardado abre, o cabeçalho
+   * é o mesmo. O que sai é só a linha do menu.
+   */
+  foraDoMenu?: boolean;
   Componente: ComponentType;
 }
 
@@ -137,8 +159,22 @@ export const TELAS: readonly Tela[] = [
     Componente: Encaixe,
   },
   {
-    nome: "vetor",
+    nome: "macros",
     grupo: "producao",
+    rotulo: "Macros",
+    apoioMenu: "Ferramentas no CorelDRAW",
+    apoioTopo: "Baixe e instale as macros que rodam dentro do Corel e falam com este sistema.",
+    icone: "icones.svg#puzzle",
+    Componente: Macros,
+  },
+
+
+  // --------------------------------------------------------------- Design
+  // O que acontece com a ARTE antes de ela virar trabalho: o traço, o molde
+  // tirado de uma foto, a resolução e a cor.
+  {
+    nome: "vetor",
+    grupo: "design",
     rotulo: "Vetor",
     apoioMenu: "Traço a partir da imagem",
     apoioTopo: "Transforme uma imagem em desenho vetorial para corte e impressão.",
@@ -147,7 +183,7 @@ export const TELAS: readonly Tela[] = [
   },
   {
     nome: "digitalizar",
-    grupo: "producao",
+    grupo: "design",
     rotulo: "Digitalizar",
     apoioMenu: "Molde a partir da foto",
     apoioTopo: "Mande a imagem do molde e tire o risco dele, na medida que você informar.",
@@ -158,7 +194,7 @@ export const TELAS: readonly Tela[] = [
   // ------------------------------------------------------------ Impressão
   {
     nome: "imagem",
-    grupo: "producao",
+    grupo: "design",
     rotulo: "Imagem",
     apoioMenu: "Resolução para imprimir",
     apoioTopo: "Aumenta a resolução da arte com rede neural, para imprimir grande sem borrar.",
@@ -166,17 +202,7 @@ export const TELAS: readonly Tela[] = [
     Componente: Imagem,
   },
   {
-    nome: "macros",
-    grupo: "producao",
-    rotulo: "Macros",
-    apoioMenu: "Ferramentas no CorelDRAW",
-    apoioTopo: "Baixe e instale as macros que rodam dentro do Corel e falam com este sistema.",
-    icone: "icones.svg#puzzle",
-    Componente: Macros,
-  },
-
-  {
-    nome: "cor", grupo: "producao", rotulo: "Cor",
+    nome: "cor", grupo: "design", rotulo: "Cor",
     apoioMenu: "Arte na cor certa", apoioTopo: "Confira e corrija a cor antes de mandar ao encaixe.",
     icone: "icones.svg#palette", Componente: Cor,
   },
@@ -202,6 +228,7 @@ export const TELAS: readonly Tela[] = [
     nome: "maquinas",
     grupo: "impressao",
     rotulo: "Máquinas",
+    foraDoMenu: true,
     apoioMenu: "Achar na rede",
     apoioTopo: "Encontre as impressoras da rede e cadastre-as — os caminhos vêm sozinhos.",
     icone: "icones.svg#radar",
@@ -228,6 +255,22 @@ export const TELAS: readonly Tela[] = [
     Componente: Historico,
   },
   {
+    /*
+     * A licença não é uma tela de trabalho: fica fora do menu, como Máquinas.
+     * Quem precisa dela chega por um destes três caminhos — a faixa de aviso
+     * quando está perto de vencer, a tela de bloqueio quando venceu, ou a
+     * linha discreta no pé do menu, que é onde ela vive o resto do tempo.
+     */
+    nome: "licenca",
+    grupo: "relatorios",
+    foraDoMenu: true,
+    rotulo: "Licença",
+    apoioMenu: "Token e validade",
+    apoioTopo: "O token que libera este computador, a validade dele e o código desta instalação.",
+    icone: "icones.svg#shield-check",
+    Componente: Licenca,
+  },
+  {
     nome: "reposicao",
     grupo: "relatorios",
     rotulo: "Reposição",
@@ -238,9 +281,9 @@ export const TELAS: readonly Tela[] = [
   },
 ];
 
-/** As telas de um grupo, na ordem em que estão declaradas acima. */
+/** As telas de um grupo que aparecem no menu, na ordem em que estão declaradas acima. */
 export function telasDoGrupo(grupo: NomeDeGrupo): Tela[] {
-  return TELAS.filter((tela) => tela.grupo === grupo);
+  return TELAS.filter((tela) => tela.grupo === grupo && !tela.foraDoMenu);
 }
 
 export const TELA_PADRAO: NomeDeTela = "moldes";

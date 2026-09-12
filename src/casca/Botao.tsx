@@ -8,10 +8,12 @@
  * Projetos sair igual à de lá.
  *
  * As cores saem dos TOKENS deste projeto, e não da escala `brand-*`/`surface-*`
- * da Lite. Não é liberdade: as duas paletas são a mesma — o laranja da Lite é
- * `#f97316`, que é exatamente o `--accent` daqui, e os fundos batem no mesmo
- * preto quente. Escrever a escala de lá seria uma segunda paleta no projeto,
- * esperando divergir da primeira na próxima vez que alguém mexer no âmbar.
+ * da Lite. Quando esta tela veio de lá as duas paletas eram a mesma — o
+ * laranja da Lite é `#f97316`, que era o `--accent` daqui. Hoje o acento é o
+ * laranja do logo (`#ff531f`, ver `estilo/tokens.css`), e é justamente por
+ * ler o token que este botão mudou junto com o resto do sistema, sem ninguém
+ * precisar abrir este arquivo. Escrever a escala da Lite aqui seria uma
+ * segunda paleta no projeto, esperando divergir da primeira.
  *
  * Os cantos são `rounded-xl` como lá — mais redondos que os do resto desta
  * casca, e é isso que dá o ar da Lite à tela.

@@ -18,30 +18,45 @@
  * na frente.
  *
  * ---------------------------------------------------------------------------
- * AS MEDIDAS VIERAM DA CASCA ANTIGA, E ISSO FOI DE PROPÓSITO
+ * O DESENHO: UMA BARRA DE PROGRAMA, NÃO UMA LISTA DE AJUSTES
  * ---------------------------------------------------------------------------
  *
- * Largura, recuos, o estado do item ativo e o relógio no pé: tudo aqui foi
- * copiado de `public/style.css` e `public/interface.css`, que era o menu da
- * tela antiga. (A marca do alto — logo, nome e "Moldes & encaixe" — saiu; o
- * nome do programa vive agora no pé.) Enquanto as duas cascas conviveram, um clique que
- * trocava de casca não podia parecer um clique que trocou de programa — e era
- * o que parecia, porque esta nasceu como um redesenho e não como uma cópia.
+ * As medidas vieram da casca antiga (`public/style.css`), e por um tempo
+ * tinham que vir: enquanto as duas cascas conviveram, um clique que trocava de
+ * casca não podia parecer um clique que trocou de programa. O `public/` já foi
+ * apagado, e o que sobrou era um menu que parecia a tela de ajustes de um
+ * celular — cada tela num cartão de duas linhas, com o ícone dentro de uma
+ * caixinha de borda própria, e o item ativo com borda âmbar em volta.
  *
- * O `public/` já foi apagado e não há mais o que manter em dois lugares. As
- * medidas ficam como estão porque são as que a fábrica já conhece; mexer nelas
- * agora é decisão de desenho, não mais uma obrigação de casar com a outra.
+ * Três coisas mudaram, e é disso que vem o ar de programa:
  *
- * Inclusive a FAIXA ESTREITA: entre 801 e 1100px a casca antiga encolhe a
- * barra para 78px e deixa só os ícones. Esta não encolhia, e o resultado era o
- * pior dos dois mundos — na mesma janela de 1080px, um clique que trocava de
- * casca trocava também a largura do menu, e parecia outro programa. A regra
- * vive nas duas: lá no `@media` do `interface.css`, aqui nas variantes
- * `tela:max-[1100px]:`.
+ *   1. **Uma linha por tela.** A linha de apoio ("Aproveitamento do tecido")
+ *      virou o `title` do link — continua a um segundo de distância, no
+ *      balãozinho, mas sai da vista de quem já sabe onde clica. Treze cartões
+ *      de duas linhas pedem leitura; treze linhas se varrem de olho.
+ *
+ *   2. **O ícone é um ícone.** Sem moldura, sem fundo. A moldura fazia cada
+ *      item parecer um botão dentro do menu, e o menu inteiro, uma barra de
+ *      ferramentas empilhada.
+ *
+ *   3. **O ativo é uma barrinha, não uma caixa.** Um traço âmbar de 3px
+ *      encostado na esquerda, o texto e o ícone em âmbar, e um fundo de brilho
+ *      baixo. É o que o olho já procura numa barra lateral (é o que fazem o
+ *      VS Code, o Figma e a casca antiga) — e sem a borda em volta, a lista
+ *      volta a parecer uma lista.
+ *
+ * Com o item numa linha só, a barra inteira mede ~520px: as treze telas cabem
+ * sem rolagem até num monitor de 1366x768, que era o problema que as variantes
+ * de altura resolviam à força. Restou o ajuste fino do `curta:`, para a janela
+ * bem baixa.
+ *
+ * A FAIXA ESTREITA continua: entre 801 e 1100px a barra encolhe para 78px e
+ * deixa só os ícones, como a casca antiga fazia. Sem isso, na mesma janela de
+ * 1080px a largura do menu mudava conforme a tela aberta.
  */
 
 import { useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { Icone } from "./Icone";
 import { useRelogio } from "./useRelogio";
 import { GRUPOS, telasDoGrupo } from "../rotas";
@@ -53,69 +68,51 @@ interface Props {
 
 /*
  * ---------------------------------------------------------------------------
- * A ALTURA DA JANELA MANDA NA DENSIDADE
+ * AS VARIANTES DE ALTURA
  * ---------------------------------------------------------------------------
  *
- * São treze telas, e no tamanho cheio (item de 50px com duas linhas de texto)
- * o menu pede ~940px de altura. Num monitor de 1366x768 — o mais comum no
- * chão de fábrica — isso não cabia: dois itens ficavam fora da vista e o
- * relógio ia parar 119px abaixo do fim da janela, inalcançável.
+ * `curta:` é variante de ALTURA de janela, declarada em `estilo/entrada.css`
+ * — o Tailwind só traz as de largura. Ela aperta o item nos poucos pixels que
+ * faltam numa janela baixa.
  *
- * Então o item encolhe conforme a janela: abaixo de 900px de altura a linha
- * de apoio sai (o rótulo sozinho já identifica a tela), e abaixo de 760px o
- * item aperta mais um pouco. Em 1366x768 o menu inteiro passa a caber sem
- * rolagem nenhuma.
- *
- * `curta:` e `baixinha:` são variantes de ALTURA, declaradas em
- * `estilo/entrada.css` — o Tailwind só traz as de largura.
- *
- * E elas vão ESCRITAS POR INTEIRO nas classes, nunca montadas em pedaços: o
- * Tailwind gera CSS a partir do que ENCONTRA no código-fonte, e um
- * `${PREFIXO}min-h-[42px]` não existe como texto em lugar nenhum — a regra não
+ * E vai ESCRITA POR INTEIRO nas classes, nunca montada em pedaços: o Tailwind
+ * gera CSS a partir do que ENCONTRA no código-fonte, e um
+ * `${PREFIXO}min-h-[34px]` não existe como texto em lugar nenhum — a regra não
  * nasceria, a tela ficaria igual e nada acusaria. Foi o que aconteceu na
  * primeira versão disto.
  */
 
-/** O item do menu. As medidas vieram do `.nav-btn` da casca antiga, que já saiu. */
+/** O item do menu: uma linha, ícone e rótulo. */
 const ITEM =
-  "grid min-h-[50px] grid-cols-[30px_minmax(0,1fr)] items-center gap-[10px] rounded-[10px] baixinha:grid-cols-[26px_minmax(0,1fr)]" +
+  "relative grid min-h-[36px] grid-cols-[20px_minmax(0,1fr)] items-center gap-[11px] rounded-[8px]" +
   // `no-underline`: o item virou <a>, e link sublinhado num menu lateral não é
   // o desenho desta casca — era <button> antes e assim continua parecendo.
-  " border border-transparent px-[10px] py-2 text-left no-underline transition-colors" +
-  " curta:min-h-[40px] curta:py-1" +
-  " baixinha:min-h-[36px]" +
+  " px-[10px] py-[6px] text-left no-underline transition-colors duration-100" +
+  " curta:min-h-[32px] curta:py-1" +
   // Barra estreita: o ícone sozinho, centrado.
-  " tela:max-[1100px]:grid-cols-[1fr] tela:max-[1100px]:justify-items-center tela:max-[1100px]:p-[7px]";
+  " tela:max-[1100px]:grid-cols-[1fr] tela:max-[1100px]:justify-items-center tela:max-[1100px]:px-0";
 
-/** O rótulo e a linha de apoio somem quando a barra encolhe. */
-const TEXTO_DO_ITEM = "grid min-w-0 gap-0.5 tela:max-[1100px]:hidden";
+/** O rótulo some quando a barra encolhe — sobra o ícone. */
+const TEXTO_DO_ITEM = "truncate text-[13px] font-medium tracking-[-0.005em] tela:max-[1100px]:hidden";
+
+const ITEM_PARADO = "text-tinta-fraca hover:bg-[var(--surface-hover)] hover:text-tinta";
+const ITEM_ATIVO = "bg-[var(--accent-soft)] text-ambar-claro";
 
 /**
- * A linha de apoio sai quando a janela é baixa: ela é útil, mas é a primeira
- * coisa que se troca por caber — o rótulo sozinho já diz qual tela é.
+ * A BARRINHA DO ATIVO.
+ *
+ * Fica fora do fluxo, colada na borda esquerda do item, com as pontas
+ * arredondadas. Era um `shadow-[inset_3px_0]` — que funciona, mas desenha o
+ * traço de canto vivo, encostado no topo e no pé do item, e some junto com o
+ * fundo se alguém mexer no arredondamento depois.
+ *
+ * Na barra estreita ela vai para a esquerda da própria barra (não do item),
+ * porque de lado, com 78px, encostaria no ícone.
  */
-const APOIO_SOME = "curta:hidden";
+const TRILHO = "absolute left-0 top-[6px] bottom-[6px] w-[3px] rounded-r-full bg-ambar";
 
-const ITEM_PARADO = "text-tinta-fraca hover:border-linha hover:bg-[var(--surface-hover)] hover:text-tinta";
-
-/** O ativo: borda âmbar, fundo suave e a barrinha de 3px encostada na esquerda. */
-const ITEM_ATIVO =
-  "border-[var(--accent-line)] bg-[var(--accent-soft)] text-white shadow-[inset_3px_0_var(--accent)]" +
-  // Estreita, a barrinha vai para baixo: de lado ela encostaria no ícone.
-  " tela:max-[1100px]:shadow-[inset_0_-2px_var(--accent)]";
-
-/*
- * O ícone é o piso da altura do item: `min-h` não encolhe nada enquanto o
- * conteúdo for maior que ele. Por isso, na janela mais baixa, quem encolhe é
- * o ícone — e é o que faz as treze telas caberem num monitor de 1280x720.
- */
-const ICONE = "size-[30px] shrink-0 rounded-[8px] border p-[6px] baixinha:size-[26px] baixinha:p-[5px]";
-const ICONE_PARADO = "border-linha text-tinta-fraca";
-const ICONE_ATIVO = "border-[var(--accent-line)] bg-[var(--accent-soft)] text-ambar";
-
-const ROTULO = "truncate text-[13px] font-semibold tracking-[-0.01em]";
-const APOIO = "truncate text-[10.5px] font-[450] text-tinta-apagada";
-const APOIO_ATIVO = "truncate text-[10.5px] font-[450] text-[color-mix(in_srgb,var(--accent)_55%,var(--text))]";
+/** O ícone, sem moldura: é um desenho, não um botão dentro do botão. */
+const ICONE = "size-[18px] shrink-0 transition-colors duration-100";
 
 export function Menu({ aberto, aoFechar }: Props) {
   const relogio = useRelogio();
@@ -140,12 +137,13 @@ export function Menu({ aberto, aoFechar }: Props) {
 
       <aside
         className={[
-          // A barra NÃO rola: quem rola é a lista de telas, no meio dela. A
-          // marca fica presa no alto e o relógio no pé — antes os dois iam
-          // embora junto com a rolagem, e o relógio chegava a cair fora da
-          // janela numa tela de 768px.
-          "fixed inset-y-0 left-0 z-80 flex w-[244px] flex-col overflow-x-hidden",
-          "border-r border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-4 pt-[22px] pb-[17px]",
+          // A barra NÃO rola: quem rola é a lista de telas, no meio dela. O pé
+          // fica preso embaixo — antes ia embora junto com a rolagem, e o
+          // relógio chegava a cair fora da janela numa tela de 768px.
+          // 236px e 78px: quem repete estas duas medidas é o `ml` do <main>,
+          // em `Casca.tsx` — a barra é `fixed` e não empurra o miolo sozinha.
+          "fixed inset-y-0 left-0 z-80 flex w-[236px] flex-col overflow-x-hidden",
+          "border-r border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-[10px] pt-4 pb-[14px]",
           // A barra estreita, entre 801 e 1100px. Ver o cabeçalho.
           "tela:max-[1100px]:w-[78px] tela:max-[1100px]:px-[10px]",
           "shadow-[6px_0_18px_-8px_rgba(0,0,0,0.55)] transition-transform duration-200",
@@ -154,15 +152,13 @@ export function Menu({ aberto, aoFechar }: Props) {
         ].join(" ")}
       >
         {/*
-          AQUI MORAVA A MARCA — o logo, "Optimize" e "Moldes & encaixe".
-          Ela saiu: o nome do programa passou para o pé da barra, junto do
+          AQUI MORAVA A MARCA — o logo, o nome e "Moldes & encaixe".
+          Ela saiu: o logo e o nome passaram para o pé da barra, junto do
           relógio, e o alto virou o que a barra existe para ser — a lista de
           telas, começando na primeira linha.
 
           Não é só arrumação: eram ~70px de altura gastos para dizer onde a
-          pessoa está, num programa que ela abre o dia inteiro. Com eles de
-          volta, as treze telas cabem com folga até num monitor baixo (ver a
-          nota sobre `curta:` e `baixinha:`, acima).
+          pessoa está, num programa que ela abre o dia inteiro.
         */}
 
         {/*
@@ -170,16 +166,27 @@ export function Menu({ aberto, aoFechar }: Props) {
           um leitor de tela anunciar "navegação Produção" em vez de despejar dez
           itens seguidos sem dizer onde um assunto acaba e o outro começa.
         */}
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain curta:gap-2.5 baixinha:gap-2">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-1 curta:gap-3.5">
           {GRUPOS.map((grupo) => {
             const telas = telasDoGrupo(grupo.nome);
             if (!telas.length) return null;
 
             return (
-              <nav key={grupo.nome} aria-labelledby={`grupo-${grupo.nome}`} className="flex flex-col gap-[3px]">
+              <nav key={grupo.nome} aria-labelledby={`grupo-${grupo.nome}`} className="flex flex-col gap-[2px]">
+                {/*
+                  O título do grupo na barra estreita vira um traço: sem ele os
+                  três grupos viram uma coluna só de ícones, e a divisão que o
+                  menu inteiro existe para mostrar some justo onde há menos
+                  espaço para procurar.
+                */}
                 <h2
                   id={`grupo-${grupo.nome}`}
-                  className="mt-0 mb-1 px-3 text-[10px] font-semibold tracking-[0.12em] text-tinta-apagada uppercase curta:mb-0.5 tela:max-[1100px]:hidden"
+                  className={[
+                    "mt-0 mb-[6px] px-[10px] text-[9.5px] font-semibold tracking-[0.14em] text-tinta-apagada uppercase",
+                    "curta:mb-1",
+                    "tela:max-[1100px]:mx-auto tela:max-[1100px]:mb-2 tela:max-[1100px]:h-px tela:max-[1100px]:w-6",
+                    "tela:max-[1100px]:overflow-hidden tela:max-[1100px]:bg-linha tela:max-[1100px]:px-0 tela:max-[1100px]:text-transparent",
+                  ].join(" ")}
                 >
                   {grupo.rotulo}
                 </h2>
@@ -189,18 +196,18 @@ export function Menu({ aberto, aoFechar }: Props) {
                     key={tela.nome}
                     to={`/${tela.nome}`}
                     onClick={aoFechar}
+                    /* A linha de apoio não é mais desenhada: vive aqui, no balão. */
+                    title={`${tela.rotulo} — ${tela.apoioMenu}`}
                     className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO].join(" ")}
                   >
                     {({ isActive }) => (
                       <>
+                        {isActive && <span aria-hidden="true" className={TRILHO} />}
                         <Icone
                           referencia={tela.icone}
-                          className={[ICONE, isActive ? ICONE_ATIVO : ICONE_PARADO].join(" ")}
+                          className={`${ICONE} ${isActive ? "text-ambar" : ""}`}
                         />
-                        <span className={TEXTO_DO_ITEM}>
-                          <strong className={ROTULO}>{tela.rotulo}</strong>
-                          <small className={`${isActive ? APOIO_ATIVO : APOIO} ${APOIO_SOME}`}>{tela.apoioMenu}</small>
-                        </span>
+                        <span className={TEXTO_DO_ITEM}>{tela.rotulo}</span>
                       </>
                     )}
                   </NavLink>
@@ -212,34 +219,90 @@ export function Menu({ aberto, aoFechar }: Props) {
         </div>
 
         {/*
-          O PÉ DA BARRA: o nome do programa e o relógio.
+          O PÉ DA BARRA: a marca do programa e o relógio.
 
           O relógio está aqui, e não no cabeçalho, pela mesma razão da casca
           antiga: o cabeçalho some nas telas de bancada — que é onde a pessoa
           passa a tarde — e levava o relógio junto. Aqui embaixo ele fica de pé
           em todas as telas.
 
-          O nome desceu para cá quando a marca saiu do alto. É o lugar certo
-          para ele: quem usa o programa não precisa dele para trabalhar, mas
+          A marca desceu para cá quando saiu do alto da barra. É o lugar certo
+          para ela: quem usa o programa não precisa dela para trabalhar, mas
           quem OLHA a tela — de longe, numa foto, num chamado de suporte —
-          precisa saber que programa é.
+          precisa saber que programa é. Na barra estreita sobra só o desenho,
+          um pouco maior, com a hora embaixo.
+
+          Os dois dividem uma linha só: marca à esquerda, hora à direita, do
+          jeito que uma barra de estado faz. Eram dois blocos empilhados, e o
+          pé pesava mais que o item ativo logo acima dele.
 
           O bloco fica FORA da parte que rola, encostado no pé: era `mt-auto`
           dentro dela, e numa janela baixa descia junto com a lista para fora
           da vista.
         */}
-        <div className="shrink-0 border-t border-[var(--border-hairline)] px-[10px] pt-[9px] pb-0.5">
-          <span className="block truncate font-titulo text-[12px] font-semibold tracking-[-0.01em] text-tinta-fraca tela:max-[1100px]:hidden">
-            CodeEx Optmize
-          </span>
+        <div className="mt-3 shrink-0 border-t border-[var(--border-hairline)] px-[11px] pt-[10px]">
+          <div className="flex items-center justify-between gap-2 tela:max-[1100px]:flex-col tela:max-[1100px]:gap-2">
+            {/*
+              A marca é um LINK para a licença.
 
-          <span className="mt-[5px] flex items-center gap-[9px] tela:max-[1100px]:mt-0 tela:max-[1100px]:justify-center">
-            <Icone referencia="icones.svg#clock" className="size-3.5 shrink-0 text-ambar opacity-75" />
-            <span className="flex min-w-0 items-baseline gap-1.5 leading-[1.25] tela:max-[1100px]:hidden">
-              <span className="truncate text-[10.5px] text-tinta-apagada capitalize">{relogio.data}</span>
-              <strong className="font-mono text-[11px] font-semibold text-tinta-fraca">{relogio.hora}</strong>
-            </span>
-          </span>
+              É o único caminho para essa tela quando está tudo em dia (ela
+              fica fora do menu, e a faixa de aviso só aparece perto de
+              vencer), e é onde qualquer pessoa procura "sobre este programa"
+              — que é exatamente o que a tela de licença é: nome, validade e o
+              código desta instalação.
+            */}
+            <Link
+              to="/licenca"
+              title="Licença deste computador"
+              className="flex min-w-0 items-center gap-[7px] no-underline"
+            >
+              {/*
+                A MARCA.
+
+                O arquivo é servido como está, de `estatico/` (é o que o
+                `publicDir` do Vite aponta), e o caminho passa pelo
+                `BASE_URL` como o do sprite de ícones — ver `Icone.tsx`.
+
+                O desenho é branco e laranja, sem fundo: foi feito para cair
+                sobre escuro, que é o que a barra é. O ícone do PROGRAMA (o da
+                barra de tarefas) é este mesmo sobre uma placa escura, porque
+                lá o fundo é do Windows e pode ser claro — ver
+                `empacotar/icone.png`.
+
+                O nome do programa é "CodeEx Optmize", escrito por extenso: é
+                assim que ele se chama no instalador, no chamado de suporte e na
+                boca de quem usa.
+
+                O `alt` carrega o nome e o texto ao lado fica `aria-hidden`:
+                na barra estreita o nome escrito some (é `hidden`, sai da
+                árvore de acessibilidade junto), e sem isso a marca não seria
+                anunciada por nada ali.
+              */}
+              <img
+                src={`${import.meta.env.BASE_URL}icone.png`}
+                alt="CodeEx Optmize"
+                width={20}
+                height={20}
+                /* 20px e não 18: o desenho tem um recorte pequeno no meio, e
+                   abaixo disso ele vira um borrão. Na barra estreita, onde é a
+                   única identidade que sobra, ele cresce mais um pouco. */
+                className="size-[20px] shrink-0 tela:max-[1100px]:size-[26px]"
+              />
+              <span
+                aria-hidden="true"
+                className="truncate font-titulo text-[12.5px] font-semibold tracking-[-0.01em] text-tinta tela:max-[1100px]:hidden"
+              >
+                CodeEx Optmize
+              </span>
+            </Link>
+
+            <strong
+              title={relogio.data}
+              className="shrink-0 font-mono text-[11px] font-medium text-tinta-apagada tabular-nums"
+            >
+              {relogio.hora}
+            </strong>
+          </div>
         </div>
       </aside>
     </>
