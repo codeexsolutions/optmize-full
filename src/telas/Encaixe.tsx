@@ -154,6 +154,184 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 
+<span className="ml-auto flex shrink-0 items-center gap-0.5">
+
+<button id="btn-zoom-menos" className="grid size-7 place-items-center rounded-md text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Diminuir zoom">
+
+<svg className="size-[14px]" viewBox="0 0 24 24" aria-hidden="true">
+<use href="icones.svg#zoom-out">
+
+</use>
+</svg>
+
+</button>
+
+<button id="btn-zoom-ajustar" className="w-12 rounded-md py-1 text-center font-mono text-[11px] text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Voltar ao tamanho que cabe na tela">
+{"100%"}
+</button>
+
+<button id="btn-zoom-mais" className="grid size-7 place-items-center rounded-md text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Aumentar zoom">
+
+<svg className="size-[14px]" viewBox="0 0 24 24" aria-hidden="true">
+<use href="icones.svg#zoom-in">
+
+</use>
+</svg>
+
+</button>
+
+</span>
+
+</div>
+
+
+
+<div className="relative min-h-0 flex-1">
+
+<div id="encaixe-resultado" className="peer absolute inset-0 hidden flex flex-col overflow-hidden p-3">
+
+<div className="encaixe-canvas-wrap relative">
+
+<canvas id="encaixe-canvas" className="cursor-crosshair">
+
+</canvas>
+
+</div>
+
+</div>
+
+
+
+<div className="mesa-dica pointer-events-none absolute inset-0 hidden place-items-center p-6">
+
+<div className="max-w-sm rounded-2xl border border-linha bg-painel-suave/90 p-6 text-center backdrop-blur-sm">
+
+<span className="mesa-vazia-selo mx-auto grid size-12 place-items-center rounded-xl border border-linha text-tinta-apagada">
+
+<svg className="size-[22px]" viewBox="0 0 24 24" aria-hidden="true">
+<use href="icones.svg#blocks">
+
+</use>
+</svg>
+
+</span>
+
+<p className="mt-3 mb-0 font-titulo text-base font-semibold text-tinta">
+{"Arraste seus arquivos aqui"}
+</p>
+
+<p className="mt-1 mb-0 text-[0.8rem] leading-relaxed text-tinta-fraca">
+{"\n                      Moldes em DXF, PLT, SVG ou PDF, ou artes em PNG e JPG. A medida vem do próprio\n                      arquivo e a quantidade sai do nome — "}
+<span className="font-mono">
+{"frente 5x.png"}
+</span>
+{".\n                    "}
+</p>
+
+</div>
+
+</div>
+
+
+
+<section id="encaixe-carregamento" className="encaixe-carregamento hidden" aria-live="polite" aria-busy="false">
+
+<div className="encaixe-loading-caixa">
+
+{/* O poço: as peças caem e vão fechando o risco. É decoração, e por isso
+    `aria-hidden` — quem não vê a tela recebe o andamento pelo texto e pela
+    barra, que ficam logo abaixo. */}
+<div className="encaixe-tetris" aria-hidden="true">
+<span >
+</span>
+<span >
+</span>
+<span >
+</span>
+<span >
+</span>
+<span >
+</span>
+<span >
+</span>
+<span >
+</span>
+</div>
+
+<div className="encaixe-loading-topo">
+
+<div className="encaixe-loading-copy">
+
+<span className="eyebrow" id="encaixe-loading-etapa">
+{"CALCULANDO ENCAIXE"}
+</span>
+
+<strong id="encaixe-loading-titulo">
+{"Preparando as peças"}
+</strong>
+
+<p id="encaixe-loading-detalhe">
+{"Aguarde enquanto o sistema organiza o trabalho."}
+</p>
+
+</div>
+
+<div className="encaixe-loading-tempo">
+
+<span >
+{"Tempo"}
+</span>
+
+<strong id="encaixe-loading-tempo">
+{"0,0 s"}
+</strong>
+
+</div>
+
+</div>
+
+<div className="encaixe-loading-barra" role="progressbar" aria-label="Andamento do encaixe" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}>
+
+<span id="encaixe-loading-fill">
+
+</span>
+
+</div>
+
+<div className="encaixe-loading-rodape">
+
+<div className="encaixe-loading-infos">
+
+<span id="encaixe-loading-pecas">
+{"0 peças no trabalho"}
+</span>
+
+<span className="encaixe-prioridade-badge">
+{"Outras telas pausadas"}
+</span>
+
+</div>
+
+<button id="btn-parar-busca" className="btn secondary btn-sm" type="button">
+{"Parar e usar este"}
+</button>
+
+</div>
+
+</div>
+
+</section>
+
+</div>
+
+
+
+<div className="flex shrink-0 items-center gap-4 border-t border-linha bg-painel-suave px-3 py-1.5">
+
+<div className="encaixe-stats" id="encaixe-stats">
+
+</div>
+
 <span className="menu-suspenso ml-auto" id="menu-exportar">
 
 <button id="btn-exportar" className="btn primary btn-sm inline-flex items-center gap-1.5" type="button" aria-haspopup="menu" aria-expanded="false" disabled>
@@ -176,7 +354,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </button>
 
-<div id="menu-exportar-painel" className="menu-painel direita hidden" role="menu" aria-label="Exportar">
+<div id="menu-exportar-painel" className="menu-painel direita para-cima hidden" role="menu" aria-label="Exportar">
 
 <button id="btn-encaixe-pdf" className="menu-item" type="button" role="menuitem">
 
@@ -252,189 +430,15 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 
-<div className="relative min-h-0 flex-1">
-
-<div id="encaixe-resultado" className="peer absolute inset-0 hidden flex flex-col overflow-hidden p-3">
-
-<div className="encaixe-canvas-wrap relative">
-
-<canvas id="encaixe-canvas" className="cursor-crosshair">
-
-</canvas>
-
-</div>
-
-</div>
-
-
-
-<div className="pointer-events-none absolute inset-0 hidden place-items-center p-6 peer-[.hidden]:grid">
-
-<div className="max-w-sm rounded-2xl border border-linha bg-painel-suave/90 p-6 text-center backdrop-blur-sm">
-
-<span className="mesa-vazia-selo mx-auto grid size-12 place-items-center rounded-xl border border-linha text-tinta-apagada">
-
-<svg className="size-[22px]" viewBox="0 0 24 24" aria-hidden="true">
-<use href="icones.svg#blocks">
-
-</use>
-</svg>
-
-</span>
-
-<p className="mt-3 mb-0 font-titulo text-base font-semibold text-tinta">
-{"Arraste seus arquivos aqui"}
-</p>
-
-<p className="mt-1 mb-0 text-[0.8rem] leading-relaxed text-tinta-fraca">
-{"\n                      Moldes em DXF, PLT, SVG ou PDF, ou artes em PNG e JPG. A medida vem do próprio\n                      arquivo e a quantidade sai do nome — "}
-<span className="font-mono">
-{"frente 5x.png"}
-</span>
-{".\n                    "}
-</p>
-
-</div>
-
-</div>
-
-
-
-<section id="encaixe-carregamento" className="encaixe-carregamento hidden" aria-live="polite" aria-busy="false">
-
-<div className="encaixe-loading-topo">
-
-<span className="encaixe-spinner" aria-hidden="true">
-
-</span>
-
-<div className="encaixe-loading-copy">
-
-<span className="eyebrow" id="encaixe-loading-etapa">
-{"CALCULANDO ENCAIXE"}
-</span>
-
-<strong id="encaixe-loading-titulo">
-{"Preparando as peças"}
-</strong>
-
-<p id="encaixe-loading-detalhe">
-{"Aguarde enquanto o sistema organiza o trabalho."}
-</p>
-
-</div>
-
-<div className="encaixe-loading-tempo">
-
-<span >
-{"Tempo"}
-</span>
-
-<strong id="encaixe-loading-tempo">
-{"0,0 s"}
-</strong>
-
-</div>
-
-</div>
-
-<div className="encaixe-loading-barra" role="progressbar" aria-label="Andamento do encaixe" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}>
-
-<span id="encaixe-loading-fill">
-
-</span>
-
-</div>
-
-<div className="encaixe-loading-rodape">
-
-<div className="encaixe-loading-infos">
-
-<span id="encaixe-loading-pecas">
-{"0 peças no trabalho"}
-</span>
-
-<span className="encaixe-prioridade-badge">
-{"Outras telas pausadas"}
-</span>
-
-</div>
-
-<button id="btn-parar-busca" className="btn secondary btn-sm" type="button">
-{"Parar e usar este"}
-</button>
-
-</div>
-
-</section>
-
-</div>
-
-
-
-<div className="flex shrink-0 items-center gap-4 border-t border-linha bg-painel-suave px-3 py-1.5">
-
-<div className="encaixe-stats" id="encaixe-stats">
-
-</div>
-
-<span className="ml-auto flex shrink-0 items-center gap-0.5">
-
-<button id="btn-zoom-menos" className="grid size-7 place-items-center rounded-md text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Diminuir zoom">
-
-<svg className="size-[14px]" viewBox="0 0 24 24" aria-hidden="true">
-<use href="icones.svg#zoom-out">
-
-</use>
-</svg>
-
-</button>
-
-<button id="btn-zoom-ajustar" className="w-12 rounded-md py-1 text-center font-mono text-[11px] text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Voltar ao tamanho que cabe na tela">
-{"100%"}
-</button>
-
-<button id="btn-zoom-mais" className="grid size-7 place-items-center rounded-md text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Aumentar zoom">
-
-<svg className="size-[14px]" viewBox="0 0 24 24" aria-hidden="true">
-<use href="icones.svg#zoom-in">
-
-</use>
-</svg>
-
-</button>
-
-</span>
-
-</div>
-
-
-
-<div className="shrink-0 border-t border-linha px-3 py-1.5">
+<div className="mesa-rodape shrink-0 border-t border-linha px-3 py-1.5">
 
 <p id="encaixe-sobras" className="hint error hidden m-0! mb-1.5">
 
 </p>
 
-<details className="[&[open]>summary]:text-tinta">
-
-<summary className="cursor-pointer list-none text-[0.72rem] text-tinta-apagada select-none hover:text-tinta">
-{"Como este encaixe foi feito"}
-</summary>
-
-<div id="encaixe-numeros" className="encaixe-stats mt-2">
-
-</div>
-
 <p id="encaixe-guardado-aviso" className="aviso-guardado hidden">
 
 </p>
-
-<p id="encaixe-resumo" className="hint mt-2">
-
-</p>
-
-</details>
 
 </div>
 

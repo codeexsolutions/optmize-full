@@ -333,6 +333,7 @@ async function montarPdf({ larguraTecido, consumo, posicoes, buffers, lerArte },
 }
 
 router.post("/pdf", (req, res) => {
+  limparAntigas();
   const { larguraTecido, consumo, imagens, posicoes, nome } = req.body || {};
 
   if (!(larguraTecido > 0) || !(consumo > 0) || !Array.isArray(posicoes) || posicoes.length === 0) {
@@ -386,11 +387,24 @@ router.post("/pdf", (req, res) => {
     res.destroy(erro);
   });
 
-  // O rolo sai num arquivo só (com uma página por bancada), então este pedido é
-  // o último: as artes desta sessão já cumpriram o que tinham para cumprir. A
-  // limpeza espera o fim da resposta porque `montarPdf` ainda está lendo os
-  // arquivos enquanto o PDF sai pelo cano.
-  if (sessao) res.on("close", () => apagarSessao(sessao));
+  /*
+   * QUANDO AS ARTES PODEM SER APAGADAS.
+   *
+   * Enquanto o rolo saía num arquivo só, este pedido era sempre o último: as
+   * artes já tinham cumprido o que tinham para cumprir. Agora um encaixe com
+   * bancada sai em UM PDF POR BANCADA (ver `baixarEncaixeEmPdf`, na tela), e
+   * as mesmas artes servem todos eles — apagar no primeiro deixaria os outros
+   * nove sem imagem nenhuma.
+   *
+   * Então quem manda é a tela: ela pede `manterSessao` em todos menos no
+   * último. Se ela desistir no meio (fechou o programa, deu erro), o `
+   * limparAntigas` recolhe a sessão dez minutos depois — ninguém fica com
+   * pasta temporária presa para sempre.
+   *
+   * A limpeza espera o fim da resposta porque `montarPdf` ainda está lendo os
+   * arquivos enquanto o PDF sai pelo cano.
+   */
+  if (sessao && !req.body.manterSessao) res.on("close", () => apagarSessao(sessao));
 });
 
 module.exports = router;

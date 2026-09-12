@@ -1174,11 +1174,27 @@ const COR_SELO = {
   "sem-perfil": { rotulo: "sem perfil", classe: "selo-cor-perfil" },
 };
 
+/*
+ * O SELO DE COR: UMA FAIXA NO ALTO DA LINHA, ACIMA DA MINIATURA.
+ *
+ * Ele já morou em dois lugares errados. Primeiro foi uma etiqueta entre a
+ * miniatura e o nome — e numa coluna de 320px isso custava ~78px dos ~140 que
+ * o nome tinha, deixando "frent…" em toda linha. Depois virou um "!" no canto
+ * da miniatura: saiu do caminho do nome, mas ficou em cima da ARTE, que é
+ * justamente o que a pessoa está olhando ali, e pequeno demais para se ler de
+ * relance.
+ *
+ * Agora ele tem a própria faixa, no alto do retângulo da peça e acima de tudo.
+ * Não disputa espaço com nada — a linha só cresce nas peças que têm aviso — e
+ * volta a ser TEXTO ("SEM PERFIL", "CMYK"), que é o que diz o que está errado
+ * sem precisar de balão.
+ */
 function seloDeCor(peca) {
   const aviso = peca.cor && COR_SELO[peca.cor.risco];
   if (!aviso) return "";
-  return `<span class="selo-cor ${aviso.classe}" title="${escapeHtml(peca.cor.titulo || "")}">`
-    + `${aviso.rotulo}</span>`;
+  const texto = peca.cor.titulo ? `${aviso.rotulo} — ${peca.cor.titulo}` : aviso.rotulo;
+  return `<span class="peca-selo-topo"><span class="selo-cor ${aviso.classe}"`
+    + ` title="${escapeHtml(texto)}">${aviso.rotulo}</span></span>`;
 }
 
 /**
@@ -1234,23 +1250,29 @@ function renderPecasEncaixe() {
     const linha = document.createElement("div");
     linha.className = "group border-b border-linha";
     linha.innerHTML = `
-      <div class="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-painel-suave">
-        <input type="checkbox" data-sel-peca="${peca.id}"${selecionadas.has(peca.id) ? " checked" : ""}
-               aria-label="Marcar ${escapeHtml(peca.nome)} para agrupar"
-               class="size-3.5! shrink-0 cursor-pointer" />
-        <span class="peca-thumb size-8! shrink-0" style="border-color: ${cor};"><img src="${peca.miniatura || peca.src}" alt="" /></span>
+      <div class="peca-linha px-3 py-2${selecionadas.has(peca.id) ? " marcada" : ""}" data-sel-peca="${peca.id}"
+           role="button" tabindex="0" aria-pressed="${selecionadas.has(peca.id) ? "true" : "false"}"
+           aria-label="${escapeHtml(peca.nome)} — marcar para agrupar">
         ${seloDeCor(peca)}
 
+        <div class="flex items-start gap-2">
+        <span class="peca-thumb size-8! shrink-0" style="border-color: ${cor};"><img src="${peca.miniatura || peca.src}" alt="" /></span>
+
         <span class="min-w-0 flex-1">
-          <button type="button" data-abrir-peca="${peca.id}" class="flex w-full items-center gap-1 text-left" title="Medida, giro e contorno desta peça">
-            <span class="truncate text-[11px] font-medium text-tinta">${escapeHtml(peca.nome)}</span>
+          <span class="flex items-start gap-1">
+            <span data-nome-peca="${peca.id}" class="nome-da-peca text-[11px] font-medium text-tinta">${escapeHtml(peca.nome)}</span>
             ${peca.grupo ? `<span class="shrink-0 rounded px-1 font-mono text-[8px] font-semibold uppercase leading-[1.4]"
                    style="background: ${corDoGrupo(peca.grupo)}22; color: ${corDoGrupo(peca.grupo)}; border: 1px solid ${corDoGrupo(peca.grupo)}66;"
                    title="Grupo ${escapeHtml(peca.grupo)}: estas peças saem perto umas das outras no rolo">${escapeHtml(peca.grupo)}</span>` : ""}
-            <svg class="size-3 shrink-0 text-tinta-apagada transition-colors group-hover:text-ambar" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#chevron-down" /></svg>
-          </button>
+          </span>
           <span class="block truncate font-mono text-[9px] text-tinta-apagada">${formatarNumero(peca.largura, 1)} × ${formatarNumero(peca.altura, 1)} cm${peca.qtdDoArquivo ? " · qtd do nome" : ""}</span>
         </span>
+
+        <button type="button" data-abrir-peca="${peca.id}" aria-label="Medida, giro e contorno de ${escapeHtml(peca.nome)}"
+                title="Medida, giro e contorno desta peça"
+                class="grid size-6 shrink-0 place-items-center rounded text-tinta-apagada transition-colors hover:bg-painel hover:text-ambar">
+          <svg class="size-3.5" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#chevron-down" /></svg>
+        </button>
 
         <input type="number" min="1" step="1" value="${peca.qtd}" data-campo="qtd" data-id="${peca.id}"
                aria-label="Cópias de ${escapeHtml(peca.nome)}"
@@ -1258,9 +1280,13 @@ function renderPecasEncaixe() {
 
         <button type="button" data-del-peca="${peca.id}" aria-label="Tirar ${escapeHtml(peca.nome)}"
                 class="grid size-6 shrink-0 place-items-center rounded text-tinta-apagada transition-colors hover:text-[var(--danger)]">×</button>
+        </div>
       </div>
 
       <div data-detalhes="${peca.id}" class="hidden border-t border-linha bg-painel-suave px-3 py-2.5">
+        <!-- O nome inteiro, sem corte: na linha ele é cortado para caber, e é
+             aqui (e no duplo clique) que ele aparece por extenso. -->
+        <p class="mt-0 mb-2 text-[10.5px] leading-snug font-medium break-all text-tinta">${escapeHtml(peca.nome)}</p>
         <div class="grid grid-cols-2 gap-1.5">
           <label class="${CAMPO_MINI}">Largura (cm)
             <input type="number" min="0.1" step="0.1" value="${peca.largura}" data-campo="largura" data-id="${peca.id}" />
@@ -1371,18 +1397,29 @@ escopo.ouvir(encaixePecasBody, "input", (e) => {
   }
 });
 
-escopo.ouvir(encaixePecasBody, "change", (e) => {
-  const marcar = e.target.dataset.selPeca;
-  if (marcar) {
-    const id = Number(marcar);
-    if (e.target.checked) selecionadas.add(id);
-    else selecionadas.delete(id);
-    // Só a barra muda: redesenhar a tabela inteira aqui perderia a gaveta que
-    // estiver aberta e piscaria a lista a cada clique de uma seleção múltipla.
-    atualizarBarraDeGrupo();
-    return;
-  }
+/** Marca ou desmarca uma peça, e acende a linha. */
+function alternarMarca(linha, id) {
+  const marcada = selecionadas.has(id);
+  if (marcada) selecionadas.delete(id);
+  else selecionadas.add(id);
+  linha.classList.toggle("marcada", !marcada);
+  linha.setAttribute("aria-pressed", marcada ? "false" : "true");
+  // Só a barra muda: redesenhar a tabela inteira aqui perderia a gaveta que
+  // estiver aberta e piscaria a lista a cada clique de uma seleção múltipla.
+  atualizarBarraDeGrupo();
+}
 
+/* Enter e Espaço na linha marcam, como o navegador faria num botão de
+   verdade. O Espaço também rolaria a lista, daí o `preventDefault`. */
+escopo.ouvir(encaixePecasBody, "keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const linha = e.target.closest("[data-sel-peca]");
+  if (!linha || e.target !== linha) return;
+  e.preventDefault();
+  alternarMarca(linha, Number(linha.dataset.selPeca));
+});
+
+escopo.ouvir(encaixePecasBody, "change", (e) => {
   const campo = e.target.dataset.campo;
   if (campo !== "girar" && campo !== "contorno") return;
   const peca = pecasEncaixe.find((p) => p.id === Number(e.target.dataset.id));
@@ -1475,11 +1512,62 @@ async function tirarFundoAForca(peca) {
   renderPecasEncaixe();
 }
 
+/*
+ * ===========================================================================
+ * O QUE CADA CLIQUE NA LINHA DA PEÇA FAZ
+ * ===========================================================================
+ *
+ *   no retângulo da linha ....... marca / desmarca a peça (para agrupar)
+ *   na setinha .................. abre e fecha a gaveta de medidas
+ *   duas vezes no nome .......... mostra o nome inteiro, sem cortar
+ *   no × ........................ tira a peça (mais abaixo)
+ *
+ * A CAIXA DE MARCAR SAIU. Ela era um quadradinho de 14px na ponta esquerda de
+ * uma linha de 320 — o alvo mais difícil de acertar da tela inteira, para a
+ * ação mais comum dela. Agora quem marca é a linha inteira: 300px de alvo, e
+ * a peça marcada fica com fundo e traço âmbar, que se lê de longe muito
+ * melhor do que um tique.
+ *
+ * A linha é um `role="button"` com `aria-pressed`, e não uma `div` com
+ * `onclick`: quem navega por teclado chega nela com Tab, aciona com Enter ou
+ * Espaço (ver o ouvinte de `keydown`), e o leitor de tela anuncia se ela está
+ * marcada ou não — que é exatamente o que a caixa de marcar dizia.
+ *
+ * ---------------------------------------------------------------------------
+ * O DUPLO CLIQUE NO NOME DESFAZ A MARCA QUE O PRIMEIRO CLIQUE FEZ
+ * ---------------------------------------------------------------------------
+ *
+ * O nome está DENTRO do retângulo que marca, então dois cliques nele são, para
+ * o navegador, duas marcações. `e.detail` vale 2 no segundo clique de um par:
+ * aí este trecho desfaz o que o primeiro acabou de fazer (marcar e desmarcar
+ * não deixa rastro) e troca a ação por soltar o corte do nome.
+ */
 escopo.ouvir(encaixePecasBody, "click", (e) => {
+  // A setinha vem primeiro: ela mora dentro da linha, e o que ela faz não é
+  // marcar.
   const abrir = e.target.closest("[data-abrir-peca]");
   if (abrir) {
     const gaveta = encaixePecasBody.querySelector(`[data-detalhes="${abrir.dataset.abrirPeca}"]`);
     if (gaveta) gaveta.classList.toggle("hidden");
+    return;
+  }
+
+  const linha = e.target.closest("[data-sel-peca]");
+  if (linha) {
+    // O campo de cópias e o × estão dentro da linha e têm dono próprio.
+    if (e.target.closest("input[data-campo], [data-del-peca]")) return;
+
+    const id = Number(linha.dataset.selPeca);
+
+    if (e.detail >= 2 && e.target.closest("[data-nome-peca]")) {
+      alternarMarca(linha, id);              // desfaz o clique de um instante atrás
+      const nome = linha.querySelector("[data-nome-peca]");
+      if (nome) nome.classList.toggle("nome-inteiro");
+      return;
+    }
+    if (e.detail > 2) return;
+
+    alternarMarca(linha, id);
     return;
   }
 
@@ -2503,7 +2591,13 @@ function renderResultado() {
       + `a maior tem ${formatarCm(Math.max(...bancadas.map((b) => b.fundo - b.topo)))}. `
     : "";
 
-  encaixeResumo.textContent = porBancada +
+  /*
+   * O resumo em texto ("na largura as peças ocupam X dos Y...") morava dentro
+   * do "Como este encaixe foi feito", que saiu da tela. O cálculo continua
+   * aqui, e o elemento pode não existir: quem lê o número é a faixa de baixo,
+   * e quem quiser a conta inteira tem a conferência da bancada.
+   */
+  if (encaixeResumo) encaixeResumo.textContent = porBancada +
     `Na largura, as peças ocupam ${formatarCm(medidasLaterais.larguraOcupada)} ` +
     `dos ${formatarCm(medidasLaterais.larguraTecido)} do tecido; sobram ` +
     `${formatarCm(medidasLaterais.sobraEsquerda)} à esquerda e ` +
@@ -2666,21 +2760,110 @@ function avisarQueSalvou(nome) {
   encaixeAndamento.classList.remove("hidden");
 }
 
+/**
+ * Uma pasta e um nome, para o encaixe que sai em vários arquivos.
+ *
+ * A pasta é pedida ANTES de tudo, no mesmo clique que abriu o menu: a caixa
+ * do sistema só abre enquanto o clique da pessoa ainda "vale", e qualquer
+ * espera antes dela (inclusive a nossa própria caixa de perguntar o nome)
+ * gasta essa permissão. Por isso a ordem é pasta → nome, e não o contrário.
+ *
+ * Sem `showDirectoryPicker` (navegador antigo), cada arquivo cai na pasta de
+ * downloads. Continuam sendo arquivos separados, que é o que importa; só não
+ * dá para escolher onde.
+ */
+async function escolherPastaDeSaida(quantos) {
+  let pasta = null;
+  if (window.showDirectoryPicker) {
+    try {
+      pasta = await window.showDirectoryPicker({ id: "encaixe-pdf", mode: "readwrite" });
+    } catch {
+      return null; // desistiu na caixa do sistema
+    }
+  }
+
+  const nome = await uiPergunta({
+    titulo: "Nome dos arquivos",
+    kicker: "EXPORTAR EM TAMANHO REAL",
+    texto: `O rolo sai em ${quantos} bancadas, e cada uma vira um PDF separado. `
+      + `Eles serão gravados como "nome-bancada-01.pdf", "nome-bancada-02.pdf", e assim por diante`
+      + `${pasta ? ` na pasta ${pasta.name}` : " na pasta de downloads"}.`,
+    confirmar: "Gerar os PDFs",
+    valor: `encaixe-${new Date().toISOString().slice(0, 10)}`,
+    exemplo: "nome do trabalho",
+  });
+  if (!nome) return null;
+
+  // O nome vem digitado e vira nome de arquivo: fora o que o Windows não
+  // aceita, e sem o ".pdf" que a pessoa possa ter escrito (ele é acrescentado
+  // depois do número da bancada).
+  const base = nome.replace(/\.pdf$/i, "").replace(/[\\/:*?"<>|]/g, "-").trim();
+  if (!base) return null;
+
+  return {
+    base,
+    onde: pasta ? pasta.name : "a pasta de downloads",
+    async criar(arquivo) {
+      if (!pasta) return destinoDeDownload(arquivo);
+      const alvo = await pasta.getFileHandle(arquivo, { create: true });
+      return {
+        nome: arquivo,
+        async gravar(corpo) {
+          const cano = await alvo.createWritable();
+          if (corpo instanceof ReadableStream) await corpo.pipeTo(cano);
+          else { await cano.write(corpo); await cano.close(); }
+        },
+      };
+    },
+  };
+}
+
+/**
+ * O PDF em tamanho real.
+ *
+ * O trabalho aqui é preparar as imagens: cada peça é desenhada uma vez por
+ * rotação usada, na resolução de impressão, e o servidor só posiciona esses
+ * desenhos na página (ver `servidor/encaixe-pdf.js`). Desenhar a peça já
+ * girada evita depender de rotação dentro do PDF, que é onde um sinal trocado
+ * passa despercebido até alguém imprimir 12 metros de tecido com as peças de
+ * cabeça para baixo.
+ *
+ * ---------------------------------------------------------------------------
+ * COM BANCADA, UM ARQUIVO POR BANCADA — E NÃO UM ARQUIVO COM VÁRIAS PÁGINAS
+ * ---------------------------------------------------------------------------
+ *
+ * Um rolo de 50 m com bancada de 500 cm vira dez pedaços, e cada pedaço é um
+ * trabalho separado na produção: vai para uma mesa, numa hora, muitas vezes
+ * para uma impressora diferente. Num PDF de dez páginas isso obriga quem
+ * imprime a escolher a página certa toda vez, e o erro que isso produz —
+ * imprimir a página errada — só aparece com o tecido já gasto.
+ *
+ * Então cada bancada sai no próprio arquivo, numerado. As artes sobem UMA vez
+ * (são as mesmas nos dez) e o servidor as guarda até o último pedido: é o que
+ * o `manterSessao` diz a ele.
+ *
+ * Sem bancada, nada disso acontece: é um rolo só, um arquivo só, e a caixa de
+ * salvar do sistema como sempre foi.
+ */
 async function baixarEncaixeEmPdf() {
   const r = ultimoResultado;
   if (!r || r.posicoes.length === 0) return;
 
   const metros = (cm) => (cm / 100).toFixed(2).replace(".", ",");
   const nome = `encaixe-${metros(r.consumo)}m`;
+  const bancadas = bancadasDoResultado(r);
+  const emPedacos = bancadas.length > 1;
 
   /*
-   * PRIMEIRO onde, depois o quê. A caixa de salvar é a primeira coisa que
+   * PRIMEIRO onde, depois o quê. A caixa do sistema é a primeira coisa que
    * acontece — antes de qualquer `await`, senão ela já não abre (ver
    * `escolherOndeSalvar`) — e desistir nela não custa os vinte segundos de
    * montagem de um PDF que ninguém ia querer.
    */
-  const destino = await escolherOndeSalvar(`${nome}.pdf`, "PDF em tamanho real", "application/pdf");
-  if (!destino) return;
+  const saida = emPedacos
+    ? await escolherPastaDeSaida(bancadas.length)
+    : await escolherOndeSalvar(`${nome}.pdf`, "PDF em tamanho real", "application/pdf");
+  if (!saida) return;
 
   // O andamento vai no botão que ABRE o menu, e não no item lá dentro: o item
   // já sumiu da tela junto com o menu, e é para o botão que a pessoa olha.
@@ -2696,6 +2879,7 @@ async function baixarEncaixeEmPdf() {
 
     // Cada arte sobe sozinha, em binário. Mandá-las dentro do JSON em base64
     // engordava tudo em um terço e derrubava o servidor com arte de verdade.
+    // Sobem UMA vez, mesmo que saiam dez arquivos: são as mesmas peças.
     const sessao = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
     let enviados = 0;
     for (const [chave, arte] of artes) {
@@ -2705,29 +2889,69 @@ async function baixarEncaixeEmPdf() {
       btnExportarRotulo.textContent = `Enviando artes (${enviados}/${artes.size})…`;
     }
 
-    btnExportarRotulo.textContent = "Montando PDF…";
-    const posicoes = r.posicoes.map((p) => ({
+    const imagens = [...artes.keys()].map((chave) => ({ chave }));
+    const daPeca = (p, deslocamento) => ({
       chave: `${p.item.indice}-${p.rot || (p.girado ? 90 : 0)}`,
-      x: p.x, y: p.y, largura: p.largura, altura: p.altura,
+      x: p.x,
+      y: p.y - deslocamento,
+      largura: p.largura,
+      altura: p.altura,
       // A bancada vai junto: é ela que vira página no servidor
       // (`paginasDoEncaixe`, em encaixe-pdf.js).
       bancada: p.bancada || 0,
-    }));
-
-    // O PDF escorre do servidor direto para o arquivo escolhido: ele não passa
-    // inteiro pela memória do navegador em nenhum momento.
-    const cano = await encaixeApi.pdf({
-      sessao,
-      larguraTecido: r.larguraTecido,
-      consumo: r.consumo,
-      nome,
-      imagens: [...artes.keys()].map((chave) => ({ chave })),
-      posicoes,
     });
 
-    btnExportarRotulo.textContent = "Gravando…";
-    await destino.gravar(cano);
-    avisarQueSalvou(destino.nome);
+    if (!emPedacos) {
+      btnExportarRotulo.textContent = "Montando PDF…";
+      // O PDF escorre do servidor direto para o arquivo escolhido: ele não
+      // passa inteiro pela memória do navegador em nenhum momento.
+      const cano = await encaixeApi.pdf({
+        sessao,
+        larguraTecido: r.larguraTecido,
+        consumo: r.consumo,
+        nome,
+        imagens,
+        posicoes: r.posicoes.map((p) => daPeca(p, 0)),
+      });
+      btnExportarRotulo.textContent = "Gravando…";
+      await saida.gravar(cano);
+      avisarQueSalvou(saida.nome);
+      return;
+    }
+
+    for (let i = 0; i < bancadas.length; i++) {
+      const faixa = bancadas[i];
+      const ultimo = i === bancadas.length - 1;
+      const arquivo = `${saida.base}-bancada-${String(i + 1).padStart(2, "0")}.pdf`;
+
+      btnExportarRotulo.textContent = `Montando PDF ${i + 1}/${bancadas.length}…`;
+
+      /*
+       * Cada arquivo recebe só as peças da sua bancada, e o `y` delas passa a
+       * contar do começo dela — o servidor monta uma página que vai de zero ao
+       * comprimento desta bancada, e não do rolo inteiro.
+       */
+      const posicoes = r.posicoes
+        .filter((p) => (p.bancada || 0) === faixa.numero)
+        .map((p) => ({ ...daPeca(p, faixa.topo), bancada: 0 }));
+
+      const cano = await encaixeApi.pdf({
+        sessao,
+        larguraTecido: r.larguraTecido,
+        consumo: faixa.fundo - faixa.topo,
+        nome: arquivo.replace(/\.pdf$/i, ""),
+        imagens,
+        posicoes,
+        // As artes ficam no servidor até o último arquivo sair.
+        manterSessao: !ultimo,
+      });
+
+      btnExportarRotulo.textContent = `Gravando ${i + 1}/${bancadas.length}…`;
+      const destino = await saida.criar(arquivo);
+      await destino.gravar(cano);
+    }
+
+    avisarQueSalvou(`${bancadas.length} arquivos em ${saida.onde}`);
 
   } catch (err) {
     // O recado amigável não pode ser o fim da linha: erro de programa aqui

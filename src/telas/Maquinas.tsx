@@ -24,68 +24,32 @@
  * olhando não teria como saber se está funcionando ou travou.
  */
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/cliente";
 import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
-import { useEventos } from "../impressoras/socket";
+import { PainelDaVarredura } from "../impressoras/Procura";
+import { useVarredura } from "../impressoras/varredura";
 import { dataBr, metrosCurtos } from "../utils/formato";
-import type { AchadoDaVarredura, EstadoDaVarredura, MaquinaGerenciada, RotasDaMaquina } from "../impressoras/tipos";
-
-const ROTULO_DA_FASE: Record<EstadoDaVarredura["phase"], string> = {
-  idle: "Parada",
-  starting: "Começando",
-  hosts: "Testando os computadores informados",
-  sweep: "Varrendo a rede",
-  identify: "Identificando as impressoras",
-  history: "Puxando o histórico",
-  done: "Terminou",
-  error: "Falhou",
-};
+import type { AchadoDaVarredura, MaquinaGerenciada, RotasDaMaquina } from "../impressoras/tipos";
 
 export function Maquinas() {
-  const varredura = useDados<EstadoDaVarredura>(
-    () => api.get<EstadoDaVarredura>("/impressoras/machines/scan"),
-  );
   const cadastradas = useDados<MaquinaGerenciada[]>(
     () => api.get<MaquinaGerenciada[]>("/impressoras/machines/manage"),
   );
 
   const [alvos, setAlvos] = useState("");
-  const [falha, setFalha] = useState<string | null>(null);
 
-  // O progresso da varredura vem inteiro no evento, então dá para pintar
-  // direto sem uma volta ao servidor a cada passo.
-  const recarregarCadastradas = cadastradas.recarregar;
-  useEventos(["machines:scan"], (_evento, dados) => {
-    const estado = dados as EstadoDaVarredura;
-    varredura.setDados(estado);
-    if (estado.phase === "done") recarregarCadastradas();
-  });
+  /* A varredura é do servidor, e as duas telas que mexem nela falam por este
+     hook — ver `impressoras/varredura.ts`. Terminando, a lista de cadastradas
+     é pedida de novo: pode ter entrado máquina reconhecida sem passar por
+     aqui. */
+  const { estado, rodando, falha, procurar, parar, recarregar: recarregarVarredura } = useVarredura(cadastradas.recarregar);
 
-  const procurar = useCallback(async () => {
-    setFalha(null);
-    const hosts = alvos.split(",").map((h) => h.trim()).filter(Boolean);
-    try {
-      await api.post("/impressoras/machines/scan", { hosts });
-      varredura.recarregar();
-    } catch (erro) {
-      setFalha(erro instanceof Error ? erro.message : "Não consegui começar a varredura.");
-    }
-  }, [alvos, varredura]);
+  const comOsAlvosDoCampo = () => procurar(alvos.split(",").map((h) => h.trim()).filter(Boolean));
 
-  const parar = useCallback(async () => {
-    try {
-      await api.post("/impressoras/machines/scan/stop", {});
-      varredura.recarregar();
-    } catch {
-      /* parar é um pedido, não uma garantia: a varredura em curso termina o passo atual */
-    }
-  }, [varredura]);
-
-  const estado = varredura.dados;
-  const rodando = Boolean(estado?.running);
   const pendentes = (estado?.results || []).filter((r) => r.action === "pending");
   const reconhecidas = (estado?.results || []).filter((r) => r.action !== "pending");
 
@@ -107,7 +71,7 @@ export function Maquinas() {
           ) : (
             <button
               type="button"
-              onClick={procurar}
+              onClick={comOsAlvosDoCampo}
               className="flex items-center gap-2 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro"
             >
               <Icone referencia="icones.svg#radar" className="size-4" />
@@ -131,36 +95,9 @@ export function Maquinas() {
         </label>
 
         {falha && <Aviso texto={falha} />}
-        {estado?.error && <Aviso texto={estado.error} />}
 
-        {estado && (
-          <div className="rounded-[10px] border border-linha bg-painel-suave px-3.5 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[0.85rem] font-semibold text-tinta">{ROTULO_DA_FASE[estado.phase]}</span>
-              {estado.total > 0 && (
-                <span className="font-mono text-[0.75rem] text-tinta-apagada">
-                  {estado.scanned} / {estado.total}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 mb-0 text-[0.8rem] text-tinta-fraca">{estado.message}</p>
-
-            {rodando && estado.total > 0 && (
-              <div
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={estado.total}
-                aria-valuenow={estado.scanned}
-                className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[var(--border)]"
-              >
-                <div
-                  className="h-full rounded-full bg-ambar transition-[width] duration-300"
-                  style={{ width: `${Math.min(100, (estado.scanned / estado.total) * 100)}%` }}
-                />
-              </div>
-            )}
-          </div>
-        )}
+        {/* A impressora imprimindo, o passo e o placar. Ver `impressoras/Procura.tsx`. */}
+        <PainelDaVarredura estado={estado} aoProcurar={rodando ? undefined : comOsAlvosDoCampo} />
       </Cartao>
 
       {pendentes.length > 0 && (
@@ -174,7 +111,7 @@ export function Maquinas() {
               <Pendente
                 key={achado.host}
                 achado={achado}
-                aoMudar={() => { varredura.recarregar(); cadastradas.recarregar(); }}
+                aoMudar={() => { recarregarVarredura(); cadastradas.recarregar(); }}
               />
             ))}
           </ul>
@@ -211,11 +148,29 @@ export function Maquinas() {
         </Cartao>
       )}
 
+      {/*
+        A VOLTA PARA O PAINEL.
+
+        Máquinas saiu do menu lateral (ver `foraDoMenu`, em `rotas.ts`), então
+        nenhum item fica aceso enquanto esta tela está aberta e o caminho de
+        volta precisa estar ESCRITO nela. É aqui embaixo, no cartão da lista,
+        porque é depois de cadastrar ou mexer numa máquina que alguém quer ir
+        ver o painel.
+      */}
       <Cartao
         preencher
         titulo="Impressoras cadastradas"
         icone="icones.svg#printer"
         apoio="O que o sistema conhece hoje. Desativar tira do painel e guarda uma planilha do histórico antes."
+        acao={
+          <Link
+            to="/impressoras"
+            className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem] font-semibold text-tinta-fraca no-underline transition-colors hover:text-tinta"
+          >
+            <Icone referencia="icones.svg#activity" className="size-4" />
+            Ver o painel
+          </Link>
+        }
       >
         {cadastradas.carregando && <Apoio texto="Carregando..." />}
         {cadastradas.erro && <Aviso texto={cadastradas.erro} />}

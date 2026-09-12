@@ -39,8 +39,28 @@ const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
 const corRouter = require("./cor-api");
 const { criarRotasDeImpressoras, iniciarImpressoras } = require("./impressoras-api");
+const licenca = require("./licenca");
 
 const app = express();
+
+/*
+ * ===========================================================================
+ * A PORTA: NADA DA API RESPONDE SEM LICENÇA VÁLIDA
+ * ===========================================================================
+ *
+ * Vem antes de todo o resto de propósito. O que estiver abaixo desta linha só
+ * é alcançado por quem passou — e quem não passou recebe 402 em qualquer
+ * `/api`, menos na própria `/api/licenca`, que é por onde se sai do bloqueio.
+ *
+ * A tela de bloqueio do painel é conveniência, não tranca: ela é JavaScript no
+ * navegador do cliente e se contorna com o F12 aberto. A tranca é esta, que
+ * sai em bytecode dentro do instalador (ver `empacotar/compilar.js`).
+ *
+ * Os arquivos do painel continuam sendo servidos normalmente: sem eles não há
+ * onde colar o token novo.
+ */
+app.use("/api/licenca", licenca.router);
+app.use(licenca.porteiro);
 
 // O socket precisa do servidor HTTP nu, não do Express. É por ele que a tela
 // das impressoras fica sabendo de trabalho novo, do progresso da varredura da

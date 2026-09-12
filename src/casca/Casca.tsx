@@ -28,18 +28,78 @@
  */
 
 import { Suspense, useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
 import { ProvedorDeDialogo } from "./Dialogo";
 import { Cabecalho } from "./Cabecalho";
 import { Icone } from "./Icone";
 import { Producao } from "../producao/Producao";
 import { useTelaAtual, type NomeDeTela } from "../rotas";
+import { PainelDaLicenca, useLicenca, type EstadoDaLicenca } from "../telas/Licenca";
+import { ProvedorSemCabecalho } from "./semCabecalho";
+
+/*
+ * ===========================================================================
+ * O PORTÃO DA LICENÇA
+ * ===========================================================================
+ *
+ * Antes de qualquer tela, a casca pergunta ao servidor local se esta
+ * instalação está liberada. Sem token ou com ele vencido, o que se vê é a tela
+ * de licença e mais nada: o código desta máquina, para mandar ao fornecedor, e
+ * o campo onde o token novo é colado.
+ *
+ * Isto é CONVENIÊNCIA, e é importante não confundir: quem tranca de verdade é
+ * o servidor, que responde 402 em toda a API sem licença (ver
+ * `servidor/licenca.js`) e sai em bytecode dentro do instalador. Se alguém
+ * apagar este portão com o F12 aberto, chega a uma tela bonita onde nada
+ * funciona.
+ *
+ * Enquanto a resposta não chega, a casca desenha normalmente. É de propósito:
+ * um piscar de tela de bloqueio a cada abertura, em quem está em dia, seria
+ * pior do que o meio segundo em que uma instalação vencida ainda mostra o
+ * menu — e o servidor já está recusando tudo nesse meio segundo.
+ */
+function Bloqueio({ estado }: { estado: EstadoDaLicenca }) {
+  return (
+    <div className="flex h-screen flex-col overflow-y-auto bg-fundo px-4 py-8 font-texto text-tinta antialiased">
+      <div className="mx-auto w-full max-w-[640px]">
+        <div className="mb-5 flex items-center gap-3">
+          <img src={`${import.meta.env.BASE_URL}icone.png`} alt="CodeEx Optmize" width={34} height={34} className="size-[34px]" />
+          <div>
+            <p className="m-0 font-titulo text-[1.1rem] font-semibold tracking-[-0.02em] text-tinta">CodeEx Optmize</p>
+            <p className="m-0 text-[0.82rem] text-tinta-fraca">Este computador precisa de um token para continuar.</p>
+          </div>
+        </div>
+        <PainelDaLicenca estado={estado} />
+      </div>
+    </div>
+  );
+}
+
+/** A faixa dos últimos dias. Some sozinha quando o token novo entra. */
+function FaixaDeVencimento({ dias }: { dias: number }) {
+  return (
+    <Link
+      to="/licenca"
+      className="flex shrink-0 items-center justify-center gap-2 border-b border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 py-1.5 text-[0.8rem] text-ambar-claro no-underline transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+    >
+      <Icone referencia="icones.svg#shield-check" className="size-4 shrink-0" />
+      <span>
+        {dias === 0
+          ? "A licença deste computador vence hoje."
+          : `A licença deste computador vence em ${dias} dia${dias === 1 ? "" : "s"}.`}{" "}
+        <strong className="font-semibold">Peça o token novo ao fornecedor.</strong>
+      </span>
+    </Link>
+  );
+}
 
 export function Casca() {
   const tela = useTelaAtual();
   const navegar = useNavigate();
   const [menuAberto, setMenuAberto] = useState(false);
+  const [semCabecalho, setSemCabecalho] = useState(false);
+  const licenca = useLicenca();
 
   const irPara = (nome: NomeDeTela) => navegar(`/${nome}`);
 
@@ -68,13 +128,29 @@ export function Casca() {
    */
   const bancada = tela.nome === "encaixe" || tela.nome === "projetos";
 
+  /* Bancada ou tela que pediu (ver `useSemCabecalho`): as duas trocam o
+     cabeçalho pelo botão flutuante da gaveta. */
+  const semTopo = bancada || semCabecalho;
+
   /*
    * O provedor do diálogo envolve a casca inteira: a caixa de confirmar e a de
    * perguntar são de quem estiver na frente, e uma tela não deveria precisar
    * montar a sua para poder perguntar alguma coisa.
    */
+  // Vencida, não há casca: a tela de licença é o programa inteiro.
+  if (licenca.dados && !licenca.dados.liberado) {
+    return (
+      <ProvedorDeDialogo>
+        <Bloqueio estado={licenca.dados} />
+      </ProvedorDeDialogo>
+    );
+  }
+
+  const vencendo = licenca.dados && licenca.dados.motivo === "vencendo" ? licenca.dados.dias : null;
+
   return (
     <ProvedorDeDialogo>
+    <ProvedorSemCabecalho value={setSemCabecalho}>
     <div data-tela={tela.nome} className="app-react h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
       <Menu aberto={menuAberto} aoFechar={() => setMenuAberto(false)} />
 
@@ -83,8 +159,17 @@ export function Casca() {
         que sobra é do miolo — assim uma tela que precise da altura toda a
         recebe pronta, em vez de descontar o topo numa conta de viewport.
       */}
-      <main className="flex h-screen flex-col overflow-hidden tela:ml-[244px] tela:max-[1100px]:ml-[78px]">
-        {bancada ? (
+      {/*
+        As duas margens abaixo são A LARGURA DA BARRA, e têm que bater com as
+        do `Menu.tsx` no pixel: a barra é `fixed`, então ela não empurra nada —
+        quem abre espaço para ela é este `ml`. Quando a barra encolheu de 244
+        para 236 e este número ficou para trás, sobrou uma faixa de 8px do
+        fundo entre ela e a tela, e a bancada do Encaixe — que é colada na
+        janela — deixou de ocupar a largura toda.
+      */}
+      <main className="flex h-screen flex-col overflow-hidden tela:ml-[236px] tela:max-[1100px]:ml-[78px]">
+        {vencendo !== null && <FaixaDeVencimento dias={vencendo} />}
+        {semTopo ? (
           /*
            * O BOTÃO FLUTUANTE DA GAVETA.
            *
@@ -133,6 +218,9 @@ export function Casca() {
               // cima da primeira barra da tela.
               ? "overflow-hidden pt-[52px] tela:pt-0"
               : "overflow-y-auto px-3 pb-6 tela:px-[30px]",
+            // A tela que escondeu o cabeçalho continua sendo documento: mantém
+            // a folga e a rolagem, e só abre a faixa do botão da gaveta.
+            !bancada && semCabecalho ? "pt-[52px] tela:pt-3" : "",
           ].join(" ")}
         >
           {/*
@@ -155,6 +243,7 @@ export function Casca() {
         </div>
       </main>
     </div>
+    </ProvedorSemCabecalho>
     </ProvedorDeDialogo>
   );
 }

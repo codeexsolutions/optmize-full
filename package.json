@@ -27,6 +27,7 @@
     "bancada:vaos": "node bancada/vaos.js",
     "bancada:tela": "node bancada/conferir-tela.cjs",
     "bancada:react": "node bancada/conferir-react.cjs",
+    "bancada:licenca": "node bancada/conferir-licenca.cjs",
     "tipos": "tsc --noEmit",
     "app": "npm run front && tauri dev",
     "build:app": "npm run front && tauri build",

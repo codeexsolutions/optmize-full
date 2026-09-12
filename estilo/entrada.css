@@ -50,13 +50,16 @@
  * ===========================================================================
  *
  * O Tailwind vem com variantes de LARGURA (`sm:`, `lg:`, e o `tela:` deste
- * projeto). Altura não tem — e é a altura que aperta no menu lateral: são
- * treze telas, e no tamanho cheio a barra pede ~940px. Num monitor de
- * 1366x768, o mais comum no chão de fábrica, dois itens ficavam fora da vista
- * e o relógio caía abaixo do fim da janela.
+ * projeto). Altura não tem — e era a altura que apertava no menu lateral: são
+ * treze telas, e com o item de duas linhas a barra pedia ~940px. Num monitor
+ * de 1366x768, o mais comum no chão de fábrica, dois itens ficavam fora da
+ * vista e o relógio caía abaixo do fim da janela.
  *
- * `curta:` é a janela em que a linha de apoio de cada item já não cabe;
- * `baixinha:` é a em que o próprio item precisa apertar.
+ * O item do menu virou de uma linha só (ver `casca/Menu.tsx`) e a barra passou
+ * a pedir ~520px, então a maior parte desse aperto deixou de ser necessária:
+ * hoje só o `curta:` é usado, para o ajuste fino da janela baixa. O
+ * `baixinha:` fica declarado porque é a mesma ideia um degrau abaixo e custa
+ * uma linha; se ninguém o usar, pode sair.
  *
  * São variantes declaradas, e não `[@media(max-height:900px)]:` escrito no
  * meio da classe, por dois motivos: o nome diz o que significa, e o valor
@@ -263,4 +266,123 @@
 
 @media (prefers-reduced-motion: reduce) {
   .animar-entrada { animation: none; }
+}
+
+/*
+ * ===========================================================================
+ * A IMPRESSORA DA PROCURA
+ * ===========================================================================
+ *
+ * A varredura da rede leva perto de meio minuto, e durante esse tempo a tela
+ * não tem nada para mostrar: nenhuma impressora foi identificada ainda. Era
+ * uma barrinha de progresso e uma linha de texto — o suficiente para saber
+ * que não travou, e pouco para a tela que o sistema abre quando ainda não
+ * conhece nenhuma máquina, que é a primeira impressão que ele dá.
+ *
+ * O desenho vive em `src/impressoras/Procura.tsx`; as animações moram aqui
+ * porque é aqui que mora toda keyframe da casca nova.
+ *
+ * `transform-box: fill-box` é o que faz `transform-origin: center` significar
+ * "o centro DESTA forma" dentro de um SVG. Sem ele o navegador usa o canto do
+ * sistema de coordenadas, e o que devia crescer no lugar sai passeando pela
+ * tela.
+ */
+@keyframes procura-onda {
+  from { opacity: 0.42; transform: scale(0.2); }
+  to   { opacity: 0;    transform: scale(1); }
+}
+
+/* A folha desce de trás da máquina e some quando já saiu inteira. */
+@keyframes procura-folha {
+  0%   { opacity: 1; transform: translateY(-48px); }
+  68%  { opacity: 1; transform: translateY(2px); }
+  100% { opacity: 0; transform: translateY(10px); }
+}
+
+/* A cabeça de impressão, de um lado ao outro do painel. */
+@keyframes procura-cabeca {
+  from { transform: translateX(0); }
+  to   { transform: translateX(46px); }
+}
+
+@keyframes procura-luz {
+  0%, 100% { opacity: 0.2; }
+  50%      { opacity: 1; }
+}
+
+.procura-onda,
+.procura-folha,
+.procura-cabeca,
+.procura-luz {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.procura-onda   { animation: procura-onda 2.6s ease-out infinite; }
+.procura-folha  { animation: procura-folha 2.3s ease-in-out infinite; }
+.procura-cabeca { animation: procura-cabeca 1.5s ease-in-out infinite alternate; }
+.procura-luz    { animation: procura-luz 1.6s ease-in-out infinite; }
+
+/* Parada, a máquina não imprime: fica o desenho, sem nada se mexendo. */
+.impressora-parada .procura-onda,
+.impressora-parada .procura-folha,
+.impressora-parada .procura-cabeca,
+.impressora-parada .procura-luz {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .procura-onda, .procura-folha, .procura-cabeca, .procura-luz { animation: none; }
+}
+
+/*
+ * ===========================================================================
+ * A ATIVAÇÃO DA LICENÇA
+ * ===========================================================================
+ *
+ * O desenho vive em `src/telas/Licenca.tsx`; as keyframes moram aqui, com as
+ * outras da casca.
+ *
+ * A ordem é o que conta a história, e ela está nos atrasos: o selo aparece
+ * (0,1s), o traço do certo é DESENHADO por cima dele (0,45s), as ondas saem
+ * (0,6s) e o texto sobe por último (0,85s). Nada acontece ao mesmo tempo de
+ * propósito — junto, viraria um piscar; em ordem, vira uma confirmação.
+ */
+@keyframes licenca-veu {
+  from { opacity: 0; }
+}
+
+@keyframes licenca-selo {
+  0%   { opacity: 0; transform: scale(0.5); }
+  65%  { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* O traço do certo é desenhado: o tracejado tem o tamanho do próprio caminho,
+   então mexer no deslocamento é mover a "ponta do lápis" de uma ponta à outra. */
+@keyframes licenca-risco {
+  from { stroke-dashoffset: 40; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes licenca-onda {
+  from { opacity: 0.5; transform: scale(0.62); }
+  to   { opacity: 0;   transform: scale(1.45); }
+}
+
+@keyframes licenca-sobe {
+  from { opacity: 0; transform: translateY(12px); }
+}
+
+.licenca-veu   { animation: licenca-veu .2s ease both; }
+.licenca-selo  { animation: licenca-selo .5s .1s cubic-bezier(.2, .9, .3, 1.2) both; }
+.licenca-risco { stroke-dasharray: 40; animation: licenca-risco .5s .45s ease-out both; }
+.licenca-onda  { animation: licenca-onda 1.6s .6s ease-out infinite; }
+.licenca-sobe  { animation: licenca-sobe .5s .85s cubic-bezier(.2, .8, .3, 1) both; }
+
+/* Sem animação, o fim de tudo: selo no lugar, certo desenhado, texto de pé. */
+@media (prefers-reduced-motion: reduce) {
+  .licenca-veu, .licenca-selo, .licenca-sobe { animation: none; }
+  .licenca-onda { animation: none; opacity: 0; }
+  .licenca-risco { animation: none; stroke-dashoffset: 0; }
 }
