@@ -386,3 +386,30 @@
   .licenca-onda { animation: none; opacity: 0; }
   .licenca-risco { animation: none; stroke-dashoffset: 0; }
 }
+
+/*
+ * ===========================================================================
+ * A VARREDURA DO VETOR
+ * ===========================================================================
+ *
+ * A linha que desce pela prévia enquanto o traço é calculado. O desenho vive
+ * em `src/telas/Vetor.tsx`; a keyframe mora aqui, com as outras da casca.
+ *
+ * Ela sai de cima da caixa e some embaixo — daí o `-100%` no começo e o `100%`
+ * no fim, com a altura do próprio rastro entrando na conta pelo `top`. Duas
+ * segundos e meio por passada: rápido o bastante para parecer trabalho, lento
+ * o bastante para não piscar.
+ */
+@keyframes vetor-varredura {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(calc(100vh + 100%)); }
+}
+
+.vetor-varredura {
+  top: 0;
+  animation: vetor-varredura 2.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vetor-varredura { animation: none; opacity: 0; }
+}

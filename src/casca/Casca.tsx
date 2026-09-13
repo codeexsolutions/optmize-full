@@ -126,7 +126,8 @@ export function Casca() {
    * Era assim na casca antiga, para o Encaixe
    * (`.producao[data-tela="encaixe"] .pageheader`, em producao.css).
    */
-  const bancada = tela.nome === "encaixe" || tela.nome === "projetos";
+  const bancada = tela.nome === "encaixe" || tela.nome === "projetos"
+    || tela.nome === "vetor" || tela.nome === "moldes";
 
   /* Bancada ou tela que pediu (ver `useSemCabecalho`): as duas trocam o
      cabeçalho pelo botão flutuante da gaveta. */
