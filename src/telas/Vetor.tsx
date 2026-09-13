@@ -10,6 +10,25 @@
  * acontece.
  *
  * ---------------------------------------------------------------------------
+ * ELA É UMA BANCADA, E NÃO UMA PÁGINA DE CARTÕES
+ * ---------------------------------------------------------------------------
+ *
+ * Era uma pilha de três cartões que rolava: a imagem em cima, os ajustes no
+ * meio, a comparação embaixo. O problema não era feiúra — era o trabalho:
+ * vetorizar é MEXER NUM BOTÃO E OLHAR A BORDA, dezenas de vezes, e naquela
+ * arrumação o botão e a borda nunca estavam na tela ao mesmo tempo. Cada
+ * ajuste custava uma rolada para ver o efeito e outra para voltar.
+ *
+ * Agora é bancada, como o Encaixe: os controles moram numa coluna fixa à
+ * esquerda e a comparação ocupa todo o resto da janela, sem cabeçalho de
+ * página e sem folga em volta (ver `bancada`, em `casca/Casca.tsx`). Mexeu no
+ * controle, a borda mudou do lado — sem rolar nada.
+ *
+ * A ordem da coluna é a ordem do trabalho: o arquivo em cima, os ajustes no
+ * meio (é neles que se passa o tempo), e a saída no pé, colada no botão que a
+ * produz.
+ *
+ * ---------------------------------------------------------------------------
  * A LUPA É UM ESTADO SÓ PARA AS DUAS PRÉVIAS
  * ---------------------------------------------------------------------------
  *
@@ -36,7 +55,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { carregarImagem, lerComoDataURL } from "../utils/arquivoDeImagem";
 import { formatarCm, formatarNumero, formatarSegundos } from "../utils/numero";
@@ -53,6 +71,37 @@ import { pixelsPorCmDoArquivo } from "../motores/medidaDoArquivo";
  * 1800 pontos o desenho ainda tem toda a forma e o traço sai limpo.
  */
 const LADO_MAXIMO = 1800;
+
+/**
+ * O lado do RASCUNHO — o primeiro passo, que existe para a tela responder.
+ *
+ * Vetorizar uma imagem grande leva de meio segundo a alguns segundos, e nesse
+ * tempo o que se via era o desenho ANTERIOR, parado, sem nada dizendo que uma
+ * conta nova estava rodando. Quem arrasta uma faixa de cor e não vê nada
+ * acontecer arrasta de novo — e aí são duas contas na fila.
+ *
+ * Com 560 pontos o traço sai em cerca de um décimo do tempo: não é o desenho
+ * final (a borda ainda tem degraus), mas responde à pergunta que a pessoa
+ * acabou de fazer — "mais ou menos cores?" — enquanto o bom é calculado.
+ *
+ * O rascunho NUNCA é o que se baixa: ele é substituído pelo passo final antes
+ * de qualquer botão de saída ligar. Ver `gerar`.
+ */
+const LADO_DO_RASCUNHO = 560;
+
+/*
+ * As medidas da bancada, escritas aqui porque esta tela NÃO é alcançada pelo
+ * `producao.css`: aquela folha é escopada em `.producao`, e as telas de rota
+ * ficam fora daquele div (ver `producao/Producao.tsx`). O Encaixe usa
+ * `.barra-bancada` e `.eyebrow` de lá; aqui os mesmos 43px de barra e o mesmo
+ * rótulo âmbar vêm em utilitário, para as duas telas parecerem a mesma coisa.
+ */
+const BARRA = "flex min-h-[43px] shrink-0 items-center gap-3 border-b border-linha bg-painel-suave px-3 py-1";
+const ROTULO = "font-titulo text-[10px] font-bold tracking-[0.16em] text-ambar uppercase";
+
+/* O rótulo de cada metade fica POR CIMA do desenho, e numa imagem alta ele cai
+   em cima da arte: daí o fundo próprio, que o separa do que está atrás. */
+const SELO = "pointer-events-none absolute top-2 left-2 z-10 rounded-md bg-[color-mix(in_srgb,var(--card-bg)_82%,transparent)] px-2 py-1 backdrop-blur-sm";
 const ZOOM_MAXIMO = 20;
 
 /**
@@ -153,7 +202,16 @@ export function Vetor() {
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [resumo, setResumo] = useState("");
   const [erro, setErro] = useState("");
-  const [gerando, setGerando] = useState(false);
+  /**
+   * Em que passo o rastreio está — e, por tabela, se há rastreio em curso.
+   *
+   * Era um `gerando` de sim/não. Com o desenho em dois passos, "está
+   * calculando" deixou de ser uma coisa só: o rascunho na tela já é resposta,
+   * e o que falta é o acabamento. A tela diz qual dos dois está acontecendo.
+   */
+  const [fase, setFase] = useState<"parado" | "rascunho" | "final">("parado");
+  /** O que está na tela é o traço final (e não o rascunho)? */
+  const [saidaPronta, setSaidaPronta] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [arrastando, setArrastando] = useState(false);
   const [escalaNaTela, setEscalaNaTela] = useState(1);
@@ -164,6 +222,8 @@ export function Vetor() {
   const arraste = useRef<{ x: number; y: number } | null>(null);
   const worker = useRef<Worker | null | false>(null);
   const pedido = useRef(0);
+  /** Qual chamada de `gerar` manda agora. Ver o cabeçalho de `gerar`. */
+  const geracao = useRef(0);
 
   useEffect(() => () => {
     if (worker.current) worker.current.terminate();
@@ -195,8 +255,8 @@ export function Vetor() {
    * e a regra da pasta `motores/` é conta pura. O que atravessa para o worker
    * são os bytes já lidos.
    */
-  const prepararPixels = useCallback((img: HTMLImageElement, tirarFundo: boolean) => {
-    const fator = Math.min(1, LADO_MAXIMO / Math.max(img.width, img.height));
+  const prepararPixels = useCallback((img: HTMLImageElement, tirarFundo: boolean, lado = LADO_MAXIMO) => {
+    const fator = Math.min(1, lado / Math.max(img.width, img.height));
     const largura = Math.max(1, Math.round(img.width * fator));
     const altura = Math.max(1, Math.round(img.height * fator));
 
@@ -281,25 +341,44 @@ export function Vetor() {
     aplicarLupa();
   }, [aplicarLupa]);
 
+  /**
+   * O DESENHO, EM DOIS PASSOS.
+   *
+   * Primeiro um rascunho pequeno, que aparece quase imediatamente; depois o
+   * traço final, na resolução de verdade, que entra por cima. Quem mexeu num
+   * controle vê a resposta na hora e o acabamento chega sozinho.
+   *
+   * Só o passo final liga os botões de saída (ver `temSaida`): baixar o
+   * rascunho seria entregar um desenho pior do que o que a tela mostrou um
+   * segundo depois.
+   *
+   * `geracao` é o que cancela o que ficou para trás. Arrastar uma faixa
+   * dispara uma chamada por movimento, e sem isto o rascunho de um pedido
+   * velho chegaria DEPOIS do final de um novo e apagaria o desenho bom — o
+   * defeito clássico deste tipo de tela, e o mais difícil de reproduzir.
+   */
   const gerar = useCallback(async (imagem: Aberta, quais: Ajustes) => {
+    const meuTurno = ++geracao.current;
+    const aindaSouEu = () => geracao.current === meuTurno;
+
     setErro("");
-    setGerando(true);
-    try {
-      const preparar = () => prepararPixels(imagem.img, quais.fundo);
+
+    // A medida real da arte, quando o arquivo traz o dpi: o SVG sai em
+    // centímetros de verdade e a plotter imprime no tamanho certo.
+    const larguraCm = imagem.ppcmArquivo && imagem.ppcmArquivo > 0
+      ? imagem.img.width / imagem.ppcmArquivo
+      : null;
+
+    const opcoes: OpcoesDoVetor = {
+      cores: quais.cores, detalhe: quais.detalhe, suavidade: quais.suavidade,
+      quina: quais.quina, juntarSombras: quais.sombras, redondas: quais.redondas,
+      subpixel: quais.subpixel, tensao: quais.tensao, larguraCm,
+    };
+
+    /** Um passo: prepara os pixels naquele tamanho e manda vetorizar. */
+    const passo = async (lado: number) => {
+      const preparar = () => prepararPixels(imagem.img, quais.fundo, lado);
       const { dados, largura, fator, fundo } = preparar();
-
-      // A medida real da arte, quando o arquivo traz o dpi: o SVG sai em
-      // centímetros de verdade e a plotter imprime no tamanho certo.
-      const larguraCm = imagem.ppcmArquivo && imagem.ppcmArquivo > 0
-        ? imagem.img.width / imagem.ppcmArquivo
-        : null;
-
-      const opcoes: OpcoesDoVetor = {
-        cores: quais.cores, detalhe: quais.detalhe, suavidade: quais.suavidade,
-        quina: quais.quina, juntarSombras: quais.sombras, redondas: quais.redondas,
-        subpixel: quais.subpixel, tensao: quais.tensao, larguraCm,
-      };
-
       const comecou = Date.now();
       let r: Resultado;
       try {
@@ -310,23 +389,45 @@ export function Vetor() {
         if (worker.current !== false) throw falha;
         r = vetorizarImagem(preparar().dados, opcoes) as Resultado;
       }
-      const ms = Date.now() - comecou;
+      return { r, ms: Date.now() - comecou, largura, fator, fundo };
+    };
 
-      if (!r.svg) {
+    try {
+      // ---- 1. o rascunho, só para a tela responder --------------------
+      setFase("rascunho");
+      const rascunho = await passo(LADO_DO_RASCUNHO);
+      if (!aindaSouEu()) return;
+      if (rascunho.r.svg) {
+        setResultado(rascunho.r);
+        setSaidaPronta(false);
+      }
+
+      // ---- 2. o traço de verdade --------------------------------------
+      setFase("final");
+      const bom = await passo(LADO_MAXIMO);
+      if (!aindaSouEu()) return;
+
+      if (!bom.r.svg) {
         setResultado(null);
-        setErro(r.erro || "Não consegui vetorizar essa imagem.");
+        setSaidaPronta(false);
+        setErro(bom.r.erro || "Não consegui vetorizar essa imagem.");
         return;
       }
-      setResultado(r);
-      setResumo(montarResumo(r, ms, largura, fator, fundo, quais.fundo));
+
+      setResultado(bom.r);
+      setSaidaPronta(true);
+      setResumo(montarResumo(bom.r, bom.ms, bom.largura, bom.fator, bom.fundo, quais.fundo));
     } catch (e) {
+      if (!aindaSouEu()) return;
       // O aviso na tela é para quem usa; o erro real vai para o console. Sem
       // esta linha, uma função que não existia ficou um bom tempo escondida
       // atrás de um "não consegui abrir essa imagem".
       console.error("Vetor:", e);
       setErro("Deu erro ao vetorizar: " + (e instanceof Error ? e.message : "erro desconhecido"));
     } finally {
-      setGerando(false);
+      if (aindaSouEu()) {
+        setFase("parado");
+      }
     }
   }, [prepararPixels, vetorizarNoWorker]);
 
@@ -411,99 +512,185 @@ export function Vetor() {
     }
   };
 
+  const temSaida = saidaPronta && !!resultado?.svg;
+
   return (
-    <>
-      <Cartao
-        titulo="Imagem para vetor"
-        icone="icones.svg#spline"
-        apoio="Transforma a imagem em desenho de contornos, para corte e para imprimir em qualquer tamanho."
-        /* Sem imagem aberta, é este que ocupa a janela; com imagem, quem
-           merece a altura é a comparação lá embaixo. */
-        preencher={!aberta}
-      >
-        <label
-          onDragEnter={(e) => { e.preventDefault(); setArrastando(true); }}
-          onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
-          onDragLeave={() => setArrastando(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setArrastando(false);
-            const file = e.dataTransfer?.files?.[0];
-            if (file) void abrir(file);
-          }}
-          className={`flex cursor-pointer flex-col items-center gap-2 rounded-[10px] border border-dashed px-4 py-8 text-center transition-colors ${
-            arrastando ? "border-ambar bg-[var(--accent-soft)]" : "border-linha bg-painel-suave"
-          }`}
-        >
-          <Icone referencia="icones.svg#image" className="size-7 text-tinta-apagada" />
-          <span className="text-[0.88rem] text-tinta">Escolha a imagem ou arraste para cá</span>
-          <span className="text-[0.75rem] text-tinta-apagada">PNG, JPG ou WEBP</span>
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (file) void abrir(file);
-            }}
-          />
-        </label>
+    <div className="flex h-full min-h-0 flex-col tela:flex-1 tela:flex-row">
+      {/*
+        A COLUNA. Fixa em 320px como a do Encaixe — as duas telas são a mesma
+        ideia, e uma largura diferente em cada faria o olho recalibrar ao
+        trocar de aba.
+      */}
+      {/*
+        Coluna e mesa são COLADAS na janela: sem canto redondo, sem folga e com
+        borda só na costura entre elas. É o mesmo arranjo do Encaixe (lá as
+        medidas vêm do `producao.css`), e é o que faz a tela parecer uma
+        bancada em vez de dois cartões soltos num fundo preto.
+      */}
+      <aside className="flex max-h-[55vh] w-full shrink-0 flex-col overflow-hidden border-b border-linha bg-painel tela:max-h-none tela:w-80 tela:border-r tela:border-b-0">
+        <div className={`${BARRA} justify-between`}>
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span className={`${ROTULO} shrink-0`}>IMAGEM</span>
+            <span className="truncate font-mono text-[10px] text-tinta-apagada" title={aberta?.nome}>
+              {aberta ? aberta.nome : "nenhuma"}
+            </span>
+          </span>
 
-        {erro && (
-          <p className="mt-3 mb-0 flex items-center gap-2 text-[0.85rem] text-alerta">
-            <Icone referencia="icones.svg#triangle-alert" className="size-4 shrink-0" />
-            {erro}
-          </p>
+          {aberta && (
+            <label className="shrink-0 cursor-pointer rounded-[9px] border border-linha bg-painel px-3 py-1.5 text-[0.78rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta">
+              Trocar
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void abrir(file);
+                }}
+              />
+            </label>
+          )}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {!aberta ? (
+            /*
+              Sem imagem, a coluna é só a porta de entrada: a zona de arrastar
+              ocupa o lugar dos ajustes, que não teriam o que ajustar.
+            */
+            <label
+              onDragEnter={(e) => { e.preventDefault(); setArrastando(true); }}
+              onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
+              onDragLeave={() => setArrastando(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setArrastando(false);
+                const file = e.dataTransfer?.files?.[0];
+                if (file) void abrir(file);
+              }}
+              className={`flex cursor-pointer flex-col items-center gap-2 rounded-[10px] border border-dashed px-4 py-8 text-center transition-colors ${
+                arrastando ? "border-ambar bg-[var(--accent-soft)]" : "border-linha bg-painel-suave"
+              }`}
+            >
+              <Icone referencia="icones.svg#image" className="size-7 text-tinta-apagada" />
+              <span className="text-[0.88rem] text-tinta">Escolha a imagem ou arraste para cá</span>
+              <span className="text-[0.75rem] text-tinta-apagada">PNG, JPG ou WEBP</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void abrir(file);
+                }}
+              />
+            </label>
+          ) : (
+            <>
+              {/*
+                OS ATALHOS VÊM ANTES DAS FAIXAS, e isso é o desenho da tela.
+
+                Quem chega aqui quer um logo limpo ou uma foto traçada, não um
+                número de tensão de curva. Um clique põe os seis controles no
+                lugar certo para aquele tipo de imagem; as faixas embaixo são
+                para o ajuste fino de quem já viu o resultado.
+              */}
+              <p className={`${ROTULO} mb-2`}>COMEÇAR POR</p>
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                {JEITOS.map((jeito) => (
+                  <button
+                    key={jeito.nome}
+                    type="button"
+                    title={jeito.ajuda}
+                    onClick={() => mexer(jeito.valores)}
+                    className="rounded-[9px] border border-linha bg-painel-suave px-2.5 py-2 text-[0.78rem] font-semibold text-tinta-fraca transition-colors hover:border-[var(--accent-line)] hover:text-tinta"
+                  >
+                    {jeito.rotulo}
+                  </button>
+                ))}
+              </div>
+
+              <p className={`${ROTULO} mb-2 border-t border-linha pt-3`}>AJUSTE FINO</p>
+              <div className="grid gap-3.5">
+                <Faixa rotulo="Cores" valor={ajustes.cores} min={1} max={32} passo={1}
+                  aoMudar={(v) => mexer({ cores: v })} />
+                <Faixa rotulo="Detalhe mínimo" valor={ajustes.detalhe} min={1} max={200} passo={1}
+                  aoMudar={(v) => mexer({ detalhe: v })} sufixo=" px" />
+                <Faixa rotulo="Suavidade" valor={ajustes.suavidade} min={0} max={4} passo={0.1}
+                  aoMudar={(v) => mexer({ suavidade: v })} />
+                <Faixa rotulo="Quina a partir de" valor={ajustes.quina} min={10} max={170} passo={1}
+                  aoMudar={(v) => mexer({ quina: v })} sufixo="°" />
+                <Faixa rotulo="Juntar sombras" valor={ajustes.sombras} min={0} max={100} passo={1}
+                  aoMudar={(v) => mexer({ sombras: v })} />
+                <Faixa rotulo="Tensão da curva" valor={ajustes.tensao} min={0} max={2} passo={0.05}
+                  aoMudar={(v) => mexer({ tensao: v })} />
+              </div>
+
+              <div className="mt-4 grid gap-2.5 border-t border-linha pt-3">
+                <Marcar rotulo="Tirar o fundo" ligado={ajustes.fundo} aoMudar={(v) => mexer({ fundo: v })} />
+                <Marcar rotulo="Achar formas redondas" ligado={ajustes.redondas} aoMudar={(v) => mexer({ redondas: v })} />
+                <Marcar rotulo="Afinar no subpixel" ligado={ajustes.subpixel} aoMudar={(v) => mexer({ subpixel: v })} />
+              </div>
+            </>
+          )}
+
+          {erro && (
+            <p className="mt-3 mb-0 flex items-start gap-2 text-[0.82rem] text-alerta">
+              <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-4 shrink-0" />
+              {erro}
+            </p>
+          )}
+        </div>
+
+        {/*
+          O PÉ DA COLUNA: o que sai daqui.
+
+          Fica FORA da parte que rola, colado embaixo — o botão que entrega o
+          trabalho não pode depender de rolar seis faixas para aparecer.
+        */}
+        {aberta && (
+          <div className="shrink-0 space-y-2 border-t border-linha p-3">
+            <p className="m-0 text-[0.75rem] leading-snug text-tinta-apagada">
+              {fase === "rascunho" ? "Traçando um rascunho..."
+                : fase === "final" ? "Refinando o traço..."
+                  : resumo}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={baixar}
+                disabled={!temSaida}
+                className="flex-1 rounded-[9px] border border-ambar bg-ambar px-3 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
+              >
+                Baixar SVG
+              </button>
+              <button
+                type="button"
+                onClick={() => void copiar()}
+                disabled={!temSaida}
+                className="rounded-[9px] border border-linha px-3 py-2 text-[0.82rem] text-tinta-fraca transition-colors hover:text-tinta disabled:opacity-50"
+              >
+                {copiado ? "Copiado" : "Copiar"}
+              </button>
+            </div>
+          </div>
         )}
-      </Cartao>
+      </aside>
 
-      {aberta && (
-        <>
-          <Cartao titulo="Ajustes" icone="icones.svg#palette" apoio="Comece por um atalho; depois mexa no que precisar.">
-            <div className="mb-4 flex flex-wrap gap-2">
-              {JEITOS.map((jeito) => (
-                <button
-                  key={jeito.nome}
-                  type="button"
-                  title={jeito.ajuda}
-                  onClick={() => mexer(jeito.valores)}
-                  className="rounded-[9px] border border-linha bg-painel-suave px-3.5 py-2 text-[0.82rem] font-semibold text-tinta-fraca transition-colors hover:border-[var(--accent-line)] hover:text-tinta"
-                >
-                  {jeito.rotulo}
-                </button>
-              ))}
-            </div>
+      {/* ------------------------------------------------------------- A MESA */}
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-painel">
+        <div className={BARRA}>
+          <span className={`${ROTULO} shrink-0`}>ANTES E DEPOIS</span>
 
-            <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
-              <Faixa rotulo="Cores" valor={ajustes.cores} min={1} max={32} passo={1}
-                aoMudar={(v) => mexer({ cores: v })} />
-              <Faixa rotulo="Detalhe mínimo" valor={ajustes.detalhe} min={1} max={200} passo={1}
-                aoMudar={(v) => mexer({ detalhe: v })} sufixo=" px" />
-              <Faixa rotulo="Suavidade" valor={ajustes.suavidade} min={0} max={4} passo={0.1}
-                aoMudar={(v) => mexer({ suavidade: v })} />
-              <Faixa rotulo="Quina a partir de" valor={ajustes.quina} min={10} max={170} passo={1}
-                aoMudar={(v) => mexer({ quina: v })} sufixo="°" />
-              <Faixa rotulo="Juntar sombras" valor={ajustes.sombras} min={0} max={100} passo={1}
-                aoMudar={(v) => mexer({ sombras: v })} />
-              <Faixa rotulo="Tensão da curva" valor={ajustes.tensao} min={0} max={2} passo={0.05}
-                aoMudar={(v) => mexer({ tensao: v })} />
-            </div>
+          {aberta && (
+            <>
+              <p className="m-0 hidden min-w-0 truncate text-[0.78rem] text-tinta-fraca tela:block">
+                Aproxime e arraste para comparar a borda — a lupa é a mesma nas duas.
+              </p>
 
-            <div className="mt-4 flex flex-wrap gap-4">
-              <Marcar rotulo="Tirar o fundo" ligado={ajustes.fundo} aoMudar={(v) => mexer({ fundo: v })} />
-              <Marcar rotulo="Achar formas redondas" ligado={ajustes.redondas} aoMudar={(v) => mexer({ redondas: v })} />
-              <Marcar rotulo="Afinar no subpixel" ligado={ajustes.subpixel} aoMudar={(v) => mexer({ subpixel: v })} />
-            </div>
-          </Cartao>
-
-          <Cartao
-            preencher
-            titulo="Antes e depois"
-            icone="icones.svg#zoom-in"
-            apoio="A lupa é a mesma nas duas: aproxime e arraste para comparar a borda. Dois cliques volta ao inteiro."
-            acao={
-              <div className="flex items-center gap-2">
+              <span className="ml-auto flex shrink-0 items-center gap-2">
                 <input
                   type="range"
                   min={1}
@@ -524,9 +711,29 @@ export function Vetor() {
                 >
                   Ver inteiro
                 </button>
-              </div>
-            }
-          >
+              </span>
+            </>
+          )}
+        </div>
+
+        {!aberta ? (
+          /* A mesa vazia diz o que fazer, em vez de ser um retângulo preto. */
+          <div className="grid min-h-0 flex-1 place-items-center p-6">
+            <div className="max-w-sm rounded-2xl border border-linha bg-painel-suave/90 p-6 text-center">
+              <span className="mx-auto grid size-12 place-items-center rounded-xl border border-linha bg-painel text-[color-mix(in_srgb,var(--accent)_45%,var(--text-dim))]">
+                <Icone referencia="icones.svg#spline" className="size-[22px]" />
+              </span>
+              <p className="mt-3 mb-0 font-titulo text-base font-semibold text-tinta">
+                Escolha uma imagem para vetorizar
+              </p>
+              <p className="mt-1 mb-0 text-[0.8rem] leading-relaxed text-tinta-fraca">
+                O desenho sai em contornos, para cortar ou imprimir em qualquer tamanho. A imagem
+                original fica à esquerda e o vetor à direita, com a mesma lupa nos dois.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
             {/*
               As duas caixas têm exatamente a mesma altura e o conteúdo de
               ambas preenche a caixa do mesmo jeito (`object-contain`). Isto
@@ -535,11 +742,16 @@ export function Vetor() {
               cair no mesmo lugar. Com a imagem no tamanho natural e o SVG
               esticado, as duas mostram lugares diferentes e a comparação não
               diz nada.
+
+              `grid-cols-2` e não `auto-fit`: lado a lado é o ponto da tela, e
+              numa janela estreita elas empilham pela media query, não por
+              acidente de largura mínima.
             */}
-            <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-              <div className="touch-none overflow-hidden rounded-[10px] border border-linha bg-painel-suave">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-px bg-linha tela:grid-cols-2">
+              <div className="relative min-h-0 touch-none overflow-hidden bg-painel-suave">
+                <span className={`${ROTULO} ${SELO} text-tinta-apagada`}>ORIGINAL</span>
                 <div
-                  className={`grid h-[320px] place-items-center [&_img]:size-full [&_img]:object-contain ${
+                  className={`grid h-full place-items-center [&_img]:size-full [&_img]:object-contain ${
                     escalaNaTela >= 3 ? "[&_img]:[image-rendering:pixelated]" : ""
                   }`}
                   {...gestos(original)}
@@ -547,9 +759,23 @@ export function Vetor() {
                   <img src={aberta.img.src} alt={aberta.nome} />
                 </div>
               </div>
-              <div className="touch-none overflow-hidden rounded-[10px] border border-linha bg-painel-suave">
+
+              <div className="relative min-h-0 touch-none overflow-hidden bg-painel-suave">
+                <span className={`${ROTULO} ${SELO}`}>
+                  VETOR
+                  {fase !== "parado" && (
+                    <span className="ml-2 font-texto text-[9px] font-semibold tracking-normal text-tinta-apagada normal-case">
+                      {fase === "rascunho" ? "rascunho" : "refinando"}
+                    </span>
+                  )}
+                </span>
+
+                {fase !== "parado" && <Varredura />}
+
                 <div
-                  className="grid h-[320px] place-items-center [&_svg]:size-full [&_svg]:object-contain"
+                  className={`grid h-full place-items-center [&_svg]:size-full [&_svg]:object-contain [&_svg]:transition-opacity [&_svg]:duration-200 ${
+                    fase === "rascunho" ? "[&_svg]:opacity-60" : ""
+                  }`}
                   {...gestos(saida)}
                   /*
                     O SVG vem de `motores/vetor.js`, gerado nesta máquina a partir
@@ -567,48 +793,40 @@ export function Vetor() {
               </div>
             </div>
 
-            <p className="mt-3 mb-0 text-[0.8rem] text-tinta-fraca">
-              {gerando ? "Gerando..." : resumo}
-            </p>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
 
-            {resultado && resultado.camadas.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {resultado.camadas.map((camada) => (
-                  <span
-                    key={camada.cor}
-                    title={`${camada.caminhos} contorno(s)`}
-                    className="flex items-center gap-1.5 rounded-full border border-linha px-2.5 py-1 font-mono text-[0.68rem] text-tinta-fraca"
-                  >
-                    <i aria-hidden="true" className="size-2.5 rounded-full" style={{ background: camada.cor }} />
-                    {camada.cor}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-3.5 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={baixar}
-                disabled={!resultado?.svg}
-                className="rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
-              >
-                Baixar SVG
-              </button>
-              <button
-                type="button"
-                onClick={() => void copiar()}
-                disabled={!resultado?.svg}
-                className="rounded-[9px] border border-linha px-4 py-2 text-[0.85rem] text-tinta-fraca transition-colors hover:text-tinta disabled:opacity-50"
-              >
-                Copiar SVG
-              </button>
-              {copiado && <span className="text-[0.8rem] text-certo">Copiado.</span>}
-            </div>
-          </Cartao>
-        </>
-      )}
-    </>
+/**
+ * A VARREDURA — o que se vê enquanto o traço é calculado.
+ *
+ * Uma linha âmbar que desce pela metade do vetor, de cima a baixo, sem parar,
+ * com um rastro atrás. É o desenho do que está acontecendo: o rastreio varre a
+ * imagem linha por linha, e a animação conta isso em vez de girar uma rodinha
+ * que serviria para qualquer tela de qualquer programa.
+ *
+ * Ela é decoração honesta e nada mais: NÃO é barra de progresso, porque não há
+ * progresso para medir — o traço volta do worker inteiro ou não volta. Por
+ * isso ela repete em velocidade fixa, e o que diz em que passo a conta está é
+ * a palavra ao lado do rótulo ("rascunho", "refinando").
+ *
+ * `pointer-events-none` porque a lupa continua funcionando por baixo: dá para
+ * arrastar e aproximar enquanto o desenho está sendo refeito.
+ */
+function Varredura() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+      <div className="vetor-varredura absolute inset-x-0 h-[38%]">
+        {/* O rastro: um degradê que morre para cima, como o que fica na tela de
+            um scanner depois que a lâmpada passa. */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,color-mix(in_srgb,var(--accent)_16%,transparent))]" />
+        {/* A linha, no pé do rastro — é ela que está "lendo" agora. */}
+        <div className="absolute inset-x-0 bottom-0 h-px bg-ambar shadow-[0_0_12px_2px_color-mix(in_srgb,var(--accent)_55%,transparent)]" />
+      </div>
+    </div>
   );
 }
 

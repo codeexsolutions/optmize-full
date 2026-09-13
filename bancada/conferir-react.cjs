@@ -90,7 +90,14 @@ async function main() {
   const error=document.querySelector('[role="alert"]'); assert.equal(error,null,error?.textContent);
 
   // ---------- Moldes: React, desenhada pela rota ----------
-  assert.match(document.querySelector('.molde-lista').textContent,/Nenhum|nenhum/);
+  /*
+   * Sem molde guardado, a estante não desenha `.molde-lista` nenhuma: ela
+   * mostra o passo a passo de como um molde chega aqui (ver `Vazia`, em
+   * `telas/Moldes.tsx`). O que se confere é que a tela DIZ que está vazia —
+   * que era o ponto desta linha desde sempre.
+   */
+  assert.match(document.body.textContent,/estante está vazia/i);
+  assert.equal(document.querySelectorAll('.molde-linha').length,0,'nenhum molde na estante');
   await click(botao('Adicionar molde'));
   assert.ok(document.querySelector('.modal-passo'),'o passo a passo do molde abriu');
   assert.match(document.querySelector('.escolhas').textContent,/Camisa/);
