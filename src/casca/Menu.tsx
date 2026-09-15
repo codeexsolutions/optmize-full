@@ -56,7 +56,7 @@
  */
 
 import { useEffect } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { Icone } from "./Icone";
 import { useRelogio } from "./useRelogio";
 import { GRUPOS, telasDoGrupo } from "../rotas";
@@ -242,20 +242,7 @@ export function Menu({ aberto, aoFechar }: Props) {
         */}
         <div className="mt-3 shrink-0 border-t border-[var(--border-hairline)] px-[11px] pt-[10px]">
           <div className="flex items-center justify-between gap-2 tela:max-[1100px]:flex-col tela:max-[1100px]:gap-2">
-            {/*
-              A marca é um LINK para a licença.
-
-              É o único caminho para essa tela quando está tudo em dia (ela
-              fica fora do menu, e a faixa de aviso só aparece perto de
-              vencer), e é onde qualquer pessoa procura "sobre este programa"
-              — que é exatamente o que a tela de licença é: nome, validade e o
-              código desta instalação.
-            */}
-            <Link
-              to="/licenca"
-              title="Licença deste computador"
-              className="flex min-w-0 items-center gap-[7px] no-underline"
-            >
+            <div className="flex min-w-0 items-center gap-[7px]">
               {/*
                 A MARCA.
 
@@ -294,7 +281,7 @@ export function Menu({ aberto, aoFechar }: Props) {
               >
                 CodeEx Optmize
               </span>
-            </Link>
+            </div>
 
             <strong
               title={relogio.data}

@@ -40,45 +40,8 @@ const projetosRouter = require("./projetos-api");
 const pontoRouter = require("./ponto-api");
 const corRouter = require("./cor-api");
 const { criarRotasDeImpressoras, iniciarImpressoras } = require("./impressoras-api");
-const licenca = require("./licenca");
 
 const app = express();
-
-/*
- * ===========================================================================
- * A PORTA: NADA DA API RESPONDE SEM LICENÇA VÁLIDA
- * ===========================================================================
- *
- * Vem antes de todo o resto de propósito. O que estiver abaixo desta linha só
- * é alcançado por quem passou — e quem não passou recebe 402 em qualquer
- * `/api`, menos na própria `/api/licenca`, que é por onde se sai do bloqueio.
- *
- * A tela de bloqueio do painel é conveniência, não tranca: ela é JavaScript no
- * navegador do cliente e se contorna com o F12 aberto. A tranca é esta, que
- * sai em bytecode dentro do instalador (ver `empacotar/compilar.js`).
- *
- * Os arquivos do painel continuam sendo servidos normalmente: sem eles não há
- * onde colar o token novo.
- */
-app.use("/api/licenca", licenca.router);
-
-/*
- * O PORTEIRO ESTÁ DESLIGADO.
- *
- *     app.use(licenca.porteiro);
- *
- * Era esta linha que devolvia 402 em toda rota `/api` sem token válido. Ela saiu
- * porque não há como emitir token nesta máquina — a chave privada que assina
- * vive no painel (`optmize-backend`), e sem ela o programa inteiro fica
- * inacessível, inclusive para quem o escreve.
- *
- * O resto do sistema de licença continua de pé: `servidor/licenca.js` inteiro,
- * a rota `/api/licenca`, a tela e a bancada. O que se desligou foi só o
- * bloqueio. Para religar, basta devolver a linha acima.
- *
- * ISTO NÃO PODE IR PARA O INSTALADOR DO CLIENTE: sem o porteiro, o token vira
- * enfeite e o programa libera tudo a quem o tiver.
- */
 
 // O socket precisa do servidor HTTP nu, não do Express. É por ele que a tela
 // das impressoras fica sabendo de trabalho novo, do progresso da varredura da
