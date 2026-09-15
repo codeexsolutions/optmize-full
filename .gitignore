@@ -53,3 +53,16 @@ estatico/ia/ort*
 # uma cópia do que o esbuild refaz em meio segundo, com o risco de ela
 # envelhecer em silêncio enquanto o motor de verdade muda.
 servidor/motor-encaixe.js
+
+# O programa do ESP32 (pasta `esp/`): o que o ESP-IDF gera fica de fora.
+esp/build/
+esp/managed_components/
+esp/sdkconfig
+esp/sdkconfig.old
+esp/dependencies.lock
+
+# A marca de integridade do gerenciador de componentes. Ela nao vale para o BSP
+# que mora em `esp/components/`: aquele foi copiado e CORRIGIDO de proposito, e
+# o hash guardado junto so serviria para alguem concluir, mais tarde, que o
+# arquivo foi corrompido.
+esp/components/**/.component_hash

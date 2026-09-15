@@ -1,0 +1,145 @@
+# ===========================================================================
+# A CONFIGURACAO DESTA PLACA
+# ===========================================================================
+#
+# O padrao do ESP-IDF e um chip pequeno: 2 MB de flash, sem PSRAM. A P4
+# Function EV Board e o oposto disso, e sem corrigir os tres blocos abaixo o
+# projeto ate compila -- mas nao cabe na flash e nao tem memoria para a tela.
+
+# --- Flash: 32 MB, QIO a 80 MHz, como a placa veio de fabrica ---
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# --- PSRAM: e ela que segura a tela ---
+#
+# Um framebuffer de 1024x600 em RGB565 sao 1,2 MB. O P4 tem 768 KB de RAM
+# interna no total: nao cabe, nem perto. A placa traz 32 MB de PSRAM em modo
+# HEX (16 linhas de dados) a 200 MHz, e e de la que o LVGL tira o buffer.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_HEX=y
+CONFIG_SPIRAM_SPEED_200M=y
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_SPIRAM_RODATA=y
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+
+# --- Particoes ---
+#
+# Duas correcoes sobre o padrao:
+#
+# O app do LVGL nao cabe no 1 MB de fabrica -- dai a tabela propria.
+#
+# E a tabela sai de 0x8000 para 0xA000 porque o BOOTLOADER nao cabia. No P4
+# ele comeca em 0x2000, entao a tabela em 0x8000 lhe dava 0x6000 bytes; com a
+# PSRAM em modo HEX e a flash de 32 MB ele foi para 0x60c0 e estourou por 192
+# bytes. Empurrar a tabela custa 8 KB de uma flash de 32 MB; o outro caminho
+# seria cortar o log do bootloader, que e justamente o que se le quando a
+# placa nao sobe.
+CONFIG_PARTITION_TABLE_OFFSET=0xA000
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="particoes.csv"
+
+# --- Sistema ---
+# 1 kHz porque o LVGL conta o tempo em milissegundos; nos 100 Hz padrao a
+# animacao anda de 10 em 10 ms e se ve o degrau.
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# --- Fontes do LVGL ---
+# So entram no binario as que forem marcadas aqui. Elas cobrem ASCII e mais
+# nada: acento nao desenha. Por isso os textos DA TELA sao sem acento -- os
+# comentarios, que ninguem renderiza, ficam em portugues de verdade.
+CONFIG_LV_FONT_MONTSERRAT_16=y
+CONFIG_LV_FONT_MONTSERRAT_22=y
+CONFIG_LV_FONT_MONTSERRAT_28=y
+CONFIG_LV_FONT_MONTSERRAT_48=y
+
+# --- A revisao do chip ---
+#
+# Este P4 e v1.3, silicio antigo. O IDF 5.5.5 assume por padrao v3.1+ e monta
+# um binario que o proprio esptool recusa a gravar ("requires chip revision in
+# range [v3.1 - v3.99]"). O suporte a <v3.0 e >=v3.0 e mutuamente exclusivo, e
+# quem faz a troca e o interruptor abaixo.
+#
+# Existe um --force no esptool que pula a conferencia. Nao serve: a checagem
+# nao e burocracia, e o binario e de fato compilado com as correcoes de
+# silicio do v3 -- gravado num v1.3 ele roda errado, quando roda.
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_0=y
+
+# --- Quantos framebuffers o painel DPI tem ---
+#
+# O padrao do BSP e 1. O firmware de fabrica desta placa -- o unico que acende
+# -- usa 3, e isso nao foi deduzido: esta escrito nas strings do binario dele,
+#
+#     esp_lcd_dpi_panel_get_frame_buffer(display_panel_, 3, &lcd_buffer_[0], ...)
+#
+# O numero nao e so consumo de memoria: ele entra na criacao do painel DPI e
+# muda como o controlador varre a tela. Foi a unica peca do caminho de video
+# que ficou no padrao o dia inteiro.
+CONFIG_BSP_LCD_DPI_BUFFER_NUMS=3
+
+# ===========================================================================
+# BANDA DE MEMORIA -- o que o painel DPI precisa para nao secar
+# ===========================================================================
+#
+# O painel nao recebe a imagem: ele LE o framebuffer da PSRAM enquanto varre a
+# tela, 1024x600 sessenta vezes por segundo. Se a memoria nao entrega no ritmo,
+# o controlador seca no meio da linha -- `can't fetch data from external memory
+# fast enough, underrun happens` -- e nao aparece imagem. Nao e erro de pino,
+# de driver nem de buffer: e desempenho.
+#
+# Tudo abaixo esta no sdkconfig.defaults do firmware de fabrica desta placa, o
+# unico que acende, e faltava inteiro no nosso.
+#
+# O EXPERIMENTAL importa mais do que parece: sem ele a PSRAM a 200 MHz nao se
+# sustenta (ver esp-bsp#651, onde outra pessoa so conseguiu subir a tela depois
+# de liga-lo).
+CONFIG_IDF_EXPERIMENTAL_FEATURES=y
+
+# O cache L2 e o que fica entre o controlador e a PSRAM. Linha de 128 bytes
+# significa o dobro de dados por busca -- para leitura sequencial de
+# framebuffer, que e o caso, e a diferenca entre dar conta e nao dar.
+CONFIG_CACHE_L2_CACHE_256KB=y
+CONFIG_CACHE_L2_CACHE_LINE_128B=y
+
+# O codigo roda direto da flash/PSRAM (XIP); otimizar por desempenho tira
+# trabalho do mesmo barramento que o painel esta disputando.
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# --- USB host: o descritor da camera nao cabia em 256 bytes ---
+#
+# Cada dispositivo USB ganha um buffer para as transferencias de controle, e o
+# padrao do IDF sao 256 bytes. E o bastante para um mouse; nao e para uma
+# webcam, que declara dezenas de combinacoes de formato, resolucao e taxa de
+# quadros. O descritor dela passa facil de mil bytes.
+#
+# Sem isto a enumeracao morre com `Configuration descriptor larger than control
+# transfer max length` e a camera nem chega a ser reconhecida -- que foi
+# exatamente o que aconteceu na primeira tentativa.
+CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE=4096
+
+# --- UVC: esta camera nao marca o bit de fim de cabecalho ---
+#
+# O driver exige, por padrao, que cada pacote de video traga o bit EOH (End Of
+# Header) ligado -- e o que manda a especificacao. Esta camera nao liga, e o
+# driver entao RECUSA todos os pacotes: a transmissao abre, nenhum quadro se
+# completa, e a serial enche de `EOH bit not set` (6880 avisos em dez segundos,
+# suficiente para o cao de guarda reclamar por si so).
+#
+# Desligar a conferencia nao inventa dado nenhum: o resto do cabecalho continua
+# sendo lido e validado. So se deixa de exigir um bit que esta camera nao poe.
+CONFIG_UVC_CHECK_PAYLOAD_HEADER_EOH=n
+
+# --- Wi-Fi pelo ESP32-C6 ---
+#
+# O P4 nao tem radio. O C6 ao lado dele tem, e os dois falam por SDIO. Este
+# preset define os pinos, e eles batem com o que o firmware de fabrica desta
+# placa imprime no boot: CLK 18, CMD 19, D0-D3 em 14-17, reset do C6 no 54.
+#
+# `CP_TARGET_ESP32C6` importa: os pinos do preset mudam conforme o
+# coprocessador, e para C5 seriam outros.
+CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD=y
+CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y
+CONFIG_ESP_HOSTED_HOST_TRANSPORT_BUS_SDIO=y
+CONFIG_ESP_HOSTED_HOST_SDIO_BUS_WIDTH_4=y
