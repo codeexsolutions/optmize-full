@@ -51,6 +51,7 @@ static const char *TAG = "tela";
 /* As provas, ao lado. Diagnostico, nao produto -- ver os arquivos. */
 void prova_de_painel(void);
 void prova_de_camera(void);
+void prova_de_audio(void);   /* ver o `#if 0` la embaixo */
 
 /*
  * A prova de painel pinta cor solida sem LVGL e responde "o painel recebe
@@ -134,6 +135,34 @@ void app_main(void)
      * USB a cada entrada no app seria pedir problema, e a enumeracao demora.
      */
     prova_de_camera();
+
+    /*
+     * A PROVA DE AUDIO ja respondeu, e por isso nao roda mais.
+     *
+     * Ela custava dez segundos em cada boot, e as duas perguntas dela tem
+     * resposta guardada no LEIA-ME:
+     *
+     *   A SAIDA e do ES8311 em 0x18, e o BSP a monta certo -- as quatro notas
+     *   sairam na caixa ligada no SPK.
+     *
+     *   A ENTRADA NAO E do ES8311. Com ele chegavam zeros exatos; o microfone
+     *   desta placa e de um ES7210 em 0x40, que o BSP nem tenta montar. Com o
+     *   chip certo o nivel passou a oscilar entre 82 e 359 em sala silenciosa,
+     *   que e o piso de ruido de um microfone vivo.
+     *
+     * O arquivo fica: vale 1 no dia em que o som parar.
+     */
+#if 0
+    prova_de_audio();
+#endif
+
+    /*
+     * A VOZ sobe junto e fica. Abrir o codec custa milissegundos, mas o
+     * primeiro `bsp_audio_init` levanta o I2S inteiro -- e faze-lo na hora da
+     * primeira fala poria esse custo bem no instante em que alguem espera ouvir
+     * o nome de um item.
+     */
+    voz_iniciar();
 
     interface_iniciar();
     ESP_LOGI(TAG, "no ar");

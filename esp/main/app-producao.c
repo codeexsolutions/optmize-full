@@ -552,6 +552,22 @@ static void montar_a_conferencia(void)
     lv_bar_set_range(barra, 0, pedido.quantos);
     lv_bar_set_value(barra, atual, LV_ANIM_OFF);
 
+    /*
+     * A PLACA DIZ O NOME E A METRAGEM EM VOZ ALTA.
+     *
+     * Quem esta na calandra tem as duas maos no tecido e o olho na arte. Ler a
+     * tela exige parar e virar a cabeca; ouvir, nao. E a metragem e justamente
+     * o numero que decide se aquele rolo e aquele item.
+     *
+     * Fala em TODO item, inclusive nos que ja foram marcados antes -- quem
+     * volta a um pedido conferido esta conferindo de novo, e merece a mesma
+     * informacao que teve da primeira vez.
+     *
+     * A frase vem montada do servidor: mudar o que se fala nao regrava
+     * terminal nenhum.
+     */
+    voz_falar_o_item(item->id);
+
     /* --- a arte, que e a decisao --- */
 
     imagem_da_producao_montar(area_do_app, 16, 50, 480, 382,
@@ -921,6 +937,7 @@ void app_producao_desmontar(void)
     leitor_de_qr_avisar(NULL);
     video_da_camera_fechar();
     imagem_da_producao_fechar();
+    voz_calar();   /* ninguem quer ouvir o item anterior na tela inicial */
 
     /* Os objetos morrem com a arvore; os ponteiros nao podem sobreviver a eles. */
     area_do_app = NULL;

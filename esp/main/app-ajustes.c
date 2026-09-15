@@ -231,18 +231,43 @@ static void mudou_o_brilho(lv_event_t *e)
     lv_label_set_text_fmt((lv_obj_t *)lv_event_get_user_data(e), "%d%%", valor);
 }
 
-static void mudou_o_volume(lv_event_t *e)
+static void mudou_o_ganho(lv_event_t *e)
 {
     lv_obj_t *barra = lv_event_get_target(e);
     const int valor = (int)lv_slider_get_value(barra);
     lv_label_set_text_fmt((lv_obj_t *)lv_event_get_user_data(e), "%d%%", valor);
 
     /*
-     * O ganho ainda nao chega ao codec: a entrada de audio do sistema nao
-     * existe. Mostrar o numero ja serve, e quando o audio entrar e aqui que ele
-     * sai. Melhor isto do que um controle que finge funcionar.
+     * O ganho ainda nao chega ao codec, e agora por outra razao: o microfone
+     * EXISTE (um ES7210 em 0x40, ver `prova-de-audio.c`), mas nada no sistema
+     * o escuta ainda. Ligar o controle a um microfone que ninguem le seria um
+     * botao que mexe em nada.
      */
     ESP_LOGI(TAG, "ganho do microfone: %d%% (ainda nao aplicado)", valor);
+}
+
+/*
+ * O VOLUME DA VOZ, e a frase de prova.
+ *
+ * Arrastar um controle de volume sem ouvir nada e adivinhar. Por isso, ao
+ * SOLTAR, a placa fala uma frase curta no volume novo -- e o ajuste passa a ser
+ * "arrasta, ouve, arrasta de novo" em vez de "arrasta, sai da tela, le um QR,
+ * descobre que ficou baixo".
+ *
+ * A frase sai so no SOLTAR, e nao a cada pixel arrastado: falando a cada
+ * mudanca, o controle viraria uma gagueira.
+ */
+static void mudou_o_volume_da_voz(lv_event_t *e)
+{
+    lv_obj_t *barra = lv_event_get_target(e);
+    const int valor = (int)lv_slider_get_value(barra);
+    lv_label_set_text_fmt((lv_obj_t *)lv_event_get_user_data(e), "%d%%", valor);
+
+    voz_guardar_volume(valor);
+
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) {
+        voz_falar("volume assim");
+    }
 }
 
 /* ------------------------------------------------------------ montagem */
@@ -272,6 +297,12 @@ static void deslizante(lv_obj_t *pai, const char *nome, int32_t y,
     lv_obj_set_style_bg_color(barra, COR_DESTAQUE, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(barra, COR_TEXTO, LV_PART_KNOB);
     lv_obj_add_event_cb(barra, ao_mudar, LV_EVENT_VALUE_CHANGED, valor);
+    /*
+     * O SOLTAR tambem chama, para quem quiser fazer alguma coisa so no fim do
+     * arrasto -- tocar uma frase de prova, por exemplo. Quem nao quiser ignora,
+     * porque o codigo do evento esta no proprio evento.
+     */
+    lv_obj_add_event_cb(barra, ao_mudar, LV_EVENT_RELEASED, valor);
 }
 
 void app_ajustes_montar(lv_obj_t *area)
@@ -384,7 +415,8 @@ void app_ajustes_montar(lv_obj_t *area)
     lv_obj_set_pos(t2, 0, 0);
 
     deslizante(dir, "Brilho da tela", 50, 100, mudou_o_brilho);
-    deslizante(dir, "Ganho do microfone", 140, 50, mudou_o_volume);
+    deslizante(dir, "Volume da voz", 140, voz_volume(), mudou_o_volume_da_voz);
+    deslizante(dir, "Ganho do microfone", 230, 50, mudou_o_ganho);
 
     /*
      * O ENDERECO DO SERVIDOR.

@@ -188,6 +188,17 @@ esp_codec_dev_handle_t bsp_audio_codec_speaker_init(void);
  */
 esp_codec_dev_handle_t bsp_audio_codec_microphone_init(void);
 
+/**
+ * @brief A interface de dados do I2S, ja montada por bsp_audio_init().
+ *
+ * ACRESCENTADO NESTE PROJETO. O microfone desta placa nao e o ES8311 que
+ * bsp_audio_codec_microphone_init() monta -- e um ES7210 em 0x40. Quem monta o
+ * chip certo precisa desta interface, que era estatica.
+ *
+ * @return A interface, ou NULL se bsp_audio_init() ainda nao rodou.
+ */
+const audio_codec_data_if_t *bsp_audio_get_codec_itf(void);
+
 /**************************************************************************************************
  *
  * SPIFFS

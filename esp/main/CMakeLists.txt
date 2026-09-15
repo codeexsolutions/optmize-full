@@ -6,6 +6,7 @@ idf_component_register(
          "interface.c"
          "descanso.c"
          "rede.c"
+         "voz.c"
          "optmize.c"
          "app-producao.c"
          "imagem-da-producao.c"
@@ -15,4 +16,5 @@ idf_component_register(
          "leitor-de-qr.c"
          "prova-de-painel.c"
          "prova-de-camera.c"
+         "prova-de-audio.c"
     INCLUDE_DIRS ".")
