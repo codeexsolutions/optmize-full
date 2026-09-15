@@ -37,6 +37,7 @@ const encaixeResolverRouter = require("./encaixe-resolver");
 const riscoPdfRouter = require("./risco-pdf");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
+const pontoRouter = require("./ponto-api");
 const corRouter = require("./cor-api");
 const { criarRotasDeImpressoras, iniciarImpressoras } = require("./impressoras-api");
 const licenca = require("./licenca");
@@ -146,6 +147,7 @@ app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
 app.use("/api/macros", macrosRouter);
 app.use("/api/moldes", moldesRouter);
 app.use("/api/projetos", projetosRouter);
+app.use("/api/ponto", pontoRouter);
 // As impressoras da produção: varredura da rede, histórico, ordens de
 // serviço, lista da calandra e os avisos no WhatsApp.
 app.use("/api/impressoras", criarRotasDeImpressoras(io));
