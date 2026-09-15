@@ -44,6 +44,18 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // O servidor sobe o Chrome do WhatsApp, que fica com `whatsapp-sessao/`
+    // aberta; o observador do Vite tropeça nesses arquivos (EBUSY) e derruba o
+    // dev inteiro. Nada aqui é código da tela: são dados de execução, todos
+    // fora do Git pelo mesmo motivo.
+    watch: {
+      ignored: [
+        "**/whatsapp-sessao/**",
+        "**/uploads/**",
+        "**/exportado/**",
+        "**/dados.db*",
+      ],
+    },
     proxy: {
       "/api": "http://localhost:8000",
       "/uploads": "http://localhost:8000",
