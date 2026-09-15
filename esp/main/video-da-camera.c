@@ -111,6 +111,21 @@ static uint32_t recebidos, mostrados, descartados, recusados;
  */
 static volatile bool o_usb_reclamou;
 static uvc_host_stream_config_t configuracao;
+
+/*
+ * O PEDIDO DE FOTO.
+ *
+ * A camera ja entrega MJPEG -- cada quadro E um arquivo JPEG inteiro --, e o
+ * servidor quer JPEG. Entao fotografar aqui nao e codificar nada: e guardar uma
+ * copia do proximo quadro que passar, antes de ele ser decodificado e jogado
+ * fora.
+ *
+ * Re-codificar o quadro ja decodificado seria perder qualidade duas vezes e
+ * gastar o decodificador para desfazer o que a camera acabou de fazer.
+ */
+static volatile bool querem_uma_foto;
+static uint8_t *foto_guardada;
+static size_t   foto_bytes;
 static lv_obj_t *pai_do_video;      /* onde o aviso de reconexao aparece */
 static lv_obj_t *rot_reconectando;
 
@@ -274,6 +289,26 @@ static void tarefa_do_video(void *arg)
                 vTaskDelay(pdMS_TO_TICKS(remendos < 5 ? remendos * 1000 : 5000));
             }
             continue;
+        }
+
+        /*
+         * A COPIA VEM ANTES DA DECODIFICACAO, e nao depois.
+         *
+         * Depois, o quadro ja foi devolvido ao driver e os bytes dele podem
+         * estar sendo reescritos pela proxima transferencia do USB. Aqui eles
+         * ainda sao nossos.
+         */
+        if (querem_uma_foto && foto_guardada == NULL) {
+            uint8_t *copia = heap_caps_malloc(f->data_len, MALLOC_CAP_SPIRAM);
+            if (copia != NULL) {
+                memcpy(copia, f->data, f->data_len);
+                foto_bytes = f->data_len;
+                foto_guardada = copia;   /* por ultimo: e o que sinaliza pronto */
+                ESP_LOGI(TAG, "foto guardada (%u bytes)", (unsigned)foto_bytes);
+            } else {
+                ESP_LOGW(TAG, "sem memoria para a foto");
+            }
+            querem_uma_foto = false;
         }
 
         silencio = 0;
@@ -607,6 +642,43 @@ esp_err_t video_da_camera_abrir(lv_obj_t *pai)
     return ESP_OK;
 }
 
+/* ---------------------------------------------------------- fotografar */
+
+/*
+ * Espera o proximo quadro e devolve uma copia dele em JPEG.
+ *
+ * O BUFFER E DE QUEM PEDE: sao centenas de quilobytes de PSRAM, e esquecer o
+ * `free` derruba a placa depois de algumas fotos, longe de onde o erro foi
+ * cometido.
+ *
+ * BLOQUEIA ate um quadro passar. A 30 por segundo isso e um piscar de olhos --
+ * mas se a camera estiver caida nao passa nenhum, e por isso ha prazo.
+ */
+esp_err_t video_da_camera_fotografar(uint8_t **jpeg, size_t *bytes, int prazo_ms)
+{
+    if (!rodando) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (foto_guardada != NULL) {
+        free(foto_guardada);   /* sobra de um pedido que ninguem recolheu */
+        foto_guardada = NULL;
+    }
+
+    querem_uma_foto = true;
+    for (int esperou = 0; esperou < prazo_ms; esperou += 20) {
+        if (foto_guardada != NULL) {
+            *jpeg = foto_guardada;
+            *bytes = foto_bytes;
+            foto_guardada = NULL;   /* daqui em diante e de quem pediu */
+            return ESP_OK;
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+
+    querem_uma_foto = false;
+    return ESP_ERR_TIMEOUT;
+}
+
 /* ------------------------------------------------------------ fechar */
 
 void video_da_camera_fechar(void)
@@ -646,6 +718,11 @@ void video_da_camera_fechar(void)
     /* Morrem com a arvore de objetos; aqui so se soltam os ponteiros. */
     imagem = NULL;
     rot_reconectando = NULL;
+    querem_uma_foto = false;
+    if (foto_guardada != NULL) {
+        free(foto_guardada);
+        foto_guardada = NULL;
+    }
     pai_do_video = NULL;
     o_usb_reclamou = false;
 

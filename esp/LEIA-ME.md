@@ -263,6 +263,38 @@ fechar com quadro emprestado em aberto, e falhava calado), e um **cão de guarda
 remenda a transmissão depois de três segundos sem quadro, porque a falha mais
 comum não avisa — a imagem só congela.
 
+### O ponto, pela câmera
+
+A pessoa para na frente da tela, aperta um botão da largura do aparelho, e o
+terminal fotografa. O servidor diz de quem é o rosto e já grava a batida numa
+chamada só (`/api/ponto/reconhecer?bater=1`) — quem parou na frente da câmera
+não quer confirmar duas vezes.
+
+**O botão existe de propósito.** A tentação é bater sozinho: achou rosto,
+gravou. Não serve aqui — este aparelho fica em pé na calandra e passa gente na
+frente dele o dia inteiro, levando rolo, indo ao banheiro, conversando. Sem o
+botão, o ponto de todo mundo seria batido várias vezes por dia por acidente, e
+alguém teria de limpar isso na mão toda semana. O toque é o que diz "eu quero
+bater agora", e vale o segundo que custa.
+
+**"Não te reconheci" não é erro: é a porta para a lista de nomes.** Nenhum
+reconhecimento acerta sempre — boné, barba nova, luz de frente, alguém que ainda
+não cadastrou o rosto. Se a única saída fosse o rosto, a primeira falha deixaria
+uma pessoa sem bater o ponto, e um relógio de ponto que às vezes não deixa bater
+é um relógio de ponto quebrado. A batida sai igual pela lista, e o servidor
+grava a origem — quem confere depois vê quais foram pelo rosto e quais na unha.
+
+**Fotografar aqui não é codificar nada.** A câmera já entrega MJPEG (cada quadro
+*é* um JPEG inteiro) e o servidor quer JPEG: a placa só guarda uma cópia do
+próximo quadro antes de ele ser decodificado e jogado fora. A cópia acontece
+antes da decodificação de propósito — depois, o quadro já voltou para o driver e
+os bytes podem estar sendo reescritos pela próxima transferência do USB.
+
+A hora que aparece na confirmação vem do relógio **daqui**, não do servidor:
+ele devolve o instante em ISO com fuso, e decodificar isso na placa seria
+escrever um analisador de data para mostrar cinco caracteres. É o mesmo
+instante — a batida acabou de acontecer.
+
 ### O descanso
 
 Três minutos sem um toque e a placa vira um **relógio digital de parede**. Um
@@ -333,14 +365,15 @@ atualizar o firmware do C6 pela própria placa.
   para onde a pessoa estava. Uma conferência em andamento se perde e precisa de
   uma releitura do QR (que retoma no primeiro item pendente, então não se perde
   trabalho — só o gesto). Foi escolha, não esquecimento; muda em uma linha.
-- **App de Pontos** — tela dizendo "em construção", de propósito. Um cartão que
-  leva a uma tela explicando vale mais que um cartão ausente.
 - **Entrada de áudio** — o controle de ganho do microfone existe em Ajustes,
   mostra o número e **não chega ao codec**. Está anotado no código onde ele sai
   quando o áudio entrar. Melhor isso do que um controle que finge funcionar.
 - **A lista de motivos é um chute** — "Mancha ou sujeira", "Cor fora do padrão",
   "Desalinhado", "Falha na impressão", "Tecido com defeito", "Outro". Ela tem de
   vir da gráfica: o que acontece toda semana entra, o que nunca é tocado sai.
+- **Ler os motivos do servidor** — a rota `/api/ponto/motivos` já existe e
+  devolve a lista; a placa ainda lê a cópia compilada dentro dela. Enquanto for
+  assim, mudar um motivo exige regravar cada terminal.
 - **Zoom além do arquivo** — a arte chega com 800 pixels de largura, e o zoom
   para em 200%. Olhar de perto de verdade uma arte de 8 metros exigiria pedir ao
   servidor um **pedaço** em tamanho maior, e não ampliar o que já veio.

@@ -37,6 +37,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "cJSON.h"
 #include "esp_err.h"
@@ -516,4 +517,263 @@ void optmize_baixar_imagem(const char *pedido_id, const char *item_id, int largu
             aviso(NULL, 0, "sem memoria");
         }
     }
+}
+
+/* ================================================================ o ponto */
+
+/*
+ * A HORA VEM DAQUI, e nao do servidor.
+ *
+ * O servidor devolve o instante em ISO com fuso -- decodificar isso na placa
+ * seria escrever um analisador de data para mostrar cinco caracteres. O relogio
+ * daqui ja esta certo (SNTP, ver `rede.c`) e e o mesmo instante: a batida
+ * acabou de acontecer.
+ */
+static void a_hora_de_agora(char *onde, size_t quanto)
+{
+    time_t agora = time(NULL);
+    struct tm t;
+    localtime_r(&agora, &t);
+    snprintf(onde, quanto, "%02d:%02d", t.tm_hour, t.tm_min);
+}
+
+static void ler_a_batida(const cJSON *j, Batida *b)
+{
+    memset(b, 0, sizeof(*b));
+
+    const cJSON *v = cJSON_GetObjectItem(j, "nome");
+    if (cJSON_IsString(v)) {
+        snprintf(b->nome, sizeof(b->nome), "%s", v->valuestring);
+    }
+    if ((v = cJSON_GetObjectItem(j, "nota")) && cJSON_IsNumber(v)) {
+        b->nota = (float)v->valuedouble;
+    }
+
+    /* A batida vem aninhada quando foi o rosto, e solta quando foi o nome. */
+    const cJSON *batida = cJSON_GetObjectItem(j, "batida");
+    const cJSON *onde = cJSON_IsObject(batida) ? batida : j;
+
+    if ((v = cJSON_GetObjectItem(onde, "tipo")) && cJSON_IsString(v)) {
+        snprintf(b->tipo, sizeof(b->tipo), "%s", v->valuestring);
+    }
+    if (b->nome[0] == 0) {
+        const cJSON *f = cJSON_GetObjectItem(onde, "funcionario");
+        if ((v = cJSON_GetObjectItem(f, "nome")) && cJSON_IsString(v)) {
+            snprintf(b->nome, sizeof(b->nome), "%s", v->valuestring);
+        }
+    }
+    a_hora_de_agora(b->hora, sizeof(b->hora));
+}
+
+/* ------------------------------------------------ bater pelo rosto */
+
+typedef struct {
+    const uint8_t *jpeg;
+    size_t bytes;
+    void (*aviso)(const Batida *b, const char *erro, bool nao_reconheceu);
+} PedidoDeRosto;
+
+static void tarefa_do_rosto(void *arg)
+{
+    PedidoDeRosto *p = arg;
+    Batida batida;
+    const char *erro = NULL;
+    bool nao_reconheceu = false;
+    bool deu_certo = false;
+    char *corpo = NULL;
+
+    char url[160];
+    snprintf(url, sizeof(url), "http://%s/api/ponto/reconhecer?bater=1", servidor);
+
+    esp_http_client_config_t conf = {
+        .url = url,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 20000,   /* a rede compara com o cadastro inteiro */
+        .disable_auto_redirect = true,
+    };
+
+    esp_http_client_handle_t c = servidor[0] ? esp_http_client_init(&conf) : NULL;
+    if (c == NULL) {
+        erro = servidor[0] ? "nao consegui abrir a conexao" : "sem servidor configurado";
+        goto fim;
+    }
+    esp_http_client_set_header(c, "Content-Type", "image/jpeg");
+
+    if (esp_http_client_open(c, (int)p->bytes) != ESP_OK) {
+        erro = "servidor nao respondeu";
+        goto fecha;
+    }
+    if (esp_http_client_write(c, (const char *)p->jpeg, p->bytes) < 0) {
+        erro = "a foto nao subiu inteira";
+        goto fecha;
+    }
+
+    esp_http_client_fetch_headers(c);
+    const int status = esp_http_client_get_status_code(c);
+
+    corpo = malloc(RESPOSTA_MAXIMA);
+    if (corpo == NULL) {
+        erro = "sem memoria";
+        goto fecha;
+    }
+    const int lidos = esp_http_client_read_response(c, corpo, RESPOSTA_MAXIMA - 1);
+    corpo[lidos > 0 ? lidos : 0] = 0;
+
+    cJSON *j = cJSON_Parse(corpo);
+    if (j == NULL) {
+        erro = "resposta ilegivel";
+    } else if (status == 200) {
+        ler_a_batida(j, &batida);
+        deu_certo = true;
+        ESP_LOGI(TAG, "ponto de %s (%s)", batida.nome, batida.tipo);
+    } else if (status == 404) {
+        /*
+         * NAO RECONHECEU e um caso, nao um erro. Leva a tela de escolher o
+         * nome; "o servidor caiu" leva a outra. Confundir os dois faria a
+         * pessoa ficar tentando de novo quando o caminho era escolher na lista.
+         */
+        nao_reconheceu = true;
+        erro = "nao te reconheci";
+    } else if (status == 501) {
+        nao_reconheceu = true;
+        erro = "este servidor nao reconhece rosto";
+    } else if (status == 422) {
+        erro = "nao achei um rosto na foto";
+    } else {
+        erro = "o servidor recusou";
+    }
+    cJSON_Delete(j);
+
+fecha:
+    free(corpo);
+    esp_http_client_close(c);
+    esp_http_client_cleanup(c);
+fim:
+    if (erro != NULL) {
+        ESP_LOGW(TAG, "ponto por rosto: %s", erro);
+    }
+    if (p->aviso != NULL) {
+        p->aviso(deu_certo ? &batida : NULL, erro, nao_reconheceu);
+    }
+    free(p);
+    vTaskDelete(NULL);
+}
+
+void optmize_bater_por_rosto(const uint8_t *jpeg, size_t bytes,
+                             void (*aviso)(const Batida *, const char *, bool))
+{
+    PedidoDeRosto *p = calloc(1, sizeof(*p));
+    if (p == NULL) {
+        if (aviso) aviso(NULL, "sem memoria", false);
+        return;
+    }
+    p->jpeg = jpeg;
+    p->bytes = bytes;
+    p->aviso = aviso;
+
+    if (xTaskCreate(tarefa_do_rosto, "optmize-rosto", 8192, p, 4, NULL) != pdPASS) {
+        free(p);
+        if (aviso) aviso(NULL, "sem memoria", false);
+    }
+}
+
+/* ------------------------------------------- a lista de funcionarios */
+
+static Funcionario funcionarios[FUNCIONARIOS_MAXIMOS];
+static void (*aviso_da_lista)(const Funcionario *, int, const char *);
+
+static void tarefa_da_lista(void *arg)
+{
+    (void)arg;
+    int status = 0;
+    char *corpo = pedir("/api/ponto/funcionarios", "GET", NULL, &status);
+    const char *erro = NULL;
+    int quantos = 0;
+
+    if (corpo == NULL) {
+        erro = servidor[0] ? "servidor nao respondeu" : "sem servidor configurado";
+    } else if (status != 200) {
+        erro = "o servidor recusou";
+    } else {
+        cJSON *j = cJSON_Parse(corpo);
+        if (!cJSON_IsArray(j)) {
+            erro = "resposta ilegivel";
+        } else {
+            const int total = cJSON_GetArraySize(j);
+            for (int i = 0; i < total && quantos < FUNCIONARIOS_MAXIMOS; i++) {
+                const cJSON *f = cJSON_GetArrayItem(j, i);
+                const cJSON *id = cJSON_GetObjectItem(f, "id");
+                const cJSON *nome = cJSON_GetObjectItem(f, "nome");
+                if (!cJSON_IsNumber(id) || !cJSON_IsString(nome)) continue;
+                funcionarios[quantos].id = id->valueint;
+                snprintf(funcionarios[quantos].nome, sizeof(funcionarios[quantos].nome),
+                         "%s", nome->valuestring);
+                quantos++;
+            }
+            if (total > FUNCIONARIOS_MAXIMOS) {
+                ESP_LOGW(TAG, "%d funcionarios; mostrando %d", total, FUNCIONARIOS_MAXIMOS);
+            }
+        }
+        cJSON_Delete(j);
+    }
+
+    free(corpo);
+    if (aviso_da_lista != NULL) {
+        aviso_da_lista(erro ? NULL : funcionarios, quantos, erro);
+    }
+    vTaskDelete(NULL);
+}
+
+void optmize_listar_funcionarios(void (*aviso)(const Funcionario *, int, const char *))
+{
+    aviso_da_lista = aviso;
+    xTaskCreate(tarefa_da_lista, "optmize-gente", 8192, NULL, 4, NULL);
+}
+
+/* ------------------------------------------------- bater pelo nome */
+
+static int quem_vai_bater;
+static void (*aviso_da_batida)(const Batida *, const char *);
+
+static void tarefa_de_bater(void *arg)
+{
+    (void)arg;
+    char corpo_do_pedido[96];
+    snprintf(corpo_do_pedido, sizeof(corpo_do_pedido),
+             "{\"funcionario_id\":%d,\"origem\":\"terminal\"}", quem_vai_bater);
+
+    int status = 0;
+    char *resposta = pedir("/api/ponto/batidas", "POST", corpo_do_pedido, &status);
+    const char *erro = NULL;
+    Batida batida;
+    bool deu_certo = false;
+
+    if (resposta == NULL) {
+        erro = "servidor nao respondeu";
+    } else if (status != 201 && status != 200) {
+        erro = "o servidor recusou a batida";
+    } else {
+        cJSON *j = cJSON_Parse(resposta);
+        if (j == NULL) {
+            erro = "resposta ilegivel";
+        } else {
+            ler_a_batida(j, &batida);
+            deu_certo = true;
+            ESP_LOGI(TAG, "ponto de %s (%s), escolhido na tela", batida.nome, batida.tipo);
+        }
+        cJSON_Delete(j);
+    }
+
+    free(resposta);
+    if (aviso_da_batida != NULL) {
+        aviso_da_batida(deu_certo ? &batida : NULL, erro);
+    }
+    vTaskDelete(NULL);
+}
+
+void optmize_bater_pelo_nome(int funcionario_id, void (*aviso)(const Batida *, const char *))
+{
+    quem_vai_bater = funcionario_id;
+    aviso_da_batida = aviso;
+    xTaskCreate(tarefa_de_bater, "optmize-bate", 8192, NULL, 4, NULL);
 }

@@ -88,3 +88,54 @@ void optmize_concluir(const char *pedido_id, void (*aviso)(const char *erro));
  */
 void optmize_baixar_imagem(const char *pedido_id, const char *item_id, int largura,
                            void (*aviso)(uint8_t *jpeg, size_t bytes, const char *erro));
+
+/* ---------------------------------------------------------------- o ponto */
+
+/*
+ * Quantas pessoas cabem na tela de escolher o nome.
+ *
+ * Quarenta porque e o que uma grafica tem, e porque a tela mostra oito por vez
+ * com rolagem. Se um dia passar disso, o certo nao e aumentar o numero: e
+ * procurar por nome, e ai a tela e outra.
+ */
+#define FUNCIONARIOS_MAXIMOS 40
+
+typedef struct {
+    int  id;
+    char nome[48];
+} Funcionario;
+
+typedef struct {
+    char nome[48];
+    char tipo[20];    /* entrada | almoco_saida | almoco_volta | saida | extra */
+    char hora[6];     /* HH:MM, tirado do relogio daqui */
+    float nota;       /* o quanto o rosto bateu; 0 quando foi escolhido na tela */
+} Batida;
+
+/*
+ * Manda a foto e pede para bater o ponto de quem estiver nela.
+ *
+ * O `jpeg` continua sendo de quem chamou -- esta funcao nao o libera, porque
+ * quem tirou a foto pode ainda querer mostra-la na tela.
+ *
+ * No aviso: `b` preenchido e `erro` NULL quando reconheceu e bateu; ao
+ * contrario, `b` e NULL e `erro` diz o que houve em palavras de quem esta
+ * olhando. "Nao te reconheci" e "o servidor nao respondeu" levam a telas
+ * diferentes, e por isso `nao_reconheceu` vem separado.
+ */
+void optmize_bater_por_rosto(const uint8_t *jpeg, size_t bytes,
+                             void (*aviso)(const Batida *b, const char *erro,
+                                           bool nao_reconheceu));
+
+/*
+ * Quem trabalha aqui, para a tela de escolher o nome quando o rosto falha.
+ *
+ * Devolve quantos couberam em `lista`, ou -1 se nao deu para perguntar.
+ * BLOQUEIA: chame de uma tarefa propria, nunca da do LVGL.
+ */
+void optmize_listar_funcionarios(void (*aviso)(const Funcionario *lista, int quantos,
+                                               const char *erro));
+
+/* Bate o ponto de alguem que escolheu o proprio nome na tela. */
+void optmize_bater_pelo_nome(int funcionario_id,
+                             void (*aviso)(const Batida *b, const char *erro));
