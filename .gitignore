@@ -54,6 +54,11 @@ estatico/ia/ort*
 # envelhecer em silêncio enquanto o motor de verdade muda.
 servidor/motor-encaixe.js
 
+# Os modelos de reconhecimento facial. São 39 MB, baixados do OpenCV Zoo
+# (Apache 2.0) e iguais para todo mundo — repositório não é lugar de guardar
+# binário que se busca com um comando. `npm run modelos` os traz.
+servidor/modelos/*.onnx
+
 # O programa do ESP32 (pasta `esp/`): o que o ESP-IDF gera fica de fora.
 esp/build/
 esp/managed_components/

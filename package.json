@@ -33,7 +33,8 @@
     "tauri": "tauri",
     "build:wasm": "cd wasm && cargo build --release --target wasm32-unknown-unknown && cd .. && node -e \"require('fs').copyFileSync('wasm/target/wasm32-unknown-unknown/release/encaixe.wasm','estatico/encaixe.wasm')\"",
     "ia": "node empacotar/ia.js",
-    "motor": "node empacotar/motor.js"
+    "motor": "node empacotar/motor.js",
+    "modelos": "node empacotar/modelos.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
@@ -42,6 +43,7 @@
     "iconv-lite": "^0.6.3",
     "jpeg-js": "^0.4.4",
     "multer": "^2.2.0",
+    "onnxruntime-node": "^1.30.0",
     "pdfkit": "^0.15.0",
     "sharp": "^0.35.3",
     "socket.io": "^4.8.1",
