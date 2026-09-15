@@ -1,44 +1,55 @@
 /*
  * ===========================================================================
- * APP DE PONTOS — a camera bate o ponto
+ * APP DE PONTOS — bater o ponto, e cadastrar quem vai bater
  * ===========================================================================
  *
- * A pessoa para na frente da tela, aperta um botao do tamanho da mao, e o
- * terminal fotografa. O servidor diz de quem e o rosto e ja grava a batida.
+ * Duas coisas moram aqui, e sao a mesma camera fazendo trabalhos diferentes:
+ *
+ *   BATER      a pessoa aperta, o terminal fotografa, o servidor reconhece e
+ *              grava a batida. E o que acontece quatro vezes por dia, todo dia.
+ *
+ *   CADASTRAR  guarda mais um rosto de alguem, para que o reconhecimento
+ *              funcione. Acontece uma vez por pessoa, e mais algumas quando
+ *              alguem raspa a barba ou comeca a usar oculos.
  *
  * ---------------------------------------------------------------------------
- * O BOTAO EXISTE, E ISSO E DE PROPOSITO
+ * POR QUE O CADASTRO E AQUI, E NAO SO NO COMPUTADOR
  * ---------------------------------------------------------------------------
  *
- * A tentacao e bater sozinho: achou rosto, gravou. Nao serve aqui. Este
- * aparelho fica em pe na calandra, e passa gente na frente dele o dia inteiro
- * -- levando rolo, indo ao banheiro, conversando. Sem o botao, o ponto de todo
+ * A tela de Funcionarios do Optmize tambem tira foto, pela webcam. Mas ela esta
+ * no escritorio, e as pessoas estao no galpao -- cadastrar por la significa
+ * chamar cada um ate um computador, um por vez.
+ *
+ * O terminal ja esta onde as pessoas passam. Cadastrar aqui e parar dez
+ * segundos no caminho.
+ *
+ * O QUE O TERMINAL NAO FAZ E CRIAR PESSOA. Isso exige nome completo, matricula
+ * e teclado -- e nome de gente digitado com o dedo, de pe, vira um "Jsoe" que
+ * ninguem conserta depois: ele so reaparece como "o sistema nao me acha". Criar
+ * fica no computador, onde ha teclado de verdade. Aqui se tira a foto.
+ *
+ * ---------------------------------------------------------------------------
+ * O BOTAO DE BATER EXISTE DE PROPOSITO
+ * ---------------------------------------------------------------------------
+ *
+ * A tentacao e bater sozinho: achou rosto, gravou. Nao serve. Este aparelho
+ * fica em pe na calandra, e passa gente na frente dele o dia inteiro --
+ * levando rolo, indo ao banheiro, conversando. Sem o botao, o ponto de todo
  * mundo seria batido varias vezes por dia por acidente, e alguem teria de
  * limpar isso na mao toda semana.
- *
- * O toque e o que diz "eu quero bater agora". Vale o segundo que custa.
  *
  * ---------------------------------------------------------------------------
  * O ROSTO FALHA, E A TELA CONTINUA
  * ---------------------------------------------------------------------------
  *
  * Nenhum reconhecimento acerta sempre: bone, barba nova, luz de frente, alguem
- * que ainda nao cadastrou o rosto. Se a unica saida fosse o rosto, a primeira
- * falha deixaria uma pessoa sem bater o ponto -- e um relogio de ponto que as
- * vezes nao deixa bater e um relogio de ponto quebrado.
+ * que ainda nao cadastrou. Se a unica saida fosse o rosto, a primeira falha
+ * deixaria uma pessoa sem bater o ponto -- e um relogio de ponto que as vezes
+ * nao deixa bater e um relogio de ponto quebrado.
  *
  * Por isso "nao te reconheci" NAO e um erro: e a porta para a lista de nomes. A
  * batida sai igual, e o servidor grava a origem, entao quem confere depois ve
- * quais foram pelo rosto e quais foram na unha.
- *
- * ---------------------------------------------------------------------------
- * AS QUATRO TELAS
- * ---------------------------------------------------------------------------
- *
- * A CAMERA     o video e um botao grande
- * ESPERANDO    a foto subiu, o servidor esta olhando
- * DEU CERTO    o nome, a hora e que batida foi -- some sozinha
- * A LISTA      os nomes, quando o rosto nao resolveu
+ * quais foram pelo rosto e quais na unha.
  */
 
 #include <stdio.h>
@@ -58,29 +69,102 @@ void video_da_camera_fechar(void);
 esp_err_t video_da_camera_fotografar(uint8_t **jpeg, size_t *bytes, int prazo_ms);
 
 /*
- * QUANTO A TELA DO "DEU CERTO" FICA.
+ * QUANTO A CONFIRMACAO FICA NA TELA.
  *
  * Quatro segundos: o tempo de ler um nome e uma hora e ter certeza de que foi o
- * seu. Menos que isso e quem estava guardando o cracha perde a confirmacao;
- * mais, e a fila espera por nada.
+ * seu. Menos, e quem estava guardando o cracha perde a confirmacao; mais, e a
+ * fila espera por nada.
  */
 #define QUANTO_MOSTRAR_MS 4000
 
+/* O que a camera vai fazer com a foto que tirar. */
+typedef enum { PARA_BATER, PARA_CADASTRAR } Proposito;
+
+/* O que a lista de nomes faz quando alguem toca num nome. */
+typedef enum { ESCOLHER_PARA_BATER, ESCOLHER_PARA_CADASTRAR } DepoisDaLista;
+
 static lv_obj_t *area_do_app;
-static lv_obj_t *moldura;        /* onde o video mora */
+static lv_obj_t *moldura;
 static lv_obj_t *rot_estado;
-static lv_obj_t *sobreposto;     /* o resultado, ou a lista de nomes */
+static lv_obj_t *sobreposto;
 static lv_timer_t *volta_sozinho;
 
-static uint8_t *foto;            /* a ultima foto, nossa ate soltarmos */
+static uint8_t *foto;
 static size_t   foto_bytes;
-static bool     esperando;       /* ha um pedido no ar */
+static bool     esperando;
 
-/* Uma geracao por tela: ver `chegou_a_resposta`. */
+static Proposito proposito;
+static DepoisDaLista depois_da_lista;
+static int  quem_escolhido;
+static char nome_escolhido[48];
+static int  quantas_fotos;     /* quantas ja foram guardadas nesta visita */
+
+/* Uma geracao por tela: o que estiver no ar deixa de valer ao trocar. */
 static uint32_t geracao;
 static uint32_t geracao_pedida;
 
-static void montar_a_camera(void);
+static void montar_o_inicio(void);
+static void montar_a_camera(Proposito para_que);
+static void pedir_a_lista(DepoisDaLista para_que);
+
+/*
+ * ===========================================================================
+ * TROCAR DE TELA NUNCA ACONTECE DENTRO DO TOQUE
+ * ===========================================================================
+ *
+ * Todo botao desta tela vive DENTRO da area que a proxima tela vai limpar. Se o
+ * `lv_obj_clean` rodasse ali mesmo, o LVGL continuaria despachando o evento por
+ * uma arvore de objetos ja liberados.
+ *
+ * O LVGL se protege do caso simples -- ele marca quando o PROPRIO alvo do
+ * evento e apagado. Nao se protege do avo: apagar a area inteira leva o botao
+ * junto por tabela, e a protecao nao chega la.
+ *
+ * O preco disso apareceu como travamento: batendo ponto ou cadastrando varias
+ * vezes seguidas, a placa parava com o cao de guarda reclamando da tarefa do
+ * LVGL. A pilha dizia exatamente onde:
+ *
+ *     lv_tlsf_free  ->  block_link_next  ->  block_next
+ *
+ * O alocador do LVGL andando numa lista circular, para sempre. Nao era um
+ * travamento: era a memoria dele ja corrompida por um objeto liberado duas
+ * vezes, e o laco infinito so foi onde isso finalmente apareceu.
+ *
+ * `lv_async_call` marca a troca para acontecer na proxima volta do LVGL, com o
+ * evento ja terminado e ninguem mais olhando para aqueles objetos.
+ */
+typedef enum {
+    TELA_INICIO,
+    TELA_CAMERA_BATER,
+    TELA_CAMERA_CADASTRAR,
+    TELA_LISTA_BATER,
+    TELA_LISTA_CADASTRAR,
+} Tela;
+
+static Tela proxima_tela;
+
+static void trocar_de_tela(void *nada)
+{
+    (void)nada;
+    if (area_do_app == NULL) {
+        return;   /* saiu do app antes de a troca acontecer */
+    }
+    switch (proxima_tela) {
+        case TELA_INICIO:             montar_o_inicio(); break;
+        case TELA_CAMERA_BATER:       montar_a_camera(PARA_BATER); break;
+        case TELA_CAMERA_CADASTRAR:   montar_a_camera(PARA_CADASTRAR); break;
+        case TELA_LISTA_BATER:        pedir_a_lista(ESCOLHER_PARA_BATER); break;
+        case TELA_LISTA_CADASTRAR:    pedir_a_lista(ESCOLHER_PARA_CADASTRAR); break;
+    }
+}
+
+static void ir_para(Tela t)
+{
+    proxima_tela = t;
+    lv_async_call(trocar_de_tela, NULL);
+}
+
+/* --------------------------------------------------------------- ajudas */
 
 static void soltar_a_foto(void)
 {
@@ -142,6 +226,118 @@ static lv_obj_t *botao(lv_obj_t *pai, int x, int y, int w, int h, lv_color_t cor
     return b;
 }
 
+static void avisar(const char *texto, lv_color_t cor)
+{
+    if (rot_estado != NULL) {
+        lv_label_set_text(rot_estado, texto);
+        lv_obj_set_style_text_color(rot_estado, cor, 0);
+    }
+}
+
+/* ============================================================== o inicio */
+
+static void tocou_bater_ponto(lv_event_t *e)
+{
+    (void)e;
+    ir_para(TELA_CAMERA_BATER);
+}
+
+static void tocou_cadastrar(lv_event_t *e)
+{
+    (void)e;
+    ir_para(TELA_LISTA_CADASTRAR);
+}
+
+/*
+ * DUAS PORTAS, E ELAS NAO TEM O MESMO TAMANHO.
+ *
+ * Bater ponto acontece quatro vezes por dia para cada pessoa; cadastrar rosto,
+ * uma vez na vida. Dar o mesmo peso visual as duas faria a fila da manha parar
+ * para escolher entre coisas igualmente importantes -- quando so uma delas
+ * importa naquele momento.
+ */
+static void montar_o_inicio(void)
+{
+    geracao++;
+    esperando = false;
+    fechar_o_sobreposto();
+    soltar_a_foto();
+    video_da_camera_fechar();   /* a camera nao fica aberta na tela de escolha */
+    lv_obj_clean(area_do_app);
+    moldura = NULL;
+    rot_estado = NULL;
+
+    lv_obj_t *cartao = lv_obj_create(area_do_app);
+    lv_obj_set_size(cartao, 620, 380);
+    lv_obj_set_pos(cartao, 20, 40);
+    lv_obj_set_style_bg_color(cartao, COR_CERTO, 0);
+    lv_obj_set_style_border_width(cartao, 0, 0);
+    lv_obj_set_style_radius(cartao, 18, 0);
+    lv_obj_remove_flag(cartao, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(cartao, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(cartao, tocou_bater_ponto, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *simbolo = lv_label_create(cartao);
+    lv_label_set_text(simbolo, LV_SYMBOL_OK);
+    lv_obj_set_style_text_color(simbolo, lv_color_black(), 0);
+    lv_obj_set_style_text_font(simbolo, &lv_font_montserrat_48, 0);
+    lv_obj_align(simbolo, LV_ALIGN_TOP_MID, 0, 50);
+
+    lv_obj_t *titulo = lv_label_create(cartao);
+    lv_label_set_text(titulo, "Bater ponto");
+    lv_obj_set_style_text_color(titulo, lv_color_black(), 0);
+    lv_obj_set_style_text_font(titulo, &lv_font_montserrat_48, 0);
+    lv_obj_align(titulo, LV_ALIGN_CENTER, 0, 20);
+
+    lv_obj_t *apoio = lv_label_create(cartao);
+    lv_label_set_text(apoio, "olhe para a camera e aperte");
+    lv_obj_set_style_text_color(apoio, lv_color_black(), 0);
+    lv_obj_set_style_text_font(apoio, &lv_font_montserrat_22, 0);
+    lv_obj_align(apoio, LV_ALIGN_CENTER, 0, 80);
+
+    lv_obj_t *outro = lv_obj_create(area_do_app);
+    lv_obj_set_size(outro, 340, 380);
+    lv_obj_set_pos(outro, 664, 40);
+    lv_obj_set_style_bg_color(outro, COR_CARTAO, 0);
+    lv_obj_set_style_border_color(outro, COR_BORDA, 0);
+    lv_obj_set_style_border_width(outro, 1, 0);
+    lv_obj_set_style_radius(outro, 18, 0);
+    lv_obj_set_style_pad_all(outro, 22, 0);
+    lv_obj_remove_flag(outro, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(outro, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(outro, tocou_cadastrar, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *simbolo2 = lv_label_create(outro);
+    lv_label_set_text(simbolo2, LV_SYMBOL_IMAGE);
+    lv_obj_set_style_text_color(simbolo2, COR_APOIO, 0);
+    lv_obj_set_style_text_font(simbolo2, &lv_font_montserrat_28, 0);
+    lv_obj_set_pos(simbolo2, 0, 0);
+
+    lv_obj_t *titulo2 = lv_label_create(outro);
+    lv_label_set_text(titulo2, "Cadastrar rosto");
+    lv_obj_set_style_text_color(titulo2, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(titulo2, &lv_font_montserrat_28, 0);
+    lv_obj_set_pos(titulo2, 0, 48);
+
+    lv_obj_t *apoio2 = lv_label_create(outro);
+    lv_label_set_text(apoio2,
+        "guarda mais um rosto de quem ja esta cadastrado no Optmize\n\n"
+        "de frente, de lado e com o que voce usa na cabeca -- basta parecer com um deles");
+    lv_obj_set_style_text_color(apoio2, COR_APOIO, 0);
+    lv_obj_set_style_text_font(apoio2, &lv_font_montserrat_16, 0);
+    lv_label_set_long_mode(apoio2, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(apoio2, 292);
+    lv_obj_set_pos(apoio2, 0, 96);
+
+    rot_estado = lv_label_create(area_do_app);
+    lv_label_set_text(rot_estado, "");
+    lv_obj_set_style_text_font(rot_estado, &lv_font_montserrat_22, 0);
+    lv_label_set_long_mode(rot_estado, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(rot_estado, LV_HOR_RES - 40);
+    lv_obj_set_style_text_align(rot_estado, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(rot_estado, LV_ALIGN_BOTTOM_MID, 0, -30);
+}
+
 /* ------------------------------------------------------ o que aconteceu */
 
 /* Traduz o nome tecnico da batida para o que a pessoa chamaria aquilo. */
@@ -158,7 +354,7 @@ static void tempo_de_voltar(lv_timer_t *t)
 {
     (void)t;
     volta_sozinho = NULL;
-    montar_a_camera();
+    montar_o_inicio();
 }
 
 /*
@@ -204,7 +400,7 @@ static void montar_o_sucesso(const Batida *b)
     ESP_LOGI(TAG, "%s -- %s as %s", b->nome, b->tipo, b->hora);
 }
 
-/* -------------------------------------------------- a lista de nomes */
+/* ================================================== a lista de nomes */
 
 static void bateu_pelo_nome(const Batida *b, const char *erro)
 {
@@ -215,9 +411,8 @@ static void bateu_pelo_nome(const Batida *b, const char *erro)
     if (minha == geracao && area_do_app != NULL) {
         if (b != NULL) {
             montar_o_sucesso(b);
-        } else if (rot_estado != NULL) {
-            lv_label_set_text(rot_estado, erro ? erro : "nao deu");
-            lv_obj_set_style_text_color(rot_estado, COR_DESTAQUE, 0);
+        } else {
+            avisar(erro ? erro : "nao deu", COR_DESTAQUE);
         }
     }
     bsp_display_unlock();
@@ -225,24 +420,37 @@ static void bateu_pelo_nome(const Batida *b, const char *erro)
 
 static void tocou_um_nome(lv_event_t *e)
 {
-    const int id = (int)(intptr_t)lv_event_get_user_data(e);
-    geracao_pedida = geracao;
-    optmize_bater_pelo_nome(id, bateu_pelo_nome);
+    lv_obj_t *alvo = lv_event_get_target(e);
+    quem_escolhido = (int)(intptr_t)lv_event_get_user_data(e);
+    snprintf(nome_escolhido, sizeof(nome_escolhido), "%s",
+             lv_label_get_text(lv_obj_get_child(alvo, 0)));
 
-    /* Some na hora: a fila nao precisa ver a lista enquanto a rede responde. */
-    lv_obj_t *c = abrir_o_sobreposto();
-    lv_obj_t *r = lv_label_create(c);
-    lv_label_set_text(r, "registrando...");
-    lv_obj_set_style_text_color(r, COR_APOIO, 0);
-    lv_obj_set_style_text_font(r, &lv_font_montserrat_28, 0);
-    lv_obj_center(r);
-    rot_estado = r;
+    if (depois_da_lista == ESCOLHER_PARA_CADASTRAR) {
+        quantas_fotos = 0;
+        ir_para(TELA_CAMERA_CADASTRAR);
+        return;
+    }
+
+    /*
+     * O pedido sai agora -- ele nao mexe na arvore de objetos. Quem mexe e a
+     * tela de "registrando", e essa vai pela porta de sempre: depois do evento.
+     */
+    geracao_pedida = geracao;
+    optmize_bater_pelo_nome(quem_escolhido, bateu_pelo_nome);
+    avisar("registrando...", COR_APOIO);
 }
 
-static void tocou_voltar_a_camera(lv_event_t *e)
+static void tocou_voltar_ao_inicio(lv_event_t *e)
 {
     (void)e;
-    montar_a_camera();
+    ir_para(TELA_INICIO);
+}
+
+/* Volta a camera COM A MESMA PESSOA: o proximo angulo e dela, nao de outro. */
+static void tocou_outra_foto(lv_event_t *e)
+{
+    (void)e;
+    ir_para(TELA_CAMERA_CADASTRAR);
 }
 
 static void chegou_a_lista(const Funcionario *lista, int quantos, const char *erro)
@@ -259,21 +467,37 @@ static void chegou_a_lista(const Funcionario *lista, int quantos, const char *er
     lv_obj_t *c = abrir_o_sobreposto();
 
     lv_obj_t *titulo = lv_label_create(c);
-    lv_label_set_text(titulo, erro ? erro : "Toque no seu nome");
+    lv_label_set_text(titulo, erro ? erro
+        : (depois_da_lista == ESCOLHER_PARA_CADASTRAR
+           ? "Quem vai tirar a foto?" : "Toque no seu nome"));
     lv_obj_set_style_text_color(titulo, erro ? COR_DESTAQUE : COR_TEXTO, 0);
     lv_obj_set_style_text_font(titulo, &lv_font_montserrat_28, 0);
     lv_obj_set_pos(titulo, 24, 14);
 
-    botao(c, LV_HOR_RES - 224, 10, 200, 56, COR_CARTAO, &lv_font_montserrat_16,
-          LV_SYMBOL_REFRESH "  tentar o rosto", tocou_voltar_a_camera, NULL);
+    botao(c, LV_HOR_RES - 184, 10, 160, 56, COR_CARTAO, &lv_font_montserrat_16,
+          LV_SYMBOL_LEFT "  voltar", tocou_voltar_ao_inicio, NULL);
+
+    /*
+     * O aviso mora NESTA tela, e nao na anterior. `rot_estado` e um ponteiro
+     * so, e apontar para um rotulo da tela que acabou de ser coberta faria o
+     * "registrando..." aparecer atras da lista, onde ninguem ve.
+     */
+    rot_estado = lv_label_create(c);
+    lv_label_set_text(rot_estado, "");
+    lv_obj_set_style_text_font(rot_estado, &lv_font_montserrat_22, 0);
+    lv_label_set_long_mode(rot_estado, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(rot_estado, 620);
+    lv_obj_set_pos(rot_estado, 24, 48);
 
     if (erro != NULL || quantos == 0) {
         lv_obj_t *nada = lv_label_create(c);
         lv_label_set_text(nada, (quantos == 0 && erro == NULL)
-            ? "Ninguem cadastrado no Optmize ainda."
+            ? "Ninguem cadastrado no Optmize ainda.\n"
+              "Cadastre as pessoas na tela de Funcionarios, no computador."
             : "Sem lista de nomes -- confira a rede em Ajustes.");
         lv_obj_set_style_text_color(nada, COR_APOIO, 0);
         lv_obj_set_style_text_font(nada, &lv_font_montserrat_22, 0);
+        lv_obj_set_style_text_align(nada, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(nada);
         bsp_display_unlock();
         return;
@@ -286,8 +510,8 @@ static void chegou_a_lista(const Funcionario *lista, int quantos, const char *er
      * metade dela e obrigaria a rolar em cima de uma lista de dez pessoas.
      */
     lv_obj_t *rolo = lv_obj_create(c);
-    lv_obj_set_size(rolo, LV_HOR_RES - 32, LV_VER_RES - 56 - 86);
-    lv_obj_set_pos(rolo, 16, 76);
+    lv_obj_set_size(rolo, LV_HOR_RES - 32, LV_VER_RES - 56 - 96);
+    lv_obj_set_pos(rolo, 16, 86);
     lv_obj_set_style_bg_opa(rolo, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(rolo, 0, 0);
     lv_obj_set_style_pad_all(rolo, 0, 0);
@@ -302,12 +526,90 @@ static void chegou_a_lista(const Funcionario *lista, int quantos, const char *er
     bsp_display_unlock();
 }
 
-/* ------------------------------------------------- a resposta do rosto */
+static void pedir_a_lista(DepoisDaLista para_que)
+{
+    depois_da_lista = para_que;
+    geracao_pedida = geracao;
+
+    lv_obj_t *c = abrir_o_sobreposto();
+    lv_obj_t *r = lv_label_create(c);
+    lv_label_set_text(r, "buscando os nomes...");
+    lv_obj_set_style_text_color(r, COR_APOIO, 0);
+    lv_obj_set_style_text_font(r, &lv_font_montserrat_28, 0);
+    lv_obj_center(r);
+
+    optmize_listar_funcionarios(chegou_a_lista);
+}
+
+/* ============================================ o cadastro deu certo */
 
 /*
- * Roda na tarefa do Optmize, nao na do LVGL -- por isso a tranca em volta de
- * tudo que toca na tela.
+ * TRES ANGULOS, E A TELA PEDE O PROXIMO.
+ *
+ * Um rosto de frente nao e o mesmo de lado nem com bone, e basta parecer com um
+ * deles para ser reconhecido. Quem cadastra uma foto so descobre isso meses
+ * depois, como "o sistema nunca me reconhece" -- entao a tela conta quantas ja
+ * foram e sugere continuar enquanto forem poucas.
  */
+static void cadastrou(const char *erro)
+{
+    const uint32_t minha = geracao_pedida;
+    if (!bsp_display_lock(500)) {
+        return;
+    }
+    if (minha != geracao || area_do_app == NULL) {
+        bsp_display_unlock();
+        return;
+    }
+
+    esperando = false;
+    soltar_a_foto();
+
+    if (erro != NULL) {
+        avisar(erro, COR_DESTAQUE);
+        bsp_display_unlock();
+        return;
+    }
+
+    quantas_fotos++;
+    lv_obj_t *c = abrir_o_sobreposto();
+
+    lv_obj_t *marca = lv_label_create(c);
+    lv_label_set_text(marca, LV_SYMBOL_OK);
+    lv_obj_set_style_text_color(marca, COR_CERTO, 0);
+    lv_obj_set_style_text_font(marca, &lv_font_montserrat_48, 0);
+    lv_obj_align(marca, LV_ALIGN_TOP_MID, 0, 40);
+
+    lv_obj_t *quem = lv_label_create(c);
+    lv_label_set_text_fmt(quem, "%s\n%d rosto(s) guardados agora",
+                          nome_escolhido, quantas_fotos);
+    lv_obj_set_style_text_color(quem, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(quem, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_align(quem, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(quem, LV_ALIGN_CENTER, 0, -40);
+
+    lv_obj_t *dica = lv_label_create(c);
+    lv_label_set_text(dica, quantas_fotos < 3
+        ? "tire mais uma de outro angulo -- de lado, ou com o que voce usa na cabeca"
+        : "ja da para o terminal reconhecer voce");
+    lv_obj_set_style_text_color(dica, COR_APOIO, 0);
+    lv_obj_set_style_text_font(dica, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_align(dica, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(dica, LV_ALIGN_CENTER, 0, 30);
+
+    botao(c, 40, LV_VER_RES - 56 - 110, 460, 86,
+          quantas_fotos < 3 ? COR_CERTO : COR_CARTAO, &lv_font_montserrat_28,
+          LV_SYMBOL_IMAGE "  Outra foto", tocou_outra_foto, NULL);
+    botao(c, 524, LV_VER_RES - 56 - 110, 460, 86,
+          quantas_fotos < 3 ? COR_CARTAO : COR_CERTO, &lv_font_montserrat_28,
+          "Terminei", tocou_voltar_ao_inicio, NULL);
+
+    bsp_display_unlock();
+    ESP_LOGI(TAG, "rosto de %s guardado (%d nesta visita)", nome_escolhido, quantas_fotos);
+}
+
+/* ================================================= a resposta do rosto */
+
 static void chegou_a_resposta(const Batida *b, const char *erro, bool nao_reconheceu)
 {
     const uint32_t minha = geracao_pedida;
@@ -336,25 +638,19 @@ static void chegou_a_resposta(const Batida *b, const char *erro, bool nao_reconh
          * o ponto tem de sair daqui com o ponto batido -- dizer "nao te
          * reconheci" e parar por ali seria mandar a pessoa procurar o RH.
          */
-        if (rot_estado != NULL) {
-            lv_label_set_text(rot_estado, "nao te reconheci -- buscando os nomes...");
-            lv_obj_set_style_text_color(rot_estado, COR_APOIO, 0);
-        }
+        avisar("nao te reconheci -- buscando os nomes...", COR_APOIO);
         bsp_display_unlock();
-        optmize_listar_funcionarios(chegou_a_lista);
+        pedir_a_lista(ESCOLHER_PARA_BATER);
         return;
     }
 
-    if (rot_estado != NULL) {
-        lv_label_set_text(rot_estado, erro ? erro : "nao deu");
-        lv_obj_set_style_text_color(rot_estado, COR_DESTAQUE, 0);
-    }
+    avisar(erro ? erro : "nao deu", COR_DESTAQUE);
     bsp_display_unlock();
 }
 
-/* ------------------------------------------------------- fotografar */
+/* ======================================================== fotografar */
 
-static void tocou_bater(lv_event_t *e)
+static void tocou_a_camera(lv_event_t *e)
 {
     (void)e;
     if (esperando) {
@@ -362,34 +658,53 @@ static void tocou_bater(lv_event_t *e)
     }
 
     soltar_a_foto();
-    const esp_err_t r = video_da_camera_fotografar(&foto, &foto_bytes, 1500);
-    if (r != ESP_OK) {
-        if (rot_estado != NULL) {
-            lv_label_set_text(rot_estado, "a camera nao entregou a foto");
-            lv_obj_set_style_text_color(rot_estado, COR_DESTAQUE, 0);
-        }
+    if (video_da_camera_fotografar(&foto, &foto_bytes, 1500) != ESP_OK) {
+        avisar("a camera nao entregou a foto", COR_DESTAQUE);
         return;
     }
 
     esperando = true;
     geracao_pedida = geracao;
-    if (rot_estado != NULL) {
-        lv_label_set_text(rot_estado, "olhando...");
-        lv_obj_set_style_text_color(rot_estado, COR_APOIO, 0);
+
+    /*
+     * A FOTO PASSA A SER DA TAREFA QUE VAI MANDA-LA, e o ponteiro daqui cai na
+     * mesma linha.
+     *
+     * Antes ela continuava nossa, e qualquer troca de tela chamava
+     * `soltar_a_foto` -- inclusive com a tarefa no meio do envio para o
+     * servidor. Liberar meio megabyte de PSRAM debaixo de quem esta lendo dele
+     * e o tipo de defeito que corrompe a memoria longe de onde foi cometido, e
+     * so aparece como uma placa que reinicia sozinha de vez em quando.
+     *
+     * Quem manda, entrega: quem recebe libera.
+     */
+    uint8_t *entregue = foto;
+    const size_t quanto = foto_bytes;
+    foto = NULL;
+    foto_bytes = 0;
+
+    if (proposito == PARA_CADASTRAR) {
+        avisar("guardando...", COR_APOIO);
+        optmize_cadastrar_rosto(quem_escolhido, entregue, quanto, cadastrou);
+    } else {
+        avisar("olhando...", COR_APOIO);
+        optmize_bater_por_rosto(entregue, quanto, chegou_a_resposta);
     }
-    optmize_bater_por_rosto(foto, foto_bytes, chegou_a_resposta);
 }
 
-/* ---------------------------------------------------------- a camera */
+/* ------------------------------------------------------------ a camera */
 
-static void montar_a_camera(void)
+static void montar_a_camera(Proposito para_que)
 {
-    geracao++;              /* o que estiver no ar deixa de valer */
+    geracao++;
+    proposito = para_que;
     esperando = false;
     fechar_o_sobreposto();
     soltar_a_foto();
     lv_obj_clean(area_do_app);
     rot_estado = NULL;
+
+    const bool cadastrando = (para_que == PARA_CADASTRAR);
 
     moldura = lv_obj_create(area_do_app);
     lv_obj_set_size(moldura, 620, 466);
@@ -412,15 +727,19 @@ static void montar_a_camera(void)
     lv_obj_remove_flag(coluna, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *titulo = lv_label_create(coluna);
-    lv_label_set_text(titulo, "Bater ponto");
+    lv_label_set_text(titulo, cadastrando ? nome_escolhido : "Bater ponto");
     lv_obj_set_style_text_color(titulo, COR_TEXTO, 0);
     lv_obj_set_style_text_font(titulo, &lv_font_montserrat_28, 0);
+    lv_label_set_long_mode(titulo, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(titulo, 296);
     lv_obj_set_pos(titulo, 0, 0);
 
     lv_obj_t *ajuda = lv_label_create(coluna);
-    lv_label_set_text(ajuda,
-        "olhe para a camera, de frente e com o rosto iluminado\n\n"
-        "o servidor decide que batida e esta, pelo que voce ja bateu hoje");
+    lv_label_set_text(ajuda, cadastrando
+        ? "de frente, com o rosto iluminado e sem ninguem atras\n\n"
+          "o servidor recusa a foto se nao achar exatamente um rosto nela"
+        : "olhe para a camera, de frente e com o rosto iluminado\n\n"
+          "o servidor decide que batida e esta, pelo que voce ja bateu hoje");
     lv_obj_set_style_text_color(ajuda, COR_APOIO, 0);
     lv_obj_set_style_text_font(ajuda, &lv_font_montserrat_16, 0);
     lv_label_set_long_mode(ajuda, LV_LABEL_LONG_WRAP);
@@ -432,15 +751,19 @@ static void montar_a_camera(void)
     lv_obj_set_style_text_font(rot_estado, &lv_font_montserrat_16, 0);
     lv_label_set_long_mode(rot_estado, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(rot_estado, 296);
-    lv_obj_set_pos(rot_estado, 0, 210);
+    lv_obj_set_pos(rot_estado, 0, 190);
+
+    botao(coluna, 0, 360, 296, 60, COR_BORDA, &lv_font_montserrat_16,
+          LV_SYMBOL_LEFT "  voltar", tocou_voltar_ao_inicio, NULL);
 
     /*
-     * O ALVO DE BATER OCUPA A LARGURA DA TELA. E o unico botao que importa
-     * aqui, e quem o aperta pode estar de luva, com a mao suja, com pressa --
-     * as mesmas condicoes da conferencia de producao.
+     * O ALVO OCUPA A LARGURA DA TELA. E o unico botao que importa aqui, e quem
+     * o aperta pode estar de luva, com a mao suja, com pressa -- as mesmas
+     * condicoes da conferencia de producao.
      */
     botao(area_do_app, 20, 494, 984, 86, COR_CERTO, &lv_font_montserrat_28,
-          LV_SYMBOL_OK "  Bater o meu ponto", tocou_bater, NULL);
+          cadastrando ? LV_SYMBOL_IMAGE "  Tirar a foto" : LV_SYMBOL_OK "  Bater o meu ponto",
+          tocou_a_camera, NULL);
 
     if (video_da_camera_abrir(moldura) != ESP_OK) {
         lv_obj_t *sem = lv_label_create(moldura);
@@ -456,7 +779,7 @@ static void montar_a_camera(void)
 void app_pontos_montar(lv_obj_t *area)
 {
     area_do_app = area;
-    montar_a_camera();
+    montar_o_inicio();
 }
 
 void app_pontos_desmontar(void)
@@ -472,4 +795,5 @@ void app_pontos_desmontar(void)
     rot_estado = NULL;
     sobreposto = NULL;
     esperando = false;
+    quantas_fotos = 0;
 }

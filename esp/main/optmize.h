@@ -115,15 +115,16 @@ typedef struct {
 /*
  * Manda a foto e pede para bater o ponto de quem estiver nela.
  *
- * O `jpeg` continua sendo de quem chamou -- esta funcao nao o libera, porque
- * quem tirou a foto pode ainda querer mostra-la na tela.
+ * A FOTO PASSA A SER DESTA FUNCAO, que a libera quando terminar. Quem chamou
+ * deve soltar o ponteiro na mesma linha: guardar uma copia dele e convidar a
+ * liberar meio megabyte debaixo de quem ainda esta mandando os bytes.
  *
  * No aviso: `b` preenchido e `erro` NULL quando reconheceu e bateu; ao
  * contrario, `b` e NULL e `erro` diz o que houve em palavras de quem esta
  * olhando. "Nao te reconheci" e "o servidor nao respondeu" levam a telas
  * diferentes, e por isso `nao_reconheceu` vem separado.
  */
-void optmize_bater_por_rosto(const uint8_t *jpeg, size_t bytes,
+void optmize_bater_por_rosto(uint8_t *jpeg, size_t bytes,
                              void (*aviso)(const Batida *b, const char *erro,
                                            bool nao_reconheceu));
 
@@ -139,3 +140,22 @@ void optmize_listar_funcionarios(void (*aviso)(const Funcionario *lista, int qua
 /* Bate o ponto de alguem que escolheu o proprio nome na tela. */
 void optmize_bater_pelo_nome(int funcionario_id,
                              void (*aviso)(const Batida *b, const char *erro));
+
+/*
+ * Guarda mais um rosto de alguem que JA EXISTE no Optmize.
+ *
+ * O terminal nao cria pessoa: isso exige nome completo, matricula e teclado, e
+ * nome de gente digitado com o dedo, de pe, vira um "Jsoe" que ninguem conserta
+ * depois -- ele so reaparece como "o sistema nao me acha". Criar fica na tela de
+ * Funcionarios do Optmize, onde ha teclado de verdade.
+ *
+ * O que so o terminal pode fazer e a FOTO, no lugar onde as pessoas estao.
+ *
+ * A FOTO PASSA A SER DESTA FUNCAO, como na de bater.
+ *
+ * `erro` e NULL quando deu certo; ao
+ * contrario, traz a frase do servidor -- "nao achei nenhum rosto" e "achei 2
+ * rostos" pedem coisas diferentes de quem esta na frente da camera.
+ */
+void optmize_cadastrar_rosto(int funcionario_id, uint8_t *jpeg, size_t bytes,
+                             void (*aviso)(const char *erro));

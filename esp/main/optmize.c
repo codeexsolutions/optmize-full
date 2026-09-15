@@ -568,7 +568,7 @@ static void ler_a_batida(const cJSON *j, Batida *b)
 /* ------------------------------------------------ bater pelo rosto */
 
 typedef struct {
-    const uint8_t *jpeg;
+    uint8_t *jpeg;    /* nosso a partir da chamada; liberado aqui */
     size_t bytes;
     void (*aviso)(const Batida *b, const char *erro, bool nao_reconheceu);
 } PedidoDeRosto;
@@ -655,15 +655,17 @@ fim:
     if (p->aviso != NULL) {
         p->aviso(deu_certo ? &batida : NULL, erro, nao_reconheceu);
     }
+    free(p->jpeg);   /* a foto era nossa desde a chamada */
     free(p);
     vTaskDelete(NULL);
 }
 
-void optmize_bater_por_rosto(const uint8_t *jpeg, size_t bytes,
+void optmize_bater_por_rosto(uint8_t *jpeg, size_t bytes,
                              void (*aviso)(const Batida *, const char *, bool))
 {
     PedidoDeRosto *p = calloc(1, sizeof(*p));
     if (p == NULL) {
+        free(jpeg);
         if (aviso) aviso(NULL, "sem memoria", false);
         return;
     }
@@ -672,6 +674,7 @@ void optmize_bater_por_rosto(const uint8_t *jpeg, size_t bytes,
     p->aviso = aviso;
 
     if (xTaskCreate(tarefa_do_rosto, "optmize-rosto", 8192, p, 4, NULL) != pdPASS) {
+        free(p->jpeg);
         free(p);
         if (aviso) aviso(NULL, "sem memoria", false);
     }
@@ -776,4 +779,129 @@ void optmize_bater_pelo_nome(int funcionario_id, void (*aviso)(const Batida *, c
     quem_vai_bater = funcionario_id;
     aviso_da_batida = aviso;
     xTaskCreate(tarefa_de_bater, "optmize-bate", 8192, NULL, 4, NULL);
+}
+
+/* ------------------------------------------- cadastrar um rosto */
+
+typedef struct {
+    int id;
+    uint8_t *jpeg;    /* nosso a partir da chamada; liberado aqui */
+    size_t bytes;
+    void (*aviso)(const char *erro);
+} PedidoDeCadastro;
+
+/*
+ * Guarda mais um rosto de alguem que ja existe no Optmize.
+ *
+ * QUEM EXISTE, e nao quem for digitado aqui: criar pessoa exige nome completo,
+ * matricula, e um teclado. Teclado nesta tela seria escrever nome de gente com
+ * o dedo, de pe, e um "Jose" virando "Jsoe" no cadastro e um erro que ninguem
+ * conserta depois -- ele so aparece como "o sistema nao me acha".
+ *
+ * O terminal faz o que so ele pode fazer: a FOTO, no lugar onde as pessoas
+ * estao. O cadastro administrativo fica na tela de Funcionarios do Optmize,
+ * onde ha teclado de verdade.
+ */
+static void tarefa_do_cadastro(void *arg)
+{
+    PedidoDeCadastro *p = arg;
+    const char *erro = NULL;
+    char *corpo = NULL;
+
+    char url[160];
+    snprintf(url, sizeof(url), "http://%s/api/ponto/funcionarios/%d/rostos", servidor, p->id);
+
+    esp_http_client_config_t conf = {
+        .url = url,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 20000,
+        .disable_auto_redirect = true,
+    };
+
+    esp_http_client_handle_t c = servidor[0] ? esp_http_client_init(&conf) : NULL;
+    if (c == NULL) {
+        erro = servidor[0] ? "nao consegui abrir a conexao" : "sem servidor configurado";
+        goto fim;
+    }
+    esp_http_client_set_header(c, "Content-Type", "image/jpeg");
+
+    if (esp_http_client_open(c, (int)p->bytes) != ESP_OK) {
+        erro = "servidor nao respondeu";
+        goto fecha;
+    }
+    if (esp_http_client_write(c, (const char *)p->jpeg, p->bytes) < 0) {
+        erro = "a foto nao subiu inteira";
+        goto fecha;
+    }
+
+    esp_http_client_fetch_headers(c);
+    const int status = esp_http_client_get_status_code(c);
+
+    corpo = malloc(RESPOSTA_MAXIMA);
+    if (corpo == NULL) {
+        erro = "sem memoria";
+        goto fecha;
+    }
+    const int lidos = esp_http_client_read_response(c, corpo, RESPOSTA_MAXIMA - 1);
+    corpo[lidos > 0 ? lidos : 0] = 0;
+
+    if (status == 201 || status == 200) {
+        ESP_LOGI(TAG, "rosto guardado para o funcionario %d", p->id);
+    } else if (status == 422) {
+        /*
+         * O SERVIDOR RECUSOU A FOTO, e a frase dele e a unica util aqui: "nao
+         * achei nenhum rosto" e "achei 2 rostos" pedem coisas diferentes de
+         * quem esta na frente da camera. Traduzir isso para "nao deu" mandaria
+         * a pessoa tentar de novo do mesmo jeito.
+         */
+        cJSON *j = cJSON_Parse(corpo);
+        const cJSON *e = cJSON_GetObjectItem(j, "error");
+        static char recado[96];
+        snprintf(recado, sizeof(recado), "%s",
+                 cJSON_IsString(e) ? e->valuestring : "a foto nao serviu");
+        erro = recado;
+        cJSON_Delete(j);
+    } else if (status == 501) {
+        erro = "este servidor nao tem reconhecimento";
+    } else if (status == 404) {
+        erro = "esta pessoa nao existe mais no Optmize";
+    } else {
+        erro = "o servidor recusou";
+    }
+
+fecha:
+    free(corpo);
+    esp_http_client_close(c);
+    esp_http_client_cleanup(c);
+fim:
+    if (erro != NULL) {
+        ESP_LOGW(TAG, "cadastro de rosto: %s", erro);
+    }
+    if (p->aviso != NULL) {
+        p->aviso(erro);
+    }
+    free(p->jpeg);   /* a foto era nossa desde a chamada */
+    free(p);
+    vTaskDelete(NULL);
+}
+
+void optmize_cadastrar_rosto(int funcionario_id, uint8_t *jpeg, size_t bytes,
+                             void (*aviso)(const char *erro))
+{
+    PedidoDeCadastro *p = calloc(1, sizeof(*p));
+    if (p == NULL) {
+        free(jpeg);
+        if (aviso) aviso("sem memoria");
+        return;
+    }
+    p->id = funcionario_id;
+    p->jpeg = jpeg;
+    p->bytes = bytes;
+    p->aviso = aviso;
+
+    if (xTaskCreate(tarefa_do_cadastro, "optmize-cad", 8192, p, 4, NULL) != pdPASS) {
+        free(p->jpeg);
+        free(p);
+        if (aviso) aviso("sem memoria");
+    }
 }

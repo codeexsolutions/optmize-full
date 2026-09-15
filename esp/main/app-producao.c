@@ -114,7 +114,60 @@ static const char *MOTIVOS[] = {
 
 static void montar_a_procura(void);
 static void montar_a_conferencia(void);
+static void fechar_o_sobreposto(void);
 static void montar_o_fim(bool ate_o_fim);
+
+/*
+ * ===========================================================================
+ * TROCAR DE TELA NUNCA ACONTECE DENTRO DO TOQUE
+ * ===========================================================================
+ *
+ * Todo botao daqui vive DENTRO da area que a proxima tela vai limpar. Se o
+ * `lv_obj_clean` rodasse no meio do evento, o LVGL continuaria despachando por
+ * uma arvore de objetos ja liberados.
+ *
+ * O LVGL se protege do caso simples -- ele marca quando o PROPRIO alvo do
+ * evento e apagado. Nao se protege do avo: apagar a area inteira leva o botao
+ * junto por tabela, e a protecao nao chega la.
+ *
+ * O preco disso apareceu no app de Pontos, batendo varias vezes seguidas: a
+ * placa parava com o cao de guarda reclamando da tarefa do LVGL, e a pilha
+ * mostrava `lv_tlsf_free` andando numa lista circular para sempre. Nao era
+ * travamento: era a memoria do LVGL ja corrompida por objeto liberado duas
+ * vezes, e o laco infinito so foi onde isso finalmente apareceu.
+ *
+ * Aqui o defeito ainda nao tinha mordido -- esta tela troca menos e mais devagar
+ * --, mas e o mesmo defeito.
+ */
+typedef enum {
+    TELA_PROCURA,
+    TELA_CONFERENCIA,
+    TELA_FIM,
+    SO_FECHAR_A_PERGUNTA,   /* cancelar o motivo: volta ao item, sem remontar */
+} TelaDaProducao;
+
+static TelaDaProducao proxima_tela;
+static bool o_fim_chegou_ao_fim;
+
+static void trocar_de_tela(void *nada)
+{
+    (void)nada;
+    if (area_do_app == NULL) {
+        return;   /* saiu do app antes de a troca acontecer */
+    }
+    switch (proxima_tela) {
+        case TELA_PROCURA:           montar_a_procura(); break;
+        case TELA_CONFERENCIA:       montar_a_conferencia(); break;
+        case TELA_FIM:               montar_o_fim(o_fim_chegou_ao_fim); break;
+        case SO_FECHAR_A_PERGUNTA:   fechar_o_sobreposto(); break;
+    }
+}
+
+static void ir_para(TelaDaProducao t)
+{
+    proxima_tela = t;
+    lv_async_call(trocar_de_tela, NULL);
+}
 
 /* ------------------------------------------------------------ ajudas */
 
@@ -260,15 +313,22 @@ static void decidir(int indice, bool passou, const char *motivo)
 
 /* ------------------------------------------------------- andar na fila */
 
+/*
+ * Anda um item.
+ *
+ * Nao monta nada aqui: quem chama e sempre um toque -- o "passou", o motivo
+ * escolhido, o "continuar" --, e montar de dentro do toque e o defeito descrito
+ * la em cima. A tela nova sobe na proxima volta do LVGL, e ela mesma fecha a
+ * pergunta que estiver por cima.
+ */
 static void avancar(void)
 {
-    fechar_o_sobreposto();
-
     atual++;
     if (atual >= pedido.quantos) {
-        montar_o_fim(true);
+        o_fim_chegou_ao_fim = true;
+        ir_para(TELA_FIM);
     } else {
-        montar_a_conferencia();
+        ir_para(TELA_CONFERENCIA);
     }
 }
 
@@ -283,8 +343,8 @@ static void tocou_continuar(lv_event_t *e)
 static void tocou_parar(lv_event_t *e)
 {
     (void)e;
-    fechar_o_sobreposto();
-    montar_o_fim(false);
+    o_fim_chegou_ao_fim = false;
+    ir_para(TELA_FIM);
 }
 
 /*
@@ -311,6 +371,13 @@ static void perguntar_se_segue(const char *motivo)
         return;
     }
 
+    /*
+     * Esta troca de sobreposicao ACONTECE dentro do toque, e pode: ela apaga a
+     * pergunta do motivo e poe outra no lugar -- mas as duas sao filhas diretas
+     * da area, e o `abrir_o_sobreposto` apaga so a anterior. O botao tocado
+     * morre junto, e o LVGL sabe disso: ele marca o proprio alvo do evento. O
+     * que ele nao sabe cobrir e a area inteira sumindo por baixo.
+     */
     lv_obj_t *c = abrir_o_sobreposto();
 
     lv_obj_t *titulo = lv_label_create(c);
@@ -366,7 +433,7 @@ static void tocou_cancelar_motivo(lv_event_t *e)
      * escorregou para o X -- sai sem ter reprovado uma peca boa, e volta para
      * o mesmo item.
      */
-    fechar_o_sobreposto();
+    ir_para(SO_FECHAR_A_PERGUNTA);
 }
 
 /*
@@ -600,13 +667,13 @@ static void tocou_conferir_de_novo(lv_event_t *e)
 {
     (void)e;
     atual = 0;
-    montar_a_conferencia();
+    ir_para(TELA_CONFERENCIA);
 }
 
 static void tocou_outro_codigo(lv_event_t *e)
 {
     (void)e;
-    montar_a_procura();
+    ir_para(TELA_PROCURA);
 }
 
 /*
