@@ -45,6 +45,7 @@ const fs = require("fs");
 const path = require("path");
 const db = require("./db");
 const { extensaoDaImagem, nomeDeArquivo, pastaDeUploads } = require("./uploads-arquivos");
+const rostos = require("./rostos");
 
 const router = express.Router();
 const agora = () => new Date().toISOString();
@@ -148,6 +149,47 @@ router.delete("/funcionarios/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * Altera o que foi digitado errado, e liga ou desliga a pessoa.
+ *
+ * DESLIGAR NÃO APAGA. A chave do banco é em cascata: apagar um funcionário
+ * levaria junto o histórico de ponto dele, que é justamente o que ninguém pode
+ * perder. O que se quer ao desligar alguém é parar de reconhecê-lo -- e o
+ * `/reconhecer` já só olha para quem está ativo.
+ */
+router.patch("/funcionarios/:id", express.json({ limit: "1mb" }), (req, res) => {
+  const funcionario = db.prepare("SELECT * FROM funcionarios WHERE id = ?").get(req.params.id);
+  if (!funcionario) {
+    return res.status(404).json({ error: "Funcionário não encontrado." });
+  }
+
+  const campos = [];
+  const valores = [];
+  for (const campo of ["nome", "apelido", "matricula"]) {
+    if (req.body?.[campo] !== undefined) {
+      const valor = String(req.body[campo] || "").trim();
+      if (campo === "nome" && !valor) {
+        return res.status(400).json({ error: "O funcionário precisa de um nome." });
+      }
+      campos.push(`${campo} = ?`);
+      valores.push(valor || null);
+    }
+  }
+  if (req.body?.ativo !== undefined) {
+    campos.push("ativo = ?");
+    valores.push(req.body.ativo ? 1 : 0);
+  }
+  if (campos.length === 0) {
+    return res.status(400).json({ error: "Nada para alterar." });
+  }
+
+  campos.push("atualizado_em = ?");
+  valores.push(agora(), funcionario.id);
+  db.prepare(`UPDATE funcionarios SET ${campos.join(", ")} WHERE id = ?`).run(...valores);
+
+  res.json(comRostos(db.prepare("SELECT * FROM funcionarios WHERE id = ?").get(funcionario.id)));
+});
+
 /* ============================================================= rostos */
 
 /*
@@ -157,7 +199,7 @@ router.delete("/funcionarios/:id", (req, res) => {
  */
 router.post("/funcionarios/:id/rostos",
             express.raw({ type: ["image/*", "application/octet-stream"], limit: "8mb" }),
-            (req, res) => {
+            async (req, res) => {
   const funcionario = db.prepare("SELECT * FROM funcionarios WHERE id = ?").get(req.params.id);
   if (!funcionario) {
     return res.status(404).json({ error: "Funcionário não encontrado." });
@@ -171,20 +213,67 @@ router.post("/funcionarios/:id/rostos",
     return res.status(400).json({ error: "Isto não é uma imagem que eu saiba ler." });
   }
 
+  /*
+   * O ROSTO É CONFERIDO ANTES DE ENTRAR, e não depois.
+   *
+   * Uma foto sem rosto aceita no cadastro é uma linha morta que ninguém
+   * descobre: ela nunca reconhece ninguém, e a pessoa que a enviou vai achar
+   * que o sistema não funciona. Recusar na hora dá a única resposta útil --
+   * "tire outra".
+   *
+   * Duas ou mais caras na foto também saem: no cadastro isso é o colega atrás,
+   * e guardar o vetor errado no nome de alguém é o defeito mais caro daqui.
+   */
+  const lido = await rostos.vetorDaFoto(req.body);
+  if (lido.erro) {
+    return res.status(422).json({ error: lido.erro });
+  }
+  if (lido.quantosRostos > 1) {
+    return res.status(422).json({
+      error: `Achei ${lido.quantosRostos} rostos nesta foto. Mande uma com uma pessoa só.`,
+    });
+  }
+
   fs.mkdirSync(PASTA_DOS_ROSTOS, { recursive: true });
   const arquivo = nomeDeArquivo(`rosto-${funcionario.id}`, extensao);
   fs.writeFileSync(path.join(PASTA_DOS_ROSTOS, arquivo), req.body);
 
   /*
-   * O `vetor` nasce vazio: é a rede que o preenche, e ela ainda não existe. A
-   * FOTO é o que importa guardar — com ela, o dia em que o modelo mudar é um
-   * recálculo, e não uma sessão de fotos com a gráfica inteira de novo.
+   * A FOTO FICA GUARDADA junto do vetor, e não só o vetor.
+   *
+   * Sem ela, trocar de modelo um dia viraria uma sessão de fotos com a gráfica
+   * inteira de novo. Com ela, é um recálculo -- e é para isso que serve a
+   * coluna `modelo`: ela diz quais linhas ficaram para trás.
    */
   const info = db
-    .prepare("INSERT INTO funcionario_rostos (funcionario_id, arquivo, criado_em) VALUES (?, ?, ?)")
-    .run(funcionario.id, arquivo, agora());
+    .prepare(`INSERT INTO funcionario_rostos (funcionario_id, arquivo, vetor, modelo, criado_em)
+              VALUES (?, ?, ?, ?, ?)`)
+    .run(funcionario.id, arquivo, JSON.stringify(lido.vetor), rostos.MODELO, agora());
 
-  res.status(201).json({ id: info.lastInsertRowid, arquivo });
+  res.status(201).json({
+    id: info.lastInsertRowid,
+    arquivo,
+    modelo: rostos.MODELO,
+    nota: lido.nota,
+  });
+});
+
+/**
+ * A foto de um rosto cadastrado.
+ *
+ * Existe para a tela de Funcionários mostrar o que está guardado. Ver a foto é
+ * o que permite julgar um cadastro ruim -- de lado, escura, com o colega atrás
+ * -- antes que ele vire uma pessoa que "o sistema nunca reconhece".
+ */
+router.get("/rostos/:id/imagem", (req, res) => {
+  const rosto = db.prepare("SELECT arquivo FROM funcionario_rostos WHERE id = ?").get(req.params.id);
+  if (!rosto) return res.status(404).send("Rosto não encontrado");
+
+  const caminho = path.join(PASTA_DOS_ROSTOS, rosto.arquivo);
+  if (!fs.existsSync(caminho)) return res.status(404).send("O arquivo sumiu do disco");
+
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.sendFile(caminho);
 });
 
 router.delete("/rostos/:id", (req, res) => {
@@ -208,37 +297,54 @@ router.delete("/rostos/:id", (req, res) => {
  * Registra uma batida. `origem` diz de onde veio -- o terminal, ou a mão de
  * quem cuida do RH corrigindo um esquecimento.
  */
-router.post("/batidas", express.json({ limit: "256kb" }), (req, res) => {
-  const funcionario = db.prepare("SELECT * FROM funcionarios WHERE id = ?")
-    .get(req.body?.funcionario_id);
-  if (!funcionario) {
-    return res.status(404).json({ error: "Funcionário não encontrado." });
-  }
+/**
+ * Grava uma batida e devolve o que aconteceu.
+ *
+ * Fica separada da rota porque tem DOIS chamadores que não se parecem: a rota
+ * `/batidas`, onde alguém escolheu o nome numa tela, e o `/reconhecer`, onde a
+ * câmera decidiu. Os dois precisam da mesma regra de qual batida é esta --
+ * duplicá-la seria garantir que uma das cópias envelhecesse.
+ */
+function registrarBatida(funcionarioId, extras = {}) {
+  const funcionario = db.prepare("SELECT * FROM funcionarios WHERE id = ?").get(funcionarioId);
+  if (!funcionario) return null;
 
-  const momento = req.body?.momento ? new Date(req.body.momento) : new Date();
-  if (Number.isNaN(momento.getTime())) {
-    return res.status(400).json({ error: "Momento inválido." });
-  }
+  const momento = extras.momento ? new Date(extras.momento) : new Date();
+  if (Number.isNaN(momento.getTime())) return null;
 
   const dia = diaLocal(momento);
-  const tipo = req.body?.tipo || qualBatida(funcionario.id, dia);
-  const origem = req.body?.origem === "manual" ? "manual" : "terminal";
+  const tipo = extras.tipo || qualBatida(funcionario.id, dia);
+  const origem = extras.origem === "manual" ? "manual" : "terminal";
 
   const info = db.prepare(`INSERT INTO ponto_batidas
       (funcionario_id, momento, dia, tipo, origem, confianca, observacao, criado_em)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(funcionario.id, momento.toISOString(), dia, tipo, origem,
-         Number.isFinite(Number(req.body?.confianca)) ? Number(req.body.confianca) : null,
-         String(req.body?.observacao || "").trim() || null,
+         Number.isFinite(Number(extras.confianca)) ? Number(extras.confianca) : null,
+         String(extras.observacao || "").trim() || null,
          agora());
 
-  res.status(201).json({
+  return {
     id: info.lastInsertRowid,
     funcionario: { id: funcionario.id, nome: funcionario.nome, apelido: funcionario.apelido },
     momento: momento.toISOString(),
     dia,
     tipo,
+  };
+}
+
+router.post("/batidas", express.json({ limit: "256kb" }), (req, res) => {
+  const batida = registrarBatida(req.body?.funcionario_id, {
+    momento: req.body?.momento,
+    tipo: req.body?.tipo,
+    origem: req.body?.origem,
+    confianca: req.body?.confianca,
+    observacao: req.body?.observacao,
   });
+  if (!batida) {
+    return res.status(404).json({ error: "Funcionário não encontrado, ou momento inválido." });
+  }
+  res.status(201).json(batida);
 });
 
 /*
@@ -288,21 +394,147 @@ router.delete("/batidas/:id", (req, res) => {
 
 /* =========================================================== o terminal */
 
-/*
- * O que o terminal chama ao fotografar alguém.
+/**
+ * Os motivos de uma produção não ter passado.
  *
- * Hoje ele ainda não reconhece: responde 501 dizendo isso, e o terminal cai
- * para o caminho de escolher o nome na tela. Preferir isso a devolver um
- * "não reconheci" genérico -- a diferença entre "ainda não sei fazer" e "olhei
- * e não era ninguém" importa para quem está do outro lado.
+ * MORAM AQUI, E NÃO NO FIRMWARE DA PLACA. Estavam compilados lá dentro, e
+ * trocar "Mancha ou sujeira" por outra coisa exigia regravar cada terminal --
+ * uma lista que precisa vir do chão de fábrica trancada atrás de um compilador.
+ *
+ * Fechada de propósito, e sem campo livre: quem está de luva, com pressa e com
+ * a fila andando digita "erro" e segue, e "erro" não ajuda ninguém a entender o
+ * que aconteceu semanas depois.
+ */
+const MOTIVOS = [
+  "Mancha ou sujeira",
+  "Cor fora do padrao",
+  "Desalinhado",
+  "Falha na impressao",
+  "Tecido com defeito",
+  "Outro",
+];
+
+router.get("/motivos", (_req, res) => res.json({ motivos: MOTIVOS }));
+
+/* =========================================================== o terminal */
+
+/** Diz se o reconhecimento está de pé, e por que não, quando não estiver. */
+router.get("/reconhecimento", (_req, res) => {
+  const estado = rostos.estadoDoReconhecimento();
+  const quantos = db
+    .prepare(`SELECT COUNT(*) AS n FROM funcionario_rostos WHERE vetor IS NOT NULL`)
+    .get().n;
+  res.json({ ...estado, rostosCadastrados: quantos });
+});
+
+/**
+ * O QUE O TERMINAL CHAMA AO FOTOGRAFAR ALGUÉM.
+ *
+ * Responde de quem é o rosto e, se `bater=1`, já registra a batida. Os dois
+ * numa chamada só porque são um gesto só: quem parou na frente da câmera não
+ * quer confirmar duas vezes.
+ *
+ * QUANDO NÃO RECONHECE, NÃO INVENTA. Devolve 404 com o nome de quem chegou mais
+ * perto e o quanto faltou -- é o que deixa a tela dizer "não te reconheci,
+ * tente de novo" em vez de bater o ponto de outra pessoa. Errar para baixo faz
+ * alguém repetir a foto; errar para cima põe o ponto de um no nome de outro, e
+ * ninguém descobre até o fim do mês.
  */
 router.post("/reconhecer",
             express.raw({ type: ["image/*", "application/octet-stream"], limit: "8mb" }),
-            (req, res) => {
-  res.status(501).json({
-    error: "O reconhecimento facial ainda não está ligado.",
-    alternativa: "Escolha o nome na tela do terminal.",
-  });
+            async (req, res) => {
+  if (!req.body || !req.body.length) {
+    return res.status(400).json({ error: "Nenhuma imagem chegou." });
+  }
+
+  const estado = rostos.estadoDoReconhecimento();
+  if (!estado.modelosNoDisco) {
+    return res.status(501).json({
+      error: "O reconhecimento facial não está instalado neste servidor.",
+      alternativa: "Escolha o nome na tela do terminal.",
+    });
+  }
+
+  const lido = await rostos.vetorDaFoto(req.body);
+  if (lido.erro) {
+    return res.status(422).json({ error: lido.erro });
+  }
+
+  /*
+   * O cadastro inteiro a cada chamada, e isso está certo: são dezenas de
+   * pessoas com dois ou três rostos cada, alguns milhares de números no total.
+   * Um índice aqui seria complexidade para economizar microssegundos.
+   */
+  const cadastro = db
+    .prepare(`SELECT r.funcionario_id AS funcionarioId, f.nome, r.vetor
+              FROM funcionario_rostos r
+              JOIN funcionarios f ON f.id = r.funcionario_id
+              WHERE r.vetor IS NOT NULL AND r.modelo = ? AND f.ativo = 1`)
+    .all(rostos.MODELO)
+    .map((l) => ({ ...l, vetor: JSON.parse(l.vetor) }));
+
+  const quem = rostos.deQuemE(lido.vetor, cadastro);
+
+  if (!quem.encontrado) {
+    return res.status(404).json({
+      error: "Não reconheci este rosto.",
+      maisPerto: quem.nome || null,
+      nota: quem.nota ?? null,
+      corte: quem.corte ?? rostos.CORTE,
+      alternativa: "Escolha o nome na tela do terminal.",
+    });
+  }
+
+  const resposta = {
+    funcionarioId: quem.funcionarioId,
+    nome: quem.nome,
+    nota: quem.nota,
+    segundo: quem.segundo,
+  };
+
+  if (String(req.query.bater || "") === "1") {
+    resposta.batida = registrarBatida(quem.funcionarioId, {
+      origem: "terminal",
+      confianca: quem.nota,
+    });
+  }
+
+  res.json(resposta);
+});
+
+/**
+ * Recalcula os vetores das fotos já guardadas.
+ *
+ * O dia da troca de modelo existe, e é este botão. Sem ele, trocar a rede
+ * significaria pedir foto nova a todo mundo -- e é justamente por isso que a
+ * foto fica guardada junto do vetor.
+ */
+router.post("/rostos/recalcular", async (_req, res) => {
+  const pendentes = db
+    .prepare(`SELECT id, arquivo FROM funcionario_rostos
+              WHERE vetor IS NULL OR modelo IS NULL OR modelo <> ?`)
+    .all(rostos.MODELO);
+
+  let refeitos = 0;
+  const falhas = [];
+
+  for (const linha of pendentes) {
+    try {
+      const foto = fs.readFileSync(path.join(PASTA_DOS_ROSTOS, linha.arquivo));
+      const lido = await rostos.vetorDaFoto(foto);
+      if (lido.erro) {
+        falhas.push({ id: linha.id, arquivo: linha.arquivo, motivo: lido.erro });
+        continue;
+      }
+      db.prepare("UPDATE funcionario_rostos SET vetor = ?, modelo = ? WHERE id = ?")
+        .run(JSON.stringify(lido.vetor), rostos.MODELO, linha.id);
+      refeitos++;
+    } catch (erro) {
+      falhas.push({ id: linha.id, arquivo: linha.arquivo, motivo: erro.message });
+    }
+  }
+
+  res.json({ modelo: rostos.MODELO, pendentes: pendentes.length, refeitos, falhas });
 });
 
 module.exports = router;

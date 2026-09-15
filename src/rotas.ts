@@ -79,11 +79,12 @@ const Whatsapp = lazy(() => import("./telas/Whatsapp").then((m) => ({ default: m
 const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default: m.Historico })));
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
 const Ponto = lazy(() => import("./telas/Ponto").then((m) => ({ default: m.Ponto })));
+const Funcionarios = lazy(() => import("./telas/Funcionarios").then((m) => ({ default: m.Funcionarios })));
 
 export type NomeDeTela =
   | "cor" | "moldes" | "projetos" | "encaixe" | "vetor" | "digitalizar" | "imagem" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
-  | "historico" | "reposicao" | "ponto";
+  | "historico" | "reposicao" | "ponto" | "funcionarios";
 
 export type NomeDeGrupo = "producao" | "design" | "impressao" | "relatorios";
 
@@ -268,6 +269,15 @@ export const TELAS: readonly Tela[] = [
     apoioTopo: "As batidas que vieram do terminal, em grade — o que está faltando aparece como traço.",
     icone: "icones.svg#clock",
     Componente: Ponto,
+  },
+  {
+    nome: "funcionarios",
+    grupo: "relatorios",
+    rotulo: "Funcionários",
+    apoioMenu: "Quem é quem, e quais rostos",
+    apoioTopo: "Cadastre as pessoas e os rostos que o terminal precisa reconhecer.",
+    icone: "icones.svg#users",
+    Componente: Funcionarios,
   },
   {
     nome: "reposicao",

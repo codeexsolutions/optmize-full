@@ -59,4 +59,18 @@ export const api = {
   patch: <T,>(caminho: string, corpo: unknown) =>
     pedir<T>(caminho, { method: "PATCH", body: JSON.stringify(corpo) }),
   apagar: <T,>(caminho: string) => pedir<T>(caminho, { method: "DELETE" }),
+
+  /*
+   * Uma imagem em binário puro, sem JSON em volta.
+   *
+   * Base64 dentro de JSON engorda em um terço e obriga o servidor a decodificar
+   * de novo o que já era bytes. As rotas que recebem foto -- rosto de
+   * funcionário, hoje -- esperam o corpo cru, e o tipo vem do próprio Blob.
+   */
+  enviarImagem: <T,>(caminho: string, imagem: Blob) =>
+    pedir<T>(caminho, {
+      method: "POST",
+      body: imagem,
+      headers: { "Content-Type": imagem.type || "image/jpeg" },
+    }),
 };
