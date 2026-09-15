@@ -78,12 +78,11 @@ const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m
 const Whatsapp = lazy(() => import("./telas/Whatsapp").then((m) => ({ default: m.Whatsapp })));
 const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default: m.Historico })));
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
-const Licenca = lazy(() => import("./telas/Licenca").then((m) => ({ default: m.Licenca })));
 
 export type NomeDeTela =
   | "cor" | "moldes" | "projetos" | "encaixe" | "vetor" | "digitalizar" | "imagem" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
-  | "historico" | "reposicao" | "licenca";
+  | "historico" | "reposicao";
 
 export type NomeDeGrupo = "producao" | "design" | "impressao" | "relatorios";
 
@@ -253,22 +252,6 @@ export const TELAS: readonly Tela[] = [
     apoioTopo: "Consulte, filtre e mande para a folha de produção o que já saiu.",
     icone: "icones.svg#history",
     Componente: Historico,
-  },
-  {
-    /*
-     * A licença não é uma tela de trabalho: fica fora do menu, como Máquinas.
-     * Quem precisa dela chega por um destes três caminhos — a faixa de aviso
-     * quando está perto de vencer, a tela de bloqueio quando venceu, ou a
-     * linha discreta no pé do menu, que é onde ela vive o resto do tempo.
-     */
-    nome: "licenca",
-    grupo: "relatorios",
-    foraDoMenu: true,
-    rotulo: "Licença",
-    apoioMenu: "Token e validade",
-    apoioTopo: "O token que libera este computador, a validade dele e o código desta instalação.",
-    icone: "icones.svg#shield-check",
-    Componente: Licenca,
   },
   {
     nome: "reposicao",
