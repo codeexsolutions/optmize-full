@@ -276,6 +276,22 @@ esp_codec_dev_handle_t bsp_audio_codec_speaker_init(void)
     return esp_codec_dev_new(&codec_dev_cfg);
 }
 
+/*
+ * A interface de dados do I2S, para quem precisa montar outro codec.
+ *
+ * Existe porque o MICROFONE DESTA PLACA NAO E O ES8311 que o
+ * `bsp_audio_codec_microphone_init` aqui embaixo monta: e um ES7210, em 0x40 no
+ * I2C. Este BSP descreve outra placa -- a mesma razao pela qual os pinos da tela
+ * tiveram de ser corrigidos.
+ *
+ * Os RELOGIOS e a ligacao de I2S conferem, entao o que falta a quem monta o chip
+ * certo e justamente isto, que era estatico e nao saia daqui.
+ */
+const audio_codec_data_if_t *bsp_audio_get_codec_itf(void)
+{
+    return i2s_data_if;
+}
+
 esp_codec_dev_handle_t bsp_audio_codec_microphone_init(void)
 {
     if (i2s_data_if == NULL) {

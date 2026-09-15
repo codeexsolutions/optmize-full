@@ -413,9 +413,69 @@ static void evento_da_transmissao(const uvc_host_stream_event_data_t *ev, void *
 
 /* ------------------------------------------------------------- abrir */
 
+/*
+ * Poe o objeto de imagem dentro da moldura dada.
+ *
+ * Separado porque acontece em DOIS momentos: quando o video sobe, e quando ele
+ * ja esta no ar e a tela em volta foi refeita.
+ */
+static void por_a_imagem_na_moldura(lv_obj_t *pai)
+{
+    bsp_display_lock(0);
+    pai_do_video = pai;
+    rot_reconectando = NULL;   /* o aviso, se havia, morreu com a moldura velha */
+    imagem = lv_image_create(pai);
+    lv_image_set_src(imagem, &descritor);
+    /*
+     * 211 de 256 e 82%: 800 viram 658, que cabe na moldura de 660. O LVGL
+     * escala com numero inteiro sobre 256, entao e assim que se pede 82%.
+     */
+    lv_image_set_scale(imagem, 211);
+    lv_obj_center(imagem);
+    bsp_display_unlock();
+}
+
 esp_err_t video_da_camera_abrir(lv_obj_t *pai)
 {
     if (rodando) {
+        /*
+         * JA NO AR, E A MOLDURA E OUTRA.
+         *
+         * Antes esta linha era `return ESP_OK` e mais nada -- e foi um defeito
+         * de verdade, com nome e sintoma.
+         *
+         * Quem chama aqui acabou de refazer a tela com `lv_obj_clean`, o que
+         * destruiu a moldura antiga E o objeto de imagem dentro dela. Devolver
+         * "tudo certo" deixava `imagem` apontando para memoria ja liberada, e a
+         * tarefa do video seguia escrevendo nela TRINTA VEZES POR SEGUNDO.
+         *
+         * O estrago aparecia longe: a placa travava com o cao de guarda
+         * reclamando do LVGL, preso dentro do proprio alocador.
+         *
+         * Aparecia so ao CADASTRAR duas vezes seguidas, e a assimetria explica
+         * tudo: bater ponto termina na tela inicial, que fecha o video antes de
+         * limpar; cadastrar vai de camera para camera, e a moldura era trocada
+         * com o video no ar.
+         *
+         * A transmissao USB nao se mexe -- fecha-la e reabri-la a cada troca de
+         * tela seria um segundo de espera e desgaste de driver por nada. So o
+         * objeto da tela e refeito.
+         */
+        /*
+         * SEMPRE REFAZ, e nao so quando a moldura parece outra.
+         *
+         * Comparar `pai` com a moldura anterior seria natural e estaria errado:
+         * o alocador do LVGL costuma devolver O MESMO ENDERECO para um objeto
+         * do mesmo tamanho criado logo depois de um ser destruido. A moldura
+         * nova teria o endereco da velha, a comparacao diria "e a mesma", e o
+         * ponteiro de imagem continuaria pendurado -- exatamente o defeito que
+         * esta funcao existe para fechar.
+         *
+         * Chamar `abrir` significa "ponha o video NESTA moldura". Quem chama
+         * acabou de refazer a tela, entao o objeto antigo nunca sobrevive.
+         */
+        ESP_LOGI(TAG, "video ja no ar; refazendo a imagem na moldura nova");
+        por_a_imagem_na_moldura(pai);
         return ESP_OK;
     }
     recebidos = mostrados = descartados = recusados = 0;
@@ -481,17 +541,7 @@ esp_err_t video_da_camera_abrir(lv_obj_t *pai)
     descritor.data_size = (size_t)LARGURA_DO_VIDEO * ALTURA_DO_VIDEO * 2;
     descritor.data = quadro[0];
 
-    bsp_display_lock(0);
-    pai_do_video = pai;
-    imagem = lv_image_create(pai);
-    lv_image_set_src(imagem, &descritor);
-    /*
-     * 211 de 256 e 82%: 800 viram 658, que cabe na moldura de 660. O LVGL
-     * escala com numero inteiro sobre 256, entao e assim que se pede 82%.
-     */
-    lv_image_set_scale(imagem, 211);
-    lv_obj_center(imagem);
-    bsp_display_unlock();
+    por_a_imagem_na_moldura(pai);
 
     if (leitor_de_qr_iniciar(LARGURA_DO_VIDEO, ALTURA_DECODIFICADA) != ESP_OK) {
         ESP_LOGW(TAG, "sem leitor de QR -- o video segue normalmente");

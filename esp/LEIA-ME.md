@@ -295,6 +295,67 @@ ele devolve o instante em ISO com fuso, e decodificar isso na placa seria
 escrever um analisador de data para mostrar cinco caracteres. É o mesmo
 instante — a batida acabou de acontecer.
 
+### A voz
+
+O terminal **fala o nome e a metragem** de cada item ao entrar nele na
+conferência. Quem está na calandra tem as duas mãos no tecido e o olho na arte:
+ler a tela exige parar e virar a cabeça, ouvir não. E a metragem é justamente o
+número que decide se aquele rolo é aquele item.
+
+Fala em todo item, inclusive nos já marcados — quem volta a um pedido conferido
+está conferindo de novo. Uma fala nova **corta** a anterior: quem passa rápido
+por três itens não quer ouvir os três em fila, muito depois de já estar olhando
+o quarto.
+
+**A placa não sintetiza nada.** Quem transforma texto em som é o servidor, com a
+voz `Microsoft Maria Desktop` (pt-BR) que já vem no Windows — zero dependência
+nova: nem pacote, nem modelo, nem chave de API, nem internet. Chegam aqui
+amostras prontas em PCM cru, 16 kHz mono, sem cabeçalho: os bytes da rede são os
+bytes do alto-falante. A única conversão é copiar cada amostra ao lado dela,
+porque o ES8311 quer dois canais.
+
+A razão de a síntese ficar lá não é o tamanho do modelo: é que **mudar o que se
+fala vira uma linha no servidor** em vez de uma regravação de cada terminal.
+
+**O codec abre uma vez e fica aberto.** Abrir e fechar a cada frase criava uma
+corrida com a frase seguinte, e ela apareceu na serial de um jeito silencioso: o
+codec respondia `Input already open`, a segunda fala escrevia 169 mil bytes —
+5,3 segundos de áudio — em 200 milissegundos, e ninguém ouvia o segundo item.
+Sem erro em lugar nenhum. Uma tranca dá a vez, e a fala nova espera a anterior
+largar a saída (128 ms no pior caso).
+
+Volume em **Ajustes**, guardado na NVS, com uma frase de prova ao soltar o
+controle — arrastar um volume sem ouvir nada é adivinhar. O padrão é 90%: este
+aparelho fica em pé ao lado de uma calandra, não numa mesa.
+
+### O microfone, e o chip que o BSP não conhece
+
+**Existe, e não é do ES8311.**
+
+`bsp_audio_codec_microphone_init()` do BSP monta um ES8311 — o mesmo chip da
+saída. Com ele, a leitura abria sem erro nenhum e devolvia **zeros exatos** por
+seis segundos. Não era silêncio: silêncio num microfone de verdade tem chiado, e
+chiado não é zero. Era não haver caminho de dados.
+
+A varredura do I2C mostrou três aparelhos, e um respondia em **0x40** — que eu
+rotulei como "expansor de pinos, talvez". É o **ES7210**, um conversor dedicado
+a microfones: `ES7210_CODEC_DEFAULT_ADDR` é 0x80 em oito bits, os mesmos 0x40 em
+sete. A confirmação veio do firmware de fábrica guardado em `backup/`, onde
+"ES7210" aparece dez vezes.
+
+Com o chip certo, o nível passou a oscilar entre 82 e 359 em sala silenciosa —
+o piso de ruído de um microfone vivo.
+
+É a mesma história dos pinos da tela, pela mesma razão: **o BSP descreve outra
+placa**. Por isso ele ganhou um `bsp_audio_get_codec_itf()`, que expõe a
+interface de I2S para quem monta o chip certo.
+
+Os relógios conferem, aliás: MCLK 13, BCLK 12, LRCK 10, DOUT 9 — iguais aos da
+documentação da Waveshare.
+
+`prova-de-audio.c` guarda tudo isso e fica desligada (`#if 0` em `tela.c`),
+porque custava dez segundos em cada boot. Vale 1 no dia em que o som parar.
+
 ### O descanso
 
 Três minutos sem um toque e a placa vira um **relógio digital de parede**. Um
@@ -365,9 +426,11 @@ atualizar o firmware do C6 pela própria placa.
   para onde a pessoa estava. Uma conferência em andamento se perde e precisa de
   uma releitura do QR (que retoma no primeiro item pendente, então não se perde
   trabalho — só o gesto). Foi escolha, não esquecimento; muda em uma linha.
-- **Entrada de áudio** — o controle de ganho do microfone existe em Ajustes,
-  mostra o número e **não chega ao codec**. Está anotado no código onde ele sai
-  quando o áudio entrar. Melhor isso do que um controle que finge funcionar.
+- **Ouvir** — o microfone funciona e nada no sistema o escuta. Por isso o
+  controle de ganho em Ajustes continua mostrando o número sem chegar ao codec:
+  ligá-lo a um microfone que ninguém lê seria um botão que mexe em nada. É o
+  caminho de um assistente de voz, e ele precisa de reconhecimento de fala no
+  servidor (Whisper roda offline) antes de existir aqui.
 - **A lista de motivos é um chute** — "Mancha ou sujeira", "Cor fora do padrão",
   "Desalinhado", "Falha na impressão", "Tecido com defeito", "Outro". Ela tem de
   vir da gráfica: o que acontece toda semana entra, o que nunca é tocado sai.

@@ -25,6 +25,25 @@ void interface_iniciar(void);
 /* Volta para a tela inicial, desmontando o app aberto. */
 void interface_voltar_ao_inicio(void);
 
+/* ------------------------------------------------------------- a voz */
+
+/*
+ * A placa fala pelo alto-falante da saida SPK. Quem transforma texto em som e
+ * o SERVIDOR (ver `servidor/voz.js`); aqui so chegam amostras prontas.
+ *
+ * Uma fala nova CORTA a anterior -- quem passa rapido por tres itens nao quer
+ * ouvir os tres em fila, muito depois de ja estar olhando o quarto.
+ */
+esp_err_t voz_iniciar(void);
+void voz_falar(const char *texto);
+void voz_falar_o_item(const char *item_id);
+void voz_calar(void);
+
+/* O volume da voz, de 0 a 100. Guardado na NVS; ajustavel em Ajustes. */
+int  voz_volume(void);
+void voz_guardar_volume(int novo);
+bool voz_esta_falando(void);
+
 /* ---------------------------------------------------- o descanso */
 
 /*
