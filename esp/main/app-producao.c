@@ -82,6 +82,7 @@ static lv_obj_t *area_do_app;      /* a area que a casca entregou */
 static lv_obj_t *moldura;          /* onde o video mora */
 static lv_obj_t *rot_aviso;        /* o que o servidor respondeu, quando reclama */
 static lv_obj_t *sobreposto;       /* o motivo, ou a pergunta de seguir */
+static lv_obj_t *rot_do_fecho;     /* o que o servidor disse ao fechar o pedido */
 
 static Pedido pedido;
 static int  atual = -1;            /* qual item esta na frente; -1 = nenhum */
@@ -113,8 +114,10 @@ static const char *MOTIVOS[] = {
 #define ALTURA_UTIL (LV_VER_RES - 56)
 
 static void montar_a_procura(void);
+static void montar_a_visao_geral(void);
 static void montar_a_conferencia(void);
 static void fechar_o_sobreposto(void);
+static void tocou_outro_codigo(lv_event_t *e);
 static void montar_o_fim(bool ate_o_fim);
 
 /*
@@ -141,6 +144,7 @@ static void montar_o_fim(bool ate_o_fim);
  */
 typedef enum {
     TELA_PROCURA,
+    TELA_VISAO_GERAL,       /* o que o pedido tem, antes de comecar */
     TELA_CONFERENCIA,
     TELA_FIM,
     SO_FECHAR_A_PERGUNTA,   /* cancelar o motivo: volta ao item, sem remontar */
@@ -157,6 +161,7 @@ static void trocar_de_tela(void *nada)
     }
     switch (proxima_tela) {
         case TELA_PROCURA:           montar_a_procura(); break;
+        case TELA_VISAO_GERAL:       montar_a_visao_geral(); break;
         case TELA_CONFERENCIA:       montar_a_conferencia(); break;
         case TELA_FIM:               montar_o_fim(o_fim_chegou_ao_fim); break;
         case SO_FECHAR_A_PERGUNTA:   fechar_o_sobreposto(); break;
@@ -473,6 +478,175 @@ static void perguntar_o_motivo(void)
                  &lv_font_montserrat_16, "Cancelar", tocou_cancelar_motivo, NULL);
 }
 
+/* ================================================= a visao geral */
+
+static void tocou_iniciar(lv_event_t *e)
+{
+    (void)e;
+    atual = primeiro_pendente();
+    if (atual >= pedido.quantos) {
+        o_fim_chegou_ao_fim = true;
+        ir_para(TELA_FIM);
+    } else {
+        ir_para(TELA_CONFERENCIA);
+    }
+}
+
+/*
+ * O QUE O PEDIDO TEM, ANTES DE COMECAR.
+ *
+ * Ler o QR nao e o mesmo que comecar a conferir. Quem aponta a camera para o
+ * papel esta perguntando "o que vem nisto aqui?" -- quantas pecas, quantos
+ * metros, se ja tem coisa marcada. So depois de saber e que se decide se e
+ * agora ou dali a meia hora, com o rolo na calandra.
+ *
+ * ESTA LISTA NAO MARCA NADA, e e por isso que ela pode existir.
+ *
+ * A primeira versao do app era uma lista COM os botoes de sim e nao em cada
+ * linha, e estava errada: marcar de uma lista convida a procurar a linha certa
+ * com o rolo andando, e e ai que se marca o item errado. Aqui nao ha o que
+ * errar -- nao ha botao nenhum nas linhas. Sao duas telas com o mesmo formato e
+ * propositos opostos, e a diferenca esta justamente no que NAO tem aqui.
+ */
+static void montar_a_visao_geral(void)
+{
+    conferindo = false;
+    fechar_o_sobreposto();
+    imagem_da_producao_fechar();
+    lv_obj_clean(area_do_app);
+    moldura = NULL;
+    rot_aviso = NULL;
+    rot_do_fecho = NULL;
+
+    int pendentes = 0, passaram = 0, falharam = 0;
+    float total = 0.0f;
+    for (int i = 0; i < pedido.quantos; i++) {
+        const ItemDoPedido *it = &pedido.itens[i];
+        total += it->metros;
+        if (strcmp(it->status, "ok") == 0)        passaram++;
+        else if (strcmp(it->status, "erro") == 0) falharam++;
+        else                                      pendentes++;
+    }
+
+    char metros_do_total[16];
+    escrever_metros(metros_do_total, sizeof(metros_do_total), total);
+
+    /* --- o cabecalho: o tamanho do trabalho, de relance --- */
+
+    lv_obj_t *topo = lv_label_create(area_do_app);
+    lv_label_set_text_fmt(topo, "%d item(ns)  .  %s m no total",
+                          pedido.quantos, metros_do_total);
+    lv_obj_set_style_text_color(topo, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(topo, &lv_font_montserrat_28, 0);
+    lv_obj_set_pos(topo, 20, 8);
+
+    if (passaram > 0 || falharam > 0) {
+        lv_obj_t *ja = lv_label_create(area_do_app);
+        lv_label_set_text_fmt(ja, LV_SYMBOL_OK " %d  .  " LV_SYMBOL_CLOSE " %d  .  %d por conferir",
+                              passaram, falharam, pendentes);
+        lv_obj_set_style_text_color(ja, COR_APOIO, 0);
+        lv_obj_set_style_text_font(ja, &lv_font_montserrat_16, 0);
+        lv_obj_align(ja, LV_ALIGN_TOP_RIGHT, -20, 18);
+    }
+
+    botao_grande(area_do_app, LV_HOR_RES - 220, 6, 200, 44, COR_CARTAO,
+                 &lv_font_montserrat_16, LV_SYMBOL_REFRESH "  outro codigo",
+                 tocou_outro_codigo, NULL);
+
+    /* --- a lista, que so informa --- */
+
+    lv_obj_t *lista = lv_obj_create(area_do_app);
+    lv_obj_set_size(lista, LV_HOR_RES - 40, ALTURA_UTIL - 56 - 110);
+    lv_obj_set_pos(lista, 20, 52);
+    lv_obj_set_style_bg_color(lista, COR_FUNDO, 0);
+    lv_obj_set_style_border_width(lista, 0, 0);
+    lv_obj_set_style_pad_all(lista, 0, 0);
+    lv_obj_set_flex_flow(lista, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(lista, 6, 0);
+
+    for (int i = 0; i < pedido.quantos; i++) {
+        const ItemDoPedido *item = &pedido.itens[i];
+
+        lv_obj_t *linha = lv_obj_create(lista);
+        lv_obj_set_size(linha, LV_PCT(100), 56);
+        lv_obj_set_style_bg_color(linha, COR_CARTAO, 0);
+        lv_obj_set_style_border_color(linha, COR_BORDA, 0);
+        lv_obj_set_style_border_width(linha, 1, 0);
+        lv_obj_set_style_radius(linha, 8, 0);
+        lv_obj_set_style_pad_all(linha, 10, 0);
+        lv_obj_remove_flag(linha, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_remove_flag(linha, LV_OBJ_FLAG_CLICKABLE);
+
+        /*
+         * O NUMERO DE ORDEM na frente. As pecas saem da calandra em fila, e o
+         * numero e o que liga esta lista ao que a pessoa vai ver depois, item
+         * por item -- "Item 3 de 5" la, "3" aqui.
+         */
+        lv_obj_t *ordem = lv_label_create(linha);
+        lv_label_set_text_fmt(ordem, "%d", i + 1);
+        lv_obj_set_style_text_color(ordem, COR_APOIO, 0);
+        lv_obj_set_style_text_font(ordem, &lv_font_montserrat_22, 0);
+        lv_obj_set_pos(ordem, 0, 4);
+
+        lv_obj_t *nome = lv_label_create(linha);
+        lv_label_set_text(nome, item->tarefa);
+        lv_obj_set_style_text_color(nome, COR_TEXTO, 0);
+        lv_obj_set_style_text_font(nome, &lv_font_montserrat_22, 0);
+        lv_label_set_long_mode(nome, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(nome, 620);
+        lv_obj_set_pos(nome, 46, 4);
+
+        char metros_do_item[16];
+        escrever_metros(metros_do_item, sizeof(metros_do_item), item->metros);
+
+        lv_obj_t *quanto = lv_label_create(linha);
+        lv_label_set_text_fmt(quanto, "%s m", metros_do_item);
+        lv_obj_set_style_text_color(quanto, COR_TEXTO, 0);
+        lv_obj_set_style_text_font(quanto, &lv_font_montserrat_22, 0);
+        lv_obj_set_pos(quanto, 700, 4);
+
+        lv_obj_t *maquina = lv_label_create(linha);
+        lv_label_set_text(maquina, item->maquina);
+        lv_obj_set_style_text_color(maquina, COR_APOIO, 0);
+        lv_obj_set_style_text_font(maquina, &lv_font_montserrat_16, 0);
+        lv_obj_set_pos(maquina, 800, 8);
+
+        /* O que ja foi decidido, para quem esta retomando um pedido. */
+        if (ja_decidido(item)) {
+            const bool passou = strcmp(item->status, "ok") == 0;
+            lv_obj_t *marca = lv_label_create(linha);
+            lv_label_set_text(marca, passou ? LV_SYMBOL_OK : LV_SYMBOL_CLOSE);
+            lv_obj_set_style_text_color(marca, passou ? COR_CERTO : COR_DESTAQUE, 0);
+            lv_obj_set_style_text_font(marca, &lv_font_montserrat_22, 0);
+            lv_obj_set_pos(marca, 940, 4);
+        }
+    }
+
+    /* --- o botao que comeca de verdade --- */
+
+    const bool ha_o_que_conferir = pendentes > 0;
+    botao_grande(area_do_app, 20, ALTURA_UTIL - 98, LV_HOR_RES - 40, 86,
+                 ha_o_que_conferir ? COR_CERTO : COR_CARTAO, &lv_font_montserrat_28,
+                 ha_o_que_conferir ? LV_SYMBOL_PLAY "  Iniciar a conferencia"
+                                   : LV_SYMBOL_OK "  Ja esta tudo conferido -- ver o resumo",
+                 tocou_iniciar, NULL);
+
+    /*
+     * A PLACA DIZ O TAMANHO DO TRABALHO em voz alta -- nao a lista inteira.
+     *
+     * Ler vinte nomes por voz levaria dois minutos e ninguem esperaria ate o
+     * fim. O que cabe numa frase e o que a pessoa quer saber antes de decidir
+     * se comeca agora: quantas pecas e quantos metros. Os nomes vem um a um,
+     * na hora de cada item.
+     */
+    char aviso[80];
+    snprintf(aviso, sizeof(aviso), "%d itens, %s metros", pedido.quantos, metros_do_total);
+    voz_falar(aviso);
+
+    ESP_LOGI(TAG, "visao geral: %d itens, %s m (%d por conferir)",
+             pedido.quantos, metros_do_total, pendentes);
+}
+
 /* --------------------------------------------------- a conferencia */
 
 static void tocou_passou(lv_event_t *e)
@@ -641,8 +815,6 @@ static void montar_a_conferencia(void)
 }
 
 /* ------------------------------------------------------------- o fim */
-
-static lv_obj_t *rot_do_fecho;
 
 /* O servidor respondeu ao fechamento. Roda na tarefa do Optmize. */
 static void fechou(const char *erro)
@@ -815,15 +987,16 @@ static void chegou_o_pedido(const Pedido *p, const char *erro)
         ESP_LOGW(TAG, "%s", erro);
     } else {
         pedido = *p;
-        video_da_camera_fechar();   /* a conferencia toma a tela; ver o cabecalho */
+        video_da_camera_fechar();   /* a lista toma a tela; ver o cabecalho */
 
-        atual = primeiro_pendente();
-        if (atual >= pedido.quantos) {
-            /* Nada pendente: o pedido ja tinha sido conferido antes. */
-            montar_o_fim(true);
-        } else {
-            montar_a_conferencia();
-        }
+        /*
+         * A VISAO GERAL VEM ANTES, sempre -- inclusive num pedido ja todo
+         * conferido. Ler o QR nao e o mesmo que comecar a conferir: quem
+         * aponta a camera para o papel quer saber o que vem, e so depois
+         * decide se e agora.
+         */
+        atual = -1;
+        montar_a_visao_geral();
     }
 
     bsp_display_unlock();
