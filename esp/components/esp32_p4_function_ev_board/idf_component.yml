@@ -1,0 +1,28 @@
+# BSP da ESP32-P4-Function-EV-Board, COPIADO PARA DENTRO DO PROJETO e corrigido
+# para a placa que realmente temos: uma Waveshare ESP32-P4-WIFI6-Touch-LCD-7B.
+#
+# Por que copiado, e nao usado como dependencia: as correcoes vivem no codigo do
+# componente (pinos da tela, polaridade da luz, taxa das lanes), e
+# `managed_components/` e pasta gerada -- o gerenciador confere o hash e
+# restaura o original no primeiro `reconfigure`, levando as correcoes junto.
+# Aqui dentro elas sao nossas e ficam.
+#
+# Original: esp-bsp, bsp/esp32_p4_function_ev_board, versao 4.2.3,
+# commit 8cff440017ea94aea3c4f4fe0ff0a71215eaa165.
+#
+# As faixas abaixo estao FECHADAS de proposito. As abertas (`^`, `*`) foram a
+# origem de boa parte do tempo perdido: o `^2` do esp_lvgl_port resolve hoje
+# para uma versao incompativel com o LVGL que este BSP pede.
+dependencies:
+  idf: '>=5.3'
+  esp_codec_dev: 1.2.*
+  esp_lcd_ek79007: 1.0.*
+  esp_lcd_ili9881c: 1.1.*
+  esp_lcd_touch_gt911: 1.2.*
+  espressif/esp_lcd_lt8912b: 0.2.*
+  espressif/esp_lvgl_port:
+    public: true
+    version: 2.9.*
+  lvgl/lvgl:
+    public: true
+    version: 9.5.*

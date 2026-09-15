@@ -1,0 +1,13 @@
+# Uma flash de 32 MB e o app sozinho: sem OTA, sem assets, sem SPIFFS.
+# O demo de fabrica usava sete particoes porque carregava video, camera e
+# duas faixas de atualizacao; esta tela nao carrega nada disso ainda.
+#
+# A tabela mora em 0xA000 (ver sdkconfig.defaults), entao a primeira particao
+# comeca em 0xB000. O vao entre 0x11000 e 0x20000 nao e desperdicio a toa: a
+# particao de app TEM que comecar em multiplo de 64 KB, e 0x20000 e o primeiro
+# que serve.
+#
+# Nome,     Tipo, SubTipo,  Offset,   Tamanho
+nvs,        data, nvs,      0xB000,   0x5000
+phy_init,   data, phy,      0x10000,  0x1000
+factory,    app,  factory,  0x20000,  0x800000

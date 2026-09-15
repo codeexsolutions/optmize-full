@@ -1,0 +1,47 @@
+﻿## IDF Component Manager Manifest File
+dependencies:
+  ## Required IDF version
+  idf:
+    version: '>=4.1.0'
+  # # Put list of dependencies here
+  # # For components maintained by Espressif:
+  # component: "~1.0.0"
+  # # For 3rd party components:
+  # username/component: ">=1.0.0,<2.0.0"
+  # username2/component2:
+  #   version: "~1.0.0"
+  #   # For transient dependencies `public` flag can be set.
+  #   # `public` flag doesn't have an effect dependencies of the `main` component.
+  #   # All dependencies of `main` are public by default.
+  #   public: true
+  # O BSP NAO entra aqui: ele mora em `components/esp32_p4_function_ev_board`,
+  # copiado para dentro do projeto e corrigido para a placa que temos de fato --
+  # uma Waveshare ESP32-P4-WIFI6-Touch-LCD-7B, e nao a da Espressif que este BSP
+  # supoe. Ver o cabecalho do componente.
+  #
+  # Enquanto ele era dependencia, cada `reconfigure` restaurava o original e
+  # apagava as correcoes -- e a tela voltava a ficar preta sem explicacao.
+
+  # A camera e USB (UVC), ligada na porta USB-OTG -- nao e a do conector flat
+  # MIPI-CSI, que nesta placa esta vazio. Sao caminhos diferentes: a do flat
+  # usaria esp_video/esp_cam_sensor; esta precisa de pilha USB host + UVC.
+  #
+  # Faixa fechada, como todo o resto deste arquivo.
+  espressif/usb_host_uvc: "2.5.*"
+
+  # Leitor de QR. E a `quirc`, biblioteca em C pequena e sem dependencias, que
+  # trabalha sobre uma imagem em TONS DE CINZA -- nao colorida.
+  espressif/quirc: "1.2.*"
+
+  # --- Wi-Fi ---
+  #
+  # O P4 NAO TEM RADIO. Quem tem e o ESP32-C6 que vive ao lado dele na placa, e
+  # os dois conversam por SDIO. O `esp_hosted` faz esse transporte; o
+  # `esp_wifi_remote` poe por cima a mesma API de sempre (`esp_wifi_init`,
+  # `esp_wifi_connect`), de modo que o codigo de rede nao percebe que o radio
+  # esta noutro chip.
+  #
+  # Os pinos do SDIO nesta placa vieram do firmware de fabrica, que os imprime
+  # no boot: CLK 18, CMD 19, D0 14, D1 15, D2 16, D3 17, reset do C6 no 54.
+  espressif/esp_wifi_remote: "1.6.*"
+  espressif/esp_hosted: "3.0.*"
