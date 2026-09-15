@@ -172,6 +172,97 @@ Um erro que vale registrar: as estruturas `quirc_code` e `quirc_data` somam mais
 de 13 KB e estavam declaradas **na pilha** de uma tarefa de 5 KB. Estouraram na
 primeira leitura, com `Stack protection fault` e a placa reiniciando em laço.
 
+### A conferência de produção
+
+A parte que faz a placa valer a pena estar na calandra. Lê o QR da lista de
+produção (`P` + dez dígitos do SHA‑1 do pedido), pergunta ao servidor o que ele
+significa, e **conduz a conferência item por item**.
+
+Um item por vez, ocupando a tela: a arte à esquerda, os dados à direita
+(metragem em corpo grande, máquina, nome do arquivo) e dois alvos de quase meia
+tela — **passou** e **não passou**.
+
+A primeira versão era uma lista com sim e não em cada linha e a arte atrás de um
+botão. Estava errada por dois motivos que só aparecem no chão de fábrica:
+
+- **A arte é a decisão.** Se ela precisa de um toque para aparecer, ninguém
+  toca, e a conferência vira marcar linha por nome de arquivo.
+- **Na lista não há ordem.** As peças saem da calandra em fila. Uma tela com
+  doze linhas convida a procurar a linha certa, e procurar linha com o rolo
+  andando é onde se marca o item errado.
+
+**Passou** avança. **Não passou** pergunta o motivo — lista curta e fechada, sem
+teclado, porque quem está de luva e com pressa digita "erro" e segue — e depois
+pergunta se a conferência continua ou para ali. Um defeito raramente vem
+sozinho: cor fora do padrão costuma ser da máquina, e aí conferir o resto do
+rolo é perder tempo com peças que vão todas dar errado.
+
+**Parar não fecha o pedido.** Os itens restantes continuam pendentes e o mesmo
+QR retoma de onde parou — quem foi almoçar no meio não passa de novo por tudo
+que já conferiu, e é na segunda passagem que se marca no automático.
+
+No fim, o resumo e **um botão** para fechar o pedido. Fechar já foi automático e
+estava errado: não aparecia nada, e quem terminava não sabia se aquilo tinha
+virado alguma coisa do outro lado. Fechar um pedido é o único ato desta tela que
+muda a vida de outra gente — é ele que tira a produção da lista de quem está
+esperando. Um ato desses se aperta, não acontece.
+
+### A arte do item
+
+Vem do **preview que a própria impressora gerou** ao rodar o arquivo, não da
+imagem da OS: na calandra se compara com o que *saiu*, não com o que foi
+*pedido*. A OS é a segunda opção, quando existe.
+
+O servidor redimensiona e recodifica antes de mandar (rota `/imagem` em
+`pedidos.js`), por duas razões que a placa não resolveria: o original pesa
+centenas de KB e pode ser PNG, e o decodificador daqui lê **JPEG de linha de
+base** e mais nada.
+
+Tocar na arte abre a tela cheia com zoom. O objeto **cresce de verdade**
+(`lv_obj_set_size` + `LV_IMAGE_ALIGN_STRETCH`), e não por `lv_image_set_scale`:
+com `set_scale` o objeto continua pequeno, a caixa em volta não descobre que há
+o que rolar, e a imagem ampliada fica presa no meio dela.
+
+**Uma armadilha que custou caro:** o decodificador arredonda para o bloco de MCU
+os **dois** lados, não só a altura. Descrever o buffer com a largura real faz
+cada linha começar alguns pixels adiante da anterior — a foto sai cortada na
+diagonal, sem erro nenhum no caminho. A placa calcula o passo real; o servidor
+manda sempre largura múltipla de 16.
+
+### Duas armadilhas de memória, ambas custaram horas
+
+**`%f` não existe no LVGL.** `lv_label_set_text_fmt` usa o printf *do LVGL*, e
+ele vem compilado sem ponto flutuante. O `%.1f` não caía em caso nenhum: o
+formatador não reconhecia o `f`, imprimia a letra e seguia. Na calandra aparecia
+`IMPRESSORA-07 . f m` e a metragem sumia. Metros saem em décimos inteiros.
+
+**A pilha da tarefa do vídeo mora na PSRAM.** Pilha de tarefa sai da RAM interna
+por padrão e precisa dos 32 KB **em um pedaço só**. Nesta placa o maior pedaço
+livre de RAM interna é 32 KB mesmo parada — Wi‑Fi, USB e LVGL picam o resto.
+Cabia sem um byte de folga. Aí abrir a transmissão USB reserva três
+transferências ISOC de 12 KB, o maior pedaço cai para **31 KB**, e a tarefa não
+cabe mais:
+
+```
+E video: nao coube a pilha de 32 KB (interna livre 94 KB, maior bloco 31 KB)
+```
+
+A tela dizia "câmera não encontrada" e mandava conferir o cabo USB de uma câmera
+ligada, enumerada e oferecendo 800x600 na linha anterior. Por um kilobyte, e de
+forma intermitente conforme o que a rede tinha alocado naquele instante.
+
+Agora a pilha vem da PSRAM (`xTaskCreatePinnedToCoreWithCaps`). O ponto não é a
+folga maior: é **sair da disputa** por um recurso que outra gente aperta sem
+avisar. Diminuir para 16 KB funcionaria hoje e voltaria a falhar quando o USB
+pedisse mais. **Tarefa criada com `WithCaps` tem de morrer com
+`vTaskDeleteWithCaps`** — com o `vTaskDelete` comum a pilha nunca é liberada.
+
+Duas defesas que ficaram do caminho até achar isso: a tarefa **devolve os
+quadros que sobraram na fila** antes de sair (`uvc_host_stream_close` recusa
+fechar com quadro emprestado em aberto, e falhava calado), e um **cão de guarda**
+remenda a transmissão depois de três segundos sem quadro, porque a falha mais
+comum não avisa — a imagem só congela.
+
 ### A rede
 
 O P4 **não tem rádio**. Quem tem é o ESP32‑C6 ao lado dele, e os dois conversam
@@ -203,9 +294,15 @@ atualizar o firmware do C6 pela própria placa.
 - **Entrada de áudio** — o controle de ganho do microfone existe em Ajustes,
   mostra o número e **não chega ao codec**. Está anotado no código onde ele sai
   quando o áudio entrar. Melhor isso do que um controle que finge funcionar.
-- **A ligação com o Optmize** — a placa lê o QR e mostra o conteúdo cru. O que
-  ela faz com ele depende do formato dos QR que o sistema gera, que ainda não
-  definimos.
+- **A lista de motivos é um chute** — "Mancha ou sujeira", "Cor fora do padrão",
+  "Desalinhado", "Falha na impressão", "Tecido com defeito", "Outro". Ela tem de
+  vir da gráfica: o que acontece toda semana entra, o que nunca é tocado sai.
+- **Zoom além do arquivo** — a arte chega com 800 pixels de largura, e o zoom
+  para em 200%. Olhar de perto de verdade uma arte de 8 metros exigiria pedir ao
+  servidor um **pedaço** em tamanho maior, e não ampliar o que já veio.
+- **Buscar a arte do próximo item enquanto se decide o atual** — hoje cada item
+  baixa a sua quando entra na tela. Custaria mais 2 MB de PSRAM, e só vale se a
+  pausa entre um item e outro incomodar de verdade.
 
 ---
 

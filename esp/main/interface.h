@@ -59,6 +59,14 @@ const char *rede_nome_da_rede(void);
  */
 int rede_procurar(char nomes[][33], int cabem);
 
+/*
+ * Por que a ultima tentativa nao deu, em palavras. NULL quando nunca falhou.
+ *
+ * Sem isto a tela so pode dizer "conectando..." para sempre, e a pessoa fica
+ * diante de algo que parece estar trabalhando quando a senha esta errada.
+ */
+const char *rede_por_que_nao(void);
+
 /* ---------------------------------------------------------- as cores */
 
 /* Um lugar so para elas, porque tres apps as repetiriam. */

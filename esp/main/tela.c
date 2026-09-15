@@ -44,6 +44,7 @@
 #include "bsp/esp-bsp.h"
 #include "bsp/touch.h"
 #include "interface.h"
+#include "optmize.h"
 
 static const char *TAG = "tela";
 
@@ -123,6 +124,9 @@ void app_main(void)
 
     /* Demora e roda sozinha. A casca mostra o estado enquanto isso. */
     rede_iniciar();
+
+    /* So le o endereco guardado; nao fala com ninguem ainda. */
+    optmize_iniciar();
 
     /*
      * A pilha USB sobe UMA VEZ. Quem abre e fecha com o app de Producao e a

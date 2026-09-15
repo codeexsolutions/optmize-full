@@ -41,6 +41,7 @@
 
 #include "bsp/esp-bsp.h"
 #include "interface.h"
+#include "optmize.h"
 
 static const char *TAG = "ajustes";
 
@@ -51,10 +52,45 @@ static lv_obj_t *campo_senha;
 static lv_obj_t *teclado;
 static lv_obj_t *rot_estado;
 static lv_obj_t *rot_escolhida;
+static lv_obj_t *campo_servidor;
 
+static lv_timer_t *relogio_do_estado;
 static char escolhida[33];
 static char achadas[CABEM][33];
 static volatile bool montado;
+
+/*
+ * O ESTADO SE ATUALIZA SOZINHO.
+ *
+ * Na primeira versao a tela escrevia "conectando..." e nunca mais tocava
+ * naquele texto. Com a senha errada o Wi-Fi tenta de novo para sempre -- e a
+ * tela ficava mentindo, dizendo que estava conectando, sem fim.
+ *
+ * Agora um relogio confere o estado a cada segundo e diz o que realmente esta
+ * acontecendo: conectada com o endereco, ou o motivo de nao ter dado.
+ */
+static void conferir_o_estado(lv_timer_t *t)
+{
+    (void)t;
+    if (!montado || rot_estado == NULL) {
+        return;
+    }
+
+    if (rede_conectada()) {
+        lv_label_set_text_fmt(rot_estado, "conectada -- %s", rede_endereco());
+        lv_obj_set_style_text_color(rot_estado, COR_CERTO, 0);
+        return;
+    }
+
+    const char *porque = rede_por_que_nao();
+    if (porque != NULL) {
+        lv_label_set_text(rot_estado, porque);
+        lv_obj_set_style_text_color(rot_estado, COR_DESTAQUE, 0);
+    } else {
+        lv_label_set_text(rot_estado, "sem conexao");
+        lv_obj_set_style_text_color(rot_estado, COR_APOIO, 0);
+    }
+}
 
 /* --------------------------------------------------------- a varredura */
 
@@ -138,9 +174,26 @@ static void tocou_conectar(lv_event_t *e)
     }
 
     rede_conectar(escolhida, senha);
+
+    /*
+     * "conectando..." aqui e so o primeiro quadro: o relogio de um segundo
+     * substitui isto assim que houver resposta -- endereco, ou o motivo de nao
+     * ter dado.
+     */
     lv_label_set_text(rot_estado, "conectando...");
     lv_obj_set_style_text_color(rot_estado, COR_APOIO, 0);
     ESP_LOGI(TAG, "conectando em %s", escolhida);
+}
+
+static void tocou_salvar_servidor(lv_event_t *e)
+{
+    (void)e;
+    const char *endereco = lv_textarea_get_text(campo_servidor);
+    if (endereco == NULL || endereco[0] == 0) {
+        return;
+    }
+    optmize_guardar_servidor(endereco);
+    ESP_LOGI(TAG, "servidor do Optmize: %s", endereco);
 }
 
 /* O teclado so aparece quando o campo e tocado, e some quando ele sai. */
@@ -315,7 +368,7 @@ void app_ajustes_montar(lv_obj_t *area)
     /* --- direita: tela e audio --- */
 
     lv_obj_t *dir = lv_obj_create(area);
-    lv_obj_set_size(dir, 470, 260);
+    lv_obj_set_size(dir, 470, 300);
     lv_obj_set_pos(dir, 530, 20);
     lv_obj_set_style_bg_color(dir, COR_CARTAO, 0);
     lv_obj_set_style_border_color(dir, COR_BORDA, 0);
@@ -333,12 +386,51 @@ void app_ajustes_montar(lv_obj_t *area)
     deslizante(dir, "Brilho da tela", 50, 100, mudou_o_brilho);
     deslizante(dir, "Ganho do microfone", 140, 50, mudou_o_volume);
 
+    /*
+     * O ENDERECO DO SERVIDOR.
+     *
+     * Sem ele a placa le o QR e nao tem a quem perguntar o que ele significa --
+     * o codigo impresso e opaco de proposito (ver `optmize.c`). Fica aqui, e nao
+     * no codigo, pelo mesmo motivo da senha: muda de grafica para grafica, e
+     * quem instala o aparelho na parede nao tem compilador.
+     *
+     * Vai com a porta junto (`192.168.0.194:8000`) porque o servidor nao
+     * atende na 80, e um endereco sem porta falharia com "nao respondeu" --
+     * mensagem que manda procurar problema na rede, e nao no campo.
+     */
+    lv_obj_t *t3 = lv_label_create(dir);
+    lv_label_set_text(t3, "Servidor do Optmize");
+    lv_obj_set_style_text_color(t3, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(t3, &lv_font_montserrat_16, 0);
+    lv_obj_set_pos(t3, 0, 200);
+
+    campo_servidor = lv_textarea_create(dir);
+    lv_obj_set_size(campo_servidor, 290, 48);
+    lv_obj_set_pos(campo_servidor, 0, 224);
+    lv_textarea_set_one_line(campo_servidor, true);
+    lv_textarea_set_placeholder_text(campo_servidor, "192.168.0.194:8000");
+    lv_textarea_set_text(campo_servidor, optmize_servidor());
+    lv_obj_add_event_cb(campo_servidor, campo_em_foco, LV_EVENT_ALL, NULL);
+
+    lv_obj_t *salvar = lv_button_create(dir);
+    lv_obj_set_size(salvar, 120, 48);
+    lv_obj_set_pos(salvar, 300, 224);
+    lv_obj_set_style_bg_color(salvar, COR_BORDA, 0);
+    lv_obj_add_event_cb(salvar, tocou_salvar_servidor, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *rsv = lv_label_create(salvar);
+    lv_label_set_text(rsv, "Salvar");
+    lv_obj_set_style_text_font(rsv, &lv_font_montserrat_16, 0);
+    lv_obj_center(rsv);
+
     /* --- o teclado, escondido ate alguem tocar na senha --- */
 
     teclado = lv_keyboard_create(area);
     lv_obj_set_size(teclado, LV_PCT(100), 250);
     lv_obj_align(teclado, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_add_flag(teclado, LV_OBJ_FLAG_HIDDEN);
+
+    relogio_do_estado = lv_timer_create(conferir_o_estado, 1000, NULL);
+    conferir_o_estado(NULL);
 }
 
 void app_ajustes_desmontar(void)
@@ -350,9 +442,20 @@ void app_ajustes_desmontar(void)
      */
     montado = false;
 
+    /*
+     * O relogio morre com a tela. Um timer do LVGL sobrevive aos objetos que
+     * ele escreve -- deixa-lo vivo seria escrever em memoria ja liberada no
+     * proximo segundo.
+     */
+    if (relogio_do_estado != NULL) {
+        lv_timer_delete(relogio_do_estado);
+        relogio_do_estado = NULL;
+    }
+
     lista_de_redes = NULL;
     campo_senha = NULL;
     teclado = NULL;
     rot_estado = NULL;
     rot_escolhida = NULL;
+    campo_servidor = NULL;
 }

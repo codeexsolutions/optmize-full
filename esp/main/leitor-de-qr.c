@@ -163,8 +163,20 @@ void leitor_de_qr_olhar(const uint16_t *rgb565, int w)
 
     const int quantos = quirc_count(leitor);
     if (quantos <= 0) {
+        /*
+         * Nem candidato. A cada tantas varreduras se diz isso em voz alta --
+         * silencio absoluto nao distingue "o leitor esta olhando e nao ve QR"
+         * de "o leitor nem esta rodando", e as duas coisas se consertam de
+         * jeitos bem diferentes.
+         */
+        static uint32_t vazios;
+        if ((++vazios % 50) == 0) {
+            ESP_LOGI(TAG, "varrendo (%" PRIu32 " sem achar nada) -- %dx%d",
+                     vazios, largura, altura);
+        }
         return;
     }
+    ESP_LOGI(TAG, "%d candidato(s) na imagem", quantos);
 
     /*
      * ESTAS DUAS NAO PODEM FICAR NA PILHA.
@@ -184,7 +196,14 @@ void leitor_de_qr_olhar(const uint16_t *rgb565, int w)
 
     for (int i = 0; i < quantos; i++) {
         quirc_extract(leitor, i, &codigo);
-        if (quirc_decode(&codigo, &dados) != QUIRC_SUCCESS) {
+        const quirc_decode_error_t erro = quirc_decode(&codigo, &dados);
+        if (erro != QUIRC_SUCCESS) {
+            /*
+             * VIU E NAO LEU. Distinguir isto de "nao viu nada" e o que separa
+             * "aproxime o codigo" de "o leitor nao esta funcionando" -- e so o
+             * primeiro tem conserto do lado de quem segura o papel.
+             */
+            ESP_LOGW(TAG, "candidato ilegivel: %s", quirc_strerror(erro));
             /*
              * Codigo visto mas ilegivel: borrado, cortado na borda, ou o papel
              * inclinado demais. Nao e erro -- e o caso normal de quem esta
