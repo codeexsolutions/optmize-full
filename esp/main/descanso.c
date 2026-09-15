@@ -76,11 +76,13 @@ static const char *TAG = "descanso";
  * mostrador de verdade (metade da altura, e um oitavo dela de barra). Mudar so
  * a altura muda o relogio inteiro sem desalinhar nada.
  *
- * 300 numa tela de 600: o relogio ocupa metade da altura e sobra espaco para a
- * data e para o ar em volta. A largura fecha em 748 dos 1024 -- e uma margem de
- * 138 de cada lado, que e o que faz nao parecer apertado.
+ * 340 numa tela de 600: o relogio ocupa pouco mais da metade da altura e ainda
+ * sobra espaco para a data e para o ar em volta. A largura fecha em 832 dos
+ * 1024 -- margem de 96 de cada lado, que e o limite antes de parecer apertado.
+ * Acima disso os digitos encostam nas bordas e a data fica larga demais para
+ * caber em duas colunas.
  */
-#define ALTURA_DO_DIGITO   300
+#define ALTURA_DO_DIGITO   340
 #define LARGURA_DO_DIGITO  (ALTURA_DO_DIGITO / 2)
 #define BARRA              (ALTURA_DO_DIGITO / 8)
 #define LARGURA_DOS_PONTOS (BARRA + 22)
