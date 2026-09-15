@@ -1,4 +1,5 @@
 const express = require("express");
+const sharp = require("sharp");
 const { queryAll } = require("../db/records");
 const { listOrders, getOrder } = require("../db/serviceOrders");
 const {
@@ -7,6 +8,9 @@ const {
 } = require("../db/pedidos");
 const { parseClientFabric, findHistoryMatches, findMatchingOrder } = require("../services/matching");
 const { normalizeText } = require("../utils/text");
+const { getImage } = require("../db/serviceOrders");
+const { getMachine } = require("../config");
+const { readPreview } = require("../services/preview");
 
 const router = express.Router();
 
@@ -163,6 +167,98 @@ router.post("/:id/items/:itemId/result", (req, res) => {
     res.json(item);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+/*
+ * A IMAGEM DE UM ITEM, pronta para o terminal da calandra (ver `esp/`).
+ *
+ * ---------------------------------------------------------------------------
+ * DE ONDE ELA VEM, E POR QUE NESTA ORDEM
+ * ---------------------------------------------------------------------------
+ *
+ *   1. O PREVIEW DA IMPRESSORA — a arte que de fato foi impressa, gerada pela
+ *      própria máquina ao rodar o arquivo. É essa que serve na calandra: quem
+ *      está com o tecido na mão compara com o que saiu, não com o que foi
+ *      pedido.
+ *
+ *   2. A IMAGEM DA OS — a foto de referência do cliente. Vale como segunda
+ *      opção, e só: ela mostra a intenção, não o resultado.
+ *
+ * A ordem já respondeu a uma pergunta prática: o pedido que usamos para testar
+ * não tem OS vinculada (`osId` nulo) e mesmo assim tem preview. Fosse a OS
+ * primeiro, o caso comum — item sem OS — não mostraria nada.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE O SERVIDOR REDIMENSIONA
+ * ---------------------------------------------------------------------------
+ *
+ * O preview bruto deste item tem 692 KB. A placa decodifica JPEG por hardware,
+ * mas antes precisa guardar o arquivo inteiro na memória — e a tela tem 1024
+ * pixels de largura. Mandar o original seria gastar meio megabyte de PSRAM e
+ * segundos de rede para jogar fora três quartos dos pixels.
+ *
+ * `progressive: false` não é detalhe: o decodificador do P4 lê JPEG de linha de
+ * base. Um JPEG progressivo chega lá e vira um retângulo preto sem erro nenhum.
+ */
+router.get("/:id/items/:itemId/imagem", async (req, res) => {
+  try {
+    const item = getPedidoItem(req.params.itemId);
+    if (!item || item.pedidoId !== req.params.id) {
+      return res.status(404).send("Item nao encontrado");
+    }
+
+    let bruta = null;
+
+    if (item.machineId && item.task) {
+      const machine = await getMachine(item.machineId);
+      if (machine) {
+        const preview = await readPreview(machine, item.task, 0, "");
+        if (preview) bruta = preview.data;
+      }
+    }
+
+    if (!bruta && item.osId) {
+      const order = getOrder(item.osId);
+      const primeira = order && order.images[0];
+      const cheia = primeira && getImage(order.id, primeira.id);
+      if (cheia) bruta = cheia.data;
+    }
+
+    if (!bruta) return res.status(404).send("Sem imagem para este item");
+
+    const pedida = Math.min(1024, Math.max(64, Number(req.query.w) || 800));
+
+    /*
+     * A LARGURA SAI SEMPRE MÚLTIPLA DE 16, e isso é sobre o outro lado.
+     *
+     * O decodificador da placa trabalha em blocos e arredonda a largura pra
+     * cima, escrevendo linhas mais compridas que a imagem. Quem lê o buffer
+     * esperando a largura exata pega cada linha alguns pixels adiante da
+     * anterior — a foto sai cortada na diagonal, sem erro nenhum no caminho.
+     *
+     * O terminal se defende disso sozinho (ele calcula o passo real). Alinhar
+     * aqui é o cinto junto com o suspensório, e de graça: no máximo 15 pixels
+     * de largura a menos.
+     *
+     * `withoutEnlargement` sozinho não bastava justamente por isso — imagem
+     * menor que o pedido passava com a largura original, qualquer que fosse.
+     */
+    const meta = await sharp(bruta).metadata();
+    const cabe = Math.min(pedida, meta.width || pedida);
+    const largura = Math.max(16, Math.floor(cabe / 16) * 16);
+
+    const pronta = await sharp(bruta)
+      .rotate()
+      .resize({ width: largura })
+      .jpeg({ quality: 80, progressive: false, mozjpeg: false })
+      .toBuffer();
+
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(pronta);
+  } catch (error) {
+    res.status(500).send(error.message);
   }
 });
 

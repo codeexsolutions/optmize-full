@@ -1,3 +1,4 @@
+const sharp = require("sharp");
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
@@ -57,6 +58,43 @@ router.get("/:id/image/:imageId", (req, res) => {
     res.setHeader("Content-Type", image.mimeType);
     res.setHeader("Cache-Control", "private, max-age=300");
     res.send(image.data);
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+/*
+ * A mesma imagem, mas pronta para o terminal de chão de fábrica (ver `esp/`).
+ *
+ * DUAS COISAS QUE O TERMINAL NÃO SABE FAZER, e por isso são feitas aqui:
+ *
+ *   FORMATO   ele decodifica JPEG por hardware, e só. A imagem da OS pode ter
+ *             sido enviada em PNG, e um PNG chegando lá vira um retângulo
+ *             vazio sem explicação.
+ *
+ *   TAMANHO   uma foto de celular tem 4000 pixels de largura e vários
+ *             megabytes. A tela tem 1024, e a placa teria de guardar o arquivo
+ *             inteiro na memória para descobrir que não precisava dele.
+ *
+ * O `w` é limitado a 2048 de propósito: acima disso ninguém está pedindo para
+ * uma tela, e uma largura sem teto é um jeito barato de fazer o servidor gastar
+ * memória à toa.
+ */
+router.get("/:id/image/:imageId/terminal", async (req, res) => {
+  try {
+    const image = getImage(req.params.id, req.params.imageId);
+    if (!image) return res.status(404).send("Imagem não encontrada");
+
+    const largura = Math.min(2048, Math.max(64, Number(req.query.w) || 1024));
+    const pronta = await sharp(image.data)
+      .rotate()                                   // respeita o EXIF do celular
+      .resize({ width: largura, withoutEnlargement: true })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(pronta);
   } catch (error) {
     res.status(500).send(error.message);
   }
