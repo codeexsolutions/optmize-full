@@ -20,6 +20,64 @@ db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
 db.exec(`
+  -- =========================================================================
+  -- O PONTO
+  -- =========================================================================
+  --
+  -- Quem trabalha na gráfica, os rostos que o terminal usa para reconhecer, e
+  -- cada vez que alguém bateu.
+
+  CREATE TABLE IF NOT EXISTS funcionarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    apelido TEXT,              -- o nome que aparece na tela do terminal
+    matricula TEXT,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TEXT NOT NULL,
+    atualizado_em TEXT
+  );
+
+  -- Os rostos cadastrados. VÁRIOS por pessoa, de propósito: um rosto de frente
+  -- não é o mesmo rosto de lado, nem o mesmo com e sem óculos, e reconhecer
+  -- alguém de boné com uma única foto sem boné é pedir para errar.
+  --
+  -- Guarda-se o ARQUIVO da foto e, quando o reconhecimento existir, o vetor
+  -- que a rede extrai dela. O arquivo fica porque permite recalcular tudo no
+  -- dia em que o modelo mudar -- sem ele, trocar de modelo obrigaria a
+  -- fotografar todo mundo de novo.
+  CREATE TABLE IF NOT EXISTS funcionario_rostos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    funcionario_id INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+    arquivo TEXT NOT NULL,
+    vetor TEXT,                -- os números que a rede extraiu, em JSON
+    modelo TEXT,               -- qual rede os extraiu, para saber o que recalcular
+    criado_em TEXT NOT NULL
+  );
+
+  -- Cada batida, uma linha. Nada de "entrada e saída" na mesma:
+  --
+  --   - quem esquece de bater a saída deixaria uma linha pela metade, e
+  --     metade de uma linha é pior de consertar do que uma linha faltando;
+  --   - o dia com quatro batidas e o dia com seis (uma saída no meio para o
+  --     banco) cabem igual, sem coluna extra.
+  --
+  -- A coluna "tipo" é deduzida pelo servidor a partir do que já foi batido no dia --
+  -- ninguém deveria ter de escolher "estou voltando do almoço" numa tela.
+  CREATE TABLE IF NOT EXISTS ponto_batidas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    funcionario_id INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+    momento TEXT NOT NULL,     -- ISO completo, com fuso
+    dia TEXT NOT NULL,         -- AAAA-MM-DD, para agrupar sem fatiar texto na consulta
+    tipo TEXT NOT NULL,        -- entrada | almoco_saida | almoco_volta | saida | extra
+    origem TEXT NOT NULL,      -- terminal | manual
+    confianca REAL,            -- o quanto a rede confiou, quando foi reconhecimento
+    observacao TEXT,
+    criado_em TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS ponto_batidas_por_dia
+    ON ponto_batidas (dia, funcionario_id);
+
   -- Biblioteca de moldes. O desenho é feito fora (CorelDRAW, Audaces...) e
   -- mandado para cá; aqui fica guardado o que o sistema precisa saber: qual
   -- peça é qual, quantas vão em cada peça pronta, e em que tamanho.
