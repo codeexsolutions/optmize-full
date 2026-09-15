@@ -44,6 +44,15 @@ int  voz_volume(void);
 void voz_guardar_volume(int novo);
 bool voz_esta_falando(void);
 
+/* ------------------------------------------------------------ o sobre */
+
+/*
+ * A ficha do aparelho: versao, placa, rede, memoria (ver `sobre.c`). Abre pelo
+ * circulo no canto da tela inicial.
+ */
+void sobre_mostrar(lv_obj_t *pai);
+void sobre_fechar(void);
+
 /* ---------------------------------------------------- o descanso */
 
 /*

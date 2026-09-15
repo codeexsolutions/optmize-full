@@ -51,6 +51,7 @@ static lv_obj_t *botao_voltar;
 static enum { NENHUM, PRODUCAO, PONTOS, AJUSTES } aberto = NENHUM;
 
 static void abrir_inicio(void);
+static void tocou_sobre(lv_event_t *e);
 
 /* ---------------------------------------------------------- a barra */
 
@@ -192,6 +193,8 @@ static void montar_a_barra(lv_obj_t *pai)
 /* Esvazia a area e solta o que o app anterior estava segurando. */
 static void fechar_o_que_estiver_aberto(void)
 {
+    sobre_fechar();   /* o ponteiro nao pode sobreviver ao `lv_obj_clean` abaixo */
+
     switch (aberto) {
     case PRODUCAO: app_producao_desmontar(); break;
     case PONTOS:   app_pontos_desmontar();   break;
@@ -268,6 +271,16 @@ static void cartao_de_app(lv_obj_t *pai, const char *icone, const char *nome,
     lv_obj_align(sub, LV_ALIGN_CENTER, 0, 70);
 }
 
+static void tocou_sobre(lv_event_t *e)
+{
+    (void)e;
+    /*
+     * A cortina nasce na area, e nao na tela: assim ela sai junto quando
+     * alguem abre um app, sem que ninguem precise se lembrar de fecha-la.
+     */
+    sobre_mostrar(area);
+}
+
 static void abrir_inicio(void)
 {
     fechar_o_que_estiver_aberto();
@@ -284,9 +297,37 @@ static void abrir_inicio(void)
     cartao_de_app(area, LV_SYMBOL_VIDEO, "Producao",
                   "camera e leitura de QR", COR_DESTAQUE, tocou_producao, 32);
     cartao_de_app(area, LV_SYMBOL_LIST, "Pontos",
-                  "em construcao", COR_APOIO, tocou_pontos, 362);
+                  "bater ponto e cadastrar rosto", COR_CERTO, tocou_pontos, 362);
     cartao_de_app(area, LV_SYMBOL_SETTINGS, "Ajustes",
-                  "rede, brilho e audio", COR_TEXTO, tocou_ajustes, 692);
+                  "rede, brilho e voz", COR_TEXTO, tocou_ajustes, 692);
+
+    /*
+     * O CIRCULO DO "SOBRE", pequeno, no canto de baixo a direita.
+     *
+     * Pequeno de proposito: os tres cartoes sao o trabalho, e isto e
+     * manutencao -- abre-se uma vez por mes, quando alguem precisa dizer por
+     * telefone o que este aparelho e. Um quarto cartao do mesmo tamanho diria
+     * que as quatro coisas pesam igual, e faria a fila da manha parar para ler
+     * um botao que ninguem vai apertar.
+     *
+     * 44 de diametro ainda e alvo de dedo. Menor que isso viraria enfeite que
+     * so quem sabe onde fica consegue acertar.
+     */
+    lv_obj_t *info = lv_button_create(area);
+    lv_obj_set_size(info, 44, 44);
+    lv_obj_align(info, LV_ALIGN_BOTTOM_RIGHT, -20, -18);
+    lv_obj_set_style_radius(info, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(info, COR_CARTAO, 0);
+    lv_obj_set_style_border_color(info, COR_BORDA, 0);
+    lv_obj_set_style_border_width(info, 1, 0);
+    lv_obj_set_style_shadow_width(info, 0, 0);
+    lv_obj_add_event_cb(info, tocou_sobre, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *i = lv_label_create(info);
+    lv_label_set_text(i, "i");
+    lv_obj_set_style_text_color(i, COR_APOIO, 0);
+    lv_obj_set_style_text_font(i, &lv_font_montserrat_22, 0);
+    lv_obj_center(i);
 }
 
 void interface_voltar_ao_inicio(void)
