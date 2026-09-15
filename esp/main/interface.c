@@ -30,6 +30,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 
 #include "bsp/esp-bsp.h"
@@ -43,6 +44,7 @@ static lv_obj_t *area;          /* onde o app da vez desenha */
 static lv_obj_t *rot_titulo;
 static lv_obj_t *rot_relogio;
 static lv_obj_t *rot_rede;
+static lv_obj_t *sinal_de_rede;   /* o simbolo ao lado do relogio */
 static lv_obj_t *botao_voltar;
 
 /* Qual app esta aberto, para saber o que desmontar. */
@@ -52,9 +54,43 @@ static void abrir_inicio(void);
 
 /* ---------------------------------------------------------- a barra */
 
+/*
+ * O PULSO NA SERIAL.
+ *
+ * Uma linha a cada 30 segundos, e so isso. Existe por uma pergunta que a
+ * serial muda nao respondia: a placa esta congelada ou so parada esperando
+ * alguem tocar? Sem o pulso, os dois casos sao identicos de fora -- e foi
+ * exatamente esse silencio que atrasou a caca ao problema da camera.
+ *
+ * Sai da tarefa do LVGL de proposito: se ELA travar, o pulso para junto, e a
+ * ausencia dele passa a significar alguma coisa.
+ */
+static void pulso(void)
+{
+    static int voltas;
+    if (++voltas < 30) {
+        return;
+    }
+    voltas = 0;
+    /*
+     * A MEMORIA INTERNA TAMBEM, e o maior bloco dela.
+     *
+     * Nao e curiosidade: a pilha da tarefa do video pede 32 KB DE UMA VEZ, e
+     * pilha de tarefa so pode sair da RAM interna. Com 147 KB livres no total
+     * mas picados, esse pedido falha -- e a tela dizia "camera nao encontrada"
+     * como se o problema fosse o cabo.
+     */
+    ESP_LOGI("pulso", "vivo -- psram %u KB (bloco %u KB)  |  interna %u KB (bloco %u KB)",
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) / 1024),
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+}
+
 static void a_cada_segundo(lv_timer_t *t)
 {
     (void)t;
+    pulso();
 
     if (rede_tem_hora()) {
         time_t agora = time(NULL);
@@ -66,11 +102,25 @@ static void a_cada_segundo(lv_timer_t *t)
         lv_label_set_text(rot_relogio, "--:--");
     }
 
+    /*
+     * O SIMBOLO DIZ O ESTADO DE LONGE, o texto diz o detalhe de perto.
+     *
+     * Quem passa pela tela quer saber se esta conectada, nao qual e o endereco
+     * -- e um simbolo verde ou apagado se le a tres metros, o que um IP nao se
+     * le. O texto continua para quem chega perto e precisa do numero.
+     */
     if (rede_conectada()) {
+        lv_label_set_text(sinal_de_rede, LV_SYMBOL_WIFI);
+        lv_obj_set_style_text_color(sinal_de_rede, COR_CERTO, 0);
         lv_label_set_text(rot_rede, rede_endereco());
-        lv_obj_set_style_text_color(rot_rede, COR_CERTO, 0);
+        lv_obj_set_style_text_color(rot_rede, COR_APOIO, 0);
     } else {
-        lv_label_set_text(rot_rede, "sem rede");
+        lv_label_set_text(sinal_de_rede, LV_SYMBOL_CLOSE);
+        lv_obj_set_style_text_color(sinal_de_rede, COR_DESTAQUE, 0);
+
+        /* Sem conexao, o que interessa e o porque -- nao um endereco vazio. */
+        const char *porque = rede_por_que_nao();
+        lv_label_set_text(rot_rede, porque ? porque : "sem rede");
         lv_obj_set_style_text_color(rot_rede, COR_APOIO, 0);
     }
 }
@@ -123,9 +173,14 @@ static void montar_a_barra(lv_obj_t *pai)
     lv_obj_set_style_text_font(rot_relogio, &lv_font_montserrat_28, 0);
     lv_obj_align(rot_relogio, LV_ALIGN_RIGHT_MID, -20, 0);
 
+    sinal_de_rede = lv_label_create(barra);
+    lv_obj_set_style_text_font(sinal_de_rede, &lv_font_montserrat_22, 0);
+    lv_obj_align(sinal_de_rede, LV_ALIGN_RIGHT_MID, -110, 0);
+
     rot_rede = lv_label_create(barra);
     lv_obj_set_style_text_font(rot_rede, &lv_font_montserrat_16, 0);
-    lv_obj_align(rot_rede, LV_ALIGN_RIGHT_MID, -110, 0);
+    lv_obj_align(rot_rede, LV_ALIGN_RIGHT_MID, -140, 0);
+    lv_obj_set_style_text_align(rot_rede, LV_TEXT_ALIGN_RIGHT, 0);
 
     lv_timer_create(a_cada_segundo, 1000, NULL);
     a_cada_segundo(NULL);

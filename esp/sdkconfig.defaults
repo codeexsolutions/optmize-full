@@ -143,3 +143,13 @@ CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD=y
 CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y
 CONFIG_ESP_HOSTED_HOST_TRANSPORT_BUS_SDIO=y
 CONFIG_ESP_HOSTED_HOST_SDIO_BUS_WIDTH_4=y
+
+# --- A hora pelo servidor que o roteador indica ---
+#
+# O SNTP pode perguntar ao DHCP qual servidor de hora usar -- costuma ser um
+# mais perto que o `pool.ntp.org`, e funciona em rede sem saida para a internet,
+# que e o caso de muita fabrica.
+#
+# Sem esta opcao, pedir isso e erro: `Tried to configure SNTP server from DHCP,
+# while disabled`, e o servico nem sobe. O relogio fica em tracos para sempre.
+CONFIG_LWIP_DHCP_GET_NTP_SRV=y

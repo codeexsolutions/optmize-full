@@ -57,6 +57,7 @@
 #include "esp_lcd_mipi_dsi.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/idf_additions.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "usb/uvc_host.h"
@@ -101,6 +102,18 @@ static lv_image_dsc_t descritor;
 
 static uint32_t recebidos, mostrados, descartados, recusados;
 
+/*
+ * O QUE O DRIVER RECLAMOU, anotado de dentro da tarefa do USB.
+ *
+ * `volatile` e nao mutex porque o callback de evento roda na tarefa do USB e
+ * nao pode bloquear: tudo que ele faz e levantar a bandeira. Quem age e a
+ * tarefa do video, no proprio ritmo dela.
+ */
+static volatile bool o_usb_reclamou;
+static uvc_host_stream_config_t configuracao;
+static lv_obj_t *pai_do_video;      /* onde o aviso de reconexao aparece */
+static lv_obj_t *rot_reconectando;
+
 void video_da_camera_fechar(void);
 
 /* ------------------------------------------------------- o quadro que chega */
@@ -125,6 +138,91 @@ static bool chegou_um_quadro(const uvc_host_frame_t *f, void *ctx)
     return true;
 }
 
+/*
+ * O AVISO DE RECONEXAO, por cima do video.
+ *
+ * Existe porque sem ele a camera parando parece a placa travada: a imagem fica
+ * congelada no ultimo quadro e nada muda mais. Um retangulo preto com "camera
+ * caiu, reconectando" e a diferenca entre "quebrou" e "espera dois segundos".
+ *
+ * So pode ser chamado com a tranca da tela na mao.
+ */
+static void mostrar_reconectando(bool mostrar)
+{
+    if (!mostrar) {
+        if (rot_reconectando != NULL) {
+            lv_obj_delete(rot_reconectando);
+            rot_reconectando = NULL;
+        }
+        return;
+    }
+    if (rot_reconectando != NULL || pai_do_video == NULL) {
+        return;
+    }
+    rot_reconectando = lv_label_create(pai_do_video);
+    lv_label_set_text(rot_reconectando, "procurando a camera...");
+    lv_obj_set_style_text_color(rot_reconectando, COR_DESTAQUE, 0);
+    lv_obj_set_style_text_font(rot_reconectando, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_align(rot_reconectando, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_bg_color(rot_reconectando, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(rot_reconectando, LV_OPA_80, 0);
+    lv_obj_set_style_pad_all(rot_reconectando, 20, 0);
+    lv_obj_center(rot_reconectando);
+}
+
+static void anunciar_reconexao(bool mostrar)
+{
+    if (bsp_display_lock(100)) {
+        mostrar_reconectando(mostrar);
+        bsp_display_unlock();
+    }
+}
+
+/*
+ * POR AS COISAS NO LUGAR ANTES DE DESISTIR.
+ *
+ * Duas tentativas, da mais barata para a mais cara:
+ *
+ *   1. parar e comecar. Resolve quando o que travou foi a negociacao da
+ *      transmissao -- o aparelho continua la, so parou de mandar.
+ *
+ *   2. fechar e abrir. Resolve quando o driver perdeu o fio da meada com o
+ *      aparelho. Custa a enumeracao de novo, quase um segundo.
+ *
+ * Se as duas falharem, o aparelho provavelmente saiu da tomada de verdade, e
+ * a proxima rodada tenta outra vez -- nao ha nada melhor a fazer do que
+ * insistir devagar.
+ */
+static bool remendar_a_transmissao(const uvc_host_stream_config_t *conf)
+{
+    if (transmissao != NULL) {
+        uvc_host_stream_stop(transmissao);
+        vTaskDelay(pdMS_TO_TICKS(120));
+        if (uvc_host_stream_start(transmissao) == ESP_OK) {
+            ESP_LOGW(TAG, "transmissao reiniciada");
+            return true;
+        }
+
+        const esp_err_t e = uvc_host_stream_close(transmissao);
+        if (e != ESP_OK) {
+            ESP_LOGE(TAG, "nao consegui fechar para reabrir: %s", esp_err_to_name(e));
+        }
+        transmissao = NULL;
+    }
+
+    if (uvc_host_stream_open(conf, pdMS_TO_TICKS(2000), &transmissao) != ESP_OK) {
+        transmissao = NULL;
+        return false;
+    }
+    if (uvc_host_stream_start(transmissao) != ESP_OK) {
+        uvc_host_stream_close(transmissao);
+        transmissao = NULL;
+        return false;
+    }
+    ESP_LOGW(TAG, "transmissao reaberta do zero");
+    return true;
+}
+
 static void tarefa_do_video(void *arg)
 {
     (void)arg;
@@ -136,9 +234,52 @@ static void tarefa_do_video(void *arg)
         .conv_std = JPEG_YUV_RGB_CONV_STD_BT601,
     };
 
+    /*
+     * O CAO DE GUARDA DA CAMERA.
+     *
+     * A 30 quadros por segundo, um quadro chega a cada 33 ms. Tres segundos de
+     * silencio nao e lentidao: e a transmissao morta.
+     *
+     * Ele existe porque a falha mais comum NAO AVISA. O driver chama o callback
+     * de evento quando ha erro de transferencia ou o aparelho some, mas a
+     * transmissao tambem para calada -- e ai a unica pista e a imagem
+     * congelada no ultimo quadro, que de longe parece a placa travada.
+     */
+    const int SILENCIO_ATE_DESCONFIAR = 3000 / 200;   /* em voltas de 200 ms */
+    int silencio = 0;
+    int remendos = 0;
+
     while (rodando) {
         if (xQueueReceive(fila_de_quadros, &f, pdMS_TO_TICKS(200)) != pdTRUE) {
+            if (!o_usb_reclamou && ++silencio < SILENCIO_ATE_DESCONFIAR) {
+                continue;
+            }
+            o_usb_reclamou = false;
+            silencio = 0;
+
+            /*
+             * Espera crescente entre tentativas, ate 5 s. Uma camera
+             * desligada da tomada nao volta por insistencia rapida, e tentar
+             * reabrir 30 vezes por minuto mantem o barramento ocupado e a
+             * serial ilegivel justamente quando alguem precisa ler.
+             */
+            ESP_LOGW(TAG, "sem quadros ha 3 s -- remendando (tentativa %d)", remendos + 1);
+            anunciar_reconexao(true);
+
+            if (remendar_a_transmissao(&configuracao)) {
+                remendos = 0;
+                anunciar_reconexao(false);
+            } else if (rodando) {
+                remendos++;
+                vTaskDelay(pdMS_TO_TICKS(remendos < 5 ? remendos * 1000 : 5000));
+            }
             continue;
+        }
+
+        silencio = 0;
+        if (remendos != 0 || rot_reconectando != NULL) {
+            remendos = 0;
+            anunciar_reconexao(false);
         }
 
         const int destino = exibindo ^ 1;   /* pinta no que NAO esta na tela */
@@ -183,17 +324,55 @@ static void tarefa_do_video(void *arg)
         }
     }
 
+    /*
+     * ANTES DE SAIR, DEVOLVER OS QUADROS QUE SOBRARAM NA FILA.
+     *
+     * Isto nao e limpeza de boas maneiras: `uvc_host_stream_close` RECUSA
+     * fechar -- ESP_ERR_INVALID_STATE -- enquanto houver quadro que o driver
+     * emprestou e ninguem devolveu. O `chegou_um_quadro` devolve `false`
+     * justamente para ficar com o quadro ate a tarefa acabar com ele; um
+     * quadro parado na fila na hora de fechar e um emprestimo em aberto.
+     *
+     * Foi isso que fez a camera "parar do nada" depois que a conferencia
+     * passou a fechar a transmissao a cada QR lido: com sorte a fila estava
+     * vazia e fechava; sem sorte o fecho falhava calado, a transmissao velha
+     * ficava pendurada, e a proxima abertura pegava um driver em estado
+     * impossivel. Nada aparecia na tela -- so a imagem que nunca mais voltava.
+     */
+    const uvc_host_frame_t *sobrou = NULL;
+    while (xQueueReceive(fila_de_quadros, &sobrou, 0) == pdTRUE) {
+        if (transmissao != NULL) {
+            uvc_host_frame_return(transmissao, (uvc_host_frame_t *)sobrou);
+        }
+    }
+
+    /*
+     * Quanto da pilha sobrou, uma vez, na saida. E a unica medida honesta do
+     * quanto os 32 KB sao necessarios -- se um dia sobrar muito, da para
+     * baixar; enquanto a `quirc` puser 9 KB de estrutura na pilha dela, nao.
+     */
+    ESP_LOGI(TAG, "saindo -- sobraram %u bytes de pilha",
+             (unsigned)(uxTaskGetStackHighWaterMark(NULL)));
+
     tarefa = NULL;
-    vTaskDelete(NULL);
+    vTaskDeleteWithCaps(NULL);   /* WithCaps na criacao, WithCaps na morte */
 }
 
 static void evento_da_transmissao(const uvc_host_stream_event_data_t *ev, void *ctx)
 {
     (void)ctx;
+    /*
+     * So levanta a bandeira -- isto roda na tarefa do USB, e trabalho pesado
+     * aqui trava o barramento inteiro. Quem remenda e a tarefa do video.
+     */
     if (ev->type == UVC_HOST_DEVICE_DISCONNECTED) {
         ESP_LOGW(TAG, "a camera foi desconectada");
+        o_usb_reclamou = true;
     } else if (ev->type == UVC_HOST_TRANSFER_ERROR) {
         ESP_LOGW(TAG, "erro de transferencia no USB");
+        o_usb_reclamou = true;
+    } else if (ev->type == UVC_HOST_FRAME_BUFFER_OVERFLOW) {
+        ESP_LOGW(TAG, "quadro maior que o buffer -- descartado");
     }
 }
 
@@ -206,12 +385,35 @@ esp_err_t video_da_camera_abrir(lv_obj_t *pai)
     }
     recebidos = mostrados = descartados = recusados = 0;
 
+    /*
+     * QUANTA MEMORIA SOBRA, ANOTADO ANTES DE PEDIR.
+     *
+     * Este bloco pede quase 2 MB de PSRAM em dois pedacos, e a transmissao
+     * pede mais. Quando algo aqui falha, a tela dizia "camera nao encontrada"
+     * -- uma mentira: a camera estava la, o que faltou foi memoria. Com os
+     * numeros no log da para ver a diferenca sem adivinhar.
+     */
+    ESP_LOGI(TAG, "abrindo -- psram %u KB (bloco %u KB)  |  interna %u KB (bloco %u KB)",
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) / 1024),
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+
     const jpeg_decode_engine_cfg_t motor = {
         .intr_priority = 0,
         .timeout_ms = 100,   /* a 30 fps um quadro tem 33 ms; 100 e folga */
     };
-    ESP_RETURN_ON_ERROR(jpeg_new_decoder_engine(&motor, &decodificador),
-                        TAG, "nao consegui o decodificador de JPEG");
+    esp_err_t ed = jpeg_new_decoder_engine(&motor, &decodificador);
+    if (ed != ESP_OK) {
+        /*
+         * O P4 tem UM decodificador de JPEG, e a tela da arte tambem usa ele.
+         * Se a arte ainda estiver decodificando quando alguem pede "outro
+         * codigo", esta chamada falha -- e a culpa nao e da camera.
+         */
+        ESP_LOGE(TAG, "o decodificador de JPEG esta ocupado: %s", esp_err_to_name(ed));
+        decodificador = NULL;
+        return ed;
+    }
 
     /*
      * Os buffers vem do alocador DO DECODIFICADOR: ele resolve alinhamento e
@@ -225,7 +427,9 @@ esp_err_t video_da_camera_abrir(lv_obj_t *pai)
     for (int i = 0; i < 2; i++) {
         quadro[i] = jpeg_alloc_decoder_mem(pedido, &mem, &quadro_bytes);
         if (quadro[i] == NULL) {
-            ESP_LOGE(TAG, "sem memoria para o quadro %d", i);
+            ESP_LOGE(TAG, "sem memoria para o quadro %d (pedi %u KB, maior bloco livre %u KB)",
+                     i, (unsigned)(pedido / 1024),
+                     (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) / 1024));
             video_da_camera_fechar();
             return ESP_ERR_NO_MEM;
         }
@@ -243,6 +447,7 @@ esp_err_t video_da_camera_abrir(lv_obj_t *pai)
     descritor.data = quadro[0];
 
     bsp_display_lock(0);
+    pai_do_video = pai;
     imagem = lv_image_create(pai);
     lv_image_set_src(imagem, &descritor);
     /*
@@ -265,7 +470,12 @@ esp_err_t video_da_camera_abrir(lv_obj_t *pai)
         return ESP_ERR_NO_MEM;
     }
 
-    const uvc_host_stream_config_t conf = {
+    /*
+     * A CONFIGURACAO FICA GUARDADA. Reabrir a transmissao depois de uma queda
+     * precisa dela exatamente igual, e a tarefa do video nao tem como
+     * remonta-la sozinha.
+     */
+    configuracao = (uvc_host_stream_config_t) {
         .event_cb = evento_da_transmissao,
         .frame_cb = chegou_um_quadro,
         .usb = { .dev_addr = 0, .vid = 0, .pid = 0, .uvc_stream_index = 0 },
@@ -284,36 +494,116 @@ esp_err_t video_da_camera_abrir(lv_obj_t *pai)
     };
 
     /*
+     * A PRIMEIRA TENTATIVA PODE FALHAR, E ISSO NAO E O FIM.
+     *
      * Dois segundos de espera, e nao cinco: quem entrou no app esta olhando a
-     * tela. Se nao ha camera, e melhor dizer isso rapido do que deixar a pessoa
-     * diante de um retangulo preto sem explicacao.
+     * tela, e dizer logo que esta procurando e melhor que um retangulo preto
+     * calado.
+     *
+     * Mas FALHAR AQUI NAO DESISTE MAIS. A versao anterior voltava com erro, a
+     * tela escrevia "camera nao encontrada" e ficava assim para sempre -- so
+     * sair do app e voltar trazia a imagem. E a falha mais comum era de
+     * tempo, nao de hardware: a camera leva uns 4 segundos para se apresentar
+     * no USB depois que a placa liga, e quem entra em Producao antes disso
+     * pegava o "nao encontrada" com a camera perfeitamente viva do lado.
+     *
+     * Entao a tarefa sobe de qualquer jeito, e o cao de guarda dela assume: e
+     * a mesma engrenagem que reergue a transmissao quando ela cai no meio do
+     * uso. Um caminho so para "ainda nao apareceu" e "sumiu agora" -- nao dois.
      */
-    esp_err_t e = uvc_host_stream_open(&conf, pdMS_TO_TICKS(2000), &transmissao);
+    esp_err_t e = uvc_host_stream_open(&configuracao, pdMS_TO_TICKS(2000), &transmissao);
     if (e != ESP_OK) {
-        ESP_LOGW(TAG, "nenhuma camera respondeu: %s", esp_err_to_name(e));
-        video_da_camera_fechar();
-        return e;
+        ESP_LOGW(TAG, "a camera nao respondeu ainda (%s) -- vou insistindo",
+                 esp_err_to_name(e));
+        transmissao = NULL;
+        anunciar_reconexao(true);
     }
 
     rodando = true;
     /*
-     * 8 KB porque esta tarefa tambem chama o leitor de QR, e a `quirc` usa
-     * pilha propria para decodificar.
+     * 32 KB, e a conta e da `quirc`, nao nossa.
+     *
+     * A `quirc_decode` declara `struct datastream ds` COMO VARIAVEL LOCAL, e
+     * essa estrutura carrega `data[QUIRC_MAX_PAYLOAD]` -- 8896 bytes -- mais o
+     * resto. Só ela passa de 9 KB de pilha, e ainda chama funcoes que empilham
+     * por cima.
+     *
+     * Com 8 KB a placa reiniciava no instante em que um QR aparecia na frente
+     * da camera -- e so nesse instante, porque sem candidato a `quirc_decode`
+     * nunca e chamada. Na tela dava um quadro corrompido e um reinicio, sem
+     * pista nenhuma do motivo.
+     *
+     * A licao, que ja tinha aparecido uma vez: tirar as NOSSAS estruturas da
+     * pilha nao basta se a biblioteca poe as dela.
      */
-    if (xTaskCreatePinnedToCore(tarefa_do_video, "video", 8192, NULL, 4, &tarefa, 1) != pdPASS) {
+    /*
+     * A PILHA DESTA TAREFA MORA NA PSRAM, e nao na RAM interna.
+     *
+     * ---------------------------------------------------------------------
+     * O QUE ACONTECIA
+     * ---------------------------------------------------------------------
+     *
+     * Pilha de tarefa sai da RAM interna por padrao, e ela precisa dos 32 KB
+     * EM UM PEDACO SO. Nesta placa o maior pedaco livre de RAM interna e 32 KB
+     * mesmo parada -- a pilha do WiFi, o USB e o LVGL picam o resto. Ou seja:
+     * o pedido cabia exatamente, sem um byte de folga.
+     *
+     * Ai a abertura da transmissao USB, uma linha antes, reserva os buffers
+     * dela na RAM interna (tres transferencias ISOC de 12 KB). O maior pedaco
+     * cai para 31 KB, e a criacao da tarefa falha:
+     *
+     *     interna livre 94 KB, maior bloco 31 KB   <- faltou 1 KB
+     *
+     * A tela dizia "camera nao encontrada", e mandava conferir o cabo USB de
+     * uma camera ligada, enumerada e funcionando. Por um kilobyte.
+     *
+     * ---------------------------------------------------------------------
+     * POR QUE A PSRAM RESOLVE, E NAO SO ADIA
+     * ---------------------------------------------------------------------
+     *
+     * La ha 27 MB livres num bloco de 27 MB. Nao e folga maior: e sair de uma
+     * disputa por um recurso escasso que outra gente -- WiFi, USB -- aperta
+     * sem avisar. Diminuir a pilha para 16 KB tambem funcionaria hoje e
+     * voltaria a falhar no dia em que o USB pedir mais.
+     *
+     * O custo e latencia: pilha na PSRAM e mais lenta que na interna. Aqui nao
+     * pesa, porque 32 KB cabem folgados no cache L2 de 256 KB desta placa --
+     * na pratica a pilha vive no cache, e a PSRAM so aparece na primeira
+     * tocada em cada pagina.
+     *
+     * ATENCAO: tarefa criada com `WithCaps` TEM de morrer com
+     * `vTaskDeleteWithCaps`. Com o `vTaskDelete` comum a pilha nunca e
+     * liberada, e sao 32 KB por entrada no app.
+     */
+    if (xTaskCreatePinnedToCoreWithCaps(tarefa_do_video, "video", 32768, NULL, 4,
+                                        &tarefa, 1, MALLOC_CAP_SPIRAM) != pdPASS) {
+        ESP_LOGE(TAG, "nao coube a pilha da tarefa do video "
+                      "(psram livre %u KB, maior bloco %u KB)",
+                 (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024),
+                 (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) / 1024));
         rodando = false;
         video_da_camera_fechar();
-        return ESP_FAIL;
+        return ESP_ERR_NO_MEM;
     }
 
-    e = uvc_host_stream_start(transmissao);
-    if (e != ESP_OK) {
-        ESP_LOGE(TAG, "nao consegui iniciar a transmissao: %s", esp_err_to_name(e));
-        video_da_camera_fechar();
-        return e;
+    if (transmissao != NULL) {
+        e = uvc_host_stream_start(transmissao);
+        if (e != ESP_OK) {
+            /*
+             * Abriu e nao comecou: devolve o que abriu e deixa o cao de guarda
+             * tentar de novo. Manter uma transmissao aberta e parada seria
+             * pior que nao ter nenhuma -- ela segura o aparelho, e a proxima
+             * abertura falha por causa dela.
+             */
+            ESP_LOGW(TAG, "abriu mas nao comecou (%s) -- vou insistindo",
+                     esp_err_to_name(e));
+            uvc_host_stream_close(transmissao);
+            transmissao = NULL;
+            anunciar_reconexao(true);
+        } else {
+            ESP_LOGI(TAG, "video no ar (MJPEG %dx%d)", LARGURA_DO_VIDEO, ALTURA_DO_VIDEO);
+        }
     }
-
-    ESP_LOGI(TAG, "video no ar (MJPEG %dx%d)", LARGURA_DO_VIDEO, ALTURA_DO_VIDEO);
     return ESP_OK;
 }
 
@@ -333,7 +623,17 @@ void video_da_camera_fechar(void)
 
     if (transmissao != NULL) {
         uvc_host_stream_stop(transmissao);
-        uvc_host_stream_close(transmissao);
+        /*
+         * O RESULTADO DO FECHO IMPORTA. Ele falha com ESP_ERR_INVALID_STATE
+         * quando algum quadro emprestado nao voltou -- e um fecho que falha
+         * calado deixa a transmissao velha pendurada, com a proxima abertura
+         * herdando a bagunca. A tarefa drena a fila antes de sair justamente
+         * para isto nunca acontecer; se aparecer, o bug esta la e nao aqui.
+         */
+        const esp_err_t e = uvc_host_stream_close(transmissao);
+        if (e != ESP_OK) {
+            ESP_LOGE(TAG, "o fecho da transmissao falhou: %s", esp_err_to_name(e));
+        }
         transmissao = NULL;
     }
     if (fila_de_quadros != NULL) {
@@ -343,8 +643,11 @@ void video_da_camera_fechar(void)
 
     leitor_de_qr_parar();
 
-    /* A imagem morre com a arvore de objetos; aqui so se solta o ponteiro. */
+    /* Morrem com a arvore de objetos; aqui so se soltam os ponteiros. */
     imagem = NULL;
+    rot_reconectando = NULL;
+    pai_do_video = NULL;
+    o_usb_reclamou = false;
 
     for (int i = 0; i < 2; i++) {
         if (quadro[i] != NULL) {

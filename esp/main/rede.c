@@ -77,11 +77,43 @@ static bool ligada;             /* `esp_wifi_start` ja foi chamado */
 static bool hora_certa;
 static uint32_t espera_ms = ESPERA_INICIAL_MS;
 static uint32_t quedas;
+static uint8_t  ultimo_motivo;   /* por que caiu da ultima vez */
 
 bool rede_conectada(void)   { return conectado; }
 bool rede_tem_hora(void)    { return hora_certa; }
 const char *rede_endereco(void) { return endereco; }
 const char *rede_nome_da_rede(void) { return rede_nome; }
+
+/*
+ * POR QUE NAO CONECTOU, em palavras de quem esta olhando a tela.
+ *
+ * O Wi-Fi tenta de novo para sempre, e sem isto a tela so pode dizer
+ * "conectando..." -- para sempre tambem. A pessoa fica diante de uma tela que
+ * parece estar trabalhando quando na verdade a senha esta errada.
+ *
+ * Os tres motivos abaixo cobrem quase tudo que acontece de verdade. O resto vai
+ * numerado: e raro, e o numero ao menos da o que procurar.
+ */
+const char *rede_por_que_nao(void)
+{
+    static char outro[40];
+
+    switch (ultimo_motivo) {
+    case 0:
+        return NULL;                       /* nunca caiu */
+    case WIFI_REASON_NO_AP_FOUND:
+        return "rede nao encontrada";
+    case WIFI_REASON_AUTH_FAIL:
+    case WIFI_REASON_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+        return "senha errada";
+    case WIFI_REASON_AUTH_EXPIRE:
+        return "o roteador encerrou a sessao";
+    default:
+        snprintf(outro, sizeof(outro), "falhou (motivo %u)", ultimo_motivo);
+        return outro;
+    }
+}
 
 /* --------------------------------------------------------- a gaveta */
 
@@ -167,7 +199,8 @@ static void aconteceu(void *ctx, esp_event_base_t base, int32_t id, void *dados)
          * Espera crescente. Sem ela, um roteador fora do ar recebe uma
          * tentativa a cada poucos milissegundos, e quem paga e o C6.
          */
-        ESP_LOGW(TAG, "caiu (%" PRIu32 "a vez), de novo em %" PRIu32 " ms", quedas, espera_ms);
+        ESP_LOGW(TAG, "caiu (%" PRIu32 "a vez, motivo %u: %s), de novo em %" PRIu32 " ms",
+                 quedas, ultimo_motivo, rede_por_que_nao(), espera_ms);
         vTaskDelay(pdMS_TO_TICKS(espera_ms));
         espera_ms = espera_ms * 2 > ESPERA_MAXIMA_MS ? ESPERA_MAXIMA_MS : espera_ms * 2;
 
@@ -180,6 +213,7 @@ static void aconteceu(void *ctx, esp_event_base_t base, int32_t id, void *dados)
         snprintf(endereco, sizeof(endereco), IPSTR, IP2STR(&e->ip_info.ip));
         conectado = true;
         espera_ms = ESPERA_INICIAL_MS;   /* deu certo: recomeca a contagem */
+        ultimo_motivo = 0;               /* e o motivo velho deixa de valer */
         ESP_LOGI(TAG, "conectado -- %s", endereco);
 
         acertar_a_hora();
@@ -215,6 +249,7 @@ esp_err_t rede_conectar(const char *nome, const char *senha)
         /* Ja estava no ar: derruba para subir com a rede nova. */
         esp_wifi_disconnect();
         espera_ms = ESPERA_INICIAL_MS;
+        ultimo_motivo = 0;   /* rede nova: o motivo da anterior nao diz nada */
         esp_wifi_connect();
     }
 
