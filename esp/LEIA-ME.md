@@ -263,6 +263,46 @@ fechar com quadro emprestado em aberto, e falhava calado), e um **cão de guarda
 remenda a transmissão depois de três segundos sem quadro, porque a falha mais
 comum não avisa — a imagem só congela.
 
+### O descanso
+
+Três minutos sem um toque e a placa vira um **relógio digital de parede**. Um
+toque em qualquer lugar volta para a tela inicial.
+
+Não é protetor de tela — LCD não queima imagem parada, isso morreu com o tubo.
+É o que o aparelho *é* quando ninguém precisa dele: ele fica em pé na calandra o
+dia inteiro, e na maior parte desse dia ninguém está mexendo nele. Três cartões
+de app parados desperdiçam a única tela grande do galpão.
+
+**Os dígitos são desenhados, não escritos.** Sete segmentos por número, como no
+relógio de cabeceira. Não é enfeite: é o que resolve o tamanho. A maior
+Montserrat que o LVGL traz pronta tem 48 pixels, e ampliar por transformação dá
+borrão — o que estica é o desenho, não a letra. Gerar uma fonte de 200 px custou
+85 KB de flash e ainda teria teto: 300 px exigiria outro arquivo. Barra
+desenhada não tem teto, sai nítida em qualquer tamanho, e a altura é um
+`#define` do qual todo o resto se deriva.
+
+Os segmentos apagados ficam visíveis a 10% — é a barra que você vê sem acender
+num mostrador de verdade. Sem ela o número flutua; com ela há um mostrador
+atrás. Os dois pontos piscam a cada segundo, e isso faz trabalho: de longe, um
+mostrador parado e um aparelho travado são a mesma imagem.
+
+**Tudo numa grade.** Cinco colunas de largura fixa para o mostrador — com
+coluna elástica o `1`, que acende só duas barras, encolheria a coluna e o
+relógio dançaria a cada minuto. A data é outra grade de duas colunas meio a
+meio, ocupando exatamente a largura do mostrador: dia da semana à esquerda, dia
+e mês à direita, e as pontas batem porque é a **mesma largura**, não porque
+alguém acertou números na mão.
+
+A ociosidade vem do próprio LVGL (`lv_display_get_inactive_time`). Contar por
+fora exigiria pendurar um ouvinte em cada tela e lembrar disso em toda tela
+nova — e a primeira esquecida vira uma tela que nunca descansa, ou pior, uma que
+descansa no meio de alguém usando.
+
+A cortina nasce na **camada de cima** do LVGL, e não na tela: ali ela fica por
+cima de tudo sem depender da ordem em que os objetos foram criados. E some com
+`lv_obj_delete_async` porque quem a apaga é o toque nela mesma — apagar o objeto
+que está tratando o evento deixa o LVGL trabalhando em memória liberada.
+
 ### A rede
 
 O P4 **não tem rádio**. Quem tem é o ESP32‑C6 ao lado dele, e os dois conversam
@@ -289,6 +329,10 @@ atualizar o firmware do C6 pela própria placa.
 
 ## O que ainda não existe
 
+- **Voltar de onde parou** — sair do descanso leva para a tela inicial, e não
+  para onde a pessoa estava. Uma conferência em andamento se perde e precisa de
+  uma releitura do QR (que retoma no primeiro item pendente, então não se perde
+  trabalho — só o gesto). Foi escolha, não esquecimento; muda em uma linha.
 - **App de Pontos** — tela dizendo "em construção", de propósito. Um cartão que
   leva a uma tela explicando vale mais que um cartão ausente.
 - **Entrada de áudio** — o controle de ganho do microfone existe em Ajustes,

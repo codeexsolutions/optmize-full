@@ -25,6 +25,19 @@ void interface_iniciar(void);
 /* Volta para a tela inicial, desmontando o app aberto. */
 void interface_voltar_ao_inicio(void);
 
+/* ---------------------------------------------------- o descanso */
+
+/*
+ * A tela de hora que entra sozinha depois de tres minutos parados, e sai ao
+ * primeiro toque (ver `descanso.c`).
+ *
+ * `descanso_conferir` e chamado a cada segundo pela casca e cuida de tudo:
+ * decide quando entrar, e mantem a hora andando enquanto estiver de pe.
+ */
+void descanso_conferir(void);
+void descanso_acordar(void);
+bool descanso_esta_na_frente(void);
+
 /* ------------------------------------------------------------- os apps */
 
 /*
