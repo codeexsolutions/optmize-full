@@ -59,7 +59,15 @@ import { ProvedorSemCabecalho } from "./semCabecalho";
  * pior do que o meio segundo em que uma instalação vencida ainda mostra o
  * menu — e o servidor já está recusando tudo nesse meio segundo.
  */
-function Bloqueio({ estado }: { estado: EstadoDaLicenca }) {
+/*
+ * EXPORTADO só para continuar existindo enquanto o bloqueio está desligado.
+ *
+ * Sem uso dentro deste arquivo, o TypeScript o recusaria (`TS6133: declared but
+ * its value is never read`) e a saída fácil seria apagá-lo — o que tornaria
+ * religar a trava um trabalho de reescrever, e não de descomentar. Exportado,
+ * ele fica intacto e de graça: quem religar o `if` lá embaixo só precisa disso.
+ */
+export function Bloqueio({ estado }: { estado: EstadoDaLicenca }) {
   return (
     <div className="flex h-screen flex-col overflow-y-auto bg-fundo px-4 py-8 font-texto text-tinta antialiased">
       <div className="mx-auto w-full max-w-[640px]">
@@ -138,14 +146,21 @@ export function Casca() {
    * perguntar são de quem estiver na frente, e uma tela não deveria precisar
    * montar a sua para poder perguntar alguma coisa.
    */
-  // Vencida, não há casca: a tela de licença é o programa inteiro.
-  if (licenca.dados && !licenca.dados.liberado) {
-    return (
-      <ProvedorDeDialogo>
-        <Bloqueio estado={licenca.dados} />
-      </ProvedorDeDialogo>
-    );
-  }
+  /*
+   * O BLOQUEIO ESTÁ DESLIGADO.
+   *
+   *   if (licenca.dados && !licenca.dados.liberado) {
+   *     return <ProvedorDeDialogo><Bloqueio estado={licenca.dados} /></ProvedorDeDialogo>;
+   *   }
+   *
+   * Sem token válido, isto trocava o programa inteiro pela tela de licença.
+   * Saiu junto com o porteiro do servidor (ver `servidor/server.js`), pelo mesmo
+   * motivo: não há como emitir token nesta máquina.
+   *
+   * A tela de licença continua existindo em `/licenca`, e continua mostrando o
+   * código da máquina e aceitando token — o que deixou de acontecer é ela se
+   * impor sobre o resto. Para religar, devolva o `if` acima.
+   */
 
   const vencendo = licenca.dados && licenca.dados.motivo === "vencendo" ? licenca.dados.dias : null;
 
