@@ -78,11 +78,12 @@ const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m
 const Whatsapp = lazy(() => import("./telas/Whatsapp").then((m) => ({ default: m.Whatsapp })));
 const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default: m.Historico })));
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
+const Ponto = lazy(() => import("./telas/Ponto").then((m) => ({ default: m.Ponto })));
 
 export type NomeDeTela =
   | "cor" | "moldes" | "projetos" | "encaixe" | "vetor" | "digitalizar" | "imagem" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
-  | "historico" | "reposicao";
+  | "historico" | "reposicao" | "ponto";
 
 export type NomeDeGrupo = "producao" | "design" | "impressao" | "relatorios";
 
@@ -252,6 +253,21 @@ export const TELAS: readonly Tela[] = [
     apoioTopo: "Consulte, filtre e mande para a folha de produção o que já saiu.",
     icone: "icones.svg#history",
     Componente: Historico,
+  },
+  {
+    /*
+     * O ponto fica em Relatórios, e não em Produção, porque é o mesmo gesto
+     * das outras telas daqui: alguém abre para CONFERIR o que já aconteceu,
+     * não para fazer acontecer. Quem bate ponto é o terminal de chão de
+     * fábrica; esta tela é onde se olha para o que ele registrou.
+     */
+    nome: "ponto",
+    grupo: "relatorios",
+    rotulo: "Ponto",
+    apoioMenu: "Quem bateu, e quando",
+    apoioTopo: "As batidas que vieram do terminal, em grade — o que está faltando aparece como traço.",
+    icone: "icones.svg#clock",
+    Componente: Ponto,
   },
   {
     nome: "reposicao",
