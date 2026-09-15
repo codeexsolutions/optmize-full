@@ -4,6 +4,7 @@
 idf_component_register(
     SRCS "tela.c"
          "interface.c"
+         "descanso.c"
          "rede.c"
          "optmize.c"
          "app-producao.c"

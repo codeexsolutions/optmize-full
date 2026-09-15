@@ -91,6 +91,7 @@ static void a_cada_segundo(lv_timer_t *t)
 {
     (void)t;
     pulso();
+    descanso_conferir();
 
     if (rede_tem_hora()) {
         time_t agora = time(NULL);
