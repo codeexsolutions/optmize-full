@@ -164,6 +164,61 @@ function Camera({ aoTirar, aoFechar }: { aoTirar: (foto: Blob) => void; aoFechar
   );
 }
 
+/* ======================================================= apagar de vez */
+
+/**
+ * A pergunta antes de apagar.
+ *
+ * Não é cerimônia: apagar leva as batidas junto, e isso é irreversível de um
+ * jeito que "desligar" não é. A caixa diz o número de batidas que vão embora —
+ * quem clicou por engano descobre o tamanho do estrago ANTES, e não depois.
+ *
+ * O botão que apaga fica em laranja e à direita, longe do dedo que vinha
+ * clicando em "Desligar".
+ */
+function Confirmar({
+  quem,
+  aoConfirmar,
+  aoFechar,
+}: {
+  quem: Funcionario;
+  aoConfirmar: () => void;
+  aoFechar: () => void;
+}) {
+  const rostos = quem.rostos?.length ?? 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={aoFechar}>
+      <div
+        className="w-full max-w-md rounded-xl border border-linha bg-painel p-5 shadow-[var(--shadow)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-2 text-base font-medium text-tinta">Apagar {quem.nome}?</h2>
+        <p className="mb-2 text-sm text-tinta-fraca">
+          Vão junto <strong>todas as batidas de ponto</strong> desta pessoa e {rostos} rosto(s)
+          cadastrados. Não há como desfazer.
+        </p>
+        <p className="mb-4 text-sm text-tinta-apagada">
+          Se a pessoa saiu da gráfica, o certo é <strong>Desligar</strong>: ela some do terminal e
+          do reconhecimento, e o histórico continua inteiro para a folha.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button type="button" className={BOTAO} onClick={aoFechar}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="rounded-[9px] border border-alerta px-3 py-1.5 text-[0.78rem] text-alerta transition-colors hover:bg-alerta hover:text-painel"
+            onClick={aoConfirmar}
+          >
+            Apagar de vez
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* =============================================================== a tela */
 
 export function Funcionarios() {
@@ -174,6 +229,7 @@ export function Funcionarios() {
   const [apelido, setApelido] = useState("");
   const [matricula, setMatricula] = useState("");
   const [fotografando, setFotografando] = useState<Funcionario | null>(null);
+  const [apagando, setApagando] = useState<Funcionario | null>(null);
   const [recado, setRecado] = useState<{ tom: "bom" | "ruim"; texto: string } | null>(null);
 
   function recarregar() {
@@ -210,12 +266,29 @@ export function Funcionarios() {
       setFotografando(null);
     }, `Rosto guardado para ${quem.nome}.`);
 
+  const apagarDeVez = (quem: Funcionario) =>
+    void tentar(async () => {
+      const r = await api.apagar<{ batidasApagadas: number }>(
+        `/ponto/funcionarios/${quem.id}?apagar=1`,
+      );
+      setApagando(null);
+      return r;
+    }, `${quem.nome} foi apagado.`);
+
   return (
     <>
       {fotografando && (
         <Camera
           aoTirar={(foto) => guardarRosto(fotografando, foto)}
           aoFechar={() => setFotografando(null)}
+        />
+      )}
+
+      {apagando && (
+        <Confirmar
+          quem={apagando}
+          aoConfirmar={() => apagarDeVez(apagando)}
+          aoFechar={() => setApagando(null)}
         />
       )}
 
@@ -265,6 +338,7 @@ export function Funcionarios() {
               quem={quem}
               aoFotografar={() => setFotografando(quem)}
               aoMudar={(promessa, recadoBom) => void tentar(() => promessa, recadoBom)}
+              aoApagar={setApagando}
             />
           ))}
         </div>
@@ -326,10 +400,12 @@ function Pessoa({
   quem,
   aoFotografar,
   aoMudar,
+  aoApagar,
 }: {
   quem: Funcionario;
   aoFotografar: () => void;
   aoMudar: (promessa: Promise<unknown>, recado: string) => void;
+  aoApagar: (quem: Funcionario) => void;
 }) {
   const rostos = quem.rostos ?? [];
   const semVetor = rostos.filter((r) => !r.modelo).length;
@@ -364,6 +440,14 @@ function Pessoa({
             }
           >
             {quem.ativo ? "Desligar" : "Reativar"}
+          </button>
+          <button
+            type="button"
+            title="Apagar de vez, com as batidas"
+            className={`${BOTAO} hover:text-alerta`}
+            onClick={() => aoApagar(quem)}
+          >
+            <Icone referencia="icones.svg#trash" className="inline size-4" />
           </button>
         </span>
       </div>

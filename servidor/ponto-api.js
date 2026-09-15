@@ -140,13 +140,66 @@ router.put("/funcionarios/:id", express.json({ limit: "1mb" }), (req, res) => {
  * funcionário levaria o histórico junto (a chave estrangeira é em cascata).
  * Quem sai fica inativo — some das listas do terminal, continua nos relatórios.
  */
+/**
+ * Sai da lista — de dois jeitos, e a diferença importa.
+ *
+ * SEM `?apagar=1`, desliga: `ativo = 0`. A pessoa some do terminal e do
+ * reconhecimento, e o histórico de ponto dela continua inteiro. É o que se quer
+ * quando alguém sai da gráfica — a folha do mês passado ainda precisa existir.
+ *
+ * COM `?apagar=1`, apaga de verdade: a pessoa, os rostos, as fotos no disco e
+ * **as batidas**. A chave do banco é em cascata, então isso não é uma escolha
+ * que eu possa suavizar: apagar leva o histórico junto, sempre.
+ *
+ * Por isso o apagar exige a pergunta explícita na URL em vez de ser o
+ * comportamento do DELETE. Serve para tirar cadastro de teste e erro de
+ * digitação, não para dar baixa em quem trabalhou — e a resposta diz quantas
+ * batidas foram embora, para quem apagou por engano saber o tamanho do estrago
+ * na mesma hora.
+ */
 router.delete("/funcionarios/:id", (req, res) => {
-  const info = db.prepare("UPDATE funcionarios SET ativo = 0, atualizado_em = ? WHERE id = ?")
-    .run(agora(), req.params.id);
-  if (info.changes === 0) {
+  const funcionario = db.prepare("SELECT * FROM funcionarios WHERE id = ?").get(req.params.id);
+  if (!funcionario) {
     return res.status(404).json({ error: "Funcionário não encontrado." });
   }
-  res.json({ ok: true });
+
+  if (String(req.query.apagar || "") !== "1") {
+    db.prepare("UPDATE funcionarios SET ativo = 0, atualizado_em = ? WHERE id = ?")
+      .run(agora(), funcionario.id);
+    return res.json({ ok: true, apagado: false, nome: funcionario.nome });
+  }
+
+  const batidas = db
+    .prepare("SELECT COUNT(*) AS n FROM ponto_batidas WHERE funcionario_id = ?")
+    .get(funcionario.id).n;
+
+  /*
+   * As fotos saem do disco ANTES da linha do banco: sem o registro não há mais
+   * como saber o nome do arquivo, e ele ficaria em `uploads/rostos` para
+   * sempre, sem ninguém que o reclame.
+   */
+  const rostos = db
+    .prepare("SELECT arquivo FROM funcionario_rostos WHERE funcionario_id = ?")
+    .all(funcionario.id);
+  for (const rosto of rostos) {
+    try {
+      fs.unlinkSync(path.join(PASTA_DOS_ROSTOS, rosto.arquivo));
+    } catch {
+      /* o arquivo já não estava lá: o registro sair é o que importa */
+    }
+  }
+
+  db.prepare("DELETE FROM ponto_batidas WHERE funcionario_id = ?").run(funcionario.id);
+  db.prepare("DELETE FROM funcionario_rostos WHERE funcionario_id = ?").run(funcionario.id);
+  db.prepare("DELETE FROM funcionarios WHERE id = ?").run(funcionario.id);
+
+  res.json({
+    ok: true,
+    apagado: true,
+    nome: funcionario.nome,
+    batidasApagadas: batidas,
+    rostosApagados: rostos.length,
+  });
 });
 
 /**
