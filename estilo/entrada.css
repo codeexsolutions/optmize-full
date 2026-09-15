@@ -337,58 +337,6 @@
 
 /*
  * ===========================================================================
- * A ATIVAÇÃO DA LICENÇA
- * ===========================================================================
- *
- * O desenho vive em `src/telas/Licenca.tsx`; as keyframes moram aqui, com as
- * outras da casca.
- *
- * A ordem é o que conta a história, e ela está nos atrasos: o selo aparece
- * (0,1s), o traço do certo é DESENHADO por cima dele (0,45s), as ondas saem
- * (0,6s) e o texto sobe por último (0,85s). Nada acontece ao mesmo tempo de
- * propósito — junto, viraria um piscar; em ordem, vira uma confirmação.
- */
-@keyframes licenca-veu {
-  from { opacity: 0; }
-}
-
-@keyframes licenca-selo {
-  0%   { opacity: 0; transform: scale(0.5); }
-  65%  { opacity: 1; transform: scale(1.08); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-/* O traço do certo é desenhado: o tracejado tem o tamanho do próprio caminho,
-   então mexer no deslocamento é mover a "ponta do lápis" de uma ponta à outra. */
-@keyframes licenca-risco {
-  from { stroke-dashoffset: 40; }
-  to   { stroke-dashoffset: 0; }
-}
-
-@keyframes licenca-onda {
-  from { opacity: 0.5; transform: scale(0.62); }
-  to   { opacity: 0;   transform: scale(1.45); }
-}
-
-@keyframes licenca-sobe {
-  from { opacity: 0; transform: translateY(12px); }
-}
-
-.licenca-veu   { animation: licenca-veu .2s ease both; }
-.licenca-selo  { animation: licenca-selo .5s .1s cubic-bezier(.2, .9, .3, 1.2) both; }
-.licenca-risco { stroke-dasharray: 40; animation: licenca-risco .5s .45s ease-out both; }
-.licenca-onda  { animation: licenca-onda 1.6s .6s ease-out infinite; }
-.licenca-sobe  { animation: licenca-sobe .5s .85s cubic-bezier(.2, .8, .3, 1) both; }
-
-/* Sem animação, o fim de tudo: selo no lugar, certo desenhado, texto de pé. */
-@media (prefers-reduced-motion: reduce) {
-  .licenca-veu, .licenca-selo, .licenca-sobe { animation: none; }
-  .licenca-onda { animation: none; opacity: 0; }
-  .licenca-risco { animation: none; stroke-dashoffset: 0; }
-}
-
-/*
- * ===========================================================================
  * A VARREDURA DO VETOR
  * ===========================================================================
  *
