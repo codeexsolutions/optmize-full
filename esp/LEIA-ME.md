@@ -356,6 +356,29 @@ documentação da Waveshare.
 `prova-de-audio.c` guarda tudo isso e fica desligada (`#if 0` em `tela.c`),
 porque custava dez segundos em cada boot. Vale 1 no dia em que o som parar.
 
+### O sobre
+
+Um círculo de 44 px com um "i", no canto inferior direito da tela inicial, e
+atrás dele a ficha do aparelho: versão e data da compilação, placa e chip, rede
+e endereço, servidor, memória livre e tempo de pé.
+
+Não é vitrine. É o que alguém lê **por telefone** quando o terminal está
+estranho, e cada linha responde a uma pergunta que já foi feita nesta sala.
+
+Pequeno de propósito: os três cartões são o trabalho, isto é manutenção e se
+abre uma vez por mês. Um quarto cartão do mesmo tamanho diria que as quatro
+coisas pesam igual. 44 ainda é alvo de dedo — menor que isso vira enfeite que só
+quem sabe onde fica consegue acertar.
+
+**O maior bloco livre aparece ao lado do total**, e os dois juntos contam o que
+nenhum conta sozinho: a câmera falhou um dia inteiro com 94 KB de RAM interna
+livre, porque o maior pedaço contínuo era de 31 KB e a pilha da tarefa precisava
+de 32. Só com o total, aquilo teria parecido memória sobrando.
+
+A ficha diz em voz alta que **a placa é Waveshare e não Espressif** — quem for
+depurar isto um dia vai procurar o BSP da Function-EV-Board e achar os pinos da
+tela errados, como já aconteceu aqui.
+
 ### O descanso
 
 Três minutos sem um toque e a placa vira um **relógio digital de parede**. Um

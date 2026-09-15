@@ -5,6 +5,7 @@ idf_component_register(
     SRCS "tela.c"
          "interface.c"
          "descanso.c"
+         "sobre.c"
          "rede.c"
          "voz.c"
          "optmize.c"
