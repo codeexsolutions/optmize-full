@@ -244,12 +244,19 @@ pode fazer, no lugar onde as pessoas estão.
 
 ### Ajustes
 
+**Três cartões em duas colunas.** A rede ocupa a coluna da esquerda inteira — é a
+única coisa desta tela com vários passos em ordem (buscar, escolher, digitar,
+conectar), e cortar isso em dois cartões cortaria a sequência. À direita, o
+servidor em cima e tela-e-som embaixo.
+
 A rede aparece numa **lista do que está no ar** — toca-se no nome em vez de
 digitá-lo. Senha em código obrigaria recompilar para trocar de roteador, e numa
 gráfica quem troca o roteador não tem compilador.
 
-O volume da voz **fala uma frase de prova ao soltar o controle**: arrastar um volume
-sem ouvir nada é adivinhar.
+O **endereço do servidor tem cartão próprio**, e não é capricho: ele é o segundo
+ajuste de *rede* da página. Estava no fim do cartão de som, debaixo do controle
+de volume, onde ninguém ia procurá-lo — e onde, pior, ele se sobrepunha ao
+controle do microfone, os dois disputando as mesmas linhas da tela.
 
 No pé da coluna da esquerda, uma **ficha de duas linhas**: o endereço que o
 terminal tem na rede, e o endereço do servidor. São exatamente as duas linhas que
@@ -257,9 +264,21 @@ alguém precisa ler por telefone quando o Optmize "não aparece" — e o estado 
 conexão fica ali do lado, junto do botão que o muda, porque quem acabou de tocar
 em Conectar está olhando para aquele botão.
 
-O ganho do microfone mostra o número e *não chega ao codec*. O microfone existe e
-funciona, mas nada no sistema o escuta ainda — ligar o controle a um microfone que
-ninguém lê seria um botão que mexe em nada.
+O volume da voz **fala uma frase de prova ao soltar o controle**: arrastar um
+volume sem ouvir nada é adivinhar.
+
+O ganho do microfone sai **apagado, e onde os outros dois mostram a porcentagem
+ele mostra "sem uso"**. O microfone existe — um ES7210 —, mas nada no sistema o
+escuta ainda, e um número que não governa nada é pior que número nenhum: quem
+arrasta, lê "70%" e não ouve diferença passa a desconfiar também do volume, que
+funciona. Ele fica na tela porque o dia em que alguém escutar o microfone é aqui
+que o controle vai estar.
+
+**O teclado tem 210 de altura, e não 250.** Com 250 ele subia até o campo da
+senha e tapava justamente o campo que a pessoa estava digitando — que é o mesmo
+defeito que o botão de revelar existe para evitar. Ainda assim o campo fica
+baixo, então o cartão da rede sobe 40 enquanto o teclado está no ar e volta ao
+sair.
 
 ### O descanso — *três minutos sem um toque*
 
