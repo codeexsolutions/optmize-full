@@ -64,7 +64,17 @@ esp/build/
 esp/managed_components/
 esp/sdkconfig
 esp/sdkconfig.old
-esp/dependencies.lock
+
+# O `dependencies.lock` NAO entra nesta lista, embora seja gerado.
+#
+# Ele e o unico arquivo que diz QUAIS versoes realmente compilaram. O manifesto
+# ao lado dele pede faixas, e faixa aberta ja custou dias neste projeto: o `^2`
+# que o proprio BSP usa para o `esp_lvgl_port` resolve hoje para uma versao que
+# nem compila com o LVGL que este projeto fixa. Sem o lock, quem clonar vai
+# resolver de novo, pegar outra coisa, e o erro vai aparecer no meio do LVGL --
+# a duzia de arquivos de distancia da causa.
+#
+# Gerado nao quer dizer descartavel: quer dizer que ninguem o escreve a mao.
 
 # A marca de integridade do gerenciador de componentes. Ela nao vale para o BSP
 # que mora em `esp/components/`: aquele foi copiado e CORRIGIDO de proposito, e
