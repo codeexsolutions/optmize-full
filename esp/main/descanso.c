@@ -409,7 +409,7 @@ static void montar(void)
 
     rot_dia_da_semana = lv_label_create(data);
     lv_label_set_text(rot_dia_da_semana, "");
-    lv_obj_set_style_text_font(rot_dia_da_semana, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(rot_dia_da_semana, &fonte_28, 0);
     lv_obj_set_style_text_color(rot_dia_da_semana, COR_APOIO, 0);
     lv_obj_set_style_text_letter_space(rot_dia_da_semana, 3, 0);
     lv_obj_set_grid_cell(rot_dia_da_semana, LV_GRID_ALIGN_START, 0, 1,
@@ -417,7 +417,7 @@ static void montar(void)
 
     rot_dia_e_mes = lv_label_create(data);
     lv_label_set_text(rot_dia_e_mes, "");
-    lv_obj_set_style_text_font(rot_dia_e_mes, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(rot_dia_e_mes, &fonte_28, 0);
     lv_obj_set_style_text_color(rot_dia_e_mes, COR_APOIO, 0);
     lv_obj_set_style_text_letter_space(rot_dia_e_mes, 3, 0);
     lv_obj_set_grid_cell(rot_dia_e_mes, LV_GRID_ALIGN_END, 1, 1,
@@ -427,8 +427,8 @@ static void montar(void)
 
     rot_sem_rede = lv_label_create(cortina);
     lv_label_set_text(rot_sem_rede, LV_SYMBOL_WARNING "  SEM REDE");
-    lv_obj_set_style_text_font(rot_sem_rede, &lv_font_montserrat_22, 0);
-    lv_obj_set_style_text_color(rot_sem_rede, COR_DESTAQUE, 0);
+    lv_obj_set_style_text_font(rot_sem_rede, &fonte_22, 0);
+    lv_obj_set_style_text_color(rot_sem_rede, COR_ATENCAO, 0);
     lv_obj_set_style_text_letter_space(rot_sem_rede, 2, 0);
     lv_obj_align(rot_sem_rede, LV_ALIGN_BOTTOM_MID, 0, -26);
     lv_obj_add_flag(rot_sem_rede, LV_OBJ_FLAG_HIDDEN);

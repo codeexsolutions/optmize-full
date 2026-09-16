@@ -251,7 +251,7 @@ static void tocou_a_imagem(lv_event_t *e)
     lv_obj_t *nome = lv_label_create(cortina);
     lv_label_set_text(nome, o_titulo);
     lv_obj_set_style_text_color(nome, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(nome, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(nome, &fonte_16, 0);
     lv_label_set_long_mode(nome, LV_LABEL_LONG_DOT);
     lv_obj_set_width(nome, 500);
     lv_obj_set_pos(nome, 16, 14);
@@ -259,7 +259,7 @@ static void tocou_a_imagem(lv_event_t *e)
     rot_zoom = lv_label_create(cortina);
     lv_label_set_text(rot_zoom, "");
     lv_obj_set_style_text_color(rot_zoom, COR_APOIO, 0);
-    lv_obj_set_style_text_font(rot_zoom, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rot_zoom, &fonte_16, 0);
     lv_obj_set_pos(rot_zoom, 16, 38);
 
     /*
@@ -284,7 +284,7 @@ static void tocou_a_imagem(lv_event_t *e)
 
         lv_obj_t *r = lv_label_create(b);
         lv_label_set_text(r, botoes[i].r);
-        lv_obj_set_style_text_font(r, &lv_font_montserrat_22, 0);
+        lv_obj_set_style_text_font(r, &fonte_22, 0);
         lv_obj_set_style_text_color(r, i == 3 ? lv_color_black() : COR_TEXTO, 0);
         lv_obj_center(r);
     }
@@ -376,7 +376,7 @@ static void chegou_a_imagem(uint8_t *jpeg, size_t bytes, const char *erro)
         free(jpeg);
         if (bsp_display_lock(500)) {
             if (minha == geracao) {
-                avisar("imagem ilegivel", COR_DESTAQUE);
+                avisar("imagem ilegivel", COR_ALERTA);
             }
             bsp_display_unlock();
         }
@@ -474,7 +474,7 @@ pronto:
 
     if (falha != NULL) {
         free(saida);
-        avisar(falha, COR_DESTAQUE);
+        avisar(falha, COR_ALERTA);
         ESP_LOGW(TAG, "%s", falha);
         bsp_display_unlock();
         return;
@@ -537,14 +537,14 @@ void imagem_da_producao_montar(lv_obj_t *pai, int x, int y, int w, int h,
     lv_obj_set_style_bg_color(painel, lv_color_black(), 0);
     lv_obj_set_style_border_color(painel, COR_BORDA, 0);
     lv_obj_set_style_border_width(painel, 1, 0);
-    lv_obj_set_style_radius(painel, 12, 0);
+    lv_obj_set_style_radius(painel, RAIO, 0);
     lv_obj_set_style_pad_all(painel, 0, 0);
     lv_obj_remove_flag(painel, LV_OBJ_FLAG_SCROLLABLE);
 
     rot_estado = lv_label_create(painel);
     lv_label_set_text(rot_estado, "carregando a arte...");
     lv_obj_set_style_text_color(rot_estado, COR_APOIO, 0);
-    lv_obj_set_style_text_font(rot_estado, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rot_estado, &fonte_16, 0);
     lv_obj_set_style_text_align(rot_estado, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(rot_estado, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(rot_estado, w - 40);

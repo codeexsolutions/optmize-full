@@ -81,7 +81,7 @@ esp_err_t video_da_camera_fotografar(uint8_t **jpeg, size_t *bytes, int prazo_ms
 typedef enum { PARA_BATER, PARA_CADASTRAR } Proposito;
 
 /* O que a lista de nomes faz quando alguem toca num nome. */
-typedef enum { ESCOLHER_PARA_BATER, ESCOLHER_PARA_CADASTRAR } DepoisDaLista;
+typedef enum { ESCOLHER_PARA_BATER, ESCOLHER_PARA_CADASTRAR, SO_MOSTRAR } DepoisDaLista;
 
 static lv_obj_t *area_do_app;
 static lv_obj_t *moldura;
@@ -106,6 +106,7 @@ static uint32_t geracao_pedida;
 static void montar_o_inicio(void);
 static void montar_a_camera(Proposito para_que);
 static void pedir_a_lista(DepoisDaLista para_que);
+static void tocou_ver_a_lista(lv_event_t *e);
 
 /*
  * ===========================================================================
@@ -139,6 +140,7 @@ typedef enum {
     TELA_CAMERA_CADASTRAR,
     TELA_LISTA_BATER,
     TELA_LISTA_CADASTRAR,
+    TELA_QUEM_ESTA_CADASTRADO,
 } Tela;
 
 static Tela proxima_tela;
@@ -155,6 +157,7 @@ static void trocar_de_tela(void *nada)
         case TELA_CAMERA_CADASTRAR:   montar_a_camera(PARA_CADASTRAR); break;
         case TELA_LISTA_BATER:        pedir_a_lista(ESCOLHER_PARA_BATER); break;
         case TELA_LISTA_CADASTRAR:    pedir_a_lista(ESCOLHER_PARA_CADASTRAR); break;
+        case TELA_QUEM_ESTA_CADASTRADO: pedir_a_lista(SO_MOSTRAR); break;
     }
 }
 
@@ -213,14 +216,25 @@ static lv_obj_t *botao(lv_obj_t *pai, int x, int y, int w, int h, lv_color_t cor
     lv_obj_set_style_bg_color(b, cor, 0);
     lv_obj_set_style_border_color(b, COR_BORDA, 0);
     lv_obj_set_style_border_width(b, 1, 0);
-    lv_obj_set_style_radius(b, 12, 0);
+    lv_obj_set_style_radius(b, RAIO_MIUDO, 0);
+    /*
+     * Sem sombra, e com resposta ao dedo. Os dois vem do Optmize: ele separa
+     * superficies por cor e borda, e escurece o que esta sendo apertado.
+     */
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_bg_opa(b, LV_OPA_80, LV_STATE_PRESSED);
     lv_obj_add_event_cb(b, quando_tocar, LV_EVENT_CLICKED, carga);
 
     lv_obj_t *r = lv_label_create(b);
     lv_label_set_text(r, texto);
     lv_obj_set_style_text_font(r, fonte, 0);
+    /*
+     * TINTA ESCURA SOBRE COR FORTE, e nao preto puro: preto sobre laranja
+     * vibra na vista. `COR_DESTAQUE_TINTA` e o mesmo quase-preto que o Optmize
+     * usa em cima do laranja dele.
+     */
     const bool forte = lv_color_eq(cor, COR_CERTO) || lv_color_eq(cor, COR_DESTAQUE);
-    lv_obj_set_style_text_color(r, forte ? lv_color_black() : COR_TEXTO, 0);
+    lv_obj_set_style_text_color(r, forte ? COR_DESTAQUE_TINTA : COR_TEXTO, 0);
     lv_obj_set_style_text_align(r, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(r);
     return b;
@@ -236,6 +250,66 @@ static void avisar(const char *texto, lv_color_t cor)
 
 /* ============================================================== o inicio */
 
+/*
+ * UMA PORTA DA TELA DE ENTRADA.
+ *
+ * `forte` pinta o cartao inteiro da cor, e so o de bater ponto usa isso. Os
+ * outros sao superficie de cartao com o icone colorido -- que e como o Optmize
+ * trata escolha secundaria.
+ */
+static void cartao_de_porta(lv_obj_t *pai, int32_t x, int32_t y, int32_t w, int32_t h,
+                            lv_color_t cor, bool forte, const char *icone,
+                            const char *nome, const char *apoio, lv_event_cb_t ao_tocar)
+{
+    lv_obj_t *c = lv_obj_create(pai);
+    lv_obj_set_size(c, w, h);
+    lv_obj_set_pos(c, x, y);
+    lv_obj_set_style_bg_color(c, forte ? cor : COR_CARTAO, 0);
+    lv_obj_set_style_bg_color(c, forte ? cor : COR_CARTAO_SUAVE, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(c, forte ? LV_OPA_80 : LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(c, forte ? cor : COR_BORDA, 0);
+    lv_obj_set_style_border_width(c, 1, 0);
+    lv_obj_set_style_radius(c, RAIO, 0);
+    lv_obj_set_style_pad_all(c, 20, 0);
+    lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(c, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(c, ao_tocar, LV_EVENT_CLICKED, NULL);
+
+    const lv_color_t tinta = forte ? COR_DESTAQUE_TINTA : COR_TEXTO;
+
+    lv_obj_t *caixa = lv_obj_create(c);
+    lv_obj_set_size(caixa, 52, 52);
+    lv_obj_set_pos(caixa, 0, 0);
+    lv_obj_set_style_radius(caixa, 14, 0);
+    lv_obj_set_style_bg_color(caixa, forte ? COR_DESTAQUE_TINTA : cor, 0);
+    lv_obj_set_style_bg_opa(caixa, LV_OPA_20, 0);
+    lv_obj_set_style_border_width(caixa, 0, 0);
+    lv_obj_set_style_pad_all(caixa, 0, 0);
+    lv_obj_remove_flag(caixa, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(caixa, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *simbolo = lv_label_create(caixa);
+    lv_label_set_text(simbolo, icone);
+    lv_obj_set_style_text_color(simbolo, forte ? tinta : cor, 0);
+    lv_obj_set_style_text_font(simbolo, &fonte_28, 0);
+    lv_obj_center(simbolo);
+
+    lv_obj_t *rot = lv_label_create(c);
+    lv_label_set_text(rot, nome);
+    lv_obj_set_style_text_color(rot, tinta, 0);
+    lv_obj_set_style_text_font(rot, forte ? &fonte_48 : &fonte_28, 0);
+    lv_obj_set_pos(rot, 68, forte ? 0 : 2);
+
+    lv_obj_t *sub = lv_label_create(c);
+    lv_label_set_text(sub, apoio);
+    lv_obj_set_style_text_color(sub, forte ? tinta : COR_FRACA, 0);
+    lv_obj_set_style_text_opa(sub, forte ? LV_OPA_70 : LV_OPA_COVER, 0);
+    lv_obj_set_style_text_font(sub, forte ? &fonte_22 : &fonte_16, 0);
+    lv_label_set_long_mode(sub, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(sub, w - 108);
+    lv_obj_set_pos(sub, 68, forte ? 54 : 40);
+}
+
 static void tocou_bater_ponto(lv_event_t *e)
 {
     (void)e;
@@ -246,6 +320,12 @@ static void tocou_cadastrar(lv_event_t *e)
 {
     (void)e;
     ir_para(TELA_LISTA_CADASTRAR);
+}
+
+static void tocou_ver_a_lista(lv_event_t *e)
+{
+    (void)e;
+    ir_para(TELA_QUEM_ESTA_CADASTRADO);
 }
 
 /*
@@ -267,71 +347,32 @@ static void montar_o_inicio(void)
     moldura = NULL;
     rot_estado = NULL;
 
-    lv_obj_t *cartao = lv_obj_create(area_do_app);
-    lv_obj_set_size(cartao, 620, 380);
-    lv_obj_set_pos(cartao, 20, 40);
-    lv_obj_set_style_bg_color(cartao, COR_CERTO, 0);
-    lv_obj_set_style_border_width(cartao, 0, 0);
-    lv_obj_set_style_radius(cartao, 18, 0);
-    lv_obj_remove_flag(cartao, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(cartao, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(cartao, tocou_bater_ponto, LV_EVENT_CLICKED, NULL);
+    /*
+     * O CARTAO DE BATER OCUPA A LARGURA TODA, e os outros dois dividem a linha
+     * de baixo.
+     *
+     * Bater ponto acontece quatro vezes por dia para cada pessoa; cadastrar
+     * rosto, uma vez na vida; ver quem esta cadastrado, quase nunca. Uma grade
+     * de tres iguais diria que as tres pesam o mesmo, e a fila da manha pararia
+     * para escolher entre coisas que nao competem.
+     */
+    cartao_de_porta(area_do_app, 20, 28, LV_HOR_RES - 40, 190, COR_CERTO, true,
+                    LV_SYMBOL_OK, "Bater ponto", "olhe para a camera e aperte",
+                    tocou_bater_ponto);
 
-    lv_obj_t *simbolo = lv_label_create(cartao);
-    lv_label_set_text(simbolo, LV_SYMBOL_OK);
-    lv_obj_set_style_text_color(simbolo, lv_color_black(), 0);
-    lv_obj_set_style_text_font(simbolo, &lv_font_montserrat_48, 0);
-    lv_obj_align(simbolo, LV_ALIGN_TOP_MID, 0, 50);
+    cartao_de_porta(area_do_app, 20, 232, 492, 164, COR_DESTAQUE, false,
+                    LV_SYMBOL_IMAGE, "Cadastrar rosto",
+                    "guarda mais um rosto de quem ja esta no Optmize",
+                    tocou_cadastrar);
 
-    lv_obj_t *titulo = lv_label_create(cartao);
-    lv_label_set_text(titulo, "Bater ponto");
-    lv_obj_set_style_text_color(titulo, lv_color_black(), 0);
-    lv_obj_set_style_text_font(titulo, &lv_font_montserrat_48, 0);
-    lv_obj_align(titulo, LV_ALIGN_CENTER, 0, 20);
-
-    lv_obj_t *apoio = lv_label_create(cartao);
-    lv_label_set_text(apoio, "olhe para a camera e aperte");
-    lv_obj_set_style_text_color(apoio, lv_color_black(), 0);
-    lv_obj_set_style_text_font(apoio, &lv_font_montserrat_22, 0);
-    lv_obj_align(apoio, LV_ALIGN_CENTER, 0, 80);
-
-    lv_obj_t *outro = lv_obj_create(area_do_app);
-    lv_obj_set_size(outro, 340, 380);
-    lv_obj_set_pos(outro, 664, 40);
-    lv_obj_set_style_bg_color(outro, COR_CARTAO, 0);
-    lv_obj_set_style_border_color(outro, COR_BORDA, 0);
-    lv_obj_set_style_border_width(outro, 1, 0);
-    lv_obj_set_style_radius(outro, 18, 0);
-    lv_obj_set_style_pad_all(outro, 22, 0);
-    lv_obj_remove_flag(outro, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(outro, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(outro, tocou_cadastrar, LV_EVENT_CLICKED, NULL);
-
-    lv_obj_t *simbolo2 = lv_label_create(outro);
-    lv_label_set_text(simbolo2, LV_SYMBOL_IMAGE);
-    lv_obj_set_style_text_color(simbolo2, COR_APOIO, 0);
-    lv_obj_set_style_text_font(simbolo2, &lv_font_montserrat_28, 0);
-    lv_obj_set_pos(simbolo2, 0, 0);
-
-    lv_obj_t *titulo2 = lv_label_create(outro);
-    lv_label_set_text(titulo2, "Cadastrar rosto");
-    lv_obj_set_style_text_color(titulo2, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(titulo2, &lv_font_montserrat_28, 0);
-    lv_obj_set_pos(titulo2, 0, 48);
-
-    lv_obj_t *apoio2 = lv_label_create(outro);
-    lv_label_set_text(apoio2,
-        "guarda mais um rosto de quem ja esta cadastrado no Optmize\n\n"
-        "de frente, de lado e com o que voce usa na cabeca -- basta parecer com um deles");
-    lv_obj_set_style_text_color(apoio2, COR_APOIO, 0);
-    lv_obj_set_style_text_font(apoio2, &lv_font_montserrat_16, 0);
-    lv_label_set_long_mode(apoio2, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(apoio2, 292);
-    lv_obj_set_pos(apoio2, 0, 96);
+    cartao_de_porta(area_do_app, 532, 232, 472, 164, COR_APOIO, false,
+                    LV_SYMBOL_LIST, "Lista de pessoas",
+                    "quem esta cadastrado, e quantos rostos cada um tem",
+                    tocou_ver_a_lista);
 
     rot_estado = lv_label_create(area_do_app);
     lv_label_set_text(rot_estado, "");
-    lv_obj_set_style_text_font(rot_estado, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(rot_estado, &fonte_22, 0);
     lv_label_set_long_mode(rot_estado, LV_LABEL_LONG_DOT);
     lv_obj_set_width(rot_estado, LV_HOR_RES - 40);
     lv_obj_set_style_text_align(rot_estado, LV_TEXT_ALIGN_CENTER, 0);
@@ -369,26 +410,52 @@ static void montar_o_sucesso(const Batida *b)
     lv_obj_t *c = abrir_o_sobreposto();
     lv_obj_set_style_bg_color(c, lv_color_black(), 0);
 
-    lv_obj_t *marca = lv_label_create(c);
+    /*
+     * UM ANEL GRANDE COM O CERTO DENTRO, e nao um simbolo solto.
+     *
+     * Esta tela e vista de longe, ja de costas: a pessoa apertou, esta
+     * guardando o cracha e virando para a maquina. O que ela precisa captar de
+     * relance e "deu certo" -- e um anel de 120 pixels responde isso antes de
+     * qualquer letra ser lida.
+     */
+    lv_obj_t *anel = lv_obj_create(c);
+    lv_obj_set_size(anel, 120, 120);
+    lv_obj_align(anel, LV_ALIGN_TOP_MID, 0, 44);
+    lv_obj_set_style_radius(anel, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(anel, COR_CERTO, 0);
+    lv_obj_set_style_bg_opa(anel, LV_OPA_20, 0);
+    lv_obj_set_style_border_color(anel, COR_CERTO, 0);
+    lv_obj_set_style_border_width(anel, 3, 0);
+    lv_obj_set_style_pad_all(anel, 0, 0);
+    lv_obj_remove_flag(anel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(anel, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *marca = lv_label_create(anel);
     lv_label_set_text(marca, LV_SYMBOL_OK);
     lv_obj_set_style_text_color(marca, COR_CERTO, 0);
-    lv_obj_set_style_text_font(marca, &lv_font_montserrat_48, 0);
-    lv_obj_align(marca, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_set_style_text_font(marca, &fonte_48, 0);
+    lv_obj_center(marca);
 
     lv_obj_t *nome = lv_label_create(c);
     lv_label_set_text(nome, b->nome);
     lv_obj_set_style_text_color(nome, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(nome, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_font(nome, &fonte_48, 0);
     lv_label_set_long_mode(nome, LV_LABEL_LONG_DOT);
     lv_obj_set_width(nome, LV_HOR_RES - 80);
     lv_obj_set_style_text_align(nome, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(nome, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_align(nome, LV_ALIGN_TOP_MID, 0, 190);
 
     lv_obj_t *oque = lv_label_create(c);
     lv_label_set_text_fmt(oque, "%s  as  %s", em_palavras(b->tipo), b->hora);
     lv_obj_set_style_text_color(oque, COR_APOIO, 0);
-    lv_obj_set_style_text_font(oque, &lv_font_montserrat_28, 0);
-    lv_obj_align(oque, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_set_style_text_font(oque, &fonte_28, 0);
+    lv_obj_align(oque, LV_ALIGN_TOP_MID, 0, 258);
+
+    lv_obj_t *ok = lv_label_create(c);
+    lv_label_set_text(ok, "Ponto registrado com sucesso");
+    lv_obj_set_style_text_color(ok, COR_CERTO, 0);
+    lv_obj_set_style_text_font(ok, &fonte_16, 0);
+    lv_obj_align(ok, LV_ALIGN_TOP_MID, 0, 306);
 
     /*
      * A tela volta sozinha. Ninguem devia precisar tocar de novo so para
@@ -412,7 +479,7 @@ static void bateu_pelo_nome(const Batida *b, const char *erro)
         if (b != NULL) {
             montar_o_sucesso(b);
         } else {
-            avisar(erro ? erro : "nao deu", COR_DESTAQUE);
+            avisar(erro ? erro : "nao deu", COR_ALERTA);
         }
     }
     bsp_display_unlock();
@@ -468,13 +535,14 @@ static void chegou_a_lista(const Funcionario *lista, int quantos, const char *er
 
     lv_obj_t *titulo = lv_label_create(c);
     lv_label_set_text(titulo, erro ? erro
-        : (depois_da_lista == ESCOLHER_PARA_CADASTRAR
-           ? "Quem vai tirar a foto?" : "Toque no seu nome"));
-    lv_obj_set_style_text_color(titulo, erro ? COR_DESTAQUE : COR_TEXTO, 0);
-    lv_obj_set_style_text_font(titulo, &lv_font_montserrat_28, 0);
+        : (depois_da_lista == SO_MOSTRAR ? "Quem esta cadastrado"
+           : depois_da_lista == ESCOLHER_PARA_CADASTRAR
+             ? "Quem vai tirar a foto?" : "Toque no seu nome"));
+    lv_obj_set_style_text_color(titulo, erro ? COR_ALERTA : COR_TEXTO, 0);
+    lv_obj_set_style_text_font(titulo, &fonte_28, 0);
     lv_obj_set_pos(titulo, 24, 14);
 
-    botao(c, LV_HOR_RES - 184, 10, 160, 56, COR_CARTAO, &lv_font_montserrat_16,
+    botao(c, LV_HOR_RES - 184, 10, 160, 56, COR_CARTAO, &fonte_16,
           LV_SYMBOL_LEFT "  voltar", tocou_voltar_ao_inicio, NULL);
 
     /*
@@ -484,7 +552,7 @@ static void chegou_a_lista(const Funcionario *lista, int quantos, const char *er
      */
     rot_estado = lv_label_create(c);
     lv_label_set_text(rot_estado, "");
-    lv_obj_set_style_text_font(rot_estado, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(rot_estado, &fonte_22, 0);
     lv_label_set_long_mode(rot_estado, LV_LABEL_LONG_DOT);
     lv_obj_set_width(rot_estado, 620);
     lv_obj_set_pos(rot_estado, 24, 48);
@@ -496,7 +564,7 @@ static void chegou_a_lista(const Funcionario *lista, int quantos, const char *er
               "Cadastre as pessoas na tela de Funcionarios, no computador."
             : "Sem lista de nomes -- confira a rede em Ajustes.");
         lv_obj_set_style_text_color(nada, COR_APOIO, 0);
-        lv_obj_set_style_text_font(nada, &lv_font_montserrat_22, 0);
+        lv_obj_set_style_text_font(nada, &fonte_22, 0);
         lv_obj_set_style_text_align(nada, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(nada);
         bsp_display_unlock();
@@ -518,9 +586,19 @@ static void chegou_a_lista(const Funcionario *lista, int quantos, const char *er
 
     const int largura = (LV_HOR_RES - 32 - 16) / 2;
     for (int i = 0; i < quantos; i++) {
-        botao(rolo, (i % 2) * (largura + 16), (i / 2) * 88, largura, 76,
-              COR_CARTAO, &lv_font_montserrat_22, lista[i].nome,
-              tocou_um_nome, (void *)(intptr_t)lista[i].id);
+        lv_obj_t *b = botao(rolo, (i % 2) * (largura + 16), (i / 2) * 88, largura, 76,
+                            COR_CARTAO, &fonte_22, lista[i].nome,
+                            tocou_um_nome, (void *)(intptr_t)lista[i].id);
+        /*
+         * EM MODO DE SO MOSTRAR, os nomes nao respondem ao toque.
+         *
+         * Um botao que nao faz nada e pior que um rotulo: a pessoa aperta,
+         * espera, aperta de novo, e conclui que o aparelho travou. Tirar a
+         * bandeira de clicavel faz a lista se comportar como o que ela e.
+         */
+        if (depois_da_lista == SO_MOSTRAR) {
+            lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
+        }
     }
 
     bsp_display_unlock();
@@ -535,7 +613,7 @@ static void pedir_a_lista(DepoisDaLista para_que)
     lv_obj_t *r = lv_label_create(c);
     lv_label_set_text(r, "buscando os nomes...");
     lv_obj_set_style_text_color(r, COR_APOIO, 0);
-    lv_obj_set_style_text_font(r, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(r, &fonte_28, 0);
     lv_obj_center(r);
 
     optmize_listar_funcionarios(chegou_a_lista);
@@ -566,7 +644,7 @@ static void cadastrou(const char *erro)
     soltar_a_foto();
 
     if (erro != NULL) {
-        avisar(erro, COR_DESTAQUE);
+        avisar(erro, COR_ALERTA);
         bsp_display_unlock();
         return;
     }
@@ -577,14 +655,14 @@ static void cadastrou(const char *erro)
     lv_obj_t *marca = lv_label_create(c);
     lv_label_set_text(marca, LV_SYMBOL_OK);
     lv_obj_set_style_text_color(marca, COR_CERTO, 0);
-    lv_obj_set_style_text_font(marca, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_font(marca, &fonte_48, 0);
     lv_obj_align(marca, LV_ALIGN_TOP_MID, 0, 40);
 
     lv_obj_t *quem = lv_label_create(c);
     lv_label_set_text_fmt(quem, "%s\n%d rosto(s) guardados agora",
                           nome_escolhido, quantas_fotos);
     lv_obj_set_style_text_color(quem, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(quem, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(quem, &fonte_28, 0);
     lv_obj_set_style_text_align(quem, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(quem, LV_ALIGN_CENTER, 0, -40);
 
@@ -593,15 +671,15 @@ static void cadastrou(const char *erro)
         ? "tire mais uma de outro angulo -- de lado, ou com o que voce usa na cabeca"
         : "ja da para o terminal reconhecer voce");
     lv_obj_set_style_text_color(dica, COR_APOIO, 0);
-    lv_obj_set_style_text_font(dica, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(dica, &fonte_16, 0);
     lv_obj_set_style_text_align(dica, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(dica, LV_ALIGN_CENTER, 0, 30);
 
     botao(c, 40, LV_VER_RES - 56 - 110, 460, 86,
-          quantas_fotos < 3 ? COR_CERTO : COR_CARTAO, &lv_font_montserrat_28,
+          quantas_fotos < 3 ? COR_CERTO : COR_CARTAO, &fonte_28,
           LV_SYMBOL_IMAGE "  Outra foto", tocou_outra_foto, NULL);
     botao(c, 524, LV_VER_RES - 56 - 110, 460, 86,
-          quantas_fotos < 3 ? COR_CARTAO : COR_CERTO, &lv_font_montserrat_28,
+          quantas_fotos < 3 ? COR_CARTAO : COR_CERTO, &fonte_28,
           "Terminei", tocou_voltar_ao_inicio, NULL);
 
     bsp_display_unlock();
@@ -644,7 +722,7 @@ static void chegou_a_resposta(const Batida *b, const char *erro, bool nao_reconh
         return;
     }
 
-    avisar(erro ? erro : "nao deu", COR_DESTAQUE);
+    avisar(erro ? erro : "nao deu", COR_ALERTA);
     bsp_display_unlock();
 }
 
@@ -659,7 +737,7 @@ static void tocou_a_camera(lv_event_t *e)
 
     soltar_a_foto();
     if (video_da_camera_fotografar(&foto, &foto_bytes, 1500) != ESP_OK) {
-        avisar("a camera nao entregou a foto", COR_DESTAQUE);
+        avisar("a camera nao entregou a foto", COR_ALERTA);
         return;
     }
 
@@ -712,7 +790,7 @@ static void montar_a_camera(Proposito para_que)
     lv_obj_set_style_bg_color(moldura, lv_color_black(), 0);
     lv_obj_set_style_border_color(moldura, COR_BORDA, 0);
     lv_obj_set_style_border_width(moldura, 1, 0);
-    lv_obj_set_style_radius(moldura, 12, 0);
+    lv_obj_set_style_radius(moldura, RAIO, 0);
     lv_obj_set_style_pad_all(moldura, 0, 0);
     lv_obj_remove_flag(moldura, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -722,38 +800,45 @@ static void montar_a_camera(Proposito para_que)
     lv_obj_set_style_bg_color(coluna, COR_CARTAO, 0);
     lv_obj_set_style_border_color(coluna, COR_BORDA, 0);
     lv_obj_set_style_border_width(coluna, 1, 0);
-    lv_obj_set_style_radius(coluna, 14, 0);
+    lv_obj_set_style_radius(coluna, RAIO, 0);
     lv_obj_set_style_pad_all(coluna, 20, 0);
     lv_obj_remove_flag(coluna, LV_OBJ_FLAG_SCROLLABLE);
 
+    titulo_de_bloco(coluna, 2, cadastrando ? "CADASTRANDO" : "POSICIONE SEU ROSTO");
+
     lv_obj_t *titulo = lv_label_create(coluna);
-    lv_label_set_text(titulo, cadastrando ? nome_escolhido : "Bater ponto");
+    lv_label_set_text(titulo, cadastrando ? nome_escolhido : "Olhe para a camera");
     lv_obj_set_style_text_color(titulo, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(titulo, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(titulo, &fonte_22, 0);
     lv_label_set_long_mode(titulo, LV_LABEL_LONG_DOT);
     lv_obj_set_width(titulo, 296);
-    lv_obj_set_pos(titulo, 0, 0);
+    lv_obj_set_pos(titulo, 0, 26);
 
-    lv_obj_t *ajuda = lv_label_create(coluna);
-    lv_label_set_text(ajuda, cadastrando
-        ? "de frente, com o rosto iluminado e sem ninguem atras\n\n"
-          "o servidor recusa a foto se nao achar exatamente um rosto nela"
-        : "olhe para a camera, de frente e com o rosto iluminado\n\n"
-          "o servidor decide que batida e esta, pelo que voce ja bateu hoje");
-    lv_obj_set_style_text_color(ajuda, COR_APOIO, 0);
-    lv_obj_set_style_text_font(ajuda, &lv_font_montserrat_16, 0);
-    lv_label_set_long_mode(ajuda, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(ajuda, 296);
-    lv_obj_set_pos(ajuda, 0, 46);
+    checklist_linha(coluna, 74,  COR_CERTO, "mantenha o rosto no centro da mira");
+    checklist_linha(coluna, 124, COR_CERTO, "boa iluminacao, de frente");
+    checklist_linha(coluna, 174, COR_CERTO, cadastrando
+        ? "ninguem atras -- uma pessoa so na foto"
+        : "sem bone ou oculos escuros");
+
+    lv_obj_t *risco = lv_obj_create(coluna);
+    lv_obj_set_size(risco, 296, 1);
+    lv_obj_set_pos(risco, 0, 240);
+    lv_obj_set_style_bg_color(risco, COR_BORDA_SUAVE, 0);
+    lv_obj_set_style_border_width(risco, 0, 0);
+    lv_obj_remove_flag(risco, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(risco, LV_OBJ_FLAG_CLICKABLE);
 
     rot_estado = lv_label_create(coluna);
-    lv_label_set_text(rot_estado, "");
-    lv_obj_set_style_text_font(rot_estado, &lv_font_montserrat_16, 0);
+    lv_label_set_text(rot_estado, cadastrando
+        ? "o servidor recusa a foto se nao achar exatamente um rosto"
+        : "o servidor decide que batida e esta, pelo que voce ja bateu hoje");
+    lv_obj_set_style_text_color(rot_estado, COR_FRACA, 0);
+    lv_obj_set_style_text_font(rot_estado, &fonte_16, 0);
     lv_label_set_long_mode(rot_estado, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(rot_estado, 296);
-    lv_obj_set_pos(rot_estado, 0, 190);
+    lv_obj_set_pos(rot_estado, 0, 256);
 
-    botao(coluna, 0, 360, 296, 60, COR_BORDA, &lv_font_montserrat_16,
+    botao(coluna, 0, 360, 296, 60, COR_BORDA, &fonte_16,
           LV_SYMBOL_LEFT "  voltar", tocou_voltar_ao_inicio, NULL);
 
     /*
@@ -761,15 +846,19 @@ static void montar_a_camera(Proposito para_que)
      * o aperta pode estar de luva, com a mao suja, com pressa -- as mesmas
      * condicoes da conferencia de producao.
      */
-    botao(area_do_app, 20, 494, 984, 86, COR_CERTO, &lv_font_montserrat_28,
+    botao(area_do_app, 20, 494, 984, 86, COR_CERTO, &fonte_28,
           cadastrando ? LV_SYMBOL_IMAGE "  Tirar a foto" : LV_SYMBOL_OK "  Bater o meu ponto",
           tocou_a_camera, NULL);
 
-    if (video_da_camera_abrir(moldura) != ESP_OK) {
+    const esp_err_t abriu = video_da_camera_abrir(moldura);
+    /* Depois do video: no LVGL quem nasce depois fica por cima. */
+    mira_desenhar(moldura, COR_CERTO, 44);
+
+    if (abriu != ESP_OK) {
         lv_obj_t *sem = lv_label_create(moldura);
         lv_label_set_text(sem, "a camera nao abriu");
         lv_obj_set_style_text_color(sem, COR_APOIO, 0);
-        lv_obj_set_style_text_font(sem, &lv_font_montserrat_22, 0);
+        lv_obj_set_style_text_font(sem, &fonte_22, 0);
         lv_obj_center(sem);
     }
 }

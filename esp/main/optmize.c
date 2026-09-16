@@ -251,6 +251,10 @@ static void tarefa_de_ler(void *arg)
                         snprintf(d->id, sizeof(d->id), "%s", v->valuestring);
                     if ((v = cJSON_GetObjectItem(it, "task")) && cJSON_IsString(v))
                         snprintf(d->tarefa, sizeof(d->tarefa), "%s", v->valuestring);
+                    if ((v = cJSON_GetObjectItem(it, "clientName")) && cJSON_IsString(v))
+                        snprintf(d->cliente, sizeof(d->cliente), "%s", v->valuestring);
+                    if ((v = cJSON_GetObjectItem(it, "fabric")) && cJSON_IsString(v))
+                        snprintf(d->tecido, sizeof(d->tecido), "%s", v->valuestring);
                     if ((v = cJSON_GetObjectItem(it, "machineName")) && cJSON_IsString(v))
                         snprintf(d->maquina, sizeof(d->maquina), "%s", v->valuestring);
                     if ((v = cJSON_GetObjectItem(it, "calandraStatus")) && cJSON_IsString(v))

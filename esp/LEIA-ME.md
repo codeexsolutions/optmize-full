@@ -62,6 +62,12 @@ em coisas que no v1.3 já estão certas.
 
 ---
 
+## As telas
+
+Este arquivo é sobre **como foi construído** — a placa, os pinos, os defeitos que
+custaram dias. O que cada tela faz e por que ela é assim está em
+[`TELAS.md`](TELAS.md), ao lado.
+
 ## Onde está cada coisa
 
 ```
