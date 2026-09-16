@@ -818,11 +818,11 @@ export const CRUZADA_MAX_FORMATOS = 60;
  * receita "solta" que compete ao lado dela.
  */
 export function montarUnidadesCruzadas(itens) {
+  // Por silhueta: com um arquivo por peça, contar formatos pelo índice dava
+  // 155 onde há 4, e o teto lá embaixo desligava a cruzada justamente no
+  // trabalho grande (ver `chaveDaSilhueta`).
   const porPeca = new Map();
-  itens.forEach((item) => {
-    if (!porPeca.has(item.indice)) porPeca.set(item.indice, []);
-    porPeca.get(item.indice).push(item);
-  });
+  agruparPorSilhueta(itens).forEach((balde, chave) => porPeca.set(chave, balde.itens));
   const indices = [...porPeca.keys()];
   // Formato demais para valer o custo de conferir todo par, ou nenhum par
   // encontrado: `null` avisa quem chamou que esta receita não tem nada de
@@ -839,6 +839,9 @@ export function montarUnidadesCruzadas(itens) {
       if (resultado) {
         candidatos.push({
           ia: indices[i], ib: indices[j], formas: resultado.formas,
+          // As peças que serviram de modelo. É por elas — pelo objeto, não por
+          // um número — que as partes do bloco são casadas lá embaixo.
+          pa: a, pb: b,
           economia: 1 - resultado.melhorArea / resultado.areaSolta,
         });
       }
@@ -861,13 +864,19 @@ export function montarUnidadesCruzadas(itens) {
       unidades.push({
         itens: [itemA, itemB],
         // As formas foram medidas com a primeira cópia de cada formato; aqui
-        // cada bloco recebe as cópias de verdade, casadas pelo índice do
-        // formato — não pela posição, porque `tentar` monta o bloco nos dois
-        // sentidos e a peça que fica em primeiro lugar muda de arranjo para
-        // arranjo.
+        // cada bloco recebe as cópias de verdade, casadas pela PEÇA MODELO —
+        // não pela posição, porque `tentar` monta o bloco nos dois sentidos e a
+        // peça que fica em primeiro lugar muda de arranjo para arranjo.
+        //
+        // O casamento era pelo índice do arquivo. Desde que os formatos passaram
+        // a ser contados por silhueta (ver `chaveDaSilhueta`), `c.ia` é uma
+        // chave de texto e a comparação com um índice daria falso sempre — as
+        // duas partes do bloco receberiam a MESMA peça, e uma das duas sumiria
+        // do encaixe. Comparar o objeto modelo não depende de como o formato é
+        // identificado.
         formas: c.formas.map((f) => ({
           ...f,
-          partes: f.partes.map((p) => ({ ...p, item: p.item.indice === c.ia ? itemA : itemB })),
+          partes: f.partes.map((p) => ({ ...p, item: p.item === c.pa ? itemA : itemB })),
         })),
       });
     }
@@ -890,6 +899,127 @@ export const TAMANHO_DO_AGRUPAMENTO = { solta: 1, dupla: 2, trio: 3, quarteto: 4
  * só, e o que não completa um bloco entra solto. Peça que não pode virar 180°
  * não forma bloco invertido e sai sempre solta.
  */
+/**
+ * ===========================================================================
+ * QUEM É A MESMA PEÇA — a silhueta, e não o arquivo
+ * ===========================================================================
+ *
+ * Tudo que agrupa neste motor nascia de `item.indice`, o número do ARQUIVO na
+ * lista: a dupla e o trio juntam cópias do mesmo índice, a família é o índice,
+ * e a cruzada compara um índice com outro.
+ *
+ * Isso vale enquanto o pedido chega como "esta arte, 25 cópias". A produção
+ * desta loja não manda assim. Num trabalho real guardado no banco são **155
+ * formatos para 175 peças** — cada uniforme é personalizado, então cada um é um
+ * arquivo — e a assinatura dele mostra que, de silhueta, são QUATRO peças
+ * diferentes: 50 iguais, 50 iguais, 50 iguais e 5 tirinhas.
+ *
+ * Pelo índice, aquilo são 155 peças estranhas entre si. E aí, justamente no
+ * pedido grande — que é onde a busca menos tem orçamento para descobrir sozinha
+ * o que fazer —, o motor desliga a maquinaria inteira de agrupar:
+ *
+ *   dupla e trio   precisam de cópias do mesmo índice: não há nenhuma
+ *   familia        vira uma família por peça, o mesmo que ordenar por área
+ *   cruzada        desiste acima de CRUZADA_MAX_FORMATOS formatos
+ *
+ * Medido na bancada, com `producao-uniforme` e `producao-avulsa` — as MESMAS
+ * 175 peças, a mesma geometria, mudando só se elas chegam como cópias ou como
+ * arquivos soltos: 32,300 m contra 32,518 m, e a receita vencedora caindo de
+ * `vaos/dupla/lado` para `vaos/solta/altura`.
+ *
+ * A chave abaixo é a silhueta em si: as medidas da grade, a área real e o
+ * contorno (topo e base, coluna por coluna). Duas peças com a mesma chave são
+ * intercambiáveis para o encaixe — e é isso que o bloco precisa, porque ele
+ * mede as formas na PRIMEIRA cópia e assenta as outras no mesmo desenho (ver
+ * `formasDoBloco`). Por isso a chave não é aproximada e a conferência é exata:
+ * o balde guarda a máscara de quem chegou primeiro e compara contorno por
+ * contorno antes de aceitar a segunda.
+ *
+ * O grupo da pessoa entra na chave porque peça de grupos diferentes não pode
+ * virar um bloco só — o grupo é uma promessa de que elas andam juntas, e um
+ * bloco misturaria as duas promessas.
+ */
+/*
+ * O botão da bancada: `--extra agruparPor=arquivo` devolve o agrupamento por
+ * índice de arquivo, que era como este motor identificava peça igual.
+ *
+ * Ele é global ao módulo, e não um parâmetro, porque quem pergunta "estas duas
+ * peças são a mesma?" não é só a busca: são os comparadores de ordem
+ * (`ORDENS_CONTORNO`), que recebem duas unidades e mais nada. Passar o ajuste
+ * por parâmetro obrigaria a atravessá-lo por toda a cadeia para servir a um
+ * botão de medição — e o valor só muda no começo de uma busca, que é quando
+ * `buscarMelhorEncaixe` o define.
+ */
+export let agruparPorArquivo = false;
+export function definirAgrupamento(porQue) {
+  agruparPorArquivo = porQue === "arquivo";
+}
+
+export function chaveDaSilhueta(item) {
+  if (agruparPorArquivo) return `arquivo:${item.indice}`;
+  const mascaras = item.mascaras;
+  const giro = item.giro || "180";
+  const grupo = item.grupo || "";
+  if (!mascaras) return `crua:${item.largura}x${item.altura}:${giro}:${grupo}`;
+  if (mascaras._chaveDaSilhueta == null) {
+    const base = mascaras.rotacoes[0] || mascaras.rotacoes[180]
+      || mascaras.rotacoes[Object.keys(mascaras.rotacoes)[0]];
+    // FNV-1a sobre o contorno. Ela só separa baldes; quem decide se duas peças
+    // são mesmo iguais é a conferência exata em `agruparPorSilhueta`.
+    let mistura = 2166136261;
+    const juntar = (valor) => {
+      mistura ^= valor | 0;
+      mistura = Math.imul(mistura, 16777619);
+    };
+    juntar(base.cols); juntar(base.rows);
+    juntar(Math.round((mascaras.areaReal || 0) * 100));
+    for (let c = 0; c < base.cols; c++) { juntar(base.topo[c]); juntar(base.base[c]); }
+    mascaras._chaveDaSilhueta = `${base.cols}x${base.rows}:${(mistura >>> 0).toString(36)}`;
+  }
+  return `${mascaras._chaveDaSilhueta}:${giro}:${grupo}`;
+}
+
+/** As duas máscaras desenham a mesma silhueta, coluna por coluna? */
+export function mesmaSilhueta(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const rotacoes = Object.keys(a.rotacoes);
+  if (rotacoes.length !== Object.keys(b.rotacoes).length) return false;
+  for (const rot of rotacoes) {
+    const ma = a.rotacoes[rot];
+    const mb = b.rotacoes[rot];
+    if (!ma || !mb) { if (ma !== mb) return false; continue; }
+    if (ma.cols !== mb.cols || ma.rows !== mb.rows) return false;
+    for (let c = 0; c < ma.cols; c++) {
+      if (ma.topo[c] !== mb.topo[c] || ma.base[c] !== mb.base[c]) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * As peças repartidas por silhueta: um balde por desenho, e não por arquivo.
+ *
+ * Colisão de chave não passa: o balde guarda a máscara de quem o abriu, e
+ * quem chegar depois só entra se desenhar a mesma coisa. Quem não entrar abre
+ * um balde próprio, marcado pelo índice — pior que agrupar, melhor que
+ * agrupar errado, que é peça em cima de peça.
+ */
+export function agruparPorSilhueta(itens) {
+  const baldes = new Map();
+  itens.forEach((item) => {
+    let chave = chaveDaSilhueta(item);
+    const balde = baldes.get(chave);
+    if (balde && !mesmaSilhueta(balde.mascaras, item.mascaras)) {
+      chave = `${chave}#${item.indice}`;
+    }
+    const meu = baldes.get(chave);
+    if (meu) meu.itens.push(item);
+    else baldes.set(chave, { mascaras: item.mascaras, itens: [item] });
+  });
+  return baldes;
+}
+
 export function montarUnidades(itens, tamanho) {
   const unidades = [];
   if (!(tamanho > 1)) {
@@ -897,13 +1027,10 @@ export function montarUnidades(itens, tamanho) {
     return unidades;
   }
 
-  const porPeca = new Map();
-  itens.forEach((item) => {
-    if (!porPeca.has(item.indice)) porPeca.set(item.indice, []);
-    porPeca.get(item.indice).push(item);
-  });
+  // Por SILHUETA, não por arquivo: ver `chaveDaSilhueta`.
+  const porPeca = agruparPorSilhueta(itens);
 
-  porPeca.forEach((copias) => {
+  porPeca.forEach(({ itens: copias }) => {
     const formasBloco = copias.length >= tamanho && rotacoesDe(copias[0]).includes(180)
       ? formasDoBloco(copias, tamanho)
       : null;
@@ -1365,33 +1492,63 @@ export function melhorVagaNosVaos(colunas, colsTecido, unidade, tetoFundo, linha
   return melhor;
 }
 
+/**
+ * Quem tem o que ganhar com uma passada de repescagem.
+ *
+ * O encaixe por caixa (`retangulo`) fica de fora: ele nem guarda a silhueta,
+ * então a colocação que a repescagem mexeria não existe do lado dele.
+ */
+export const aceitaRepescagem = (motor) =>
+  motor === "contorno" || motor === "faixas" || motor === "vaos" || motor === "blocos";
+
 // Quantas peças do rabo do rolo entram na repescagem. Mexer em peça do meio não
 // encurta metragem nenhuma: o consumo é o ponto mais baixo alcançado.
 export const REPESCA_MAX_PECAS = 16;
 // Só entra na roda a peça que termina no último terço do rolo.
 export const REPESCA_FATIA_DO_RABO = 0.66;
 
-export function repescarNosVaos(colocacoes, colsTecido, linhasBancada) {
+/*
+ * `voltas` é quantas vezes a repescagem passa pelo rabo do rolo.
+ *
+ * Uma passada só deixa tecido para trás por um motivo simples: a peça mais
+ * funda tenta primeiro, e nessa hora os vãos bons ainda estão ocupados pelas
+ * peças que vêm depois dela na fila da repescagem. Quando elas sobem, abre-se
+ * lugar que a primeira já não volta para pegar. Além disso o rabo é medido
+ * contra o fundo de ANTES: baixando o fundo, o último terço é outro, e peça
+ * que nem era do rabo passa a ser.
+ *
+ * A volta seguinte custa o mesmo que a primeira (2 a 40 ms) e para sozinha
+ * assim que o fundo não encurta mais, então o preço é pago só enquanto ela
+ * está comprando tecido. Continua valendo que ela **nunca piora**: a peça só
+ * sai do lugar por uma posição que termine mais acima.
+ */
+export function repescarNosVaos(colocacoes, colsTecido, linhasBancada, voltas = 1) {
   const fundoDeTodas = () => colocacoes.reduce((m, c) => Math.max(m, fundoDaColocacao(c)), 0);
   if (colocacoes.length < 2) return fundoDeTodas();
 
   const colunas = intervalosDoRolo(colocacoes, colsTecido);
-  const fundoMax = fundoDeTodas();
+  let fundoMax = fundoDeTodas();
 
-  const doRabo = colocacoes
-    .filter((c) => fundoDaColocacao(c) >= fundoMax * REPESCA_FATIA_DO_RABO)
-    .sort((a, b) => fundoDaColocacao(b) - fundoDaColocacao(a))
-    .slice(0, REPESCA_MAX_PECAS);
+  for (let volta = 0; volta < Math.max(1, voltas); volta++) {
+    const doRabo = colocacoes
+      .filter((c) => fundoDaColocacao(c) >= fundoMax * REPESCA_FATIA_DO_RABO)
+      .sort((a, b) => fundoDaColocacao(b) - fundoDaColocacao(a))
+      .slice(0, REPESCA_MAX_PECAS);
 
-  doRabo.forEach((col) => {
-    const antes = fundoDaColocacao(col);
-    ocuparIntervalos(colunas, col, -1);
-    const vaga = melhorVagaNosVaos(colunas, colsTecido, col.unidade, antes, linhasBancada);
-    if (vaga) { col.forma = vaga.forma; col.x = vaga.x; col.y = vaga.y; }
-    ocuparIntervalos(colunas, col, 1);
-  });
+    doRabo.forEach((col) => {
+      const antes = fundoDaColocacao(col);
+      ocuparIntervalos(colunas, col, -1);
+      const vaga = melhorVagaNosVaos(colunas, colsTecido, col.unidade, antes, linhasBancada);
+      if (vaga) { col.forma = vaga.forma; col.x = vaga.x; col.y = vaga.y; }
+      ocuparIntervalos(colunas, col, 1);
+    });
 
-  return fundoDeTodas();
+    const agora = fundoDeTodas();
+    if (agora >= fundoMax) { fundoMax = agora; break; }
+    fundoMax = agora;
+  }
+
+  return fundoMax;
 }
 
 export function resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo) {
@@ -1412,13 +1569,16 @@ export function encaixarContorno(unidades, config) {
   if (typeof encaixarContornoWasm === "function") {
     const pelaViaRapida = encaixarContornoWasm(unidades, config);
     if (pelaViaRapida) {
-      // A repescagem trabalha nas colocações, que o WASM também devolve.
-      if (config.repescar && pelaViaRapida.colocacoes) {
+      // A repescagem trabalha nas colocações, que o WASM também devolve. Num
+      // pedaço que continua um rolo ela fica de fora, pelo mesmo motivo do
+      // caminho em JavaScript logo abaixo.
+      if (config.repescar && !config.perfilInicial && pelaViaRapida.colocacoes) {
         const { passo } = config;
         const colsDoTecido = config.colsForcado
           || Math.max(1, Math.floor(config.larguraTecido / passo));
         const linhas = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
-        const fundo = repescarNosVaos(pelaViaRapida.colocacoes, colsDoTecido, linhas);
+        const fundo = repescarNosVaos(pelaViaRapida.colocacoes, colsDoTecido, linhas,
+          config.repescaVoltas);
         const refeito = resultadoDoEncaixe(
           posicoesDasColocacoes(pelaViaRapida.colocacoes, passo, linhas),
           pelaViaRapida.naoEncaixadas, fundo, passo);
@@ -1434,12 +1594,32 @@ export function encaixarContorno(unidades, config) {
   // `colsForcado` é usado pelo encaixe por faixas: ali a largura não é a do
   // rolo, é a da faixa.
   const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
-  const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
+  // `linhasBancadaForcado` vem de quem encaixa a fila em pedaços: a trava tem
+  // que ser a do conjunto inteiro, e não a que este pedaço calcularia sozinho
+  // (ver `encaixarPorBlocos`).
+  const linhasBancada = config.linhasBancadaForcado != null ? config.linhasBancadaForcado
+    : bancadaEmCelulas(config, reservaDaArte(unidades, passo));
 
-  const perfil = new Int32Array(colsTecido);
+  /*
+   * `config.perfilInicial` é o relevo que sobrou de um pedaço já encaixado, e
+   * com ele esta passada CONTINUA o rolo em vez de começar um novo.
+   *
+   * Isso é de graça porque o encaixe é sequencial: cada peça desce no relevo
+   * que as anteriores deixaram e não olha para as que vêm depois. Encaixar
+   * 1..k e continuar de k+1 dá exatamente o mesmo resultado que encaixar tudo
+   * de uma vez — é o que deixa `encaixarPorBlocos` procurar a ordem de um
+   * pedaço da fila sem re-encaixar o pedido inteiro a cada tentativa.
+   */
+  const perfil = config.perfilInicial
+    ? Int32Array.from(config.perfilInicial.subarray
+      ? config.perfilInicial.subarray(0, colsTecido) : config.perfilInicial)
+    : new Int32Array(colsTecido);
   const colocacoes = [];
   const naoEncaixadas = [];
+  // Quem continua um rolo já começado herda o fundo dele: pode ser que nenhuma
+  // peça nova desça tanto quanto o que já estava lá.
   let fundoMax = 0;
+  for (let c = 0; c < colsTecido; c++) if (perfil[c] > fundoMax) fundoMax = perfil[c];
   // A unidade cuja posição escolhida deixou mais buraco morto acima dela —
   // "vazio" já é medido para toda posição (ver `melhorPosicaoDaUnidade`),
   // então guardar o pior daqui não custa nada a mais. É o que a busca usa
@@ -1460,12 +1640,21 @@ export function encaixarContorno(unidades, config) {
     if (escolha.vazio > piorVazio) { piorVazio = escolha.vazio; piorUnidade = unidade; }
   });
 
-  if (config.repescar) fundoMax = repescarNosVaos(colocacoes, colsTecido, linhasBancada);
+  // A repescagem mexe em peça já assentada olhando os intervalos ocupados
+  // DESTAS colocações. Num pedaço que continua um rolo, as peças dos pedaços
+  // anteriores não estão nessa conta — repescar aqui mandaria uma peça para
+  // cima de outra. Quem repesca o encaixe por blocos é ele mesmo, no fim, com
+  // o rolo inteiro na mão (ver `encaixarPorBlocos`).
+  if (config.repescar && !config.perfilInicial) {
+    fundoMax = repescarNosVaos(colocacoes, colsTecido, linhasBancada, config.repescaVoltas);
+  }
 
   const resultado = resultadoDoEncaixe(
     posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundoMax, passo);
+  resultado.colocacoes = colocacoes;
   resultado.piorUnidade = piorUnidade;
   resultado.piorVazio = piorVazio;
+  if (config.querPerfil) resultado.perfilFinal = perfil;
   return resultado;
 }
 
@@ -1733,8 +1922,338 @@ export function encaixarPorVaos(unidades, config) {
     if (vazio > piorVazio) { piorVazio = vazio; piorUnidade = unidade; }
   });
 
+  /*
+   * A repescagem também aqui — e antes ela não vinha.
+   *
+   * O polimento do fim da busca (ver `buscarMelhorEncaixe`) chamava este
+   * encaixador com `repescar` ligado, e ele ignorava o pedido: a passada
+   * inteira saía idêntica à que já tinha vencido, e o polimento de um encaixe
+   * por vãos era uma tentativa gasta para nada.
+   *
+   * Que ele desce nos vãos desde a primeira peça quase torna a repescagem
+   * redundante — e, na varredura exata, torna mesmo: medido com
+   * `bancada:sobreposicao` nos treze trabalhos, a repescagem não tirou um
+   * centímetro de nenhum encaixe por vãos. O motivo é que ela refaz a mesma
+   * descida que ele já fez, só que com MAIS peças no caminho.
+   *
+   * O que sobra para ela é a fatia que varre pulando (ver `puloDaFatia`, em
+   * encaixe-paralelo.js): ali o encaixe testou uma coluna a cada três, e a
+   * repescagem testa todas. Nessas fatias ela é a varredura fina que o encaixe
+   * não pagou — e é por isso que ela fica, apesar do empate na varredura exata.
+   */
+  if (config.repescar) {
+    fundoMax = repescarNosVaos(colocacoes, colsTecido, linhasBancada, config.repescaVoltas);
+  }
+
   const resultado = resultadoDoEncaixe(
     posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundoMax, passo);
+  resultado.colocacoes = colocacoes;
+  resultado.piorUnidade = piorUnidade;
+  resultado.piorVazio = piorVazio;
+  return resultado;
+}
+
+// ==================== O ENCAIXE POR BLOCOS ====================
+
+/**
+ * ===========================================================================
+ * O ENCAIXE POR BLOCOS — a fila entra por pedaços, e cada pedaço é procurado
+ * ===========================================================================
+ *
+ * O QUE ELE RESOLVE
+ * -----------------
+ * A busca deste motor faz uma coisa só: sacode a fila inteira, encaixa tudo de
+ * novo e fica com o melhor. Isso funciona enquanto a fila é curta. Medido na
+ * bancada (5 fatias × 3 s × 3 sementes), quantas arrumações cada trabalho
+ * chega a experimentar por peça:
+ *
+ *   so-camiseta         12 peças   262.801 tentativas   21.900 por peça
+ *   lote-grande        130 peças    11.815 tentativas       91 por peça
+ *   producao-uniforme  175 peças     3.195 tentativas       18 por peça
+ *
+ * Dezoito arrumações por peça não é busca, é sorteio. E é exatamente a queixa
+ * que veio da produção: no pedido grande, o pedaço que sozinho encaixaria
+ * apertado sai mal no meio do lote. Não é o encaixador que piora com o
+ * tamanho — é o orçamento de busca que evapora, porque cada tentativa custa o
+ * pedido inteiro.
+ *
+ * A PROPRIEDADE QUE ABRE A PORTA
+ * ------------------------------
+ * O encaixe é sequencial: cada peça desce no relevo que as anteriores
+ * deixaram e não olha para as que vêm depois. Então encaixar 1..k e continuar
+ * de k+1 dá **exatamente** o mesmo resultado que encaixar tudo de uma vez.
+ *
+ * Ou seja: a fila pode ser tratada em pedaços sem perder nada na emenda — nada
+ * de rabo de rolo mal aproveitado por pedaço, que é o que fazia "encaixar um
+ * arquivo de cada vez" custar caro (ver a ordem "familia", que é o meio-termo
+ * sem esta peça). O que faltava era o encaixador saber começar de um relevo em
+ * vez de tecido novo; hoje ele sabe, dos dois lados (`config.perfilInicial`,
+ * aqui e em wasm/src/lib.rs).
+ *
+ * COMO ELE PROCURA
+ * ----------------
+ * O rolo é montado bloco a bloco. Para cada bloco:
+ *
+ *   1. olha a JANELA — as próximas unidades da fila, o dobro do tamanho do
+ *      bloco;
+ *   2. testa várias arrumações: quais unidades da janela entram neste bloco e
+ *      em que ordem (a primeira da fila entra sempre, senão a peça grande
+ *      ficaria para trás bloco após bloco);
+ *   3. fica com a que deixou o rolo mais curto, desempatando pelo relevo mais
+ *      baixo — frente de trabalho mais plana é mais lugar para o bloco
+ *      seguinte;
+ *   4. assenta esse bloco de vez e segue para o próximo.
+ *
+ * O item 2 é o que responde à queixa. A janela deixa uma peça pequena de mais
+ * adiante na fila subir para tapar o vão que a grande abriu — sem depender de
+ * o embaralhamento global ter, por sorte, posto as duas lado a lado.
+ *
+ * O PREÇO, E POR QUE ELE COMPENSA NO GRANDE
+ * -----------------------------------------
+ * Uma passada por blocos custa `tentativas` passadas comuns: cada unidade é
+ * encaixada uma vez por arrumação testada do bloco dela. Em troca, o que ela
+ * visita não é UMA arrumação da fila inteira — é uma escolha por bloco, e as
+ * escolhas se compõem.
+ *
+ * No trabalho pequeno isso não paga: lá a busca comum já experimenta dezenas
+ * de milhares de filas inteiras, e o bloco ainda por cima decide cedo e não
+ * volta atrás. Por isso ele entra como **mais uma receita na disputa**, igual
+ * a todo encaixador daqui: só leva o trabalho quando gastar menos.
+ */
+
+// Quantas unidades entram de uma vez, e de quantas a escolha é feita.
+export const BLOCO_UNIDADES = 8;
+export const BLOCO_JANELA = 2;      // a janela é este múltiplo do bloco
+export const BLOCO_TENTATIVAS = 12; // arrumações testadas por bloco
+
+/**
+ * A fila repartida em corridas INDIVISÍVEIS.
+ *
+ * As peças que a pessoa marcou como grupo entram juntas na fila (ver
+ * `juntarGrupos`) e é assim que elas têm que continuar: a escolha do bloco
+ * sorteia corridas inteiras, nunca um pedaço de grupo. Sem grupo, cada
+ * unidade é uma corrida de uma.
+ */
+export function corridasDeGrupo(unidades) {
+  const corridas = [];
+  unidades.forEach((unidade) => {
+    const grupo = grupoDaUnidade(unidade);
+    const ultima = corridas[corridas.length - 1];
+    if (grupo && ultima && ultima.grupo === grupo) ultima.unidades.push(unidade);
+    else corridas.push({ grupo, unidades: [unidade] });
+  });
+  return corridas;
+}
+
+/** Quantas corridas do começo da janela cabem no tamanho do bloco. */
+export function corridasAteTamanho(janela, tamanho) {
+  let quantas = 0;
+  let unidades = 0;
+  for (const corrida of janela) {
+    if (quantas > 0 && unidades >= tamanho) break;
+    quantas++;
+    unidades += corrida.unidades.length;
+  }
+  return quantas;
+}
+
+/**
+ * Quais corridas da janela entram neste bloco, e em que ordem.
+ *
+ * A primeira da fila entra sempre: sem isso, a unidade que a ordem pôs na
+ * frente — a maior, quase sempre — poderia ser adiada bloco após bloco e
+ * acabar sozinha no fim do rolo, que é o contrário do que se quer.
+ */
+export function escolherDaJanela(janela, quantasUnidades, sortear) {
+  const sorteadas = janela.slice(1);
+  for (let i = sorteadas.length - 1; i > 0; i--) {
+    const j = Math.floor(sortear() * (i + 1));
+    const guarda = sorteadas[i]; sorteadas[i] = sorteadas[j]; sorteadas[j] = guarda;
+  }
+  const escolhidas = [janela[0]];
+  let quantas = janela[0].unidades.length;
+  for (const corrida of sorteadas) {
+    if (quantas >= quantasUnidades) break;
+    escolhidas.push(corrida);
+    quantas += corrida.unidades.length;
+  }
+  // A ordem de entrada também é sorteada: num encaixe guloso ela decide tanto
+  // quanto quem entra.
+  for (let i = escolhidas.length - 1; i > 0; i--) {
+    const j = Math.floor(sortear() * (i + 1));
+    const guarda = escolhidas[i]; escolhidas[i] = escolhidas[j]; escolhidas[j] = guarda;
+  }
+  return escolhidas;
+}
+
+/** O que o bloco deixou: o fundo do rolo e quanto relevo ele levantou. */
+export function notaDoBloco(resultado, colsTecido) {
+  const perfil = resultado.perfilFinal;
+  let fundo = 0;
+  let soma = 0;
+  for (let c = 0; c < colsTecido; c++) {
+    const altura = perfil[c];
+    soma += altura;
+    if (altura > fundo) fundo = altura;
+  }
+  return { sobraram: resultado.naoEncaixadas.length, fundo, soma };
+}
+
+/**
+ * Qual das duas arrumações do bloco é melhor.
+ *
+ * Primeiro quem deixou menos peça de fora, depois o rolo mais curto. O
+ * desempate pela SOMA do relevo é o que impede a escolha míope: duas
+ * arrumações que terminam no mesmo fundo não valem o mesmo se uma delas
+ * deixou a frente de trabalho cheia de degrau — o bloco seguinte desce no que
+ * esta deixar.
+ */
+export const notaMelhor = (a, b) => (
+  a.sobraram !== b.sobraram ? a.sobraram < b.sobraram
+    : a.fundo !== b.fundo ? a.fundo < b.fundo
+      : a.soma < b.soma);
+
+/**
+ * A outra leitura possível: o desperdício em primeiro lugar, o fundo como
+ * desempate.
+ *
+ * `soma` é o relevo somado — a área de tecido que o bloco tirou de circulação,
+ * vão preso incluído. Como a área das peças é a mesma em toda arrumação, menor
+ * soma é menos vão preso. Qual das duas leituras rende fica para a bancada
+ * decidir: `--extra blocoNota=vazio`.
+ */
+export const notaMelhorPorVazio = (a, b) => (
+  a.sobraram !== b.sobraram ? a.sobraram < b.sobraram
+    : a.soma !== b.soma ? a.soma < b.soma
+      : a.fundo < b.fundo);
+
+/**
+ * O que distingue uma arrumação de bloco de outra, para não testar duas vezes
+ * a mesma.
+ *
+ * Duas unidades da mesma família são intercambiáveis — trocá-las de lugar dá
+ * exatamente o mesmo encaixe (é o mesmo motivo pelo qual `baguncarFamilias`
+ * sacode blocos e não peças). Numa fila ordenada por família, a janela inteira
+ * costuma ser de uma família só, e sem esta conta o bloco gastaria as doze
+ * tentativas dele reencaixando doze vezes o mesmo desenho.
+ */
+export function assinaturaDaEscolha(corridas) {
+  let assinatura = "";
+  for (const corrida of corridas) {
+    assinatura += familiaDaUnidade(corrida.unidades[0]) + ":" + corrida.unidades.length + "|";
+  }
+  return assinatura;
+}
+
+export function encaixarPorBlocos(unidades, config) {
+  const { passo, larguraTecido } = config;
+  const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
+  // A trava da bancada sai do conjunto INTEIRO, uma vez. Deixá-la nascer
+  // dentro de cada bloco daria uma linha diferente por bloco — a reserva da
+  // arte depende de quais peças estão na mão (ver `reservaDaArte`) — e a
+  // promessa de que nenhuma peça cruza a linha valeria por bloco, não pelo
+  // rolo.
+  const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
+
+  const tamanho = Math.max(1, Math.round(config.blocoUnidades || BLOCO_UNIDADES));
+  const largura = Math.max(1, Math.round(config.blocoJanela || BLOCO_JANELA));
+  const tentativas = Math.max(1, Math.round(config.blocoTentativas || BLOCO_TENTATIVAS));
+  const melhorNota = config.blocoNota === "vazio" ? notaMelhorPorVazio : notaMelhor;
+
+  /*
+   * O sorteio nasce da ORDEM recebida, e não de um contador escondido.
+   *
+   * A busca chama este encaixador milhares de vezes com filas diferentes, e
+   * duas chamadas com a MESMA fila têm que dar o mesmo encaixe — é o que
+   * garante que apertar "Optmizar" duas vezes com o mesmo lote não dê
+   * metragens diferentes, e é o que deixa a bancada medir.
+   */
+  let semente = (config.semente || 20260824) >>> 0;
+  unidades.forEach((unidade, i) => {
+    const primeira = unidade.itens[0];
+    const dela = primeira ? primeira.indice * 7 + primeira.copia : 0;
+    semente = (Math.imul(semente, 31) + dela + i) >>> 0;
+  });
+  const sortear = geradorDeSorteio(semente);
+
+  const configDoBloco = {
+    ...config,
+    // O plano do WASM é montado para o conjunto inteiro e reaproveitado em
+    // todos os blocos; cada bloco entra como uma ordem curta dentro dele (ver
+    // `encaixarContornoWasm`).
+    conjunto: unidades,
+    querPerfil: true,
+    repescar: false,
+    linhasBancadaForcado: linhasBancada,
+  };
+
+  let restantes = corridasDeGrupo(unidades);
+  let perfil = new Int32Array(colsTecido);
+  let fundo = 0;
+  const colocacoes = [];
+  const naoEncaixadas = [];
+  let piorUnidade = null;
+  let piorVazio = -Infinity;
+
+  while (restantes.length > 0) {
+    // A janela: as próximas corridas, até o dobro do tamanho do bloco.
+    const janela = [];
+    let naJanela = 0;
+    for (const corrida of restantes) {
+      if (janela.length > 0 && naJanela >= tamanho * largura) break;
+      janela.push(corrida);
+      naJanela += corrida.unidades.length;
+    }
+
+    let campea = null;
+    const vistas = new Set();
+    // O sorteio pode cair numa arrumação já testada; quando isso acontecer,
+    // ela não gasta tentativa, só um sorteio. O teto de sorteios é o que
+    // impede o laço de insistir numa janela que não tem mais nada de novo a
+    // oferecer (janela de uma família só, por exemplo).
+    const tetoDeSorteios = tentativas * 3;
+    let sorteios = 0;
+    let feitas = 0;
+    while (feitas < tentativas && sorteios < tetoDeSorteios) {
+      sorteios++;
+      // A primeira tentativa é a fila como ela veio: assim o bloco nunca sai
+      // pior do que a ordem que a receita escolheu.
+      const corridas = feitas === 0
+        ? janela.slice(0, corridasAteTamanho(janela, tamanho))
+        : escolherDaJanela(janela, tamanho, sortear);
+      const assinatura = assinaturaDaEscolha(corridas);
+      if (vistas.has(assinatura)) continue;
+      vistas.add(assinatura);
+      feitas++;
+      const bloco = [];
+      corridas.forEach((corrida) => corrida.unidades.forEach((u) => bloco.push(u)));
+      const resultado = encaixarContorno(bloco, { ...configDoBloco, perfilInicial: perfil });
+      const nota = notaDoBloco(resultado, colsTecido);
+      if (!campea || melhorNota(nota, campea.nota)) campea = { resultado, nota, corridas };
+    }
+
+    campea.resultado.colocacoes.forEach((colocacao) => colocacoes.push(colocacao));
+    campea.resultado.naoEncaixadas.forEach((item) => naoEncaixadas.push(item));
+    if (campea.resultado.piorVazio > piorVazio) {
+      piorVazio = campea.resultado.piorVazio;
+      piorUnidade = campea.resultado.piorUnidade;
+    }
+    perfil = campea.resultado.perfilFinal;
+    if (campea.nota.fundo > fundo) fundo = campea.nota.fundo;
+
+    const assentadas = new Set(campea.corridas);
+    restantes = restantes.filter((corrida) => !assentadas.has(corrida));
+  }
+
+  // A repescagem, agora sim: aqui o rolo está inteiro na mão, e é a conta de
+  // todas as colocações que ela precisa para não mandar peça para cima de
+  // peça (ver a trava em `encaixarContorno`).
+  if (config.repescar) {
+    fundo = repescarNosVaos(colocacoes, colsTecido, linhasBancada, config.repescaVoltas);
+  }
+
+  const resultado = resultadoDoEncaixe(
+    posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundo, passo);
   resultado.colocacoes = colocacoes;
   resultado.piorUnidade = piorUnidade;
   resultado.piorVazio = piorVazio;
@@ -2036,8 +2555,11 @@ export function juntarGrupos(lista) {
  */
 export function familiaDaUnidade(unidade) {
   if (unidade._familia == null) {
+    // A família é a SILHUETA, e não o arquivo: num pedido em que cada peça vem
+    // no seu arquivo, agrupar por arquivo dava uma família por peça — ou seja,
+    // ordem nenhuma (ver `chaveDaSilhueta`).
     unidade._familia = grupoDaUnidade(unidade)
-      || unidade.itens.map((i) => i.indice).sort((a, b) => a - b).join("-");
+      || unidade.itens.map(chaveDaSilhueta).sort().join("-");
   }
   return unidade._familia;
 }
@@ -2179,6 +2701,21 @@ export function receitasBase(motores, temGiroLivre, cortes = [], agrupamentos = 
       ordens.forEach((ordem) => {
         if (ordem.porFamilia && agrupamento !== "solta") return;
         receitas.push({ motor: "vaos", agrupamento, ordem: ordem.nome, heuristica: "fundo" });
+      });
+    });
+  }
+  if (motores.includes("blocos")) {
+    /*
+     * As mesmas ordens e heurísticas do contorno — ele É o contorno, encaixando
+     * a fila por pedaços. A ordem continua mandando: é ela que decide quem
+     * chega primeiro na janela de cada bloco.
+     */
+    agrupamentos.forEach((agrupamento) => {
+      ordens.forEach((ordem) => {
+        if (ordem.porFamilia && agrupamento !== "solta") return;
+        HEURISTICAS_CONTORNO.forEach((heuristica) => {
+          receitas.push({ motor: "blocos", agrupamento, ordem: ordem.nome, heuristica });
+        });
       });
     });
   }
@@ -2366,6 +2903,10 @@ export const melhorQue = (candidato, atual) => {
  * `config.memoria` traz o que foi aprendido antes: `{ receita: {usos, vitorias} }`.
  */
 export async function buscarMelhorEncaixe(itens, config) {
+  // Por silhueta ou por arquivo (ver `definirAgrupamento`). Fica no começo de
+  // tudo: as unidades são montadas logo abaixo, e a família é decidida na
+  // primeira ordenação.
+  definirAgrupamento(config.agruparPor);
   const motores = config.motores || ["contorno", "retangulo"];
   const temGiroLivre = itens.some(podeDeitar);
   const memoria = config.memoria || {};
@@ -2408,7 +2949,8 @@ export async function buscarMelhorEncaixe(itens, config) {
   // decide é o resultado, e por isso os dois correm.
   let agrupamentos = config.agrupamentos || AGRUPAMENTOS_PADRAO;
   const unidades = {};
-  if (motores.includes("contorno") || motores.includes("faixas") || motores.includes("vaos")) {
+  if (motores.includes("contorno") || motores.includes("faixas") || motores.includes("vaos")
+      || motores.includes("blocos")) {
     agrupamentos.forEach((nome) => {
       unidades[nome] = nome === "cruzada"
         ? montarUnidadesCruzadas(itens)
@@ -2444,6 +2986,9 @@ export async function buscarMelhorEncaixe(itens, config) {
       return { chave: "retangulo/" + receita.agrupamento, crua: listasRetangulo[receita.agrupamento],
         ordem: ORDENS_RETANGULO.find((o) => o.nome === receita.ordem) };
     }
+    // O motor por blocos mexe nas MESMAS unidades do contorno, então divide
+    // com ele o balde de "melhor ordem já vista": uma ordem boa que um
+    // descobre serve para o outro.
     const ordem = ORDENS_CONTORNO.find((o) => o.nome === receita.ordem);
     // A ordem por família tem balde próprio de "melhor ordem já vista". Sem
     // isso ela retomaria de uma ordem misturada descoberta por outra receita, e
@@ -2476,6 +3021,9 @@ export async function buscarMelhorEncaixe(itens, config) {
     }
     if (receita.motor === "vaos") {
       return encaixarPorVaos(lista, { ...config, heuristica: receita.heuristica });
+    }
+    if (receita.motor === "blocos") {
+      return encaixarPorBlocos(lista, { ...config, heuristica: receita.heuristica });
     }
     if (receita.motor === "contorno") {
       return encaixarContorno(lista, { ...config, heuristica: receita.heuristica });
@@ -2634,6 +3182,35 @@ export async function buscarMelhorEncaixe(itens, config) {
   // `reinserir`, junto com o comando para remedir.
   const REINSERCAO_CHANCE = config.reinsercaoChance != null ? config.reinsercaoChance : 0;
 
+  /*
+   * Os ajustes do polimento do fim (ver "O POLIMENTO", lá embaixo).
+   *
+   * `polimentoAmplo=false` devolve o polimento como ele era — um candidato só,
+   * uma volta de repescagem e nada de repescar o encaixe por vãos. É por ele
+   * que a bancada mede os dois lados com o MESMO código, sem voltar o
+   * repositório no tempo.
+   */
+  const POLIMENTO_AMPLO = config.polimentoAmplo !== false;
+  const POLIMENTO_FINALISTAS = POLIMENTO_AMPLO
+    ? (config.polimentoFinalistas != null ? Math.max(1, Number(config.polimentoFinalistas)) : 4)
+    : 1;
+  const REPESCA_VOLTAS = POLIMENTO_AMPLO
+    ? (config.repescaVoltas != null ? Math.max(1, Number(config.repescaVoltas)) : 3)
+    : 1;
+  /**
+   * Os candidatos do polimento: o melhor encaixe de CADA receita, e não só o
+   * da campeã.
+   *
+   * A repescagem não rende igual em todo encaixe — ela paga onde ficou vão
+   * preso, e isso depende do desenho, não do consumo. Duas tentativas separadas
+   * por meio por cento podem trocar de lugar depois de polidas: a segunda tinha
+   * mais vão para devolver. Polir só a primeira é não olhar para isso.
+   *
+   * Um por receita, e não os N melhores de todos, porque tentativas da mesma
+   * receita saem parecidas — poliria quatro vezes quase o mesmo encaixe.
+   */
+  const finalistas = new Map();
+
   const receitasNaRoda = () => {
     const linhas = [...placar.values()];
     if (config.podar === false || !melhor || linhas.length <= PODA_MINIMO) return linhas;
@@ -2729,6 +3306,19 @@ export async function buscarMelhorEncaixe(itens, config) {
     tentativas++;
     guardarOrdem(resultado);
     const linha = placar.get(chave);
+    // O melhor encaixe desta receita, guardado para o polimento do fim. Só o
+    // que coube inteiro, pelo mesmo motivo de `guardarOrdem`, e só de quem
+    // aceita repescagem — polir o encaixe por caixa devolveria ele mesmo.
+    if (POLIMENTO_FINALISTAS > 1 && linha && resultado.ordemUsada
+        && resultado.naoEncaixadas.length === 0 && aceitaRepescagem(linha.receita.motor)) {
+      const antes = finalistas.get(chave);
+      if (!antes || resultado.consumo < antes.consumo) {
+        finalistas.set(chave, {
+          chave, receita: linha.receita, ordem: resultado.ordemUsada,
+          chaveDaLista: resultado.chaveDaLista, consumo: resultado.consumo,
+        });
+      }
+    }
     if (linha) {
       linha.tentativas++;
       // Só entra o encaixe que coube INTEIRO — o mesmo cuidado que o placar dos
@@ -2765,6 +3355,17 @@ export async function buscarMelhorEncaixe(itens, config) {
   };
 
   const tetoMs = config.tempoMaximoMs || 20000;
+  /*
+   * O polimento passou a custar mais de uma passada, e esse custo sai do tempo
+   * da busca — não é acrescentado a ele. Do contrário a bancada estaria
+   * comparando dois orçamentos diferentes, e na tela o campo de tempo pedido
+   * passaria a mentir um pouco mais a cada candidato polido.
+   */
+  const RESERVA_POLIMENTO = POLIMENTO_AMPLO
+    ? (config.polimentoReservaMs != null ? Number(config.polimentoReservaMs)
+      : Math.min(300, tetoMs * 0.04))
+    : 0;
+  const tetoBusca = Math.max(tetoMs * 0.5, tetoMs - RESERVA_POLIMENTO);
 
   const avisar = (fase) => {
     if (config.aoProgredir) {
@@ -2842,7 +3443,7 @@ export async function buscarMelhorEncaixe(itens, config) {
   // receitas voltam para a roda. Ver "bater na parede" logo abaixo.
   let podaSuspensaAte = 0;
 
-  while (Date.now() - inicio < tetoMs) {
+  while (Date.now() - inicio < tetoBusca) {
     if (config.deveParar && config.deveParar()) break;
     if (bateuAMeta()) break;
 
@@ -2946,7 +3547,7 @@ export async function buscarMelhorEncaixe(itens, config) {
   }
 
   /*
-   * O POLIMENTO: uma última passada do vencedor, agora com a repescagem nos
+   * O POLIMENTO: uma última passada dos finalistas, agora com a repescagem nos
    * vãos ligada (ver `repescarNosVaos`).
    *
    * Por que só no fim, e não em toda tentativa: a repescagem troca o relevo por
@@ -2960,22 +3561,62 @@ export async function buscarMelhorEncaixe(itens, config) {
    * Medida numa passada gulosa, sem busca, ela tirou 6,88% do misturado pequeno
    * e 2,58% do lote grande — os dois trabalhos com mais formatos diferentes,
    * que é onde o vão preso se acumula.
+   *
+   * O que mudou: em vez de polir só a campeã, ele pole o melhor encaixe de cada
+   * receita, do mais apertado ao menos, enquanto houver troco de tempo (ver
+   * `finalistas` e `RESERVA_POLIMENTO`). Quem decide continua sendo `melhorQue`,
+   * então candidato polido que não melhorar não entra.
    */
+  const polirOrdem = (receita, ordem) => {
+    const comRepesca = {
+      ...config, heuristica: receita.heuristica,
+      // O encaixe por vãos só entra na repescagem no polimento amplo: sem ela
+      // ele devolve o mesmo encaixe que já tinha, e é assim que o polimento de
+      // antes se comporta (ver POLIMENTO_AMPLO).
+      repescar: POLIMENTO_AMPLO || receita.motor !== "vaos",
+      repescaVoltas: REPESCA_VOLTAS,
+    };
+    if (receita.motor === "faixas") {
+      return encaixarPorFaixas(ordem, { ...comRepesca, corteCols: receita.corte });
+    }
+    if (receita.motor === "vaos") return encaixarPorVaos(ordem, comRepesca);
+    if (receita.motor === "blocos") return encaixarPorBlocos(ordem, comRepesca);
+    return encaixarContorno(ordem, comRepesca);
+  };
+
+  // A campeã primeiro — ela é a que o polimento de sempre pegava, e é a que
+  // roda mesmo quando não sobrou tempo nenhum. Depois as outras receitas, da
+  // que chegou mais perto para a que chegou menos.
+  const paraPolir = [];
   if (melhor && receitaVencedora && melhor.ordemUsada
-      && (receitaVencedora.motor === "contorno" || receitaVencedora.motor === "faixas"
-        || receitaVencedora.motor === "vaos")) {
-    const comRepesca = { ...config, heuristica: receitaVencedora.heuristica, repescar: true };
-    const polido = receitaVencedora.motor === "faixas"
-      ? encaixarPorFaixas(melhor.ordemUsada, { ...comRepesca, corteCols: receitaVencedora.corte })
-      : receitaVencedora.motor === "vaos"
-        ? encaixarPorVaos(melhor.ordemUsada, comRepesca)
-        : encaixarContorno(melhor.ordemUsada, comRepesca);
+      && aceitaRepescagem(receitaVencedora.motor)) {
+    paraPolir.push({ chave: melhorChave, receita: receitaVencedora, ordem: melhor.ordemUsada,
+      chaveDaLista: melhor.chaveDaLista });
+  }
+  [...finalistas.values()]
+    .sort((a, b) => a.consumo - b.consumo)
+    .forEach((f) => {
+      if (paraPolir.length >= POLIMENTO_FINALISTAS) return;
+      if (paraPolir.some((c) => c.chave === f.chave)) return;
+      paraPolir.push(f);
+    });
+
+  for (const candidato of paraPolir) {
+    const polido = polirOrdem(candidato.receita, candidato.ordem);
     if (melhorQue(polido, melhor)) {
-      polido.ordemUsada = melhor.ordemUsada;
-      polido.chaveDaLista = melhor.chaveDaLista;
+      polido.ordemUsada = candidato.ordem;
+      polido.chaveDaLista = candidato.chaveDaLista;
       polido.repescou = true;
       melhor = polido;
+      // O polimento pode trocar o vencedor de receita, e quem responde "qual
+      // motor ganhou" lá embaixo é `melhorChave`. Sem esta linha a tela diria
+      // o nome da receita errada — e a memória aprenderia com ele.
+      melhorChave = candidato.chave;
+      receitaVencedora = candidato.receita;
     }
+    // O troco do tempo acabou: a campeã já foi polida, que é o que o polimento
+    // garantia antes de existirem candidatos.
+    if (Date.now() - inicio >= tetoMs) break;
   }
 
   avisar("pronto");
@@ -2996,7 +3637,7 @@ export async function buscarMelhorEncaixe(itens, config) {
   // resultado dizia "usei o retângulo" mesmo quando o contorno tinha vencido.
   melhor.venceuContorno = melhorChave
     ? (melhorChave.startsWith("contorno") || melhorChave.startsWith("faixas")
-      || melhorChave.startsWith("vaos")) : false;
+      || melhorChave.startsWith("vaos") || melhorChave.startsWith("blocos")) : false;
   melhor.venceuFaixas = melhorChave ? melhorChave.startsWith("faixas") : false;
   melhor.melhorPorMotor = Object.fromEntries(melhorDeCadaMotor);
   melhor.ganhos = historicoDeGanhos;
