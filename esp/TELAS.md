@@ -1,7 +1,7 @@
 # As telas do terminal
 
 O que cada tela do aparelho da calandra faz, o que aparece nela, e por que ela é
-assim. Dezesseis telas, quatro caminhos.
+assim. Dezoito telas, quatro caminhos.
 
 Este documento é sobre **o que se vê**. O `LEIA-ME.md` ao lado é sobre **como foi
 construído** — a placa, os pinos, os defeitos que custaram dias.
@@ -31,13 +31,27 @@ relógio marcando hora errada com ar de certeza é pior que um que assume não s
 
 ### A tela inicial
 
-Três cartões grandes, um por app, e um círculo pequeno no canto para o **Sobre**.
-O ícone de cada app mora num disco da cor dele.
+A marca do Optmize no topo, três cartões grandes — um por app —, e dois círculos
+pequenos no canto de baixo: **?** para a ajuda e **i** para o Sobre. No rodapé, o
+estado da rede e a versão gravada.
 
-**Por quê:** a cor identifica a área sem pintar a superfície inteira — um cartão
-laranja inteiro gritaria mais que o conteúdo dele. O círculo do Sobre é pequeno de
-propósito: os três cartões são o trabalho, aquilo é manutenção aberta uma vez por
-mês.
+Cada cartão tem uma tarja fina da cor do app no topo e o ícone num quadrado
+arredondado com fundo apagado.
+
+**Por quê:** a cor identifica a área sem pintar a superfície inteira — três
+cartões chapados gritariam ao mesmo tempo, e nenhum é mais importante que os
+outros dois. O quadrado arredondado, e não o círculo, porque é a forma da própria
+marca: dois colchetes de canto reto.
+
+O rodapé repete o que a barra já diz, e de propósito: a barra é lida por quem
+está usando, o rodapé por quem **acabou de chegar** na frente do aparelho e ainda
+não tocou nele. A primeira pergunta de quem chega num terminal estranho é "ele
+está funcionando?".
+
+Os dois círculos são pequenos porque os três cartões são o trabalho e aquilo é
+manutenção — mas são **dois**, e não um dentro do outro: "que aparelho é este" é
+quem liga do escritório, "o que está acontecendo" é quem está com o problema na
+frente, e essa é a urgente.
 
 ---
 
@@ -45,8 +59,17 @@ mês.
 
 ### 1. A procura
 
-A câmera ao vivo à esquerda, a instrução à direita. O terminal lê sozinho: não há
-botão de disparar.
+A câmera ao vivo à esquerda, com **quatro cantos verdes** marcando onde o código
+tem de caber. À direita, três linhas de checklist e o último código lido. O
+terminal lê sozinho: não há botão de disparar.
+
+**Por que a mira:** um retângulo preto com vídeo dentro não diz onde mirar. A
+pessoa aproxima, afasta, inclina, e descobre o enquadramento por tentativa — toda
+vez, para sempre. São cantos e não moldura fechada porque a moldura taparia
+justamente a borda do que se está enquadrando.
+
+**Por que checklist e não parágrafo:** ninguém lê parágrafo em pé, com pressa — e
+um parágrafo não diz *qual* das coisas está errada quando a leitura não pega.
 
 O QR da folha é um código curto — `Pc4b5348578` — e só o servidor sabe traduzi-lo.
 Códigos de OS (`O…`) e de trabalho avulso (`R…`) são válidos e **não servem aqui**;
@@ -73,12 +96,18 @@ item errado.
 
 ### 3. A conferência — *um item por vez*
 
-A arte à esquerda, já carregada. A **metragem sozinha em corpo grande** — ela não
-é mais um dado entre outros, é o número que decide se aquele rolo é aquele item —
-e abaixo dela, em pares alinhados, cliente, tecido e máquina. *"Dry Fit" muda a
-temperatura da máquina*, e isso o nome do arquivo não diz. Dois alvos embaixo, cada um com quase meia tela. Ao entrar em cada item a
-placa **diz o nome e a metragem em voz alta** — inclusive nos já marcados, porque
-quem volta a um pedido conferido está conferindo de novo.
+A arte à esquerda, já carregada. À direita, a **metragem sozinha em corpo
+grande** — ela não é mais um dado entre outros, é o número que decide se aquele
+rolo é aquele item — e abaixo dela, em pares alinhados, cliente, tecido e
+máquina. Dois alvos no rodapé, cada um com quase meia tela.
+
+Cliente e tecido vieram do servidor e respondem o que o nome do arquivo não
+responde: de quem é a peça, e o que ela é. *"Dry Fit" muda a temperatura da
+máquina.*
+
+Ao entrar em cada item a placa **diz o nome e a metragem em voz alta** —
+inclusive nos já marcados, porque quem volta a um pedido conferido está
+conferindo de novo.
 
 **Por quê:** a arte *é* a decisão. Se ela precisa de um toque para aparecer,
 ninguém toca, e a conferência vira marcar linha por nome de arquivo — que é o que
@@ -140,17 +169,17 @@ estivesse resolvido — escondendo trabalho que ninguém fez.
 
 ---
 
-## Pontos — duas portas
+## Pontos — três portas
 
-### As duas áreas
+### As três portas
 
-Bater ponto ocupa dois terços da tela, em verde. Cadastrar rosto é um cartão ao
-lado.
+Bater ponto ocupa a largura inteira, em verde. Cadastrar rosto e lista de pessoas
+dividem a linha de baixo.
 
-**Por quê:** bater ponto acontece quatro vezes por dia para cada pessoa; cadastrar
-rosto, uma vez na vida. Dar o mesmo peso visual às duas faria a fila da manhã parar
-para escolher entre coisas igualmente importantes — quando só uma delas importa
-naquele momento.
+**Por quê:** bater ponto acontece quatro vezes por dia para cada pessoa;
+cadastrar rosto, uma vez na vida; ver quem está cadastrado, quase nunca. Uma
+grade de três iguais diria que as três pesam o mesmo, e a fila da manhã pararia
+para escolher entre coisas que não competem.
 
 ### Bater ponto
 
@@ -166,8 +195,12 @@ ponto de todo mundo seria batido várias vezes por dia por acidente.
 
 ### A confirmação
 
-O nome em corpo enorme, a batida e a hora abaixo. Volta sozinha à entrada do app em
-quatro segundos.
+Um **anel verde de 120 pixels** com o certo dentro, o nome em corpo enorme abaixo,
+e a batida com a hora. Volta sozinha à entrada do app em quatro segundos.
+
+O anel existe porque esta tela é vista **de longe, já de costas**: a pessoa
+apertou, está guardando o crachá e virando para a máquina. Um anel responde "deu
+certo" antes de qualquer letra ser lida.
 
 **Por quê:** a pergunta que a pessoa faz aqui é "foi o *meu* ponto?", e ela pergunta
 isso de longe, já andando. Quatro segundos é o tempo de ler um nome e uma hora e ter
@@ -217,6 +250,12 @@ gráfica quem troca o roteador não tem compilador.
 
 O volume da voz **fala uma frase de prova ao soltar o controle**: arrastar um volume
 sem ouvir nada é adivinhar.
+
+No pé da coluna da esquerda, uma **ficha de duas linhas**: o endereço que o
+terminal tem na rede, e o endereço do servidor. São exatamente as duas linhas que
+alguém precisa ler por telefone quando o Optmize "não aparece" — e o estado da
+conexão fica ali do lado, junto do botão que o muda, porque quem acabou de tocar
+em Conectar está olhando para aquele botão.
 
 O ganho do microfone mostra o número e *não chega ao codec*. O microfone existe e
 funciona, mas nada no sistema o escuta ainda — ligar o controle a um microfone que
