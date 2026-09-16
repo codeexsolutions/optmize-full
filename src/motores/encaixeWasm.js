@@ -58,9 +58,9 @@ export const WASM_CAB = {
   unidInicio: 8, unidQtd: 9,
   ordem: 10, nOrdem: 11,
   perfil: 12, colsTecido: 13, usaVazio: 14, pulo: 15,
-  acumulado: 16, saida: 17, linhasBancada: 18,
+  acumulado: 16, saida: 17, linhasBancada: 18, manterPerfil: 19,
 };
-export const WASM_CAB_TAMANHO = 19;
+export const WASM_CAB_TAMANHO = 20;
 
 export let motorWasm = null;      // { instancia, i32, memoria }
 export let motorWasmFalhou = false;
@@ -317,13 +317,34 @@ export function encaixarContornoWasm(unidades, config) {
   const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
   const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
 
-  const plano = prepararUnidadesNoWasm(unidades);
+  /*
+   * `config.conjunto` é o conjunto INTEIRO de unidades desta busca, quando o
+   * que se pede para encaixar é só um pedaço dele.
+   *
+   * O plano do WASM (as formas escritas na memória) é montado por conjunto e
+   * reaproveitado enquanto as mesmas unidades voltarem — e a conferência disso
+   * é "todas apontam para o mesmo plano, e o plano foi montado para tantas
+   * unidades" (ver `prepararUnidadesNoWasm`). Mandando um pedaço, essa conta
+   * falha e o plano é remontado a cada chamada: percorrer todas as formas de
+   * novo custa o mesmo que o encaixe, e o ganho do WASM ia embora.
+   *
+   * Só que o Rust nunca precisou disso: ele encaixa as `nOrdem` unidades que a
+   * ORDEM listar, e a ordem pode ser um pedaço do plano. Então o conjunto monta
+   * o plano uma vez e cada pedaço entra como uma ordem curta.
+   */
+  const plano = prepararUnidadesNoWasm(config.conjunto || unidades);
   if (!plano || colsTecido > plano.colsTecidoMax) return null;
 
   const i32 = motorWasm.i32;
   const cab = plano.cabecalho;
 
-  for (let k = 0; k < unidades.length; k++) i32[plano.ordem + k] = unidades[k]._wasm.id;
+  for (let k = 0; k < unidades.length; k++) {
+    const dela = unidades[k]._wasm;
+    // Unidade que não é deste plano não tem forma escrita aqui — melhor cair
+    // no caminho em JavaScript do que ler forma alheia.
+    if (!dela || dela.plano !== plano) return null;
+    i32[plano.ordem + k] = dela.id;
+  }
   i32[cab + WASM_CAB.nOrdem] = unidades.length;
   i32[cab + WASM_CAB.colsTecido] = colsTecido;
   i32[cab + WASM_CAB.usaVazio] = heuristica === "vazio" ? 1 : 0;
@@ -332,7 +353,28 @@ export function encaixarContornoWasm(unidades, config) {
   // `empurrarParaBancada` de encaixe-motor.js que o Rust copia.
   i32[cab + WASM_CAB.linhasBancada] = linhasBancada || 0;
 
-  const fundoMax = motorWasm.instancia.exports.encaixar(cab * 4);
+  /*
+   * O relevo de onde esta rodada parte. Sem `perfilInicial` é tecido novo, e o
+   * Rust zera o relevo como sempre fez; com ele, o relevo vai escrito daqui e o
+   * Rust continua em cima (ver CAB_MANTER_PERFIL, em wasm/src/lib.rs).
+   *
+   * O fundo que o Rust devolve conta só as peças DESTA rodada. Quando ela
+   * continua um rolo já começado, o consumo é o mais fundo dos dois — pode ser
+   * que nenhuma peça nova tenha descido tanto quanto o que já estava lá.
+   */
+  const inicial = config.perfilInicial;
+  let fundoDoQueJaEstava = 0;
+  if (inicial) {
+    for (let c = 0; c < colsTecido; c++) {
+      const altura = inicial[c] || 0;
+      i32[plano.perfil + c] = altura;
+      if (altura > fundoDoQueJaEstava) fundoDoQueJaEstava = altura;
+    }
+  }
+  i32[cab + WASM_CAB.manterPerfil] = inicial ? 1 : 0;
+
+  const fundoDaRodada = motorWasm.instancia.exports.encaixar(cab * 4);
+  const fundoMax = Math.max(fundoDaRodada, fundoDoQueJaEstava);
 
   // A volta: o WASM diz qual forma venceu e onde; as peças de verdade e as
   // máscaras continuam aqui do lado do JavaScript.
@@ -369,10 +411,16 @@ export function encaixarContornoWasm(unidades, config) {
   // caminhos se separam sem ninguém ver.
   const posicoes = posicoesDasColocacoes(colocacoes, passo, linhasBancada);
 
-  return {
+  const resultado = {
     posicoes, colocacoes, naoEncaixadas,
     consumo: fundoMax > 0 ? fundoMax * passo : 0,
     areaReal: posicoes.reduce((soma, p) => soma + p.item.mascaras.areaReal, 0),
     piorUnidade, piorVazio,
   };
+  // O relevo que sobrou, para o pedaço seguinte continuar dele. Sai copiado: o
+  // vetor do WASM é rascunho, e a próxima rodada escreve por cima dele.
+  if (config.querPerfil) {
+    resultado.perfilFinal = i32.slice(plano.perfil, plano.perfil + colsTecido);
+  }
+  return resultado;
 }
