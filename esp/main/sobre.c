@@ -80,13 +80,13 @@ static void linha(lv_obj_t *pai, int coluna, int *y, const char *rotulo, const c
     lv_obj_t *r = lv_label_create(pai);
     lv_label_set_text(r, rotulo);
     lv_obj_set_style_text_color(r, COR_APOIO, 0);
-    lv_obj_set_style_text_font(r, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(r, &fonte_16, 0);
     lv_obj_set_pos(r, x, *y);
 
     lv_obj_t *v = lv_label_create(pai);
     lv_label_set_text(v, valor);
     lv_obj_set_style_text_color(v, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(v, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(v, &fonte_16, 0);
     lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
     lv_obj_set_width(v, 290);
     lv_obj_set_pos(v, x + 170, *y);
@@ -94,12 +94,13 @@ static void linha(lv_obj_t *pai, int coluna, int *y, const char *rotulo, const c
     *y += 30;
 }
 
-static void titulo_de_bloco(lv_obj_t *pai, int coluna, int *y, const char *texto)
+/* O titulo de um bloco DENTRO de uma das duas colunas desta tela. */
+static void titulo_da_coluna(lv_obj_t *pai, int coluna, int *y, const char *texto)
 {
     lv_obj_t *t = lv_label_create(pai);
     lv_label_set_text(t, texto);
     lv_obj_set_style_text_color(t, COR_DESTAQUE, 0);
-    lv_obj_set_style_text_font(t, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(t, &fonte_16, 0);
     lv_obj_set_style_text_letter_space(t, 2, 0);
     lv_obj_set_pos(t, coluna * 496 + 24, *y);
     *y += 28;
@@ -122,7 +123,7 @@ void sobre_mostrar(lv_obj_t *pai)
     lv_obj_t *nome = lv_label_create(cortina);
     lv_label_set_text(nome, "Terminal Optmize");
     lv_obj_set_style_text_color(nome, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(nome, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(nome, &fonte_28, 0);
     lv_obj_set_pos(nome, 24, 12);
 
     lv_obj_t *fechar = lv_button_create(cortina);
@@ -134,7 +135,7 @@ void sobre_mostrar(lv_obj_t *pai)
     lv_obj_add_event_cb(fechar, tocou_fechar, LV_EVENT_CLICKED, NULL);
     lv_obj_t *rf = lv_label_create(fechar);
     lv_label_set_text(rf, "Fechar");
-    lv_obj_set_style_text_font(rf, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rf, &fonte_16, 0);
     lv_obj_center(rf);
 
     char texto[96];
@@ -142,7 +143,7 @@ void sobre_mostrar(lv_obj_t *pai)
     /* ===================== coluna da esquerda: o programa ================ */
 
     int y = 62;
-    titulo_de_bloco(cortina, 0, &y, "PROGRAMA");
+    titulo_da_coluna(cortina, 0, &y, "PROGRAMA");
 
     const esp_app_desc_t *app = esp_app_get_description();
     linha(cortina, 0, &y, "Versao", app->version);
@@ -151,7 +152,7 @@ void sobre_mostrar(lv_obj_t *pai)
     linha(cortina, 0, &y, "ESP-IDF", app->idf_ver);
 
     y += 12;
-    titulo_de_bloco(cortina, 0, &y, "APARELHO");
+    titulo_da_coluna(cortina, 0, &y, "APARELHO");
 
     /*
      * A PLACA NAO E A DA ESPRESSIF, e dizer isso aqui nao e detalhe de
@@ -176,7 +177,7 @@ void sobre_mostrar(lv_obj_t *pai)
     /* ===================== coluna da direita: o estado ================== */
 
     y = 62;
-    titulo_de_bloco(cortina, 1, &y, "REDE");
+    titulo_da_coluna(cortina, 1, &y, "REDE");
 
     linha(cortina, 1, &y, "Wi-Fi", rede_conectada() ? rede_nome_da_rede() : "sem rede");
     linha(cortina, 1, &y, "Endereco", rede_conectada() ? rede_endereco() : "--");
@@ -192,7 +193,7 @@ void sobre_mostrar(lv_obj_t *pai)
     linha(cortina, 1, &y, "Hora", rede_tem_hora() ? "acertada pela rede" : "sem hora certa");
 
     y += 12;
-    titulo_de_bloco(cortina, 1, &y, "MEMORIA E TEMPO");
+    titulo_da_coluna(cortina, 1, &y, "MEMORIA E TEMPO");
 
     /*
      * O TOTAL E O MAIOR BLOCO, lado a lado. Os dois juntos contam o que nenhum
@@ -222,7 +223,7 @@ void sobre_mostrar(lv_obj_t *pai)
     lv_label_set_text(rodape,
         "O terminal nao guarda dado nenhum: tudo vem do Optmize, e volta para ele.");
     lv_obj_set_style_text_color(rodape, COR_APOIO, 0);
-    lv_obj_set_style_text_font(rodape, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rodape, &fonte_16, 0);
     lv_obj_align(rodape, LV_ALIGN_BOTTOM_LEFT, 24, -16);
 
     ESP_LOGI(TAG, "versao %s, compilado em %s %s", app->version, app->date, app->time);

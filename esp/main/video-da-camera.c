@@ -177,7 +177,7 @@ static void mostrar_reconectando(bool mostrar)
     rot_reconectando = lv_label_create(pai_do_video);
     lv_label_set_text(rot_reconectando, "procurando a camera...");
     lv_obj_set_style_text_color(rot_reconectando, COR_DESTAQUE, 0);
-    lv_obj_set_style_text_font(rot_reconectando, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(rot_reconectando, &fonte_22, 0);
     lv_obj_set_style_text_align(rot_reconectando, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_bg_color(rot_reconectando, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(rot_reconectando, LV_OPA_80, 0);

@@ -257,7 +257,13 @@ static lv_obj_t *botao_grande(lv_obj_t *pai, int x, int y, int w, int h,
     lv_obj_set_style_bg_color(b, cor, 0);
     lv_obj_set_style_border_color(b, COR_BORDA, 0);
     lv_obj_set_style_border_width(b, 1, 0);
-    lv_obj_set_style_radius(b, 12, 0);
+    lv_obj_set_style_radius(b, RAIO_MIUDO, 0);
+    /*
+     * Sem sombra, e com resposta ao dedo. Os dois vem do Optmize: ele separa
+     * superficies por cor e borda, e escurece o que esta sendo apertado.
+     */
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_set_style_bg_opa(b, LV_OPA_80, LV_STATE_PRESSED);
     lv_obj_add_event_cb(b, quando_tocar, LV_EVENT_CLICKED, carga);
 
     lv_obj_t *r = lv_label_create(b);
@@ -268,8 +274,13 @@ static lv_obj_t *botao_grande(lv_obj_t *pai, int x, int y, int w, int h,
      * laranja daqui sao claros: letra branca em cima deles nao se le de dois
      * metros, que e a distancia de quem passa pela calandra.
      */
+    /*
+     * TINTA ESCURA SOBRE COR FORTE, e nao preto puro: preto sobre laranja
+     * vibra na vista. `COR_DESTAQUE_TINTA` e o mesmo quase-preto que o Optmize
+     * usa em cima do laranja dele.
+     */
     const bool forte = lv_color_eq(cor, COR_CERTO) || lv_color_eq(cor, COR_DESTAQUE);
-    lv_obj_set_style_text_color(r, forte ? lv_color_black() : COR_TEXTO, 0);
+    lv_obj_set_style_text_color(r, forte ? COR_DESTAQUE_TINTA : COR_TEXTO, 0);
     lv_obj_set_style_text_align(r, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(r);
     return b;
@@ -286,7 +297,7 @@ static void marcou(const char *item_id, const char *erro)
     if (bsp_display_lock(200)) {
         if (rot_aviso != NULL) {
             lv_label_set_text(rot_aviso, erro);
-            lv_obj_set_style_text_color(rot_aviso, COR_DESTAQUE, 0);
+            lv_obj_set_style_text_color(rot_aviso, COR_ALERTA, 0);
         }
         bsp_display_unlock();
     }
@@ -385,38 +396,41 @@ static void perguntar_se_segue(const char *motivo)
      */
     lv_obj_t *c = abrir_o_sobreposto();
 
-    lv_obj_t *titulo = lv_label_create(c);
-    lv_label_set_text(titulo, "Marcado como nao passou");
-    lv_obj_set_style_text_color(titulo, COR_DESTAQUE, 0);
-    lv_obj_set_style_text_font(titulo, &lv_font_montserrat_28, 0);
-    lv_obj_set_pos(titulo, 40, 60);
+    lv_obj_t *aviso = cartao_de_estado(c, 30, 40, LV_HOR_RES - 60, 140,
+                                       COR_ALERTA, LV_SYMBOL_WARNING);
 
-    lv_obj_t *qual = lv_label_create(c);
+    lv_obj_t *titulo = lv_label_create(aviso);
+    lv_label_set_text(titulo, "Marcado como nao passou");
+    lv_obj_set_style_text_color(titulo, COR_ALERTA, 0);
+    lv_obj_set_style_text_font(titulo, &fonte_28, 0);
+    lv_obj_set_pos(titulo, 76, 0);
+
+    lv_obj_t *qual = lv_label_create(aviso);
     lv_label_set_text_fmt(qual, "%s  .  %s", pedido.itens[atual].tarefa, motivo);
     lv_obj_set_style_text_color(qual, COR_APOIO, 0);
-    lv_obj_set_style_text_font(qual, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(qual, &fonte_16, 0);
     lv_label_set_long_mode(qual, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(qual, 900);
-    lv_obj_set_pos(qual, 40, 102);
+    lv_obj_set_width(qual, LV_HOR_RES - 190);
+    lv_obj_set_pos(qual, 76, 36);
 
-    lv_obj_t *pergunta = lv_label_create(c);
+    lv_obj_t *pergunta = lv_label_create(aviso);
     lv_label_set_text_fmt(pergunta, "Continuar a conferencia?  Faltam %d item(ns).", faltam);
     lv_obj_set_style_text_color(pergunta, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(pergunta, &lv_font_montserrat_22, 0);
-    lv_obj_set_pos(pergunta, 40, 168);
+    lv_obj_set_style_text_font(pergunta, &fonte_22, 0);
+    lv_obj_set_pos(pergunta, 76, 68);
 
-    botao_grande(c, 40, 240, 460, 120, COR_CERTO, &lv_font_montserrat_28,
+    botao_grande(c, 30, 216, 470, 118, COR_CERTO, &fonte_28,
                  LV_SYMBOL_OK "  Continuar", tocou_continuar, NULL);
-    botao_grande(c, 524, 240, 460, 120, COR_CARTAO, &lv_font_montserrat_28,
+    botao_grande(c, 524, 216, 470, 118, COR_CARTAO, &fonte_28,
                  LV_SYMBOL_STOP "  Parar agora", tocou_parar, NULL);
 
     lv_obj_t *nota = lv_label_create(c);
     lv_label_set_text(nota,
         "Parar nao fecha o pedido: o que sobrar continua pendente,\n"
         "e o mesmo QR retoma daqui.");
-    lv_obj_set_style_text_color(nota, COR_APOIO, 0);
-    lv_obj_set_style_text_font(nota, &lv_font_montserrat_16, 0);
-    lv_obj_set_pos(nota, 40, 390);
+    lv_obj_set_style_text_color(nota, COR_FRACA, 0);
+    lv_obj_set_style_text_font(nota, &fonte_16, 0);
+    lv_obj_set_pos(nota, 32, 356);
 }
 
 /* ------------------------------------------------------- o motivo */
@@ -456,13 +470,13 @@ static void perguntar_o_motivo(void)
     lv_obj_t *titulo = lv_label_create(c);
     lv_label_set_text(titulo, "Por que nao passou?");
     lv_obj_set_style_text_color(titulo, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(titulo, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(titulo, &fonte_28, 0);
     lv_obj_set_pos(titulo, 40, 20);
 
     lv_obj_t *qual = lv_label_create(c);
     lv_label_set_text(qual, pedido.itens[atual].tarefa);
     lv_obj_set_style_text_color(qual, COR_APOIO, 0);
-    lv_obj_set_style_text_font(qual, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(qual, &fonte_16, 0);
     lv_label_set_long_mode(qual, LV_LABEL_LONG_DOT);
     lv_obj_set_width(qual, 900);
     lv_obj_set_pos(qual, 40, 58);
@@ -470,12 +484,12 @@ static void perguntar_o_motivo(void)
     /* Dois por linha, grandes: mesma razao dos botoes de passou e nao passou. */
     for (int i = 0; i < (int)QUANTOS_MOTIVOS; i++) {
         botao_grande(c, 40 + (i % 2) * 484, 100 + (i / 2) * 100, 460, 84,
-                     COR_CARTAO, &lv_font_montserrat_22, MOTIVOS[i],
+                     COR_CARTAO, &fonte_22, MOTIVOS[i],
                      tocou_um_motivo, (void *)(intptr_t)i);
     }
 
     botao_grande(c, 412, ALTURA_UTIL - 72, 200, 56, COR_BORDA,
-                 &lv_font_montserrat_16, "Cancelar", tocou_cancelar_motivo, NULL);
+                 &fonte_16, "Cancelar", tocou_cancelar_motivo, NULL);
 }
 
 /* ================================================= a visao geral */
@@ -537,7 +551,7 @@ static void montar_a_visao_geral(void)
     lv_label_set_text_fmt(topo, "%d item(ns)  .  %s m no total",
                           pedido.quantos, metros_do_total);
     lv_obj_set_style_text_color(topo, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(topo, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(topo, &fonte_28, 0);
     lv_obj_set_pos(topo, 20, 8);
 
     if (passaram > 0 || falharam > 0) {
@@ -545,12 +559,12 @@ static void montar_a_visao_geral(void)
         lv_label_set_text_fmt(ja, LV_SYMBOL_OK " %d  .  " LV_SYMBOL_CLOSE " %d  .  %d por conferir",
                               passaram, falharam, pendentes);
         lv_obj_set_style_text_color(ja, COR_APOIO, 0);
-        lv_obj_set_style_text_font(ja, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_font(ja, &fonte_16, 0);
         lv_obj_align(ja, LV_ALIGN_TOP_RIGHT, -20, 18);
     }
 
     botao_grande(area_do_app, LV_HOR_RES - 220, 6, 200, 44, COR_CARTAO,
-                 &lv_font_montserrat_16, LV_SYMBOL_REFRESH "  outro codigo",
+                 &fonte_16, LV_SYMBOL_REFRESH "  outro codigo",
                  tocou_outro_codigo, NULL);
 
     /* --- a lista, que so informa --- */
@@ -572,7 +586,7 @@ static void montar_a_visao_geral(void)
         lv_obj_set_style_bg_color(linha, COR_CARTAO, 0);
         lv_obj_set_style_border_color(linha, COR_BORDA, 0);
         lv_obj_set_style_border_width(linha, 1, 0);
-        lv_obj_set_style_radius(linha, 8, 0);
+        lv_obj_set_style_radius(linha, RAIO_MIUDO, 0);
         lv_obj_set_style_pad_all(linha, 10, 0);
         lv_obj_remove_flag(linha, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_remove_flag(linha, LV_OBJ_FLAG_CLICKABLE);
@@ -585,13 +599,13 @@ static void montar_a_visao_geral(void)
         lv_obj_t *ordem = lv_label_create(linha);
         lv_label_set_text_fmt(ordem, "%d", i + 1);
         lv_obj_set_style_text_color(ordem, COR_APOIO, 0);
-        lv_obj_set_style_text_font(ordem, &lv_font_montserrat_22, 0);
+        lv_obj_set_style_text_font(ordem, &fonte_22, 0);
         lv_obj_set_pos(ordem, 0, 4);
 
         lv_obj_t *nome = lv_label_create(linha);
         lv_label_set_text(nome, item->tarefa);
         lv_obj_set_style_text_color(nome, COR_TEXTO, 0);
-        lv_obj_set_style_text_font(nome, &lv_font_montserrat_22, 0);
+        lv_obj_set_style_text_font(nome, &fonte_22, 0);
         lv_label_set_long_mode(nome, LV_LABEL_LONG_DOT);
         lv_obj_set_width(nome, 620);
         lv_obj_set_pos(nome, 46, 4);
@@ -602,13 +616,13 @@ static void montar_a_visao_geral(void)
         lv_obj_t *quanto = lv_label_create(linha);
         lv_label_set_text_fmt(quanto, "%s m", metros_do_item);
         lv_obj_set_style_text_color(quanto, COR_TEXTO, 0);
-        lv_obj_set_style_text_font(quanto, &lv_font_montserrat_22, 0);
+        lv_obj_set_style_text_font(quanto, &fonte_22, 0);
         lv_obj_set_pos(quanto, 700, 4);
 
         lv_obj_t *maquina = lv_label_create(linha);
         lv_label_set_text(maquina, item->maquina);
         lv_obj_set_style_text_color(maquina, COR_APOIO, 0);
-        lv_obj_set_style_text_font(maquina, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_font(maquina, &fonte_16, 0);
         lv_obj_set_pos(maquina, 800, 8);
 
         /* O que ja foi decidido, para quem esta retomando um pedido. */
@@ -617,7 +631,7 @@ static void montar_a_visao_geral(void)
             lv_obj_t *marca = lv_label_create(linha);
             lv_label_set_text(marca, passou ? LV_SYMBOL_OK : LV_SYMBOL_CLOSE);
             lv_obj_set_style_text_color(marca, passou ? COR_CERTO : COR_DESTAQUE, 0);
-            lv_obj_set_style_text_font(marca, &lv_font_montserrat_22, 0);
+            lv_obj_set_style_text_font(marca, &fonte_22, 0);
             lv_obj_set_pos(marca, 940, 4);
         }
     }
@@ -626,7 +640,7 @@ static void montar_a_visao_geral(void)
 
     const bool ha_o_que_conferir = pendentes > 0;
     botao_grande(area_do_app, 20, ALTURA_UTIL - 98, LV_HOR_RES - 40, 86,
-                 ha_o_que_conferir ? COR_CERTO : COR_CARTAO, &lv_font_montserrat_28,
+                 ha_o_que_conferir ? COR_CERTO : COR_CARTAO, &fonte_28,
                  ha_o_que_conferir ? LV_SYMBOL_PLAY "  Iniciar a conferencia"
                                    : LV_SYMBOL_OK "  Ja esta tudo conferido -- ver o resumo",
                  tocou_iniciar, NULL);
@@ -662,24 +676,6 @@ static void tocou_nao_passou(lv_event_t *e)
     perguntar_o_motivo();
 }
 
-static void linha_de_dado(lv_obj_t *pai, int y, const char *rotulo,
-                          const char *valor, const lv_font_t *fonte)
-{
-    lv_obj_t *r = lv_label_create(pai);
-    lv_label_set_text(r, rotulo);
-    lv_obj_set_style_text_color(r, COR_APOIO, 0);
-    lv_obj_set_style_text_font(r, &lv_font_montserrat_16, 0);
-    lv_obj_set_pos(r, 0, y);
-
-    lv_obj_t *v = lv_label_create(pai);
-    lv_label_set_text(v, valor);
-    lv_obj_set_style_text_color(v, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(v, fonte, 0);
-    lv_label_set_long_mode(v, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(v, 420);
-    lv_obj_set_pos(v, 0, y + 22);
-}
-
 static void montar_a_conferencia(void)
 {
     conferindo = true;
@@ -696,7 +692,7 @@ static void montar_a_conferencia(void)
     lv_obj_t *onde = lv_label_create(area_do_app);
     lv_label_set_text_fmt(onde, "Item %d de %d", atual + 1, pedido.quantos);
     lv_obj_set_style_text_color(onde, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(onde, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(onde, &fonte_22, 0);
     lv_obj_set_pos(onde, 16, 6);
 
     float total = 0.0f;
@@ -709,7 +705,7 @@ static void montar_a_conferencia(void)
     lv_obj_t *soma = lv_label_create(area_do_app);
     lv_label_set_text_fmt(soma, "%s m no pedido", metros_do_total);
     lv_obj_set_style_text_color(soma, COR_APOIO, 0);
-    lv_obj_set_style_text_font(soma, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(soma, &fonte_16, 0);
     lv_obj_align(soma, LV_ALIGN_TOP_RIGHT, -16, 12);
 
     /*
@@ -755,25 +751,58 @@ static void montar_a_conferencia(void)
     lv_obj_set_style_bg_color(ficha, COR_CARTAO, 0);
     lv_obj_set_style_border_color(ficha, COR_BORDA, 0);
     lv_obj_set_style_border_width(ficha, 1, 0);
-    lv_obj_set_style_radius(ficha, 12, 0);
+    lv_obj_set_style_radius(ficha, RAIO, 0);
     lv_obj_set_style_pad_all(ficha, 20, 0);
     lv_obj_remove_flag(ficha, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *nome = lv_label_create(ficha);
     lv_label_set_text(nome, item->tarefa);
     lv_obj_set_style_text_color(nome, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(nome, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(nome, &fonte_22, 0);
     lv_label_set_long_mode(nome, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(nome, 448);
     lv_obj_set_pos(nome, 0, 0);
 
+    /*
+     * A METRAGEM FICA FORA DA FICHA, em corpo grande e sozinha.
+     *
+     * Ela nao e mais um dado entre outros: e o numero que decide se aquele rolo
+     * na mao e este item. Posta na lista com os demais, ela pesaria igual a
+     * "Maquina" -- e ninguem confere um rolo pela impressora que o fez.
+     */
     char metros_do_item[16];
     escrever_metros(metros_do_item, sizeof(metros_do_item), item->metros);
-    char com_unidade[24];
-    snprintf(com_unidade, sizeof(com_unidade), "%s m", metros_do_item);
 
-    linha_de_dado(ficha, 108, "Metragem", com_unidade, &lv_font_montserrat_28);
-    linha_de_dado(ficha, 186, "Maquina", item->maquina, &lv_font_montserrat_22);
+    lv_obj_t *rot_metros = lv_label_create(ficha);
+    lv_label_set_text(rot_metros, "METRAGEM");
+    lv_obj_set_style_text_color(rot_metros, COR_DESTAQUE, 0);
+    lv_obj_set_style_text_font(rot_metros, &fonte_16, 0);
+    lv_obj_set_style_text_letter_space(rot_metros, 2, 0);
+    lv_obj_set_pos(rot_metros, 0, 96);
+
+    lv_obj_t *quanto = lv_label_create(ficha);
+    lv_label_set_text_fmt(quanto, "%s m", metros_do_item);
+    lv_obj_set_style_text_color(quanto, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(quanto, &fonte_48, 0);
+    lv_obj_set_pos(quanto, 0, 118);
+
+    lv_obj_t *risco = lv_obj_create(ficha);
+    lv_obj_set_size(risco, 448, 1);
+    lv_obj_set_pos(risco, 0, 186);
+    lv_obj_set_style_bg_color(risco, COR_BORDA_SUAVE, 0);
+    lv_obj_set_style_border_width(risco, 0, 0);
+    lv_obj_remove_flag(risco, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(risco, LV_OBJ_FLAG_CLICKABLE);
+
+    /*
+     * O RESTO EM PARES ALINHADOS. Cliente e tecido vieram agora do servidor:
+     * ja estavam na tabela e nao saiam de la. Na calandra os dois respondem o
+     * que o nome do arquivo nao responde -- de quem e a peca, e o que ela e.
+     * "Dry Fit" muda a temperatura da maquina.
+     */
+    par_da_ficha(ficha, 202, "Cliente",  item->cliente, 448);
+    par_da_ficha(ficha, 228, "Tecido",   item->tecido,  448);
+    par_da_ficha(ficha, 254, "Maquina",  item->maquina, 448);
 
     /*
      * O QUE JA ESTAVA MARCADO, quando estava. So aparece em item redecidido --
@@ -787,30 +816,30 @@ static void montar_a_conferencia(void)
                               passou ? LV_SYMBOL_OK : LV_SYMBOL_CLOSE,
                               passou ? "passou" : "nao passou");
         lv_obj_set_style_text_color(antes, passou ? COR_CERTO : COR_DESTAQUE, 0);
-        lv_obj_set_style_text_font(antes, &lv_font_montserrat_16, 0);
-        lv_obj_set_pos(antes, 0, 264);
+        lv_obj_set_style_text_font(antes, &fonte_16, 0);
+        lv_obj_set_pos(antes, 0, 292);
     }
 
     lv_obj_t *dica = lv_label_create(ficha);
     lv_label_set_text(dica, "Toque na arte para ver de perto.");
     lv_obj_set_style_text_color(dica, COR_APOIO, 0);
-    lv_obj_set_style_text_font(dica, &lv_font_montserrat_16, 0);
-    lv_obj_set_pos(dica, 0, 300);
+    lv_obj_set_style_text_font(dica, &fonte_16, 0);
+    lv_obj_set_pos(dica, 0, 322);
 
     rot_aviso = lv_label_create(ficha);
     lv_label_set_text(rot_aviso, "");
-    lv_obj_set_style_text_font(rot_aviso, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rot_aviso, &fonte_16, 0);
     lv_label_set_long_mode(rot_aviso, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(rot_aviso, 448);
-    lv_obj_set_pos(rot_aviso, 0, 326);
+    lv_obj_set_pos(rot_aviso, 0, 348);
 
     /* --- os dois alvos --- */
 
     botao_grande(area_do_app, 16, 446, 486, 86, COR_DESTAQUE,
-                 &lv_font_montserrat_28, LV_SYMBOL_CLOSE "  Nao passou",
+                 &fonte_28, LV_SYMBOL_CLOSE "  Nao passou",
                  tocou_nao_passou, NULL);
     botao_grande(area_do_app, 522, 446, 486, 86, COR_CERTO,
-                 &lv_font_montserrat_28, LV_SYMBOL_OK "  Passou",
+                 &fonte_28, LV_SYMBOL_OK "  Passou",
                  tocou_passou, NULL);
 }
 
@@ -825,7 +854,7 @@ static void fechou(const char *erro)
     if (rot_do_fecho != NULL) {
         if (erro != NULL) {
             lv_label_set_text_fmt(rot_do_fecho, "%s -- o pedido continua aberto", erro);
-            lv_obj_set_style_text_color(rot_do_fecho, COR_DESTAQUE, 0);
+            lv_obj_set_style_text_color(rot_do_fecho, COR_ALERTA, 0);
         } else {
             snprintf(pedido.estado, sizeof(pedido.estado), "concluido");
             lv_label_set_text(rot_do_fecho, LV_SYMBOL_OK "  pedido fechado no Optmize");
@@ -911,40 +940,73 @@ static void montar_o_fim(bool ate_o_fim)
         }
     }
 
-    lv_obj_t *titulo = lv_label_create(area_do_app);
+    const lv_color_t cor_do_fim = ate_o_fim ? COR_CERTO : COR_ATENCAO;
+    lv_obj_t *resumo = cartao_de_estado(area_do_app, 30, 24, LV_HOR_RES - 60, 170,
+                                        cor_do_fim,
+                                        ate_o_fim ? LV_SYMBOL_OK : LV_SYMBOL_STOP);
+
+    lv_obj_t *titulo = lv_label_create(resumo);
     lv_label_set_text(titulo, ate_o_fim ? "Producao conferida" : "Conferencia interrompida");
-    lv_obj_set_style_text_color(titulo, ate_o_fim ? COR_CERTO : COR_DESTAQUE, 0);
-    lv_obj_set_style_text_font(titulo, &lv_font_montserrat_28, 0);
-    lv_obj_set_pos(titulo, 40, 40);
+    lv_obj_set_style_text_color(titulo, cor_do_fim, 0);
+    lv_obj_set_style_text_font(titulo, &fonte_28, 0);
+    lv_obj_set_pos(titulo, 76, 0);
 
     char metros_ok[16];
     escrever_metros(metros_ok, sizeof(metros_ok), metros_bons);
 
-    lv_obj_t *conta = lv_label_create(area_do_app);
+    lv_obj_t *conta = lv_label_create(resumo);
     lv_label_set_text_fmt(conta,
         LV_SYMBOL_OK "  %d passaram  (%s m)\n"
         LV_SYMBOL_CLOSE "  %d nao passaram",
         passaram, metros_ok, falharam);
     lv_obj_set_style_text_color(conta, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(conta, &lv_font_montserrat_22, 0);
-    lv_obj_set_style_text_line_space(conta, 12, 0);
-    lv_obj_set_pos(conta, 40, 104);
+    lv_obj_set_style_text_font(conta, &fonte_22, 0);
+    lv_obj_set_style_text_line_space(conta, 10, 0);
+    lv_obj_set_pos(conta, 76, 40);
+
+    /*
+     * O PEDIDO, NA OUTRA METADE DO CARTAO, separado por um risco vertical.
+     *
+     * A esquerda esta o que ACONTECEU; a direita, o que isso foi. Sao duas
+     * coisas diferentes e o risco diz isso sem precisar de titulo em nenhuma
+     * das duas.
+     */
+    lv_obj_t *divisor = lv_obj_create(resumo);
+    lv_obj_set_size(divisor, 1, 86);
+    lv_obj_set_pos(divisor, 480, 24);
+    lv_obj_set_style_bg_color(divisor, COR_BORDA, 0);
+    lv_obj_set_style_border_width(divisor, 0, 0);
+    lv_obj_remove_flag(divisor, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(divisor, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *quem = lv_label_create(resumo);
+    lv_label_set_text_fmt(quem, "Cliente: %s\nTecido: %s",
+                          pedido.quantos > 0 && pedido.itens[0].cliente[0]
+                              ? pedido.itens[0].cliente : "--",
+                          pedido.quantos > 0 && pedido.itens[0].tecido[0]
+                              ? pedido.itens[0].tecido : "--");
+    lv_obj_set_style_text_color(quem, COR_APOIO, 0);
+    lv_obj_set_style_text_font(quem, &fonte_16, 0);
+    lv_obj_set_style_text_line_space(quem, 8, 0);
+    lv_label_set_long_mode(quem, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(quem, 380);
+    lv_obj_set_pos(quem, 510, 44);
 
     if (pendentes > 0) {
         lv_obj_t *resto = lv_label_create(area_do_app);
         lv_label_set_text_fmt(resto,
             "%d item(ns) continuam pendentes. O mesmo QR retoma daqui.", pendentes);
         lv_obj_set_style_text_color(resto, COR_APOIO, 0);
-        lv_obj_set_style_text_font(resto, &lv_font_montserrat_16, 0);
-        lv_obj_set_pos(resto, 40, 196);
+        lv_obj_set_style_text_font(resto, &fonte_16, 0);
+        lv_obj_set_pos(resto, 32, 206);
     }
 
     rot_do_fecho = lv_label_create(area_do_app);
     lv_label_set_text(rot_do_fecho, "");
-    lv_obj_set_style_text_font(rot_do_fecho, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rot_do_fecho, &fonte_16, 0);
     lv_label_set_long_mode(rot_do_fecho, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(rot_do_fecho, 900);
-    lv_obj_set_pos(rot_do_fecho, 40, 228);
+    lv_obj_set_pos(rot_do_fecho, 32, 232);
 
     const bool ja_fechado = strcmp(pedido.estado, "concluido") == 0;
 
@@ -954,16 +1016,16 @@ static void montar_o_fim(bool ate_o_fim)
     } else if (pendentes == 0) {
         lv_label_set_text(rot_do_fecho, "Falta so fechar o pedido no Optmize.");
         lv_obj_set_style_text_color(rot_do_fecho, COR_APOIO, 0);
-        botao_grande(area_do_app, 40, 258, 944, 80, COR_CERTO,
-                     &lv_font_montserrat_28, LV_SYMBOL_OK "  Fechar o pedido",
+        botao_grande(area_do_app, 30, 258, LV_HOR_RES - 60, 80, COR_CERTO,
+                     &fonte_28, LV_SYMBOL_OK "  Fechar o pedido",
                      tocou_fechar_o_pedido, NULL);
     }
 
-    botao_grande(area_do_app, 40, 356, 460, 110, COR_CERTO,
-                 &lv_font_montserrat_28, LV_SYMBOL_REFRESH "  Outro codigo",
+    botao_grande(area_do_app, 30, 352, 470, 106, COR_CERTO,
+                 &fonte_28, LV_SYMBOL_REFRESH "  Outro codigo",
                  tocou_outro_codigo, NULL);
-    botao_grande(area_do_app, 524, 356, 460, 110, COR_CARTAO,
-                 &lv_font_montserrat_22, "Conferir este de novo",
+    botao_grande(area_do_app, 524, 352, 470, 106, COR_CARTAO,
+                 &fonte_22, "Conferir este de novo",
                  tocou_conferir_de_novo, NULL);
 }
 
@@ -982,7 +1044,7 @@ static void chegou_o_pedido(const Pedido *p, const char *erro)
     if (erro != NULL) {
         if (rot_aviso != NULL) {
             lv_label_set_text(rot_aviso, erro);
-            lv_obj_set_style_text_color(rot_aviso, COR_DESTAQUE, 0);
+            lv_obj_set_style_text_color(rot_aviso, COR_ALERTA, 0);
         }
         ESP_LOGW(TAG, "%s", erro);
     } else {
@@ -1038,7 +1100,7 @@ static void montar_a_procura(void)
     lv_obj_set_style_bg_color(moldura, lv_color_black(), 0);
     lv_obj_set_style_border_color(moldura, COR_BORDA, 0);
     lv_obj_set_style_border_width(moldura, 1, 0);
-    lv_obj_set_style_radius(moldura, 12, 0);
+    lv_obj_set_style_radius(moldura, RAIO, 0);
     lv_obj_set_style_pad_all(moldura, 0, 0);
     lv_obj_remove_flag(moldura, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -1048,34 +1110,53 @@ static void montar_a_procura(void)
     lv_obj_set_style_bg_color(coluna, COR_CARTAO, 0);
     lv_obj_set_style_border_color(coluna, COR_BORDA, 0);
     lv_obj_set_style_border_width(coluna, 1, 0);
-    lv_obj_set_style_radius(coluna, 14, 0);
+    lv_obj_set_style_radius(coluna, RAIO, 0);
     lv_obj_set_style_pad_all(coluna, 18, 0);
     lv_obj_remove_flag(coluna, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *titulo = lv_label_create(coluna);
-    lv_label_set_text(titulo, "Aponte o QR");
-    lv_obj_set_style_text_color(titulo, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(titulo, &lv_font_montserrat_22, 0);
-    lv_obj_set_pos(titulo, 0, 0);
+    titulo_de_bloco(coluna, 2, "APONTE O QR");
 
-    lv_obj_t *ajuda = lv_label_create(coluna);
-    lv_label_set_text(ajuda,
-        "o codigo da lista de producao\n\n"
-        "deixe ele ocupar um terco\nda imagem, sem reflexo");
-    lv_obj_set_style_text_color(ajuda, COR_APOIO, 0);
-    lv_obj_set_style_text_font(ajuda, &lv_font_montserrat_16, 0);
-    lv_label_set_long_mode(ajuda, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(ajuda, 264);
-    lv_obj_set_pos(ajuda, 0, 40);
+    lv_obj_t *titulo = lv_label_create(coluna);
+    lv_label_set_text(titulo, "da folha de producao");
+    lv_obj_set_style_text_color(titulo, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(titulo, &fonte_22, 0);
+    lv_obj_set_pos(titulo, 0, 26);
+
+    /*
+     * TRES LINHAS, cada uma uma coisa a corrigir. O paragrafo que havia aqui
+     * ninguem lia em pe, com pressa -- e um paragrafo nao diz QUAL das coisas
+     * esta errada quando a leitura nao pega.
+     */
+    checklist_linha(coluna, 78,  COR_CERTO, "deixe o codigo ocupar um terco da imagem");
+    checklist_linha(coluna, 128, COR_CERTO, "mantenha a folha parada e sem reflexo");
+    checklist_linha(coluna, 178, COR_CERTO, "a leitura e automatica -- nao ha botao");
+
+    lv_obj_t *risco = lv_obj_create(coluna);
+    lv_obj_set_size(risco, 264, 1);
+    lv_obj_set_pos(risco, 0, 244);
+    lv_obj_set_style_bg_color(risco, COR_BORDA_SUAVE, 0);
+    lv_obj_set_style_border_width(risco, 0, 0);
+    lv_obj_remove_flag(risco, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(risco, LV_OBJ_FLAG_CLICKABLE);
+
+    titulo_de_bloco(coluna, 262, "ULTIMO CODIGO");
 
     rot_aviso = lv_label_create(coluna);
-    lv_label_set_text(rot_aviso, "");
-    lv_obj_set_style_text_font(rot_aviso, &lv_font_montserrat_16, 0);
+    lv_label_set_text(rot_aviso, "aguardando...");
+    lv_obj_set_style_text_color(rot_aviso, COR_FRACA, 0);
+    lv_obj_set_style_text_font(rot_aviso, &fonte_16, 0);
     lv_label_set_long_mode(rot_aviso, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(rot_aviso, 264);
-    lv_obj_set_pos(rot_aviso, 0, 160);
+    lv_obj_set_pos(rot_aviso, 0, 288);
 
+    /*
+     * A MIRA VEM DEPOIS DO VIDEO na ordem de criacao, e isso importa: no LVGL
+     * quem nasce depois fica por cima. Desenhada antes, ela sumiria atras do
+     * quadro da camera.
+     */
     const esp_err_t e = video_da_camera_abrir(moldura);
+    mira_desenhar(moldura, COR_CERTO, 40);
+
     if (e != ESP_OK) {
         /*
          * O MOTIVO NA TELA, e nao "camera nao encontrada" para tudo.
@@ -1089,7 +1170,7 @@ static void montar_a_procura(void)
         lv_obj_t *sem = lv_label_create(moldura);
         lv_label_set_text_fmt(sem, "a camera nao abriu\n\n%s", esp_err_to_name(e));
         lv_obj_set_style_text_color(sem, COR_APOIO, 0);
-        lv_obj_set_style_text_font(sem, &lv_font_montserrat_22, 0);
+        lv_obj_set_style_text_font(sem, &fonte_22, 0);
         lv_obj_set_style_text_align(sem, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(sem);
         ESP_LOGW(TAG, "sem camera");

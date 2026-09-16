@@ -125,7 +125,7 @@ static void tarefa_de_procurar(void *arg)
         lv_obj_clean(lista_de_redes);
         for (int i = 0; i < quantas; i++) {
             lv_obj_t *b = lv_list_add_button(lista_de_redes, LV_SYMBOL_WIFI, achadas[i]);
-            lv_obj_set_style_text_font(b, &lv_font_montserrat_16, 0);
+            lv_obj_set_style_text_font(b, &fonte_16, 0);
             lv_obj_add_event_cb(b, tocou_numa_rede, LV_EVENT_CLICKED, NULL);
         }
         if (quantas == 0) {
@@ -279,13 +279,20 @@ static void deslizante(lv_obj_t *pai, const char *nome, int32_t y,
     lv_obj_t *rot = lv_label_create(pai);
     lv_label_set_text(rot, nome);
     lv_obj_set_style_text_color(rot, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(rot, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rot, &fonte_16, 0);
     lv_obj_set_pos(rot, 0, y);
 
     lv_obj_t *valor = lv_label_create(pai);
-    lv_obj_set_style_text_color(valor, COR_APOIO, 0);
-    lv_obj_set_style_text_font(valor, &lv_font_montserrat_16, 0);
-    lv_obj_set_pos(valor, 370, y);
+    lv_obj_set_style_text_color(valor, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(valor, &fonte_16, 0);
+    /*
+     * O numero a DIREITA do trilho e alinhado a direita, nao a esquerda: assim
+     * ele cresce para dentro ao passar de 9 para 10 e de 99 para 100, em vez de
+     * empurrar a borda do cartao.
+     */
+    lv_obj_set_width(valor, 60);
+    lv_obj_set_style_text_align(valor, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(valor, 350, y);
     lv_label_set_text_fmt(valor, "%d%%", inicial);
 
     lv_obj_t *barra = lv_slider_create(pai);
@@ -293,9 +300,17 @@ static void deslizante(lv_obj_t *pai, const char *nome, int32_t y,
     lv_obj_set_pos(barra, 0, y + 28);
     lv_slider_set_range(barra, 0, 100);
     lv_slider_set_value(barra, inicial, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(barra, COR_BORDA, 0);
+    /*
+     * Trilho na cor do FUNDO -- afundado no cartao --, indicador no acento,
+     * botao branco. Antes o trilho era da cor da borda e o deslizante parecia
+     * um objeto pousado em cima do painel em vez de um sulco nele.
+     */
+    lv_obj_set_style_bg_color(barra, COR_FUNDO, 0);
+    lv_obj_set_style_border_color(barra, COR_BORDA_SUAVE, 0);
+    lv_obj_set_style_border_width(barra, 1, 0);
     lv_obj_set_style_bg_color(barra, COR_DESTAQUE, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(barra, COR_TEXTO, LV_PART_KNOB);
+    lv_obj_set_style_shadow_width(barra, 0, LV_PART_KNOB);
     lv_obj_add_event_cb(barra, ao_mudar, LV_EVENT_VALUE_CHANGED, valor);
     /*
      * O SOLTAR tambem chama, para quem quiser fazer alguma coisa so no fim do
@@ -313,42 +328,58 @@ void app_ajustes_montar(lv_obj_t *area)
     /* --- esquerda: a rede --- */
 
     lv_obj_t *esq = lv_obj_create(area);
-    lv_obj_set_size(esq, 490, 500);
-    lv_obj_set_pos(esq, 20, 20);
+    lv_obj_set_size(esq, 490, 506);
+    lv_obj_set_pos(esq, 20, 18);
     lv_obj_set_style_bg_color(esq, COR_CARTAO, 0);
     lv_obj_set_style_border_color(esq, COR_BORDA, 0);
     lv_obj_set_style_border_width(esq, 1, 0);
-    lv_obj_set_style_radius(esq, 14, 0);
+    lv_obj_set_style_radius(esq, RAIO, 0);
     lv_obj_set_style_pad_all(esq, 18, 0);
     lv_obj_remove_flag(esq, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *t1 = lv_label_create(esq);
-    lv_label_set_text(t1, "Rede sem fio");
-    lv_obj_set_style_text_color(t1, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(t1, &lv_font_montserrat_22, 0);
-    lv_obj_set_pos(t1, 0, 0);
+    lv_label_set_text(t1, "REDE SEM FIO");
+    lv_obj_set_style_text_color(t1, COR_DESTAQUE, 0);
+    lv_obj_set_style_text_font(t1, &fonte_16, 0);
+    /*
+     * Titulo de bloco em maiuscula, corpo pequeno e cor de acento -- o mesmo
+     * tratamento do "sobre". Titulo grande competiria com o conteudo; assim ele
+     * organiza sem chamar atencao para si.
+     */
+    lv_obj_set_style_text_letter_space(t1, 2, 0);
+    lv_obj_set_pos(t1, 0, 4);
 
     lv_obj_t *procurar = lv_button_create(esq);
     lv_obj_set_size(procurar, 130, 40);
     lv_obj_set_pos(procurar, 320, 0);
-    lv_obj_set_style_bg_color(procurar, COR_BORDA, 0);
+    lv_obj_set_style_bg_color(procurar, COR_CARTAO_SUAVE, 0);
+    lv_obj_set_style_border_color(procurar, COR_BORDA, 0);
+    lv_obj_set_style_border_width(procurar, 1, 0);
+    lv_obj_set_style_radius(procurar, RAIO_MIUDO, 0);
+    lv_obj_set_style_shadow_width(procurar, 0, 0);
     lv_obj_add_event_cb(procurar, tocou_procurar, LV_EVENT_CLICKED, NULL);
     lv_obj_t *rp = lv_label_create(procurar);
     lv_label_set_text(rp, LV_SYMBOL_REFRESH "  buscar");
-    lv_obj_set_style_text_font(rp, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rp, &fonte_16, 0);
     lv_obj_center(rp);
 
     lista_de_redes = lv_list_create(esq);
     lv_obj_set_size(lista_de_redes, 450, 210);
     lv_obj_set_pos(lista_de_redes, 0, 48);
+    /*
+     * A lista e um degrau MAIS ESCURA que o cartao que a contem, e nao mais
+     * clara. O que esta dentro afunda; o que esta na frente sobe. Invertido,
+     * a lista parecia flutuar por cima do painel.
+     */
     lv_obj_set_style_bg_color(lista_de_redes, COR_FUNDO, 0);
-    lv_obj_set_style_border_color(lista_de_redes, COR_BORDA, 0);
+    lv_obj_set_style_border_color(lista_de_redes, COR_BORDA_SUAVE, 0);
     lv_obj_set_style_border_width(lista_de_redes, 1, 0);
-    lv_obj_set_style_radius(lista_de_redes, 10, 0);
+    lv_obj_set_style_radius(lista_de_redes, RAIO_MIUDO, 0);
+    lv_obj_set_style_pad_all(lista_de_redes, 6, 0);
     lv_list_add_text(lista_de_redes, "toque em buscar");
 
     rot_escolhida = lv_label_create(esq);
-    lv_obj_set_style_text_font(rot_escolhida, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rot_escolhida, &fonte_16, 0);
     lv_obj_set_pos(rot_escolhida, 0, 268);
     if (escolhida[0]) {
         lv_label_set_text_fmt(rot_escolhida, "rede: %s", escolhida);
@@ -364,12 +395,23 @@ void app_ajustes_montar(lv_obj_t *area)
     lv_textarea_set_one_line(campo_senha, true);
     lv_textarea_set_password_mode(campo_senha, true);
     lv_textarea_set_placeholder_text(campo_senha, "senha");
+    lv_obj_set_style_bg_color(campo_senha, COR_FUNDO, 0);
+    lv_obj_set_style_border_color(campo_senha, COR_BORDA_SUAVE, 0);
+    lv_obj_set_style_border_color(campo_senha, COR_DESTAQUE, LV_STATE_FOCUSED);
+    lv_obj_set_style_border_width(campo_senha, 1, 0);
+    lv_obj_set_style_radius(campo_senha, RAIO_MIUDO, 0);
+    lv_obj_set_style_text_color(campo_senha, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(campo_senha, &fonte_16, 0);
     lv_obj_add_event_cb(campo_senha, campo_em_foco, LV_EVENT_ALL, NULL);
 
     lv_obj_t *revelar = lv_button_create(esq);
     lv_obj_set_size(revelar, 55, 48);
     lv_obj_set_pos(revelar, 395, 296);
-    lv_obj_set_style_bg_color(revelar, COR_BORDA, 0);
+    lv_obj_set_style_bg_color(revelar, COR_CARTAO_SUAVE, 0);
+    lv_obj_set_style_border_color(revelar, COR_BORDA, 0);
+    lv_obj_set_style_border_width(revelar, 1, 0);
+    lv_obj_set_style_radius(revelar, RAIO_MIUDO, 0);
+    lv_obj_set_style_shadow_width(revelar, 0, 0);
     lv_obj_add_event_cb(revelar, tocou_revelar, LV_EVENT_CLICKED, NULL);
     lv_obj_t *olho = lv_label_create(revelar);
     lv_label_set_text(olho, LV_SYMBOL_EYE_CLOSE);
@@ -378,40 +420,78 @@ void app_ajustes_montar(lv_obj_t *area)
     lv_obj_t *conectar = lv_button_create(esq);
     lv_obj_set_size(conectar, 170, 48);
     lv_obj_set_pos(conectar, 0, 360);
+    /*
+     * O UNICO BOTAO LARANJA DESTA TELA. Tudo o mais aqui e secundario --
+     * buscar, revelar a senha --, e dar laranja a todos faria a tela inteira
+     * gritar igual. O acento so vale enquanto for raro.
+     */
     lv_obj_set_style_bg_color(conectar, COR_DESTAQUE, 0);
+    lv_obj_set_style_bg_opa(conectar, LV_OPA_80, LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(conectar, 0, 0);
+    lv_obj_set_style_radius(conectar, RAIO_MIUDO, 0);
+    lv_obj_set_style_shadow_width(conectar, 0, 0);
     lv_obj_add_event_cb(conectar, tocou_conectar, LV_EVENT_CLICKED, NULL);
     lv_obj_t *rc = lv_label_create(conectar);
     lv_label_set_text(rc, "Conectar");
-    lv_obj_set_style_text_font(rc, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(rc, COR_DESTAQUE_TINTA, 0);
+    lv_obj_set_style_text_font(rc, &fonte_16, 0);
     lv_obj_center(rc);
 
+    /*
+     * O ESTADO DA CONEXAO FICA NO PE DA COLUNA, ao lado do botao que o muda.
+     *
+     * E o unico lugar onde ele faz trabalho: quem acabou de tocar em "Conectar"
+     * esta olhando para aquele botao, e a resposta tem de aparecer no campo de
+     * visao dele. No topo da coluna, seria lida antes de qualquer tentativa e
+     * ignorada depois.
+     */
     rot_estado = lv_label_create(esq);
-    lv_obj_set_style_text_font(rot_estado, &lv_font_montserrat_16, 0);
-    lv_obj_set_pos(rot_estado, 190, 375);
+    lv_obj_set_style_text_font(rot_estado, &fonte_16, 0);
+    lv_label_set_long_mode(rot_estado, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(rot_estado, 262);
+    lv_obj_set_pos(rot_estado, 188, 374);
     if (rede_conectada()) {
-        lv_label_set_text_fmt(rot_estado, "conectada -- %s", rede_endereco());
+        lv_label_set_text_fmt(rot_estado, LV_SYMBOL_WIFI "  %s", rede_endereco());
         lv_obj_set_style_text_color(rot_estado, COR_CERTO, 0);
     } else {
-        lv_label_set_text(rot_estado, "sem conexao");
-        lv_obj_set_style_text_color(rot_estado, COR_APOIO, 0);
+        const char *porque = rede_por_que_nao();
+        lv_label_set_text_fmt(rot_estado, "%s", porque ? porque : "sem conexao");
+        lv_obj_set_style_text_color(rot_estado, COR_ATENCAO, 0);
     }
+
+    /*
+     * A FICHA DA CONEXAO, embaixo de tudo: o que o terminal sabe da rede em que
+     * esta. E o que alguem le por telefone quando o Optmize "nao aparece" --
+     * endereco daqui, e endereco do servidor.
+     */
+    lv_obj_t *risco_da_rede = lv_obj_create(esq);
+    lv_obj_set_size(risco_da_rede, 450, 1);
+    lv_obj_set_pos(risco_da_rede, 0, 416);
+    lv_obj_set_style_bg_color(risco_da_rede, COR_BORDA_SUAVE, 0);
+    lv_obj_set_style_border_width(risco_da_rede, 0, 0);
+    lv_obj_remove_flag(risco_da_rede, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(risco_da_rede, LV_OBJ_FLAG_CLICKABLE);
+
+    par_da_ficha(esq, 430, "Endereco", rede_conectada() ? rede_endereco() : "--", 450);
+    par_da_ficha(esq, 456, "Servidor", optmize_servidor(), 450);
 
     /* --- direita: tela e audio --- */
 
     lv_obj_t *dir = lv_obj_create(area);
     lv_obj_set_size(dir, 470, 300);
-    lv_obj_set_pos(dir, 530, 20);
+    lv_obj_set_pos(dir, 530, 18);
     lv_obj_set_style_bg_color(dir, COR_CARTAO, 0);
     lv_obj_set_style_border_color(dir, COR_BORDA, 0);
     lv_obj_set_style_border_width(dir, 1, 0);
-    lv_obj_set_style_radius(dir, 14, 0);
+    lv_obj_set_style_radius(dir, RAIO, 0);
     lv_obj_set_style_pad_all(dir, 18, 0);
     lv_obj_remove_flag(dir, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *t2 = lv_label_create(dir);
-    lv_label_set_text(t2, "Tela e audio");
-    lv_obj_set_style_text_color(t2, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(t2, &lv_font_montserrat_22, 0);
+    lv_label_set_text(t2, "TELA E SOM");
+    lv_obj_set_style_text_color(t2, COR_DESTAQUE, 0);
+    lv_obj_set_style_text_font(t2, &fonte_16, 0);
+    lv_obj_set_style_text_letter_space(t2, 2, 0);
     lv_obj_set_pos(t2, 0, 0);
 
     deslizante(dir, "Brilho da tela", 50, 100, mudou_o_brilho);
@@ -433,7 +513,7 @@ void app_ajustes_montar(lv_obj_t *area)
     lv_obj_t *t3 = lv_label_create(dir);
     lv_label_set_text(t3, "Servidor do Optmize");
     lv_obj_set_style_text_color(t3, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(t3, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(t3, &fonte_16, 0);
     lv_obj_set_pos(t3, 0, 200);
 
     campo_servidor = lv_textarea_create(dir);
@@ -451,7 +531,7 @@ void app_ajustes_montar(lv_obj_t *area)
     lv_obj_add_event_cb(salvar, tocou_salvar_servidor, LV_EVENT_CLICKED, NULL);
     lv_obj_t *rsv = lv_label_create(salvar);
     lv_label_set_text(rsv, "Salvar");
-    lv_obj_set_style_text_font(rsv, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(rsv, &fonte_16, 0);
     lv_obj_center(rsv);
 
     /* --- o teclado, escondido ate alguem tocar na senha --- */

@@ -195,6 +195,15 @@ function criarRotasDeImpressoras(io) {
             position,
             recordId: item.recordId,
             task: item.task,
+            /*
+             * CLIENTE E TECIDO vão para o terminal junto do resto.
+             *
+             * Já estavam na tabela e não saíam daqui. Na calandra os dois
+             * respondem perguntas que o nome do arquivo não responde: de quem é
+             * a peça, e o que ela é — e "Dry Fit" muda a temperatura da máquina.
+             */
+            clientName: item.clientName,
+            fabric: item.fabric,
             machineName: item.machineName,
             printLength: item.printLength,
             date: item.date,

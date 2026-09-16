@@ -25,6 +25,8 @@
 typedef struct {
     char  id[48];        /* o itemId, que a rota de marcar exige */
     char  tarefa[96];    /* o nome do arquivo impresso */
+    char  cliente[48];
+    char  tecido[32];    /* "Dry Fit" muda a temperatura da calandra */
     char  maquina[32];
     char  status[16];    /* pendente | ok | erro */
     float metros;
