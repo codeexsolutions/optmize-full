@@ -24,6 +24,7 @@
     "bancada:grupos": "node bancada/conferir-grupos.js",
     "bancada:corte": "node bancada/conferir-bancada.js",
     "bancada:sobreposicao": "node bancada/conferir-sobreposicao.js",
+    "bancada:rotacoes": "node bancada/conferir-rotacoes.js",
     "bancada:vaos": "node bancada/vaos.js",
     "bancada:tela": "node bancada/conferir-tela.cjs",
     "bancada:react": "node bancada/conferir-react.cjs",
