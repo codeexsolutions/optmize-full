@@ -92,20 +92,27 @@ function Camera({ aoTirar, aoFechar }: { aoTirar: (foto: Blob) => void; aoFechar
 
   useEffect(() => {
     let fluxo: MediaStream | null = null;
-    navigator.mediaDevices
-      .getUserMedia({ video: { width: 1280, height: 720, facingMode: "user" }, audio: false })
+    let cancelado = false;
+    Promise.resolve().then(() => {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("Este navegador não oferece acesso à câmera.");
+      return navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: "user" }, audio: false });
+    })
       .then((s) => {
+        if (cancelado) { s.getTracks().forEach((t) => t.stop()); return; }
         fluxo = s;
         if (video.current) {
           video.current.srcObject = s;
-          void video.current.play();
+          return video.current.play();
         }
       })
-      .catch((e: Error) => setErro(`Não consegui abrir a câmera: ${e.message}`));
+      .catch((e: Error) => { if (!cancelado) setErro(`Não consegui abrir a câmera: ${e.message}`); });
 
     // Sem isto a luzinha da webcam fica acesa depois de fechar a caixa, e o
     // navegador segura o aparelho contra qualquer outro programa.
-    return () => fluxo?.getTracks().forEach((t) => t.stop());
+    return () => {
+      cancelado = true;
+      fluxo?.getTracks().forEach((t) => t.stop());
+    };
   }, []);
 
   function tirar() {

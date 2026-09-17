@@ -1,5 +1,4 @@
 const fs = require("fs/promises");
-const fssync = require("fs");
 const path = require("path");
 const xml2js = require("xml2js");
 const { enumerateDays } = require("../utils/date");

@@ -59,6 +59,7 @@ import { Modal } from "../casca/Modal";
 import { projetosApi, type Cliente, type Projeto, type ProjetoNaLista } from "../api/projetos";
 import { medidasDoArquivo, pixelsPorCmDoArquivo, PPCM_PADRAO } from "../motores/medidaDoArquivo";
 import { useLigacao } from "../producao/ligacao";
+import { carregarImagem } from "../utils/arquivoDeImagem";
 
 /**
  * A arte reduzida para caber na tela.
@@ -89,6 +90,7 @@ export function Projetos() {
   const [projetosPorCliente, setProjetosPorCliente] = useState<Record<number, ProjetoNaLista[]>>({});
   const [abertos, setAbertos] = useState<ReadonlySet<number>>(new Set());
   const [projetoAberto, setProjetoAberto] = useState<Projeto | null>(null);
+  const ultimaAbertura = useRef(0);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
 
@@ -104,6 +106,7 @@ export function Projetos() {
   }, []);
 
   useEffect(() => { void carregarClientes(); }, [carregarClientes]);
+  useEffect(() => () => { ultimaAbertura.current++; }, []);
 
   /**
    * Toda ação da árvore passa por aqui.
@@ -138,7 +141,15 @@ export function Projetos() {
   };
 
   const abrirProjeto = async (id: number) => {
-    await tentar(async () => setProjetoAberto(await projetosApi.abrir(id)));
+    const abertura = ++ultimaAbertura.current;
+    try {
+      const projeto = await projetosApi.abrir(id);
+      if (abertura !== ultimaAbertura.current) return;
+      setProjetoAberto(projeto);
+      setErro("");
+    } catch (e) {
+      if (abertura === ultimaAbertura.current) setErro(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const novoCliente = async () => {
@@ -956,13 +967,6 @@ function MedidaDaPeca({ rotulo, children }: { rotulo: string; children: ReactNod
 }
 
 // ==================== AS MINIATURAS ====================
-
-const carregarImagem = (src: string) => new Promise<HTMLImageElement>((ok, falhou) => {
-  const img = new Image();
-  img.onload = () => ok(img);
-  img.onerror = () => falhou(new Error("não deu para abrir a imagem"));
-  img.src = src;
-});
 
 function miniaturaDaImagem(img: HTMLImageElement): string | null {
   try {

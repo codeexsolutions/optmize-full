@@ -56,7 +56,7 @@
  * que quem chega aqui já sabe.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDialogo } from "../casca/Dialogo";
 import { moldesApi, type Molde, type MoldeNaEstante } from "../api/moldes";
 import { EditorDeMolde } from "./moldes/EditorDeMolde";
@@ -72,6 +72,7 @@ export function Moldes() {
   const dialogo = useDialogo();
   const [moldes, setMoldes] = useState<MoldeNaEstante[]>([]);
   const [aberto, setAberto] = useState<Aberto>(null);
+  const ultimaAbertura = useRef(0);
   const [erro, setErro] = useState("");
   /** O recado de "salvo, mas faltou arquivo em tal tamanho". */
   const [aviso, setAviso] = useState("");
@@ -88,20 +89,22 @@ export function Moldes() {
   }, []);
 
   useEffect(() => { void carregar(); }, [carregar]);
+  useEffect(() => () => { ultimaAbertura.current++; }, []);
 
-  const abrirParaEditar = async (id: number) => {
-    try {
-      setAberto({ qual: "editor", molde: await moldesApi.abrir(id) });
-    } catch {
-      setErro("Não achei esse molde.");
-    }
+  const trocarAberto = (proximo: Aberto) => {
+    ultimaAbertura.current++;
+    setAberto(proximo);
   };
 
-  const abrirParaEncaixar = async (id: number) => {
+  const abrirMolde = async (id: number, qual: "editor" | "envio") => {
+    const abertura = ++ultimaAbertura.current;
     try {
-      setAberto({ qual: "envio", molde: await moldesApi.abrir(id) });
+      const molde = await moldesApi.abrir(id);
+      if (abertura !== ultimaAbertura.current) return;
+      setAberto({ qual, molde });
+      setErro("");
     } catch {
-      setErro("Não achei esse molde.");
+      if (abertura === ultimaAbertura.current) setErro("Não achei esse molde.");
     }
   };
 
@@ -113,7 +116,7 @@ export function Moldes() {
     if (!certeza) return;
     try {
       await moldesApi.apagar(molde.id);
-      setAberto(null);
+      trocarAberto(null);
       await carregar();
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
@@ -157,7 +160,7 @@ export function Moldes() {
           <button
             type="button"
             className="btn primary btn-sm"
-            onClick={() => { setAviso(""); setAberto({ qual: "editor", molde: null }); }}
+            onClick={() => { setAviso(""); trocarAberto({ qual: "editor", molde: null }); }}
           >
             <span aria-hidden="true">+</span> Adicionar molde
           </button>
@@ -235,7 +238,7 @@ export function Moldes() {
                     type="button"
                     className="btn primary btn-sm"
                     title="Escolher a arte e mandar as peças deste molde para o tecido"
-                    onClick={() => void abrirParaEncaixar(molde.id)}
+                    onClick={() => void abrirMolde(molde.id, "envio")}
                   >
                     Encaixar
                   </button>
@@ -243,7 +246,7 @@ export function Moldes() {
                     type="button"
                     className="btn secondary btn-sm"
                     title="Mexer nas peças, nos tamanhos e nos arquivos deste molde"
-                    onClick={() => void abrirParaEditar(molde.id)}
+                    onClick={() => void abrirMolde(molde.id, "editor")}
                   >
                     Editar
                   </button>
@@ -268,9 +271,9 @@ export function Moldes() {
           // em vez de reaproveitar o anterior com as partes do molde de antes.
           key={aberto.molde?.id ?? "novo"}
           molde={aberto.molde}
-          aoFechar={() => setAberto(null)}
+          aoFechar={() => trocarAberto(null)}
           aoSalvar={async (recado) => {
-            setAberto(null);
+            trocarAberto(null);
             setAviso(recado);
             await carregar();
           }}
@@ -281,8 +284,9 @@ export function Moldes() {
         <EnvioParaEncaixe
           key={aberto.molde.id}
           molde={aberto.molde}
-          aoFechar={() => setAberto(null)}
-          aoRecarregar={(molde) => setAberto({ qual: "envio", molde })}
+          aoFechar={() => trocarAberto(null)}
+          aoRecarregar={(molde) => setAberto((atual) =>
+            atual?.qual === "envio" && atual.molde.id === molde.id ? { qual: "envio", molde } : atual)}
         />
       )}
     </div>
