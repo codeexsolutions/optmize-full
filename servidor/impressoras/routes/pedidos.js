@@ -141,8 +141,9 @@ router.patch("/:id/status", (req, res) => {
 
 router.patch("/:id/items/:itemId/os", (req, res) => {
   try {
+    const before = getPedidoItem(req.params.itemId);
+    if (!before || before.pedidoId !== req.params.id) return res.status(404).json({ error: "Item não encontrado" });
     const item = setItemOs(req.params.itemId, req.body && req.body.osId);
-    if (!item || item.pedidoId !== req.params.id) return res.status(404).json({ error: "Item não encontrado" });
     res.json(item);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -213,7 +214,9 @@ router.get("/:id/items/:itemId/imagem", async (req, res) => {
     if (item.machineId && item.task) {
       const machine = await getMachine(item.machineId);
       if (machine) {
-        const preview = await readPreview(machine, item.task, 0, "");
+        // A OS também serve quando o compartilhamento da impressora está
+        // desligado ou inacessível, não apenas quando não há arquivo de preview.
+        const preview = await readPreview(machine, item.task, 0, "").catch(() => null);
         if (preview) bruta = preview.data;
       }
     }

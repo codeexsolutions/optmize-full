@@ -92,6 +92,7 @@ export function ProvedorDeDialogo({ children }: { children: ReactNode }) {
   const [valor, setValor] = useState("");
   const [fechando, setFechando] = useState(false);
   const responder = useRef<((resposta: boolean) => void) | null>(null);
+  const fechamento = useRef<ReturnType<typeof setTimeout> | null>(null);
   const campo = useRef<HTMLInputElement>(null);
   const confirmar = useRef<HTMLButtonElement>(null);
   const valorAtual = useRef("");
@@ -104,23 +105,39 @@ export function ProvedorDeDialogo({ children }: { children: ReactNode }) {
    * de uma caixa ainda visível.
    */
   const fechar = useCallback((resposta: boolean) => {
+    if (fechamento.current !== null || !responder.current) return;
     setFechando(true);
-    setTimeout(() => {
+    fechamento.current = setTimeout(() => {
+      fechamento.current = null;
       setFechando(false);
       setAberto(null);
       document.body.classList.remove("dialog-open");
-      responder.current?.(resposta);
+      const concluir = responder.current;
       responder.current = null;
+      concluir?.(resposta);
     }, 140);
   }, []);
 
   const abrir = useCallback((pedido: Aberto) => {
+    // O fechamento de uma caixa anterior nunca pode responder à próxima.
+    if (fechamento.current !== null) clearTimeout(fechamento.current);
+    fechamento.current = null;
+    setFechando(false);
     // Uma caixa por vez: se já houver alguém esperando, ele recebe "não".
     responder.current?.(false);
     responder.current = null;
     setAberto(pedido);
     document.body.classList.add("dialog-open");
     return new Promise<boolean>((resolve) => { responder.current = resolve; });
+  }, []);
+
+  useEffect(() => () => {
+    if (fechamento.current !== null) clearTimeout(fechamento.current);
+    fechamento.current = null;
+    const concluir = responder.current;
+    responder.current = null;
+    concluir?.(false);
+    document.body.classList.remove("dialog-open");
   }, []);
 
   // O foco vai para o campo (quando tem) ou para o botão de confirmar: quem

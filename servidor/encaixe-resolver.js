@@ -375,12 +375,24 @@ router.post("/resolver", async (req, res) => {
 
     const areaReal = campeao.posicoes.reduce(
       (soma, p) => soma + (p.item.mascaras ? p.item.mascaras.areaReal : 0), 0);
-    const areaTecido = larguraTecido * campeao.consumo;
+    /*
+     * A MÍDIA, E NÃO O CONSUMO.
+     *
+     * Com bancada, o que sai do rolo são mesas inteiras — o rabo vazio no fim
+     * de cada mesa é retalho que já foi pago. Ver "A MÍDIA QUE O TRABALHO
+     * CONSOME", em src/motores/encaixeMotor.js.
+     *
+     * `consumo` continua na resposta, porque é ele que o Corel usa para saber
+     * até onde o desenho vai; `midia` é o que se compra.
+     */
+    const midia = motor.midiaConsumida(campeao.consumo, comprimentoBancada, campeao.posicoes);
 
     res.json({
       // O que interessa a quem pediu
       consumo: campeao.consumo,
-      aproveitamento: areaTecido > 0 ? areaReal / areaTecido : 0,
+      midia,
+      bancadas: motor.bancadasOcupadas(campeao.posicoes, campeao.consumo, comprimentoBancada),
+      aproveitamento: motor.aproveitamentoDaMidia(areaReal, larguraTecido, midia),
       larguraTecido,
       posicoes,
       naoEncaixadas: campeao.naoEncaixadas.map((it) => ({

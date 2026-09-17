@@ -96,6 +96,95 @@ function podarPrebuilds(pasta) {
 }
 
 /**
+ * O mesmo peso morto do `podarPrebuilds`, e numa escala outra.
+ *
+ * O `onnxruntime-node` — quem roda a rede que acha rosto em foto (ver
+ * `servidor/rostos.js`) — traz o runtime compilado para as três plataformas e
+ * as duas arquiteturas de cada uma: 289 MB, em `bin/napi-v6/<sistema>/<arco>/`.
+ * Fica o desta máquina. Os outros 244 MB são o runtime do ONNX para macOS e
+ * Linux dentro de um instalador que só existe para Windows, e que sozinhos
+ * pesam mais do que o resto do programa e o Node embutido somados.
+ */
+function podarOnnx(pasta) {
+  const bin = path.join(pasta, "onnxruntime-node", "bin", "napi-v6");
+  if (!fs.existsSync(bin)) return;
+
+  for (const sistema of fs.readdirSync(bin)) {
+    const dentro = path.join(bin, sistema);
+    if (sistema !== process.platform) {
+      fs.rmSync(dentro, { recursive: true, force: true });
+      continue;
+    }
+    for (const arco of fs.readdirSync(dentro)) {
+      if (arco !== process.arch) fs.rmSync(path.join(dentro, arco), { recursive: true, force: true });
+    }
+  }
+}
+
+/**
+ * Quem sobrou na pasta e ninguém exige sai.
+ *
+ * As marcas do lock (ver `podarDesenvolvimento`) resolvem quase tudo, mas
+ * erram para menos: um pacote pendurado só em ferramenta de desenvolver pode
+ * chegar aqui marcado como `optional` e nada mais, e passa por produção.
+ *
+ * Então a última palavra não é a marca, é o alcance: partindo das
+ * `dependencies` do package.json — que é o que o servidor pode exigir —, segue
+ * o que cada pacote sobrevivente declara precisar. O que a caminhada não
+ * alcançar não tem como aparecer num `require` em execução.
+ *
+ * As `peerDependencies` entram na caminhada. O `require` não distingue de onde
+ * veio o pacote, e há biblioteca que exige o par dela em tempo de execução —
+ * podá-lo seria um "Cannot find module" na máquina de quem instalou, que é o
+ * defeito que este arquivo inteiro existe para não produzir.
+ *
+ * O que está aninhado (`archiver/node_modules/...`) não é olhado: ele vive
+ * dentro do pai e vai embora com ele, se o pai for embora.
+ */
+function podarOrfaos(pasta) {
+  const raizes = Object.keys(
+    JSON.parse(fs.readFileSync(path.join(RAIZ, "package.json"), "utf-8")).dependencies || {},
+  );
+
+  const alcancados = new Set();
+  const fila = [...raizes];
+
+  while (fila.length > 0) {
+    const nome = fila.pop();
+    if (alcancados.has(nome)) continue;
+
+    let manifesto;
+    try {
+      manifesto = JSON.parse(fs.readFileSync(path.join(pasta, nome, "package.json"), "utf-8"));
+    } catch {
+      continue; // já podado, ou aninhado noutro pacote: não há o que seguir
+    }
+    alcancados.add(nome);
+
+    for (const grupo of ["dependencies", "optionalDependencies", "peerDependencies"]) {
+      fila.push(...Object.keys(manifesto[grupo] || {}));
+    }
+  }
+
+  // A lista do disco: os pacotes soltos e os de dentro de cada escopo.
+  const instalados = [];
+  for (const item of fs.readdirSync(pasta)) {
+    if (item.startsWith(".")) continue; // `.package-lock.json`, `.bin`, `.vite`
+    if (!item.startsWith("@")) {
+      instalados.push(item);
+      continue;
+    }
+    for (const dentro of fs.readdirSync(path.join(pasta, item))) {
+      instalados.push(`${item}/${dentro}`);
+    }
+  }
+
+  for (const nome of instalados) {
+    if (!alcancados.has(nome)) fs.rmSync(path.join(pasta, nome), { recursive: true, force: true });
+  }
+}
+
+/**
  * O que só serve para desenvolver não entra no instalador.
  *
  * Quem decide o que é "só de desenvolver" é o package-lock.json: cada pacote
@@ -106,15 +195,30 @@ function podarPrebuilds(pasta) {
  *
  * O que sobra depois da poda é uma pasta de escopo vazia (`@jridgewell/` sem
  * nada dentro); ela vai junto.
+ *
+ * SÃO DUAS MARCAS, E NÃO UMA. O npm escreve `dev` no pacote que só se alcança
+ * pelo `devDependencies`, e `devOptional` no que se alcança por ali E é
+ * opcional. Olhar só a primeira deixava passar a segunda: o `typescript` está
+ * marcado `devOptional`, e com ele iam os 28 MB de `@typescript/` — o
+ * compilador inteiro, em texto, dentro do programa de quem costura camisa.
+ *
+ * E as duas marcas juntas ainda não bastam. Os binários de plataforma do
+ * TypeScript (`@typescript/typescript-linux-x64` e os outros dezenove) o npm
+ * marca só como `optional`, sem nenhum "dev" — pendurados num pacote que É de
+ * desenvolver. Pela marca deles, são de produção. Por isso, depois da poda das
+ * marcas, vem a varredura de órfãos: quem não é alcançável a partir das
+ * `dependencies` do package.json não tem como ser exigido em execução, e sai.
  */
 function podarDesenvolvimento(pasta) {
   const lock = JSON.parse(fs.readFileSync(path.join(RAIZ, "package-lock.json"), "utf-8"));
   const prefixo = "node_modules/";
 
   for (const [caminho, info] of Object.entries(lock.packages || {})) {
-    if (!info.dev || !caminho.startsWith(prefixo)) continue;
+    if (!(info.dev || info.devOptional) || !caminho.startsWith(prefixo)) continue;
     fs.rmSync(path.join(pasta, caminho.slice(prefixo.length)), { recursive: true, force: true });
   }
+
+  podarOrfaos(pasta);
 
   for (const item of fs.readdirSync(pasta)) {
     const dentro = path.join(pasta, item);
@@ -329,6 +433,7 @@ if (refeito) {
     fs.rmSync(path.join(DESTINO, "node_modules", sobra), { recursive: true, force: true });
   }
   podarPrebuilds(path.join(DESTINO, "node_modules"));
+  podarOnnx(path.join(DESTINO, "node_modules"));
   podarDesenvolvimento(path.join(DESTINO, "node_modules"));
 }
 

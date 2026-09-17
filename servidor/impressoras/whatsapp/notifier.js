@@ -267,7 +267,8 @@ function handleProgress(payload) {
     const startedAt = active && active.task === finalTask ? active.startedAt : null;
     current.delete(payload.machineId);
     if (!finalTask) return;
-    schedule(state === "completed" ? "finish" : "error", {
+    const interrupted = payload.cancelled || payload.error || state !== "completed";
+    schedule(interrupted ? "error" : "finish", {
       ...payload,
       task: finalTask,
       startedAt,

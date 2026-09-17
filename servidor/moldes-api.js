@@ -16,7 +16,7 @@ const fs = require("fs");
 const path = require("path");
 const db = require("./db");
 const {
-  extensaoDaImagem, nomeDeArquivo, limparImagensSoltas, pastaDeUploads,
+  extensaoDaImagem, nomeDeArquivo, nomeDeImagemValido, limparImagensSoltas, pastaDeUploads,
 } = require("./uploads-arquivos");
 
 const router = express.Router();
@@ -259,6 +259,10 @@ router.post("/:id/artes", (req, res) => {
   const { id, nome, pecas } = req.body || {};
   if (!nome || !String(nome).trim()) {
     return res.status(400).json({ error: "Dê um nome à estampa." });
+  }
+  if (Array.isArray(pecas)
+    && pecas.some((p) => p && p.arquivo && !nomeDeImagemValido(p.arquivo))) {
+    return res.status(400).json({ error: "O arquivo da estampa precisa ser um nome de imagem, sem caminho." });
   }
   const arrumadas = (Array.isArray(pecas) ? pecas : [])
     .filter((p) => p && p.papel && p.arquivo)

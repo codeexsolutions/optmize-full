@@ -153,8 +153,12 @@ const porcento = (f) => `${(f * 100).toFixed(1)}%`;
  *
  * Agora a corrida diz quantas tentativas por segundo ela conseguiu, e quando
  * há `--contra` o relatório compara esse ritmo com o da corrida guardada. Se
- * eles não baterem, o aviso vem antes da tabela — porque a essa altura a
- * tabela não está medindo o que diz medir.
+ * eles não baterem, o recado vem antes da tabela — porque a essa altura a
+ * tabela pode não estar medindo o que diz medir.
+ *
+ * "Pode", e não "não está": ritmo que CAI é máquina ocupada e invalida a
+ * comparação; ritmo que SOBE é a própria mudança rendendo. Os dois casos saem
+ * com palavras diferentes — ver `avisarSobreRitmo`.
  */
 
 // Acima disto a diferença de ritmo já explica sozinha uma diferença de consumo
@@ -174,16 +178,64 @@ function avisarSobreRitmo(linhas, antes) {
       + " não dá para saber se as duas tiveram o mesmo poder de fogo.\n");
     return;
   }
-  const fora = pares.filter((x) => Math.abs(x.agora - x.antes) / x.antes > RITMO_TOLERANCIA);
-  if (fora.length === 0) return;
-  console.log(`  AVISO: o ritmo da máquina mudou em ${fora.length} de ${pares.length}`
-    + " trabalho(s). A comparação abaixo NÃO é confiável — refaça as duas");
-  console.log("  corridas seguidas, com a máquina livre.");
-  fora.forEach((x) => {
+  const mostrar = (x) => {
     const dif = ((x.agora - x.antes) / x.antes) * 100;
     console.log(`    ${x.nome.padEnd(24)} ${String(x.antes).padStart(7)} → `
       + `${String(x.agora).padStart(7)} tent./s   ${dif > 0 ? "+" : ""}${dif.toFixed(0)}%`);
-  });
+  };
+
+  /*
+   * CAIR E SUBIR NÃO SÃO A MESMA COISA, e por muito tempo isto tratava os dois
+   * com um `Math.abs`.
+   *
+   * Máquina ocupada só faz o ritmo CAIR — é o caso que este guarda nasceu para
+   * pegar, e ali a corrida de agora está com menos poder de fogo do que a
+   * guardada: qualquer consumo pior pode ser só isso, e a tabela não está
+   * medindo o que diz medir.
+   *
+   * Ritmo que SOBE não tem essa leitura. Nenhuma máquina ociosa acelera o
+   * motor; quem acelera é a mudança que se está medindo, quando ela corta
+   * trabalho por tentativa em vez de trocar o que a busca faz. Foi o que o
+   * corte de rotação repetida fez (+15% a +41% de tentativas por segundo, ver
+   * "A ROTAÇÃO QUE O MOTOR NÃO TEM COMO DISTINGUIR" no motor), e o aviso antigo
+   * declarava a comparação inválida justamente quando ela estava certa: a
+   * aceleração ERA o resultado.
+   *
+   * Então subir vira nota, e não alarme. Com uma ressalva que a nota diz na
+   * cara: se a mudança não tinha por que acelerar nada, então foi a corrida
+   * GUARDADA que rodou com a máquina ocupada, e aí as duas se refazem.
+   *
+   * Cair junto com subir continua alarme. Ritmo para todo lado é máquina
+   * instável, e nesse caso nem a aceleração se sustenta como resultado.
+   */
+  const caiu = pares.filter((x) => (x.antes - x.agora) / x.antes > RITMO_TOLERANCIA);
+  const subiu = pares.filter((x) => (x.agora - x.antes) / x.antes > RITMO_TOLERANCIA);
+
+  if (caiu.length > 0) {
+    console.log(`  AVISO: o ritmo da máquina CAIU em ${caiu.length} de ${pares.length}`
+      + " trabalho(s). A comparação abaixo NÃO é confiável — refaça as duas");
+    console.log("  corridas seguidas, com a máquina livre.");
+    caiu.forEach(mostrar);
+    if (subiu.length > 0) {
+      console.log(`  (e subiu em outros ${subiu.length} — ritmo para os dois lados é`
+        + " máquina instável, não resultado.)");
+      subiu.forEach(mostrar);
+    }
+    console.log("");
+    return;
+  }
+
+  if (subiu.length === 0) return;
+  console.log(`  NOTA: o ritmo SUBIU em ${subiu.length} de ${pares.length} trabalho(s) —`
+    + " a corrida de agora fez mais");
+  console.log("  tentativas no mesmo orçamento. Se a mudança que está sendo medida corta"
+    + " trabalho por");
+  console.log("  tentativa, essa aceleração É o resultado, e a diferença de consumo abaixo"
+    + " já a inclui.");
+  console.log("  Se ela não tinha por que acelerar nada, foi a corrida guardada que rodou"
+    + " com a máquina");
+  console.log("  ocupada — nesse caso, refaça as duas.");
+  subiu.forEach(mostrar);
   console.log("");
 }
 

@@ -8,6 +8,17 @@
     "beforeBuildCommand": "node empacotar/preparar.js && node empacotar/compilar.js",
     "beforeDevCommand": "node empacotar/preparar.js"
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://optmize-backend-production.up.railway.app/app/update/tauri/{{target}}-{{arch}}/{{current_version}}"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI2NEE4NzQ3MDFCRTM1OTcKUldTWE5iNEJSNGRLSmk3b1g1SFhpRm5DU0tUaTJ6R01TYjU4aFVhSWh6V2poaEVzY3hibTJDU3UK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "app": {
     "withGlobalTauri": false,
     "security": {
@@ -17,6 +28,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "publisher": "Optimize",
     "copyright": "",
     "category": "Productivity",
@@ -31,6 +43,9 @@
     "resources": ["servidor/**/*"],
     "windows": {
       "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "ganchos.nsh",
+        "uninstallerIcon": "icons/icon.ico",
         "installMode": "currentUser",
         "languages": ["PortugueseBR"],
         "displayLanguageSelector": false

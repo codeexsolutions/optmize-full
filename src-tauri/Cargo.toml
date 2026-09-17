@@ -10,12 +10,58 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+
+# A ATUALIZAÇÃO AUTOMÁTICA.
+#
+# O app pergunta ao nosso servidor se há versão mais nova, baixa o instalador e
+# o executa. A conferência de assinatura é feita por este crate contra a
+# `pubkey` do `tauri.conf.json` — um instalador que não bate com ela é recusado
+# antes de rodar, e é isso que impede que tomar conta do servidor vire executar
+# qualquer coisa na máquina de quem usa.
+tauri-plugin-updater = "2"
+
+# A caixa que pergunta se pode atualizar agora.
+#
+# Precisa ser NATIVA, e não um `confirm()` na página: a interface do Optimize é
+# servida pelo Node em `127.0.0.1:<porta>`, uma origem remota aos olhos do
+# Tauri, que não fala com o IPC dele. Perguntar pelo lado do Rust evita ter de
+# abrir a ponte de comandos para uma origem HTTP.
+tauri-plugin-dialog = "2"
+
+# Exigido pelo `generate_context!` desde que o `tauri.conf.json` ganhou o bloco
+# `plugins`: a configuração de cada plugin é embutida no binário como um
+# `serde_json::Value`, e a macro gera código que nomeia o crate. Sem ele aqui, o
+# erro de compilação fala de `serde_json` numa linha que não o menciona.
+serde_json = "1"
 # `resource_dir()`/`app_data_dir()` no Windows vêm no formato de caminho
 # estendido (`\\?\C:\...`), que o Node.js não entende direito — a resolução
 # do módulo principal quebra tentando ler o "C:" sozinho como se fosse uma
 # pasta. `dunce` devolve o mesmo caminho no formato de sempre, sem o prefixo,
 # que é o que o Node espera.
 dunce = "1"
+
+# O WebView2 cru, para responder à caixa de permissão que o Chromium levanta
+# quando a pessoa escolhe a pasta de saída do Exportar (ver
+# `responder_permissoes`, em src/main.rs).
+#
+# A versão acompanha a que o Tauri já usa por dentro: o
+# `PlatformWebview::controller()` devolve um `ICoreWebView2Controller` DESTE
+# crate, e duas versões diferentes no mesmo binário seriam dois tipos que não
+# conversam.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+
+# O Win32 cru, para dar à janela o ícone GRANDE que o Tauri não dá (ver
+# `icone_da_barra`, em src/main.rs). Mesma regra de versão do webview2-com: é a
+# que o Tauri já usa por dentro, senão o `HWND` que ele devolve não é o `HWND`
+# que estas funções aceitam.
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.61"
+features = [
+  "Win32_Foundation",
+  "Win32_System_LibraryLoader",
+  "Win32_UI_WindowsAndMessaging",
+]
 
 # O executável é a casca: o peso está nos recursos (o Node e o servidor), não
 # no binário. Otimizar por tamanho aqui não custa velocidade de nada que o
