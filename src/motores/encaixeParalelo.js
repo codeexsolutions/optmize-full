@@ -341,6 +341,37 @@ export async function buscarMelhorEncaixeEmParalelo(itens, config) {
   const resultados = [];
   let quebrou = false;
   let vigia = null;
+  /*
+   * ===========================================================================
+   * O PRAZO DURO
+   * ===========================================================================
+   *
+   * O aviso de parar viaja por `postMessage`, e mensagem só é lida por quem
+   * está de volta ao laço de eventos. Uma fatia presa em código SÍNCRONO —
+   * uma tentativa patológica, um polimento que não acaba — nunca a lê. O
+   * `Promise.all` abaixo então espera por ela, e a tela fica em "procurando"
+   * para sempre: o contador para de subir, o tempo pedido passa, e nada
+   * acontece. Foi assim que este defeito apareceu na produção.
+   *
+   * Pedir com jeito não basta. Depois de um prazo generoso — o tempo pedido
+   * mais a margem abaixo — a fatia calada é ENCERRADA à força e a promessa
+   * dela é fechada de fora. O que ela tinha se perde; o que as outras acharam
+   * vale, e é isso que a tela recebe.
+   *
+   * A margem é larga de propósito: o polimento do fim roda DEPOIS do relógio
+   * da busca (ver "O POLIMENTO", em encaixe-motor.js) e num lote grande ele
+   * custa segundos honestos. Matar uma fatia que ia entregar é perder trabalho
+   * bom; deixar a tela pendurada é perder o dia. A margem escolhe o primeiro
+   * risco, e só depois de o segundo já ser certo.
+   *
+   * Worker morto à força não volta para a piscina: o estado dele (as máscaras
+   * preparadas, o plano do WASM) morreu junto, e reaproveitá-lo daria um
+   * defeito muito pior de achar do que este.
+   */
+  const MARGEM_DURA_MS = 15000;
+  const encerrar = new Array(workers.length).fill(null);
+  const respondeu = new Array(workers.length).fill(false);
+  let matouAlguem = false;
   // Assim que UMA fatia bate a meta de aproveitamento (ver `config.metaAproveitamento`
   // em encaixe-motor.js), não vale a pena esperar as outras terminarem o tempo
   // pedido inteiro — elas também são mandadas parar e entregam o melhor que
@@ -364,7 +395,12 @@ export async function buscarMelhorEncaixeEmParalelo(itens, config) {
     })));
 
     // 2) Cada um busca na sua fatia do portfólio.
+    //
+    // `encerrar[k]` é a porta de saída da fatia k, guardada para o prazo duro
+    // lá embaixo poder fechá-la de fora. Sem ela, quem não responde não é
+    // ninguém: a promessa fica pendurada e o `Promise.all` com ela.
     const buscas = workers.map((w, k) => new Promise((pronto) => {
+      encerrar[k] = pronto;
       const aoResponder = (evento) => {
         const msg = evento.data;
         if (!msg) return;
@@ -379,6 +415,7 @@ export async function buscarMelhorEncaixeEmParalelo(itens, config) {
         }
         if (msg.tipo === "resultado") {
           w.removeEventListener("message", aoResponder);
+          respondeu[k] = true;
           resultados.push(msg.resultado);
           pronto();
           return;
@@ -386,6 +423,7 @@ export async function buscarMelhorEncaixeEmParalelo(itens, config) {
         if (msg.tipo === "falhou") {
           w.removeEventListener("message", aoResponder);
           console.warn(`[encaixe] fatia ${k} falhou:`, msg.erro);
+          respondeu[k] = true;
           pronto(); // as outras fatias continuam valendo
         }
       };
@@ -393,6 +431,7 @@ export async function buscarMelhorEncaixeEmParalelo(itens, config) {
       w.addEventListener("error", (evento) => {
         console.warn(`[encaixe] worker ${k} quebrou:`, evento.message);
         quebrou = true;
+        respondeu[k] = true;
         pronto();
       }, { once: true });
       // O papel desta fatia (ver `papelDaFatia`, em encaixe-motor.js). Ele entra
@@ -417,6 +456,20 @@ export async function buscarMelhorEncaixeEmParalelo(itens, config) {
       if ((config.deveParar && config.deveParar()) || Date.now() - inicio > tetoMs + 1500) {
         workers.forEach((w) => w.postMessage({ tipo: "parar" }));
       }
+      // E, passado o prazo duro, para de pedir e encerra. Ver `MARGEM_DURA_MS`.
+      if (Date.now() - inicio <= tetoMs + MARGEM_DURA_MS) return;
+      workers.forEach((w, k) => {
+        if (respondeu[k]) return;
+        respondeu[k] = true;
+        matouAlguem = true;
+        console.warn(
+          `[encaixe] a fatia ${k} não respondeu ${((Date.now() - inicio) / 1000).toFixed(0)}s `
+          + `depois de começar (tempo pedido: ${(tetoMs / 1000).toFixed(0)}s). `
+          + "Encerrando-a e ficando com o que as outras acharam.",
+        );
+        try { w.terminate(); } catch { /* já estava morto */ }
+        if (encerrar[k]) encerrar[k]();
+      });
     }, 120);
 
     await Promise.all(buscas);
@@ -428,10 +481,14 @@ export async function buscarMelhorEncaixeEmParalelo(itens, config) {
     if (vigia) clearInterval(vigia);
   }
 
-  if (quebrou) derrubarPool();
+  // Worker encerrado à força levou o estado dele junto — a piscina inteira sai
+  // de circulação, e a próxima busca sobe workers novos.
+  if (quebrou || matouAlguem) derrubarPool();
 
   const juntado = juntarResultados(resultados);
   if (!juntado) {
+    // Nenhuma fatia entregou. Em thread única não há worker para travar, então
+    // este caminho sempre responde — mais devagar, e respondendo.
     console.warn("[encaixe] nenhuma fatia devolveu resultado, indo de thread única.");
     return buscarMelhorEncaixe(itens, config);
   }
