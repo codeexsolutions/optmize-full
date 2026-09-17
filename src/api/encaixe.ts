@@ -145,19 +145,77 @@ interface PecaNaChave {
 }
 
 /**
+ * Tudo o que distingue uma peça de outra, num texto só.
+ *
+ * É a unidade da chave do trabalho E a impressão digital que o encaixe
+ * guardado leva para o banco. As duas TÊM que sair daqui: a chave ignora a
+ * ordem das peças (ela ordena a lista), e o encaixe guardado é todo por
+ * índice de linha da tabela. Se as duas coisas divergirem, a chave diz "é o
+ * mesmo trabalho" enquanto os índices apontam para peças trocadas — ver
+ * `traduzirIndicesDoGuardado`.
+ *
+ * O grupo entra: ele muda a fila de entrada e, com ela, o encaixe. Sem isso,
+ * agrupar peças e refazer a procura traria de volta o risco salvo de ANTES do
+ * grupo, e a tela mostraria um encaixe que ignora o agrupamento como se fosse
+ * a resposta a ele.
+ */
+function impressaoDaPeca(p: PecaNaChave): string {
+  return [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH, p.grupo || ""].join("~");
+}
+
+/** As peças do jeito que o encaixe guardado precisa delas: uma impressão por linha, NA ORDEM. */
+export function pecasParaGuardar(pecas: PecaNaChave[]): string[] {
+  return pecas.map(impressaoDaPeca);
+}
+
+/**
+ * De qual linha de HOJE saiu cada linha de ONTEM.
+ *
+ * A chave do trabalho ordena as peças antes de resumir, então ela é a mesma
+ * para qualquer ordem da tabela. Os índices gravados no encaixe guardado, não:
+ * eles são a linha da tabela, e só. Tirar uma peça e pôr de volta (ela volta
+ * para o fim da lista) bastava para a chave continuar batendo e cada posição
+ * passar a apontar para a peça errada — a tela remontava o encaixe com as
+ * peças trocadas de tamanho, uma por cima da outra.
+ *
+ * Então aqui a ordem de ontem é casada com a de hoje, peça por peça. Se for só
+ * uma troca de ordem, o encaixe volta inteiro e certo. Se não casar — peça
+ * diferente, ou lista gravada antes de isto existir, quando só o nome e a
+ * quantidade iam para o banco — devolve `null`, e quem chamou não oferece um
+ * encaixe que não sabe remontar.
+ */
+export function traduzirIndicesDoGuardado(
+  impressoesDeOntem: unknown, pecasDeHoje: PecaNaChave[],
+): number[] | null {
+  if (!Array.isArray(impressoesDeOntem) || impressoesDeOntem.length !== pecasDeHoje.length) return null;
+  if (!impressoesDeOntem.every((i) => typeof i === "string")) return null;
+
+  // Peças de impressão igual são intercambiáveis por definição: a chave do
+  // trabalho também não sabe distingui-las. Vão por ordem de chegada.
+  const livres = new Map<string, number[]>();
+  pecasDeHoje.forEach((peca, i) => {
+    const impressao = impressaoDaPeca(peca);
+    const fila = livres.get(impressao);
+    if (fila) fila.push(i); else livres.set(impressao, [i]);
+  });
+
+  const paraHoje: number[] = [];
+  for (const impressao of impressoesDeOntem as string[]) {
+    const fila = livres.get(impressao);
+    if (!fila || fila.length === 0) return null;
+    paraHoje.push(fila.shift() as number);
+  }
+  return paraHoje;
+}
+
+/**
  * A identidade de um trabalho: as mesmas peças, no mesmo tecido, com a mesma
  * folga e a mesma bancada.
  */
 export function chaveDoTrabalho(
   pecas: PecaNaChave[], larguraTecido: number, espaco: number, comprimentoBancada: number,
 ): string {
-  // O grupo entra na chave: ele muda a fila de entrada e, com ela, o encaixe.
-  // Sem isso, agrupar peças e refazer a procura traria de volta o risco salvo
-  // de ANTES do grupo, e a tela mostraria um encaixe que ignora o agrupamento
-  // como se fosse a resposta a ele.
-  const lista = pecas.map((p) =>
-    [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH, p.grupo || ""].join("~"),
-  ).sort().join("|");
+  const lista = pecas.map(impressaoDaPeca).sort().join("|");
   // O "b" antes do comprimento não é enfeite: sem ele, uma chave nova de
   // bancada 1 cm cairia em cima da chave velha de margem 1 cm, e o trabalho
   // abriria com um encaixe guardado que não respeita bancada nenhuma.
