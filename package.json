@@ -1,6 +1,6 @@
 {
   "name": "optimize",
-  "version": "1.0.26",
+  "version": "1.0.27",
   "description": "Optimize: biblioteca de moldes, encaixe de peças no tecido, vetorização de imagem e a central das impressoras da produção.",
   "main": "servidor/server.js",
   "type": "commonjs",
@@ -29,7 +29,7 @@
     "bancada:react": "node bancada/conferir-react.cjs",
     "tipos": "tsc --noEmit",
     "app": "npm run front && tauri dev",
-    "build:app": "npm run front && tauri build",
+    "build:app": "npm run front && node empacotar/instalador.js",
     "//publicar": "Manda o instalador recem-compilado para o backend: /download passa a entrega-lo e quem esta com o programa aberto e avisado na hora. Exige OPTMIZE_ADMIN_KEY no ambiente, e que o build tenha sido ASSINADO (TAURI_SIGNING_PRIVATE_KEY). Notas da versao vao como argumento: npm run publicar -- \"Corrige o encaixe em telas 4K\"",
     "publicar": "node empacotar/publicar.js",
     "tauri": "tauri",
