@@ -12,6 +12,7 @@ import { encaixar, posicoesDasColocacoes, assinaturaDoTrabalho, buscarMelhorEnca
   midiaConsumida, aproveitamentoDaMidia, bancadasOcupadas } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
 import { prepararUnidadesNoWasm } from "../motores/encaixeWasm";
+import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
 import { grade, gradeDaPeca, tirarFundoDosPixels, silhuetaDeDados, mascarasDeSilhueta } from "../motores/encaixeMascara";
 import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../motores/encaixePrepara";
 import { AJUSTE_PADRAO, MODOS_DE_ARTE, TIPOS_DE_ARTE, ajusteNovo, tamanhoDoRapport, ppcmDaArte, desenharArteNoMolde } from "../motores/arteMolde";
@@ -252,13 +253,64 @@ let ultimoResultado = null;
  * mudado, lista limpa) tem que apagar o botão junto, e um `= null` esquecido
  * num canto deixaria o Exportar aceso prometendo um risco que já não existe.
  */
+/*
+ * O GUARDA DA SOBREPOSIÇÃO MORA AQUI, e por isso ele é inescapável.
+ *
+ * Todo encaixe que a tela passa a ter — o da busca e o retomado do banco —
+ * entra por esta função, porque é ela que acende o Exportar. Então conferir
+ * aqui é conferir TODO caminho, inclusive um que venha a ser escrito depois.
+ *
+ * Travar é não acender o botão. Não é um aviso ao lado de um botão aceso:
+ * exportar é o que manda o risco para a produção, e um encaixe com peça em
+ * cima de peça não pode sair nem por engano nem por insistência. O risco fica
+ * na tela de propósito — é olhando o desenho que se vê o que aconteceu.
+ *
+ * Ver `motores/encaixeSobreposicao.js` para a conta e para o porquê de ela ser
+ * por coluna em vez de pintar o rolo.
+ */
 function guardarResultado(valor) {
+  // O passo vem em cada posição, nos dois caminhos: `posicoesDasColocacoes` o
+  // escreve na busca e `usarEncaixeGuardado` o escreve na retomada. Não há
+  // fallback a inventar aqui — posição sem passo é encaixe que não dá para
+  // conferir, e é o próprio guarda que recusa esse caso.
+  const recusa = valor ? recusarPorSobreposicao(valor) : null;
+  if (recusa) {
+    valor.sobreposto = recusa;
+    mostrarErroEncaixe(recusa);
+  }
   ultimoResultado = valor;
   if (!btnExportar) return valor;
-  btnExportar.disabled = !valor;
+  btnExportar.disabled = !valor || !!recusa;
   // Perder o risco com o menu aberto deixaria três itens mortos à vista.
-  if (!valor) fecharMenuExportar();
+  if (!valor || recusa) fecharMenuExportar();
   return valor;
+}
+
+/*
+ * A TRAVA TAMBÉM NA AÇÃO, E NÃO SÓ NO BOTÃO.
+ *
+ * Apagar o Exportar seria suficiente se o botão fosse o único caminho, e ele
+ * não é: as três saídas (PNG, PDF, imprimir) começam com `if (!ultimoResultado)
+ * return` e mais nada, e o fim de uma exportação reacende o botão com um
+ * `disabled = false` seco, sem consultar nada. Basta uma exportação terminar
+ * depois de o risco ter sido trocado por um sobreposto para o botão voltar
+ * aceso em cima de um encaixe travado.
+ *
+ * Então a recusa mora aqui e é consultada em cada saída. Botão apagado é
+ * conveniência; isto é a trava.
+ */
+function producaoTravada() {
+  return ultimoResultado && ultimoResultado.sobreposto ? ultimoResultado.sobreposto : null;
+}
+
+/** Recusa a saída e repete o motivo na tela. `true` quando travou. */
+function recusouPorTrava() {
+  const motivo = producaoTravada();
+  if (!motivo) return false;
+  mostrarErroEncaixe(motivo);
+  fecharMenuExportar();
+  if (btnExportar) btnExportar.disabled = true;
+  return true;
 }
 
 // Uma vez que a pessoa mexe no campo "Procurar por" com a própria mão, ele é
@@ -1734,6 +1786,46 @@ async function usarEncaixeGuardado(guardado) {
     if (!peca._cacheMascaras) await mascarasDaPeca(peca, passo, 0);
   }
 
+  /*
+   * A CONFERÊNCIA QUE FALTAVA: O ÍNDICE APONTA PARA A MESMA PEÇA?
+   *
+   * As posições são guardadas por `indice`, que é a LINHA da tabela de peças. E
+   * a `chaveDoTrabalho` — quem decide se este guardado serve para o trabalho de
+   * agora — ordena a lista de peças antes de embaralhar, de propósito: o mesmo
+   * trabalho não deixa de ser o mesmo por alguém ter digitado as peças noutra
+   * ordem.
+   *
+   * As duas coisas juntas abriam um buraco: as mesmas peças em ordem DIFERENTE
+   * dão a mesma chave, o guardado é oferecido, e cada `indice` passa a apontar
+   * para outra peça. A camiseta vai para as coordenadas da gola, a gola para as
+   * da camiseta, e o resultado é peça dentro de peça. Era o defeito relatado na
+   * produção — e o "às vezes" dele é justamente isto: só quando a ordem difere.
+   *
+   * O registro guarda a lista de peças como ela estava na hora de salvar (ver a
+   * chamada de `encaixeApi.guardar`), então dá para conferir linha por linha.
+   * Não bate, não volta.
+   *
+   * Por que RECUSAR e não recolocar no lugar certo: o que ficou guardado de
+   * cada peça é nome e quantidade, e isso não identifica uma peça — duas linhas
+   * podem ter o mesmo nome e contornos diferentes. Remapear por um identificador
+   * que não identifica trocaria um encaixe sobreposto por outro, calado. Quem
+   * quiser o guardado de volta refaz a procura, que é barato, ou põe a tabela na
+   * ordem de antes.
+   *
+   * Registro antigo sem a lista de peças não dá para conferir aqui; esse fica
+   * para o guarda da sobreposição em `guardarResultado`, que confere o encaixe
+   * pronto e trava a produção se houver cruzamento.
+   */
+  if (Array.isArray(guardado.pecas)) {
+    if (guardado.pecas.length !== pecasEncaixe.length) return null;
+    for (let i = 0; i < guardado.pecas.length; i++) {
+      const antes = guardado.pecas[i] || {};
+      const agora = pecasEncaixe[i] || {};
+      if (String(antes.nome || "") !== String(agora.nome || "")) return null;
+      if (Number(antes.qtd) !== Number(agora.qtd)) return null;
+    }
+  }
+
   const posicoes = [];
   for (const p of guardado.posicoes) {
     const peca = pecasEncaixe[p.indice];
@@ -1781,10 +1873,22 @@ async function usarEncaixeGuardado(guardado) {
   });
 
   renderResultado();
-  encaixeAndamento.textContent =
-    `Este é o melhor encaixe já conseguido com estas peças: ${metrosNaTela(guardado.consumo, posicoes)}, `
-    + `de ${new Date(guardado.atualizado_em || guardado.criado_em).toLocaleDateString("pt-BR")}.`;
-  encaixeAndamento.classList.remove("hidden");
+  /*
+   * O elogio só sai se o encaixe passou pelo guarda.
+   *
+   * `guardarResultado` já pôs o erro na tela quando há peça em cima de peça, e
+   * escrever "este é o melhor encaixe já conseguido" embaixo dele seria a tela
+   * dizendo duas coisas contrárias sobre o mesmo desenho — e a frase animadora
+   * é a que a pessoa acredita.
+   */
+  if (!producaoTravada()) {
+    encaixeAndamento.textContent =
+      `Este é o melhor encaixe já conseguido com estas peças: ${metrosNaTela(guardado.consumo, posicoes)}, `
+      + `de ${new Date(guardado.atualizado_em || guardado.criado_em).toLocaleDateString("pt-BR")}.`;
+    encaixeAndamento.classList.remove("hidden");
+  } else {
+    encaixeAndamento.classList.add("hidden");
+  }
   esconderOfertaDoGuardado();
   return ultimoResultado;
 }
@@ -2708,7 +2812,7 @@ function renderResultado() {
 // ==================== DESENHO ====================
 
 escopo.ouvir(btnBaixarEncaixe, "click", async () => {
-  if (!ultimoResultado) return;
+  if (!ultimoResultado || recusouPorTrava()) return;
 
   // Nome de arquivo, e não texto de tela: a vírgula aqui é só para o PNG sair
   // batendo com o PDF, que já se chamava "encaixe-5,32m.pdf".
@@ -2733,7 +2837,7 @@ escopo.ouvir(btnBaixarEncaixe, "click", async () => {
     console.error("[encaixe] falhou ao salvar o PNG:", err);
     mostrarErroEncaixe(`Não consegui salvar o PNG: ${err.message}`);
   } finally {
-    btnExportar.disabled = false;
+    btnExportar.disabled = !!producaoTravada();
     btnExportarRotulo.textContent = "Exportar";
   }
 });
@@ -2911,6 +3015,8 @@ async function escolherPastaDeSaida(quantos) {
 async function baixarEncaixeEmPdf() {
   const r = ultimoResultado;
   if (!r || r.posicoes.length === 0) return;
+  // O PDF é a saída que mais interessa travar: é ele que vai para a impressora.
+  if (recusouPorTrava()) return;
 
   const metros = (cm) => (cm / 100).toFixed(2).replace(".", ",");
   const nome = `encaixe-${metros(r.consumo)}m`;
@@ -3023,7 +3129,7 @@ async function baixarEncaixeEmPdf() {
     console.error("[encaixe] falhou ao gerar o PDF:", err);
     mostrarErroEncaixe(`Não consegui gerar o PDF: ${err.message}`);
   } finally {
-    btnExportar.disabled = false;
+    btnExportar.disabled = !!producaoTravada();
     btnExportarRotulo.textContent = "Exportar";
   }
 }
@@ -3031,7 +3137,7 @@ async function baixarEncaixeEmPdf() {
 escopo.ouvir(btnEncaixePdf, "click", baixarEncaixeEmPdf);
 
 escopo.ouvir(btnImprimirEncaixe, "click", () => {
-  if (!ultimoResultado) return;
+  if (!ultimoResultado || recusouPorTrava()) return;
   window.print();
 });
 

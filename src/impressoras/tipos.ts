@@ -140,6 +140,10 @@ export interface EstadoDaVarredura {
   reachable: number;
   results: AchadoDaVarredura[];
   error: string | null;
+  /* O que a varredura não conseguiu cobrir — rede maior que /24, por exemplo.
+     Separado do `message` porque aquele é reescrito a cada passo e este tem de
+     durar até o fim, quando a pessoa lê o resultado. */
+  avisos?: string[];
 }
 
 /** Uma impressão acontecendo agora. */

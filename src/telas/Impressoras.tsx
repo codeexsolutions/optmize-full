@@ -41,6 +41,7 @@ import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { useEventos, useRecarregarComEventos } from "../impressoras/socket";
 import { SemImpressoras } from "../impressoras/SemImpressoras";
+import { useVarredura } from "../impressoras/varredura";
 import {
   falar, gravarPreferencias, lerPreferencias, notificar,
   pedirPermissaoDeNotificacao, prepararSom, tocarBipe,
@@ -220,6 +221,7 @@ export function Impressoras() {
           icone="icones.svg#server"
           apoio="Uma por impressora cadastrada, com o dia dela e o estado agora."
           preencher
+          acao={<BotaoDeProcurar aoTerminar={painel.recarregar} />}
         >
           <ul className="m-0 grid list-none gap-2.5 p-0 [grid-template-columns:repeat(auto-fill,minmax(250px,1fr))]">
             {dados.machines.map((m) => (
@@ -621,6 +623,89 @@ function tetoRedondo(valor: number): number {
 /* ========================================================================== */
 /* Ao vivo                                                                    */
 /* ========================================================================== */
+
+/**
+ * ===========================================================================
+ * PROCURAR DE NOVO, SEM SAIR DO PAINEL
+ * ===========================================================================
+ *
+ * A varredura já tinha botão, na tela de Máquinas. Só que essa tela é onde se
+ * CADASTRA impressora — passa-se por ela uma vez, na instalação, e não se
+ * volta. Quem liga uma máquina nova, troca um computador de lugar ou leva o
+ * sistema para outra loja está olhando ESTE painel, e não tinha como pedir
+ * "procure de novo" daqui.
+ *
+ * O botão mora no cartão "Máquinas" porque é ali que as cadastradas aparecem:
+ * a pergunta "onde estão as minhas máquinas?" e a ação "procurar mais" ficam
+ * no mesmo lugar.
+ *
+ * O ESTADO VEM DO `useVarredura`, E ISSO É DE PROPÓSITO. A varredura é uma
+ * só, no servidor, para todo mundo com o programa aberto; o hook é o mesmo que
+ * a tela de Máquinas e a porta usam. Um `fetch` próprio aqui seria a terceira
+ * cópia da mesma conversa, e a primeira a divergir em silêncio — é o que o
+ * cabeçalho do `impressoras/varredura.ts` já explica.
+ *
+ * O QUE ELE NÃO FAZ: cadastrar. A impressora achada precisa de um NOME antes
+ * de entrar, e dar nome é da tela de Máquinas. Então quando a varredura acha
+ * alguém novo, o recado aqui manda para lá, em vez de inventar um segundo
+ * lugar onde se batiza máquina.
+ */
+function BotaoDeProcurar({ aoTerminar }: { aoTerminar: () => void }) {
+  const { estado, rodando, falha, procurar, parar } = useVarredura(aoTerminar);
+
+  // Quantas a última varredura achou e ainda estão sem nome. `pending` é
+  // exatamente isso: reconhecida, fora do banco (ver `AcaoDaVarredura`).
+  const semNome = (estado?.results || []).filter((r) => r.action === "pending").length;
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      {rodando ? (
+        <button
+          type="button"
+          onClick={parar}
+          className="rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta"
+        >
+          Parar
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => procurar()}
+          className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta"
+        >
+          <Icone referencia="icones.svg#radar" className="size-4" />
+          Procurar na rede
+        </button>
+      )}
+
+      {/* O passo da varredura, uma linha. O painel inteiro de progresso é da
+          tela de Máquinas; aqui ele roubaria a tela do que a pessoa veio ver. */}
+      {rodando && estado?.message && (
+        <span className="max-w-[280px] text-right text-[0.75rem] text-tinta-fraca">
+          {estado.message}
+        </span>
+      )}
+
+      {!rodando && semNome > 0 && (
+        <span className="max-w-[280px] text-right text-[0.75rem] text-ambar">
+          {semNome === 1
+            ? "1 máquina nova achada — dê um nome a ela na tela Máquinas."
+            : `${semNome} máquinas novas achadas — dê nome a elas na tela Máquinas.`}
+        </span>
+      )}
+
+      {!rodando && semNome === 0 && estado?.phase === "done" && (
+        <span className="max-w-[280px] text-right text-[0.75rem] text-tinta-fraca">
+          Nenhuma máquina nova.
+        </span>
+      )}
+
+      {falha && (
+        <span className="max-w-[280px] text-right text-[0.75rem] text-alerta">{falha}</span>
+      )}
+    </div>
+  );
+}
 
 /**
  * Uma impressão em curso.

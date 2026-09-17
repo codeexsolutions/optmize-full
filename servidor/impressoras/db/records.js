@@ -110,4 +110,27 @@ function queryAll() {
   return rows.map(fromRow);
 }
 
-module.exports = { upsertMany, queryRange, queryByMachine, queryAll };
+/*
+ * Apagar registro por id — a única escrita destrutiva desta tabela.
+ *
+ * Ela existe por um motivo específico: o id de um registro embute o NOME do
+ * trabalho (ver `sources/printExp.js`), porque nome mais horário é o que
+ * identifica o trabalho de forma estável. A consequência é que consertar o
+ * leitor de nomes não corrige o passado — ele cria um registro novo, com o nome
+ * certo, ao lado do antigo, e o trabalho passa a contar duas vezes.
+ *
+ * NÃO existe "apagar por máquina", de propósito. Esta tabela não é um espelho
+ * descartável do arquivo da impressora: o PrintExp corta o começo do XML quando
+ * ele cresce, e os logs das outras rodam por data, então o banco guarda
+ * produção que a origem já não tem. Limpar e reimportar perderia isso calado.
+ * Quem chama daqui tem de saber exatamente quais ids está removendo, e por quê
+ * — ver `bancada/limpar-nomes-quebrados.js`.
+ */
+const deleteStmt = db.prepare("DELETE FROM imp_records WHERE id = ?");
+const deleteByIds = db.transaction((ids) => {
+  let removidos = 0;
+  for (const id of ids) removidos += deleteStmt.run(id).changes;
+  return removidos;
+});
+
+module.exports = { upsertMany, queryRange, queryByMachine, queryAll, deleteByIds };
