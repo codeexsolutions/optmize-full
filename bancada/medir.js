@@ -58,22 +58,12 @@ const { carregarMotor } = require("./motor");
 const { prepararPeca, expandir } = require("./pecas");
 const { TRABALHOS, PADRAO } = require("./trabalhos");
 
-// ==================== A MESMA REPARTIÇÃO DA PRODUÇÃO ====================
-
-// Espelham `encaixe-paralelo.js`. Se lá mudar, aqui muda junto — senão a
-// bancada mede uma repartição que ninguém roda.
-const FATIAS = 5;              // o que sobra num i5 de 6 núcleos
-const FATIAS_EXATAS = 2;
-const PULO_PADRAO = 3;
-const puloDaFatia = (k) => (k < FATIAS_EXATAS ? 1 : PULO_PADRAO);
-// Espelha `sementeDaFatia` do encaixe-paralelo.js: cada fatia sorteia diferente.
-const PASSO_DA_SEMENTE = 104729;
-const sementeDaFatia = (semente, k, espalhar) => semente + (espalhar ? k * PASSO_DA_SEMENTE : 0);
-
-// `motoresDaFatia` e `fatiaDoPortfolio` vêm do motor (ver "A FATIA DO ENCAIXE
-// POR VÃOS", em encaixe-motor.js): a bancada tem que medir a MESMA repartição
-// que a produção roda, e duas cópias da regra são duas chances de divergirem.
-
+// A repartição do portfólio e a corrida completa moram em `corrida.js`: a
+// varredura de ajustes (`varredura.js`) mede a MESMA corrida, e duas cópias
+// dela seriam duas chances de as duas ferramentas divergirem.
+const {
+  FATIAS, puloDaFatia, sementeDaFatia, prepararTrabalho, buscarComoAProducao,
+} = require("./corrida");
 
 // ==================== ARGUMENTOS ====================
 
@@ -134,100 +124,6 @@ function lerArgumentos(argv) {
     if (!TRABALHOS[nome]) throw new Error(`trabalho desconhecido: ${nome}`);
   });
   return opcoes;
-}
-
-// ==================== UMA CORRIDA ====================
-
-/** Prepara as peças de um trabalho uma vez: as máscaras servem para todas as sementes. */
-function prepararTrabalho(motor, nome) {
-  const receita = TRABALHOS[nome];
-  const { passo, raio, folgaReal } = motor.grade(receita.larguraTecido, receita.espaco);
-  const pecas = receita.pecas.map((p) => prepararPeca(motor, p.nome, {
-    passo, raio, giro: p.giro || "180", qtd: p.qtd,
-  }));
-  const itens = expandir(pecas);
-  const alturaMax = itens.reduce(
-    (soma, it) => soma + Math.max(it.largura, it.altura) + receita.espaco, 0);
-  return { nome, receita, pecas, itens, passo, raio, folgaReal, alturaMax };
-}
-
-/**
- * Uma busca completa: as fatias uma a uma, ficando com a melhor.
- *
- * É o `buscarMelhorEncaixeEmParalelo` da produção, desenrolado.
- */
-async function buscarComoAProducao(motor, trabalho,
-  { tempoMs, semente, meta, fatias, extra, espalharSemente }) {
-  const { receita, itens, passo, alturaMax } = trabalho;
-  const vetorTrabalho = motor.vetorDoTrabalho(trabalho.pecas, receita.larguraTecido);
-
-  let campeao = null;
-  let tentativas = 0;
-  const motoresPedidos = extra.motores
-    ? String(extra.motores).split("+") : ["contorno", "retangulo"];
-  /*
-   * Quais fatias dividem o portfólio COMUM.
-   *
-   * O corte é `i % n === k`, e o `n` tem que ser o número de fatias que estão
-   * dividindo — não o número total. Com 5 fatias, uma delas dedicada a um
-   * encaixador próprio e o `n` continuando 5, um quinto das receitas comuns não
-   * roda em fatia nenhuma: fica órfão.
-   */
-  for (let k = 0; k < fatias; k++) {
-    const motoresDaK = motor.motoresDaFatia(k, fatias, motoresPedidos, extra.fatiasVaos);
-    const resultado = await motor.buscarMelhorEncaixe(itens, {
-      larguraTecido: receita.larguraTecido,
-      espaco: receita.espaco,
-      comprimentoBancada: receita.comprimentoBancada || 0,
-      passo, alturaMax,
-      motores: motoresDaK,
-      // Sem memória e sem rede: a bancada mede o motor, não o histórico da
-      // loja. Com recorde antigo em jogo, duas corridas da mesma configuração
-      // já dariam resultados diferentes.
-      memoria: null, alvo: null, rede: null, redeMadura: false,
-      vetorTrabalho,
-      metaAproveitamento: meta,
-      tempoMaximoMs: tempoMs,
-      msSemGanho: Math.max(800, tempoMs * 0.25),
-      tentativasPorLote: itens.length >= 120 ? 1 : 8,
-      /*
-       * O corte do portfólio por fatia serve para N fatias dividirem A MESMA
-       * lista de receitas. Uma fatia que roda um encaixador só já tem portfólio
-       * próprio, disjunto do das outras — cortá-lo de novo deixaria ela com um
-       * quinto das receitas dela e quatro quintos de nada.
-       */
-      fatia: motor.fatiaDoPortfolio(k, fatias, motoresPedidos, extra.fatiasVaos),
-      saltoX: puloDaFatia(k),
-      semente: sementeDaFatia(semente, k, espalharSemente),
-      // O papel da fatia, do mesmo lugar que a produção usa
-      // (`papelDaFatia`, em encaixe-motor.js) — senão a bancada mediria uma
-      // repartição que não é a que roda na loja. O `--extra` da linha de
-      // comando vem depois, para dar para medir o motor COM e SEM o papel
-      // (`--extra podar=true`).
-      ...motor.papelDaFatia(k, fatias).config,
-      ...extra,
-    });
-    tentativas += resultado.tentativas || 0;
-    const melhor = !campeao
-      || resultado.naoEncaixadas.length < campeao.naoEncaixadas.length
-      || (resultado.naoEncaixadas.length === campeao.naoEncaixadas.length
-          && resultado.consumo < campeao.consumo);
-    if (melhor) campeao = resultado;
-  }
-
-  const areaTecido = receita.larguraTecido * campeao.consumo;
-  // O encaixe por caixa não devolve `areaReal` — ele nem olha a silhueta. A
-  // área real das peças é a mesma seja qual for o encaixador, então ela sai
-  // daqui, das próprias peças, e o aproveitamento dos dois vira comparável.
-  const areaReal = campeao.posicoes.reduce(
-    (soma, p) => soma + (p.item.mascaras ? p.item.mascaras.areaReal : 0), 0);
-  return {
-    consumo: campeao.consumo,
-    aproveitamento: areaTecido > 0 ? areaReal / areaTecido : 0,
-    sobraram: campeao.naoEncaixadas.length,
-    receita: campeao.receita,
-    tentativas,
-  };
 }
 
 // ==================== A TABELA ====================

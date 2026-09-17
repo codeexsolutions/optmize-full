@@ -1501,8 +1501,17 @@ export function melhorVagaNosVaos(colunas, colsTecido, unidade, tetoFundo, linha
 export const aceitaRepescagem = (motor) =>
   motor === "contorno" || motor === "faixas" || motor === "vaos" || motor === "blocos";
 
-// Quantas peças do rabo do rolo entram na repescagem. Mexer em peça do meio não
-// encurta metragem nenhuma: o consumo é o ponto mais baixo alcançado.
+/*
+ * Quantas peças do rabo do rolo entram na repescagem. Mexer em peça do meio não
+ * encurta metragem nenhuma: o consumo é o ponto mais baixo alcançado.
+ *
+ * O teto é ajustável (`config.repescaMaxPecas`) porque ele foi escolhido quando
+ * a repescagem dava UMA volta. Dando várias, subir uma peça do meio deixa de ser
+ * inútil: o lugar que ela libera pode receber, na volta seguinte, uma peça que
+ * estava mais funda — e essa sim encurta o rolo. Num pedido de 175 peças, 16 são
+ * 9% delas.
+ *   node bancada/medir.js --trabalhos producao-avulsa --extra repescaMaxPecas=64
+ */
 export const REPESCA_MAX_PECAS = 16;
 // Só entra na roda a peça que termina no último terço do rolo.
 export const REPESCA_FATIA_DO_RABO = 0.66;
@@ -1522,18 +1531,21 @@ export const REPESCA_FATIA_DO_RABO = 0.66;
  * está comprando tecido. Continua valendo que ela **nunca piora**: a peça só
  * sai do lugar por uma posição que termine mais acima.
  */
-export function repescarNosVaos(colocacoes, colsTecido, linhasBancada, voltas = 1) {
+export function repescarNosVaos(colocacoes, colsTecido, linhasBancada, voltas = 1, quantas = 0,
+  fatiaDoRabo = 0) {
   const fundoDeTodas = () => colocacoes.reduce((m, c) => Math.max(m, fundoDaColocacao(c)), 0);
   if (colocacoes.length < 2) return fundoDeTodas();
 
   const colunas = intervalosDoRolo(colocacoes, colsTecido);
   let fundoMax = fundoDeTodas();
+  const teto = quantas > 0 ? quantas : REPESCA_MAX_PECAS;
+  const rabo = fatiaDoRabo > 0 ? fatiaDoRabo : REPESCA_FATIA_DO_RABO;
 
   for (let volta = 0; volta < Math.max(1, voltas); volta++) {
     const doRabo = colocacoes
-      .filter((c) => fundoDaColocacao(c) >= fundoMax * REPESCA_FATIA_DO_RABO)
+      .filter((c) => fundoDaColocacao(c) >= fundoMax * rabo)
       .sort((a, b) => fundoDaColocacao(b) - fundoDaColocacao(a))
-      .slice(0, REPESCA_MAX_PECAS);
+      .slice(0, teto);
 
     doRabo.forEach((col) => {
       const antes = fundoDaColocacao(col);
@@ -1578,7 +1590,7 @@ export function encaixarContorno(unidades, config) {
           || Math.max(1, Math.floor(config.larguraTecido / passo));
         const linhas = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
         const fundo = repescarNosVaos(pelaViaRapida.colocacoes, colsDoTecido, linhas,
-          config.repescaVoltas);
+          config.repescaVoltas, config.repescaMaxPecas, config.repescaFatiaDoRabo);
         const refeito = resultadoDoEncaixe(
           posicoesDasColocacoes(pelaViaRapida.colocacoes, passo, linhas),
           pelaViaRapida.naoEncaixadas, fundo, passo);
@@ -1646,7 +1658,8 @@ export function encaixarContorno(unidades, config) {
   // cima de outra. Quem repesca o encaixe por blocos é ele mesmo, no fim, com
   // o rolo inteiro na mão (ver `encaixarPorBlocos`).
   if (config.repescar && !config.perfilInicial) {
-    fundoMax = repescarNosVaos(colocacoes, colsTecido, linhasBancada, config.repescaVoltas);
+    fundoMax = repescarNosVaos(colocacoes, colsTecido, linhasBancada, config.repescaVoltas,
+      config.repescaMaxPecas, config.repescaFatiaDoRabo);
   }
 
   const resultado = resultadoDoEncaixe(
@@ -1942,7 +1955,8 @@ export function encaixarPorVaos(unidades, config) {
    * não pagou — e é por isso que ela fica, apesar do empate na varredura exata.
    */
   if (config.repescar) {
-    fundoMax = repescarNosVaos(colocacoes, colsTecido, linhasBancada, config.repescaVoltas);
+    fundoMax = repescarNosVaos(colocacoes, colsTecido, linhasBancada, config.repescaVoltas,
+      config.repescaMaxPecas, config.repescaFatiaDoRabo);
   }
 
   const resultado = resultadoDoEncaixe(
@@ -2249,7 +2263,8 @@ export function encaixarPorBlocos(unidades, config) {
   // todas as colocações que ela precisa para não mandar peça para cima de
   // peça (ver a trava em `encaixarContorno`).
   if (config.repescar) {
-    fundo = repescarNosVaos(colocacoes, colsTecido, linhasBancada, config.repescaVoltas);
+    fundo = repescarNosVaos(colocacoes, colsTecido, linhasBancada, config.repescaVoltas,
+      config.repescaMaxPecas, config.repescaFatiaDoRabo);
   }
 
   const resultado = resultadoDoEncaixe(
@@ -3185,31 +3200,14 @@ export async function buscarMelhorEncaixe(itens, config) {
   /*
    * Os ajustes do polimento do fim (ver "O POLIMENTO", lá embaixo).
    *
-   * `polimentoAmplo=false` devolve o polimento como ele era — um candidato só,
-   * uma volta de repescagem e nada de repescar o encaixe por vãos. É por ele
-   * que a bancada mede os dois lados com o MESMO código, sem voltar o
-   * repositório no tempo.
+   * `polimentoAmplo=false` devolve o polimento como ele era — uma volta de
+   * repescagem, e nada de repescar o encaixe por vãos. É por ele que a bancada
+   * mede os dois lados com o MESMO código, sem voltar o repositório no tempo.
    */
   const POLIMENTO_AMPLO = config.polimentoAmplo !== false;
-  const POLIMENTO_FINALISTAS = POLIMENTO_AMPLO
-    ? (config.polimentoFinalistas != null ? Math.max(1, Number(config.polimentoFinalistas)) : 4)
-    : 1;
   const REPESCA_VOLTAS = POLIMENTO_AMPLO
     ? (config.repescaVoltas != null ? Math.max(1, Number(config.repescaVoltas)) : 3)
     : 1;
-  /**
-   * Os candidatos do polimento: o melhor encaixe de CADA receita, e não só o
-   * da campeã.
-   *
-   * A repescagem não rende igual em todo encaixe — ela paga onde ficou vão
-   * preso, e isso depende do desenho, não do consumo. Duas tentativas separadas
-   * por meio por cento podem trocar de lugar depois de polidas: a segunda tinha
-   * mais vão para devolver. Polir só a primeira é não olhar para isso.
-   *
-   * Um por receita, e não os N melhores de todos, porque tentativas da mesma
-   * receita saem parecidas — poliria quatro vezes quase o mesmo encaixe.
-   */
-  const finalistas = new Map();
 
   const receitasNaRoda = () => {
     const linhas = [...placar.values()];
@@ -3306,19 +3304,6 @@ export async function buscarMelhorEncaixe(itens, config) {
     tentativas++;
     guardarOrdem(resultado);
     const linha = placar.get(chave);
-    // O melhor encaixe desta receita, guardado para o polimento do fim. Só o
-    // que coube inteiro, pelo mesmo motivo de `guardarOrdem`, e só de quem
-    // aceita repescagem — polir o encaixe por caixa devolveria ele mesmo.
-    if (POLIMENTO_FINALISTAS > 1 && linha && resultado.ordemUsada
-        && resultado.naoEncaixadas.length === 0 && aceitaRepescagem(linha.receita.motor)) {
-      const antes = finalistas.get(chave);
-      if (!antes || resultado.consumo < antes.consumo) {
-        finalistas.set(chave, {
-          chave, receita: linha.receita, ordem: resultado.ordemUsada,
-          chaveDaLista: resultado.chaveDaLista, consumo: resultado.consumo,
-        });
-      }
-    }
     if (linha) {
       linha.tentativas++;
       // Só entra o encaixe que coube INTEIRO — o mesmo cuidado que o placar dos
@@ -3355,17 +3340,6 @@ export async function buscarMelhorEncaixe(itens, config) {
   };
 
   const tetoMs = config.tempoMaximoMs || 20000;
-  /*
-   * O polimento passou a custar mais de uma passada, e esse custo sai do tempo
-   * da busca — não é acrescentado a ele. Do contrário a bancada estaria
-   * comparando dois orçamentos diferentes, e na tela o campo de tempo pedido
-   * passaria a mentir um pouco mais a cada candidato polido.
-   */
-  const RESERVA_POLIMENTO = POLIMENTO_AMPLO
-    ? (config.polimentoReservaMs != null ? Number(config.polimentoReservaMs)
-      : Math.min(300, tetoMs * 0.04))
-    : 0;
-  const tetoBusca = Math.max(tetoMs * 0.5, tetoMs - RESERVA_POLIMENTO);
 
   const avisar = (fase) => {
     if (config.aoProgredir) {
@@ -3443,7 +3417,7 @@ export async function buscarMelhorEncaixe(itens, config) {
   // receitas voltam para a roda. Ver "bater na parede" logo abaixo.
   let podaSuspensaAte = 0;
 
-  while (Date.now() - inicio < tetoBusca) {
+  while (Date.now() - inicio < tetoMs) {
     if (config.deveParar && config.deveParar()) break;
     if (bateuAMeta()) break;
 
@@ -3547,7 +3521,7 @@ export async function buscarMelhorEncaixe(itens, config) {
   }
 
   /*
-   * O POLIMENTO: uma última passada dos finalistas, agora com a repescagem nos
+   * O POLIMENTO: uma última passada do vencedor, agora com a repescagem nos
    * vãos ligada (ver `repescarNosVaos`).
    *
    * Por que só no fim, e não em toda tentativa: a repescagem troca o relevo por
@@ -3562,10 +3536,25 @@ export async function buscarMelhorEncaixe(itens, config) {
    * e 2,58% do lote grande — os dois trabalhos com mais formatos diferentes,
    * que é onde o vão preso se acumula.
    *
-   * O que mudou: em vez de polir só a campeã, ele pole o melhor encaixe de cada
-   * receita, do mais apertado ao menos, enquanto houver troco de tempo (ver
-   * `finalistas` e `RESERVA_POLIMENTO`). Quem decide continua sendo `melhorQue`,
-   * então candidato polido que não melhorar não entra.
+   * POLIR MAIS DE UM CANDIDATO FOI MEDIDO, E NÃO PAGA.
+   *
+   * A ideia era boa no papel: a repescagem rende onde ficou vão preso, e isso
+   * depende do desenho e não do consumo, então a segunda colocada podia passar
+   * a primeira depois de polida. Foi implementado — o melhor encaixe de cada
+   * receita virava candidato, com um troco de tempo reservado para isso — e
+   * medido três vezes: 0,00% nos seis lotes pequenos, 0,00% nos três lotes
+   * grandes, 0,00% na varredura de ajustes. Nunca uma vez a segunda colocada
+   * passou a primeira.
+   *
+   * O motivo aparece na coluna da receita vencedora do pedido grande: quem
+   * ganha ali é o encaixe por vãos, e para ele a repescagem quase não muda
+   * nada — ele já desce em buraco fechado desde a primeira peça. Onde a
+   * repescagem rende de verdade (o contorno), a campeã já era a melhor antes e
+   * continua depois.
+   *
+   * Saiu, com a reserva de tempo junto: neutro que custa 4% do orçamento da
+   * busca não se justifica. Ficam as VOLTAS da repescagem, que não custam nada
+   * — param sozinhas quando o rolo não encurta mais.
    */
   const polirOrdem = (receita, ordem) => {
     const comRepesca = {
@@ -3584,39 +3573,15 @@ export async function buscarMelhorEncaixe(itens, config) {
     return encaixarContorno(ordem, comRepesca);
   };
 
-  // A campeã primeiro — ela é a que o polimento de sempre pegava, e é a que
-  // roda mesmo quando não sobrou tempo nenhum. Depois as outras receitas, da
-  // que chegou mais perto para a que chegou menos.
-  const paraPolir = [];
   if (melhor && receitaVencedora && melhor.ordemUsada
       && aceitaRepescagem(receitaVencedora.motor)) {
-    paraPolir.push({ chave: melhorChave, receita: receitaVencedora, ordem: melhor.ordemUsada,
-      chaveDaLista: melhor.chaveDaLista });
-  }
-  [...finalistas.values()]
-    .sort((a, b) => a.consumo - b.consumo)
-    .forEach((f) => {
-      if (paraPolir.length >= POLIMENTO_FINALISTAS) return;
-      if (paraPolir.some((c) => c.chave === f.chave)) return;
-      paraPolir.push(f);
-    });
-
-  for (const candidato of paraPolir) {
-    const polido = polirOrdem(candidato.receita, candidato.ordem);
+    const polido = polirOrdem(receitaVencedora, melhor.ordemUsada);
     if (melhorQue(polido, melhor)) {
-      polido.ordemUsada = candidato.ordem;
-      polido.chaveDaLista = candidato.chaveDaLista;
+      polido.ordemUsada = melhor.ordemUsada;
+      polido.chaveDaLista = melhor.chaveDaLista;
       polido.repescou = true;
       melhor = polido;
-      // O polimento pode trocar o vencedor de receita, e quem responde "qual
-      // motor ganhou" lá embaixo é `melhorChave`. Sem esta linha a tela diria
-      // o nome da receita errada — e a memória aprenderia com ele.
-      melhorChave = candidato.chave;
-      receitaVencedora = candidato.receita;
     }
-    // O troco do tempo acabou: a campeã já foi polida, que é o que o polimento
-    // garantia antes de existirem candidatos.
-    if (Date.now() - inicio >= tetoMs) break;
   }
 
   avisar("pronto");
