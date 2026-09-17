@@ -1794,45 +1794,21 @@ async function usarEncaixeGuardado(guardado) {
   }
 
   /*
-   * A CONFERÊNCIA QUE FALTAVA: O ÍNDICE APONTA PARA A MESMA PEÇA?
+   * A identidade das peças já foi conferida acima, em
+   * `traduzirIndicesDoGuardado`: ela casa a ordem de ontem com a de hoje pela
+   * impressão digital COMPLETA da peça — a mesma que a chave do trabalho usa —
+   * e recusa o que não souber remontar.
    *
-   * As posições são guardadas por `indice`, que é a LINHA da tabela de peças. E
-   * a `chaveDoTrabalho` — quem decide se este guardado serve para o trabalho de
-   * agora — ordena a lista de peças antes de embaralhar, de propósito: o mesmo
-   * trabalho não deixa de ser o mesmo por alguém ter digitado as peças noutra
-   * ordem.
+   * Aqui havia uma segunda conferência, escrita ao mesmo tempo e mais fraca:
+   * ela comparava só nome e quantidade, linha por linha, e EXIGIA a mesma
+   * ordem. Junto com a tradução, exigir a mesma ordem é pior que não conferir:
+   * recusaria justamente o caso que a tradução resolve certo — a peça tirada e
+   * posta de volta, que vai para o fim da lista.
    *
-   * As duas coisas juntas abriam um buraco: as mesmas peças em ordem DIFERENTE
-   * dão a mesma chave, o guardado é oferecido, e cada `indice` passa a apontar
-   * para outra peça. A camiseta vai para as coordenadas da gola, a gola para as
-   * da camiseta, e o resultado é peça dentro de peça. Era o defeito relatado na
-   * produção — e o "às vezes" dele é justamente isto: só quando a ordem difere.
-   *
-   * O registro guarda a lista de peças como ela estava na hora de salvar (ver a
-   * chamada de `encaixeApi.guardar`), então dá para conferir linha por linha.
-   * Não bate, não volta.
-   *
-   * Por que RECUSAR e não recolocar no lugar certo: o que ficou guardado de
-   * cada peça é nome e quantidade, e isso não identifica uma peça — duas linhas
-   * podem ter o mesmo nome e contornos diferentes. Remapear por um identificador
-   * que não identifica trocaria um encaixe sobreposto por outro, calado. Quem
-   * quiser o guardado de volta refaz a procura, que é barato, ou põe a tabela na
-   * ordem de antes.
-   *
-   * Registro antigo sem a lista de peças não dá para conferir aqui; esse fica
-   * para o guarda da sobreposição em `guardarResultado`, que confere o encaixe
-   * pronto e trava a produção se houver cruzamento.
+   * A trava da sobreposição (`guardarResultado`) continua depois disto, e não
+   * em vez disto: ela confere o encaixe PRONTO, e pega qualquer estrago, venha
+   * da ordem das peças ou de outro lugar que ninguém previu.
    */
-  if (Array.isArray(guardado.pecas)) {
-    if (guardado.pecas.length !== pecasEncaixe.length) return null;
-    for (let i = 0; i < guardado.pecas.length; i++) {
-      const antes = guardado.pecas[i] || {};
-      const agora = pecasEncaixe[i] || {};
-      if (String(antes.nome || "") !== String(agora.nome || "")) return null;
-      if (Number(antes.qtd) !== Number(agora.qtd)) return null;
-    }
-  }
-
   const posicoes = [];
   for (const p of guardado.posicoes) {
     const indice = paraHoje[p.indice];
