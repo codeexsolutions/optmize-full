@@ -25,6 +25,8 @@
     "bancada:corte": "node bancada/conferir-bancada.js",
     "bancada:sobreposicao": "node bancada/conferir-sobreposicao.js",
     "bancada:rotacoes": "node bancada/conferir-rotacoes.js",
+    "bancada:guarda": "node bancada/conferir-guarda-sobreposicao.js",
+    "bancada:printexp": "node bancada/conferir-printexp-nomes.js",
     "bancada:vaos": "node bancada/vaos.js",
     "bancada:tela": "node bancada/conferir-tela.cjs",
     "bancada:react": "node bancada/conferir-react.cjs",

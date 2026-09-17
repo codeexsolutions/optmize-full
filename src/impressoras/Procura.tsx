@@ -169,6 +169,16 @@ export function PainelDaVarredura({ estado, aoProcurar }: {
           {estado?.error || estado?.message || "A varredura testa os endereços da rede local e reconhece cada impressora pelo que ela compartilha."}
         </p>
 
+        {/* Os avisos de cobertura. Ficam ACIMA da fita de passos e não somem
+            junto com o progresso: quem precisa deles chega aqui depois do
+            "nada encontrado", e é aí que eles têm de estar na tela. */}
+        {(estado?.avisos || []).map((aviso) => (
+          <p key={aviso} className="mt-2 mb-0 flex items-start gap-2 text-[0.8rem] text-atencao">
+            <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-4 shrink-0" />
+            <span>{aviso}</span>
+          </p>
+        ))}
+
         <FitaDePassos fase={fase} className="mt-3.5" />
         <BarraDaVarredura estado={estado} className="mt-3.5" />
         {estado && <Placar estado={estado} className="mt-3.5" />}

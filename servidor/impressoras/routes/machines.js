@@ -19,6 +19,10 @@ const scan = {
   reachable: 0,
   results: [],
   error: null,
+  // Avisos que duram a varredura inteira, ao contrário do `message`, que é
+  // reescrito a cada passo. Declarado aqui e não só no `runScan` porque o
+  // GET /scan responde antes de qualquer varredura, e a tela mapeia esta lista.
+  avisos: [],
   controller: null,
   // Máquinas achadas na rede que ainda não existem no banco. Ficam aqui,
   // esperando alguém dar o nome — só então viram cadastro (POST /register).
@@ -115,10 +119,14 @@ function createMachinesRouter(io) {
     if (typeof update.scanned === "number") scan.scanned = update.scanned;
     if (typeof update.total === "number") scan.total = update.total;
     if (update.message) scan.message = update.message;
+    // Aviso não é progresso: ele ACUMULA e sobrevive até o fim da varredura,
+    // porque quem precisa lê-lo costuma chegar na tela depois do "nada
+    // encontrado" — ver `faixasIncompletas`, em services/discovery.js.
+    if (update.aviso && !scan.avisos.includes(update.aviso)) scan.avisos.push(update.aviso);
     publish();
   }
 
-  async function runScan(hosts) {
+  async function runScan(hosts, funda = false) {
     scan.running = true;
     scan.startedAt = Date.now();
     scan.finishedAt = null;
@@ -128,12 +136,13 @@ function createMachinesRouter(io) {
     scan.reachable = 0;
     scan.results = [];
     scan.error = null;
+    scan.avisos = [];
     scan.message = "Iniciando varredura...";
     scan.controller = new AbortController();
     publish();
 
     try {
-      const { reachable, found } = await scanNetwork({ hosts, onProgress, signal: scan.controller.signal });
+      const { reachable, found } = await scanNetwork({ hosts, funda, onProgress, signal: scan.controller.signal });
       scan.reachable = reachable;
 
       // As pendentes NÃO são zeradas a cada varredura: se alguém rodar outra
@@ -214,7 +223,11 @@ function createMachinesRouter(io) {
     const hosts = Array.isArray(req.body?.hosts)
       ? req.body.hosts.map(h => String(h).trim()).filter(Boolean)
       : [];
-    runScan(hosts);
+    // "Procurar fundo": desce os discos deste computador em vez de só olhar os
+    // lugares prováveis. Custa segundos, então é pedido, nunca automático —
+    // ver "A BUSCA FUNDA" em services/discovery.js.
+    const funda = req.body?.funda === true || req.body?.funda === "true";
+    runScan(hosts, funda);
     res.status(202).json(snapshot());
   });
 
