@@ -23,8 +23,8 @@ const upsertStmt = db.prepare(`
     //    rede). Ela não pode zerar os canais que o monitor ao vivo já salvou.
     if (c === "inkMl" || c === "inkChannels" || c === "inkExperimental") {
       return `${c}=CASE
-        WHEN imp_records.sourceType='csv' AND imp_records.inkExperimental=0 AND imp_records.inkChannels IS NOT NULL AND excluded.inkExperimental=1 THEN imp_records.${c}
-        WHEN excluded.inkChannels IS NULL AND imp_records.inkChannels IS NOT NULL THEN imp_records.${c}
+        WHEN imp_records.sourceType='csv' AND imp_records.inkExperimental=0 AND imp_records.inkChannels IS NOT NULL AND imp_records.inkChannels<>'[]' AND excluded.inkExperimental=1 THEN imp_records.${c}
+        WHEN excluded.inkChannels IS NULL AND imp_records.inkChannels IS NOT NULL AND imp_records.inkChannels<>'[]' THEN imp_records.${c}
         ELSE excluded.${c} END`;
     }
     return `${c}=excluded.${c}`;
@@ -53,7 +53,7 @@ function toRow(r) {
     timeSeconds: Math.round(Number(r.timeSeconds || 0)),
     inkMl: Number(r.inkMl || 0),
     inkExperimental: r.inkExperimental ? 1 : 0,
-    inkChannels: Array.isArray(r.inkChannels) ? JSON.stringify(r.inkChannels) : null,
+    inkChannels: Array.isArray(r.inkChannels) && r.inkChannels.length ? JSON.stringify(r.inkChannels) : null,
     previewRef: r.previewRef || "",
     progressPercent: r.progressPercent ?? null,
     progressState: r.progressState || null,

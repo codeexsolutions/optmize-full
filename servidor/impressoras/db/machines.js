@@ -17,6 +17,7 @@ function rowToMachine(row) {
     host: row.host || null,
     ip: row.ip || null,
     origin: row.origin || "manual",
+    position: row.position,
     discoveredAt: row.discoveredAt || null,
     updatedAt: row.updatedAt || null
   };

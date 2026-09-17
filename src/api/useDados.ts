@@ -13,7 +13,7 @@
  * chegar é uma volta ao servidor para receber a mesma coisa.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Estado<T> {
   dados: T | null;
@@ -23,29 +23,36 @@ interface Estado<T> {
 
 export function useDados<T>(buscar: () => Promise<T>, dependencias: unknown[] = []) {
   const [estado, setEstado] = useState<Estado<T>>({ dados: null, carregando: true, erro: null });
+  const ultimaConsulta = useRef(0);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const buscarEstavel = useCallback(buscar, dependencias);
 
   const recarregar = useCallback(() => {
-    let cancelado = false;
+    const consulta = ++ultimaConsulta.current;
     setEstado((antes) => ({ ...antes, carregando: true, erro: null }));
 
-    buscarEstavel()
-      .then((dados) => { if (!cancelado) setEstado({ dados, carregando: false, erro: null }); })
+    Promise.resolve().then(buscarEstavel)
+      .then((dados) => { if (consulta === ultimaConsulta.current) setEstado({ dados, carregando: false, erro: null }); })
       .catch((erro: unknown) => {
-        if (cancelado) return;
+        if (consulta !== ultimaConsulta.current) return;
         const mensagem = erro instanceof Error ? erro.message : "Não consegui falar com o servidor.";
         setEstado({ dados: null, carregando: false, erro: mensagem });
       });
 
-    return () => { cancelado = true; };
+    return () => { if (consulta === ultimaConsulta.current) ultimaConsulta.current++; };
   }, [buscarEstavel]);
 
-  useEffect(() => recarregar(), [recarregar]);
+  useEffect(() => {
+    recarregar();
+    // Invalida também as recargas manuais que começaram depois da primeira.
+    return () => { ultimaConsulta.current++; };
+  }, [recarregar]);
 
   /** Substitui o que está na tela sem ir ao servidor. Ver o cabeçalho. */
   const setDados = useCallback((dados: T) => {
+    // Um evento já trouxe o estado novo; uma consulta anterior não pode apagá-lo.
+    ultimaConsulta.current++;
     setEstado({ dados, carregando: false, erro: null });
   }, []);
 

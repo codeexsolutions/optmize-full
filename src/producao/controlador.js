@@ -4,29 +4,30 @@
  * As listas e o canvas são ilhas imperativas: não devem receber children dinâmicos React.
  */
 import { arredondar } from "../utils/geometria";
-import { moldeParaImagem, ehArquivoDeMolde, FORMATOS_DE_MOLDE, lerMoldeVetorial } from "../motores/moldes";
+import { moldeParaImagem, ehArquivoDeMolde, lerMoldeVetorial } from "../motores/moldes";
 import { ehArquivoPDF, lerArteDoPDF } from "../motores/pdfParaArte";
-import { COR_SEGURA, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
+import { diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
-import { encaixar, posicoesDasColocacoes, assinaturaDoTrabalho, buscarMelhorEncaixe,
+import { assinaturaDoTrabalho,
   midiaConsumida, aproveitamentoDaMidia, bancadasOcupadas } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
-import { prepararUnidadesNoWasm } from "../motores/encaixeWasm";
 import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
-import { grade, gradeDaPeca, tirarFundoDosPixels, silhuetaDeDados, mascarasDeSilhueta } from "../motores/encaixeMascara";
+import { grade } from "../motores/encaixeMascara";
+import { mascarasDaPeca } from "../motores/pecaNaGrade";
 import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../motores/encaixePrepara";
-import { AJUSTE_PADRAO, MODOS_DE_ARTE, TIPOS_DE_ARTE, ajusteNovo, tamanhoDoRapport, ppcmDaArte, desenharArteNoMolde } from "../motores/arteMolde";
 import { formatarNumero, formatarMetros, formatarCm, formatarSegundos, formatarPorcento, formatarM2 } from "../utils/numero";
 import {
-  DPI_PADRAO, PPCM_PADRAO, medidasDoArquivo, pixelsPorCmDoArquivo,
+  PPCM_PADRAO, medidasDoArquivo, pixelsPorCmDoArquivo,
 } from "../motores/medidaDoArquivo";
 import { lerQuantidadeDoNome } from "../motores/nomeDeArquivo";
 import {
-  bancadasDoResultado, cortesEntreBancadas, desenharArte, desenharEncaixe,
+  bancadasDoResultado, cortesEntreBancadas, desenharEncaixe,
 } from "../motores/desenhoDoEncaixe";
-import { DPI_EXPORTACAO, prepararArtes } from "../motores/exportarEncaixe";
+import { prepararArtes } from "../motores/exportarEncaixe";
+import { DPI_PREVIA } from "../motores/resolucaoDaArte";
 import {
   chaveDoTrabalho, encaixeApi, pecasParaGuardar, posicoesParaGuardar, traduzirIndicesDoGuardado,
+  posicoesGuardadasValidas,
 } from "../api/encaixe";
 import { coresDePeca } from "../utils/coresDePeca";
 import { carregarImagem } from "../utils/arquivoDeImagem";
@@ -70,10 +71,13 @@ const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/<
   const confirm = document.getElementById("ui-dialog-confirm");
   const campo = document.getElementById("ui-dialog-input");
   let finish = null;
+  let fechamento = null;
 
   function close(result) {
+    if (!finish || fechamento !== null) return;
     backdrop.classList.add("closing");
-    setTimeout(() => {
+    fechamento = setTimeout(() => {
+      fechamento = null;
       backdrop.classList.add("hidden");
       backdrop.classList.remove("closing");
       document.body.classList.remove("dialog-open");
@@ -83,7 +87,10 @@ const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/<
   }
 
   function open(options) {
+    if (fechamento !== null) clearTimeout(fechamento);
+    fechamento = null;
     if (finish) finish(false);
+    backdrop.classList.remove("closing");
     // O campo de texto só aparece quando a caixa está perguntando alguma coisa.
     campo.classList.toggle("hidden", !options.campo);
     campo.value = options.valor || "";
@@ -339,81 +346,18 @@ function limparErroEncaixe() {
 /**
  * Até onde vale a pena carregar a arte.
  *
- * O PDF sai em `DPI_EXPORTACAO` e `desenharPecaGirada` **nunca amplia** — então
- * pixel acima disso não vira qualidade nenhuma, só memória e espera. Uma
- * camiseta de 49 cm precisa de 2.911 pixels para sair a 150 dpi; a arte que
- * chega costuma ter 5.824. A margem de 30% existe para o dia em que alguém
- * subir o dpi de exportação sem lembrar desta conta.
+ * Só a prévia e o cálculo são reduzidos. O arquivo original fica na peça e
+ * é reaberto na exportação, para preservar seus pixels na impressão.
  */
 const FOLGA_DE_RESOLUCAO = 1.3;
 
 function ladoDeTrabalho(cm) {
-  return Math.max(600, Math.round((cm / 2.54) * DPI_EXPORTACAO * FOLGA_DE_RESOLUCAO));
+  return Math.max(600, Math.round((cm / 2.54) * DPI_PREVIA * FOLGA_DE_RESOLUCAO));
 }
 
 // Teto de arquivos abertos ao mesmo tempo. Ver `juntasNaLeitura`.
 const LEITURA_MAX_JUNTAS = 3;
 
-
-/**
- * Decide se a imagem tem fundo para tirar, olhando a **borda inteira**.
- *
- * Antes essa decisão saía de quatro pixels, um em cada canto — e bastava um
- * respingo, uma marca de corte ou um cantinho da arte encostando para o
- * sistema achar que não havia fundo e mandar a peça como retângulo. Era isso
- * que fazia um JPG ler o contorno e o outro não.
- *
- * Agora vale a maioria: a cor mais repetida da borda é candidata a fundo, e só
- * é aceita se ela ocupa a maior parte da volta. Assim um pedaço estranho na
- * borda não derruba mais a leitura.
- */
-/**
- * Tira o fundo da arte deixando o miolo intacto.
- *
- * `forcar` manda tirar mesmo quando o fundo é escuro ou colorido — é a opção
- * "tirar o fundo" da tabela, para arte que vem sobre preto. No automático só
- * sai fundo claro, que é como a arte de sublimação costuma chegar; tirar um
- * fundo escuro por conta própria estragaria arte com fundo de propósito.
- */
-/**
- * Os pixels de uma imagem, no tamanho original dela.
- *
- * É a **única** porta de entrada para os pixels da arte inteira, de propósito:
- * o preparo em worker (encaixe-prepara.js) manda os pixels lidos aqui, e não a
- * imagem, justamente para os dois caminhos verem exatamente os mesmos bytes.
- * Devolve `null` quando o canvas está bloqueado por imagem de outra origem.
- */
-function pixelsDaImagem(img) {
-  // Aceita <img> e ImageBitmap. O bitmap é o caminho bom para arte grande: ele
-  // é decodificado FORA da thread da tela, então o `drawImage` daqui só copia
-  // pixels prontos em vez de decodificar 29 megapixels de uma vez.
-  const largura = img.naturalWidth || img.width;
-  const altura = img.naturalHeight || img.height;
-  const canvas = document.createElement("canvas");
-  canvas.width = largura;
-  canvas.height = altura;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0);
-  try {
-    return { canvas, ctx, dados: ctx.getImageData(0, 0, largura, altura), largura, altura };
-  } catch (e) {
-    return null;
-  }
-}
-
-function removerFundoDaImagem(img, forcar = false) {
-  const lido = pixelsDaImagem(img);
-  if (!lido) return null;
-
-  // A decisão e o apagamento são do encaixe-mascara.js, que o worker também
-  // usa. Aqui fica só o que precisa de canvas: ler os pixels e refazer a
-  // imagem depois.
-  const mexeu = tirarFundoDosPixels(lido.dados.data, lido.largura, lido.altura, forcar);
-  if (!mexeu) return null;
-
-  lido.ctx.putImageData(lido.dados, 0, 0);
-  return { src: lido.canvas.toDataURL("image/png"), apagados: mexeu.apagados, cor: mexeu.cor };
-}
 
 // ==================== ENTRADA DAS PEÇAS ====================
 
@@ -496,6 +440,8 @@ async function montarPecaDaImagem(cru, semFundo, imagemPronta = null) {
     id: proximoIdPeca++,
     nome: doNome.nome,
     src: endereco,
+    arquivoOriginal: file,
+    fundoNaExportacao: semFundo ? "auto" : null,
     miniatura: miniaturaDaArte(img),
     img,
     pxW: img.naturalWidth || img.width,
@@ -545,6 +491,7 @@ async function lerArtePDFdoArquivo(file) {
     id: proximoIdPeca++,
     nome: doNome.nome,
     src: arte.endereco,
+    pdfOriginal: file,
     miniatura: miniaturaDaArte(arte.bitmap),
     img: arte.bitmap,
     pxW: arte.bitmap.width,
@@ -825,14 +772,10 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
       const cortada = semFundos[indice];
       // `null` quer dizer que não havia fundo em volta para tirar (arte que já
       // vem transparente, ou que sangra até a borda). Aí vale a original.
-      // Quando não houve fundo para tirar, o bitmap original NÃO serve mais:
-      // ele foi transferido para o worker e fechado aqui. Refazer a partir do
-      // blob custa uma decodificação, fora da thread da tela, e só acontece
-      // nesse caso — arte que já chega transparente.
       const img = cortada
         ? await criarBitmapOuImagem(cortada.blob, cortada.src)
-        : await criarBitmapOuImagem(blobs[indice], p.url,
-            ladoDeTrabalho(Math.max(p.largura, p.altura)));
+        : imagens[indice];
+      if (cortada) imagens[indice].close?.();
       // A miniatura da tabela é um <img>, então precisa de um endereço; o
       // desenho do encaixe usa o bitmap. São a mesma arte por caminhos
       // diferentes: endereço para a tela, pixels prontos para o cálculo.
@@ -842,6 +785,8 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
         id: proximoIdPeca++,
         nome: p.nome,
         src: endereco,
+        arquivoOriginal: blobs[indice],
+        fundoNaExportacao: cortada ? "auto" : null,
         miniatura: miniaturaDaArte(img),
         img,
         pxW: img.naturalWidth || img.width,
@@ -1486,7 +1431,13 @@ escopo.ouvir(encaixePecasBody, "change", (e) => {
     peca.mascaras = null;
     // "Tirar o fundo" é para arte sobre preto ou sobre cor: o automático não
     // mexe nesses de propósito, então aqui a remoção é refeita à força.
-    if (peca.contorno === "tirar-fundo") tirarFundoAForca(peca);
+    if (peca.contorno === "tirar-fundo") {
+      // Usa a mesma fila do preparo automático: os dois alteram a mesma arte,
+      // e a busca precisa esperar também a remoção pedida manualmente.
+      preparoDeFundo = preparoDeFundo.then(() => tirarFundoAForca(peca)).catch((erro) => {
+        mostrarErroEncaixe(`Não consegui tirar o fundo: ${erro.message}`);
+      });
+    }
   }
 });
 
@@ -1519,22 +1470,20 @@ async function tirarFundoDepois(pecasPorIndice, crus) {
     let trocadas = 0;
     for (let k = 0; k < indices.length; k++) {
       const semFundo = semFundos[k];
-      const cru = crus[indices[k]];
       const peca = pecasPorIndice.get(indices[k]);
       if (!peca) continue;
 
-      // O bitmap que a peça estava usando é o mesmo que acabou de ser
-      // transferido para o worker — e transferir fecha. Ela precisa de um
-      // novo de qualquer jeito: o recorte, quando houve; o arquivo de novo,
-      // quando não havia fundo para tirar.
+      // O preparo transfere uma cópia ao worker; a arte original continua
+      // válida quando não há fundo para tirar ou o processamento falha.
       if (semFundo) {
-        peca.img = await criarBitmapOuImagem(semFundo.blob, semFundo.src);
+        const img = await criarBitmapOuImagem(semFundo.blob, semFundo.src);
+        if (peca.img !== peca.imgOriginal) peca.img.close?.();
+        peca.img = img;
         peca.src = semFundo.src;
+        peca.fundoNaExportacao = "auto";
         peca.miniatura = miniaturaDaArte(peca.img);
-        peca.mascaras = null; // a silhueta muda: será refeita no encaixe
+        peca._cacheMascaras = null; // a silhueta muda: será refeita no encaixe
         trocadas++;
-      } else {
-        peca.img = await criarBitmapOuImagem(cru.file, cru.endereco);
       }
     }
     if (trocadas > 0) renderPecasEncaixe();
@@ -1551,6 +1500,7 @@ async function tirarFundoDepois(pecasPorIndice, crus) {
  * desenho e PDF — enxerga a arte já sem o fundo.
  */
 async function tirarFundoAForca(peca) {
+  peca.srcOriginal ||= peca.src;
   if (peca.imgOriginal === undefined) peca.imgOriginal = peca.img;
   // Vai pelo worker também: é a mesma leitura de milhões de pixels, e aqui a
   // pessoa está esperando com a tabela na frente.
@@ -1560,10 +1510,13 @@ async function tirarFundoAForca(peca) {
       + `A arte deve estar sangrando até a borda.`);
     return;
   }
-  peca.img = await criarBitmapOuImagem(semFundo.blob, semFundo.src);
+  const img = await criarBitmapOuImagem(semFundo.blob, semFundo.src);
+  if (peca.img !== peca.imgOriginal) peca.img.close?.();
+  peca.img = img;
   peca.src = semFundo.src;
+  peca.fundoNaExportacao = "forcar";
   peca.miniatura = miniaturaDaArte(peca.img);
-  peca.mascaras = null;
+  peca._cacheMascaras = null;
   renderPecasEncaixe();
 }
 
@@ -1671,90 +1624,6 @@ escopo.ouvir(encaixeGiroTodasSelect, "change", () => {
   renderPecasEncaixe();
 });
 
-// ==================== ENCAIXE PELO CONTORNO ====================
-
-/**
- * Aqui a peça deixa de ser um retângulo e passa a ser a silhueta real da arte.
- *
- * A silhueta vira uma grade de células (tipo um quadriculado por cima da peça);
- * de cada coluna dessa grade guardamos só onde o tecido começa e onde termina
- * — `topo` e `base`. Encaixar então é deslizar essa peça por cima do "relevo"
- * do que já foi posicionado e deixar ela descer até encostar. É assim que uma
- * manga entra na curva de outra, em vez de ficar presa na caixa em volta.
- *
- * Como só topo/base importam, um vazado no meio do desenho não atrapalha o
- * cálculo — e também não dá para enfiar peça pequena dentro desse vazado.
- */
-
-const canvasMascara = document.createElement("canvas");
-const ctxMascara = canvasMascara.getContext("2d", { willReadFrequently: true });
-
-/**
- * Descobre quais células têm tecido. Tenta, nesta ordem:
- *  - fundo transparente (PNG recortado, ou JPG que já teve o fundo tirado na
- *    hora de carregar) — o caminho mais confiável;
- *  - fundo de cor lisa em volta, espalhando a partir da borda;
- *  - se nada disso servir, assume a caixa inteira (volta a ser retângulo).
- *
- * A decisão do que é fundo é a mesma de `removerFundoDaImagem`, de propósito:
- * quando as duas discordavam, o PDF saía com o fundo pintado e o encaixe
- * empilhava as peças como se ele não existisse.
- */
-/**
- * Os pixels da arte já reduzidos à grade do encaixe.
- *
- * Mesma história do `pixelsDaImagem`: porta única, para o worker receber
- * exatamente estes bytes. Vale reparar que a redução tem que sair daqui — o
- * Chrome reduz um ImageBitmap com uma conta diferente da que usa para reduzir
- * um <img>, e deixar o worker reduzir mudava a silhueta (está explicado em
- * prepara-worker.js).
- */
-function pixelsDaArteNaGrade(peca, cols, rows) {
-  canvasMascara.width = cols;
-  canvasMascara.height = rows;
-  ctxMascara.clearRect(0, 0, cols, rows);
-  ctxMascara.drawImage(peca.img, 0, 0, cols, rows);
-  try {
-    return ctxMascara.getImageData(0, 0, cols, rows);
-  } catch (e) {
-    return null; // canvas bloqueado por imagem de outra origem
-  }
-}
-
-function silhuetaDaImagem(peca, cols, rows) {
-  const total = cols * rows;
-  const cheio = () => ({ bits: new Uint8Array(total).fill(1), modo: "caixa" });
-  if (peca.contorno === "caixa") return cheio();
-
-  const dados = pixelsDaArteNaGrade(peca, cols, rows);
-  if (!dados) return cheio();
-
-  // Daqui para frente é só conta em cima dos pixels, e mora no
-  // encaixe-mascara.js para o worker poder fazer a mesma coisa.
-  return silhuetaDeDados(dados.data, cols, rows);
-}
-
-/**
- * Monta (e guarda em cache) as máscaras de uma peça nas quatro rotações. O
- * cache evita refazer tudo a cada clique em "Optmizar" quando nada mudou.
- */
-/** A chave do cache de máscaras: muda quando qualquer entrada muda. */
-function chaveDasMascaras(peca, passo, raio) {
-  return `${passo}|${raio}|${peca.largura}|${peca.altura}|${peca.contorno}`;
-}
-
-function mascarasDaPeca(peca, passo, raio) {
-  const chave = chaveDasMascaras(peca, passo, raio);
-  if (peca._cacheMascaras && peca._cacheMascaras.chave === chave) return peca._cacheMascaras;
-
-  const { cols, rows } = gradeDaPeca(peca, passo);
-  const silhueta = silhuetaDaImagem(peca, cols, rows);
-  peca._cacheMascaras = {
-    chave, ...mascarasDeSilhueta(silhueta, cols, rows, passo, raio),
-  };
-  return peca._cacheMascaras;
-}
-
 // ==================== O MELHOR ENCAIXE JÁ CONSEGUIDO ====================
 
 /**
@@ -1780,17 +1649,17 @@ function mascarasDaPeca(peca, passo, raio) {
 async function usarEncaixeGuardado(guardado) {
   const larguraTecido = Number(encaixeLarguraInput.value);
   const espaco = folgaPedida();
-  const { passo, folgaReal } = grade(larguraTecido, espaco);
+  const { passo, raio, folgaReal } = grade(larguraTecido, espaco);
 
   // O "índice" de uma posição é a linha da tabela de peças, não um campo da
   // peça: é assim que a busca numera os itens. E linha é posição na lista, que
   // a chave do trabalho não guarda — então antes de acreditar num índice é
   // preciso saber de que peça ele falava. Ver `traduzirIndicesDoGuardado`.
   const paraHoje = traduzirIndicesDoGuardado(guardado.pecas, pecasEncaixe);
-  if (!paraHoje) return null;
+  if (!paraHoje || !posicoesGuardadasValidas(guardado.posicoes, pecasEncaixe, paraHoje)) return null;
 
   for (const peca of pecasEncaixe) {
-    if (!peca._cacheMascaras) await mascarasDaPeca(peca, passo, 0);
+    mascarasDaPeca(peca, passo, raio);
   }
 
   /*
@@ -2256,7 +2125,10 @@ async function optmizar() {
       detalhe: "Se este mesmo trabalho já foi feito, o melhor resultado será reaproveitado.",
       progresso: 27,
     });
-    const guardadoAntes = await encaixeApi.guardado(chave);
+    const recebido = await encaixeApi.guardado(chave);
+    const indicesGuardados = recebido && traduzirIndicesDoGuardado(recebido.pecas, pecasEncaixe);
+    const guardadoAntes = indicesGuardados
+      && posicoesGuardadasValidas(recebido.posicoes, pecasEncaixe, indicesGuardados) ? recebido : null;
     esconderOfertaDoGuardado();
     atualizarCarregamento({
       etapa: "Consultando histórico",
@@ -2414,6 +2286,14 @@ async function optmizar() {
     renderPecasEncaixe(); // mostra quanto da caixa cada silhueta ocupa
     renderResultado();
 
+    // Um resultado sem todas as peças parece consumir menos tecido. Guardá-lo
+    // como recorde faria as próximas buscas restaurarem um trabalho incompleto.
+    if (producaoTravada() || ultimoResultado.naoEncaixadas.length > 0) {
+      if (!producaoTravada()) mostrarErroEncaixe("Há peças fora do tecido. Este resultado não foi guardado como recorde.");
+      finalizarCarregamento("com-erro");
+      return;
+    }
+
     // A MESMA conta do painel, e do mesmo lugar: com bancada, mesas inteiras.
     // Ver "A MÍDIA QUE O TRABALHO CONSOME", em motores/encaixeMotor.js. Este
     // número vai para o recorde guardado e para a memória, então ele tem que
@@ -2440,6 +2320,7 @@ async function optmizar() {
       // esta lista que permite reencontrar a linha certa quando a tabela for
       // remontada noutra ordem (ver `traduzirIndicesDoGuardado`).
       pecas: pecasParaGuardar(pecasEncaixe),
+      totalItens: itens.length,
       posicoes: posicoesParaGuardar(ultimoResultado),
       receita: ultimoResultado.receita,
     });
@@ -3032,10 +2913,7 @@ async function baixarEncaixeEmPdf() {
   await new Promise((pronto) => setTimeout(pronto, 20));
 
   try {
-    // Resolução fixa: ver `DPI_EXPORTACAO`. Não há mais teto de envio para
-    // negociar, então não há mais o que reduzir.
-    const dpi = DPI_EXPORTACAO;
-    const artes = await prepararArtes(r.posicoes, dpi);
+    const artes = await prepararArtes(r.posicoes);
 
     // Cada arte sobe sozinha, em binário. Mandá-las dentro do JSON em base64
     // engordava tudo em um terço e derrubava o servidor com arte de verdade.

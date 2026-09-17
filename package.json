@@ -30,6 +30,8 @@
     "bancada:vaos": "node bancada/vaos.js",
     "bancada:tela": "node bancada/conferir-tela.cjs",
     "bancada:react": "node bancada/conferir-react.cjs",
+    "bancada:revisao": "node bancada/conferir-revisao-backend.cjs && node bancada/conferir-revisao-front.cjs && node bancada/conferir-revisao-impressoras.cjs && node bancada/conferir-revisao-producao.cjs",
+    "bancada:qualidade": "node bancada/conferir-qualidade-encaixe.cjs",
     "tipos": "tsc --noEmit",
     "app": "npm run front && tauri dev",
     "build:app": "npm run front && tauri build",

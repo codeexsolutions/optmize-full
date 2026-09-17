@@ -82,17 +82,12 @@ const router = express.Router();
 const artesGuardadas = new Map();
 const VALIDADE_MS = 10 * 60 * 1000;
 
-/** A pasta desta sessão. O nome é higienizado: ele vem do navegador. */
-function pastaDaSessao(sessao) {
-  return path.join(os.tmpdir(), "optmize-encaixe", sessao.replace(/[^A-Za-z0-9_-]/g, ""));
-}
-
 function apagarSessao(sessao) {
   const guardadas = artesGuardadas.get(sessao);
+  if (!guardadas) return;
   artesGuardadas.delete(sessao);
   try {
-    fs.rmSync(guardadas ? guardadas.pasta : pastaDaSessao(sessao),
-      { recursive: true, force: true });
+    fs.rmSync(guardadas.pasta, { recursive: true, force: true });
   } catch (erro) {
     // Arquivo temporário que não some não estraga nada: o sistema recolhe.
     console.warn(`[encaixe-pdf] não deu para limpar a sessão ${sessao}:`, erro.message);
@@ -117,18 +112,24 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, re
 
   let guardadas = artesGuardadas.get(sessao);
   if (!guardadas) {
-    guardadas = { criadaEm: Date.now(), pasta: pastaDaSessao(sessao), artes: new Map() };
     try {
-      fs.mkdirSync(guardadas.pasta, { recursive: true });
+      // O identificador só indexa o Map. Retirar pontuação dele fazia sessões
+      // diferentes usar a mesma pasta, e uma apagava as artes da outra.
+      guardadas = {
+        criadaEm: Date.now(),
+        pasta: fs.mkdtempSync(path.join(os.tmpdir(), "optmize-encaixe-")),
+        artes: new Map(),
+      };
     } catch (erro) {
       return res.status(500).json({ error: `Não deu para guardar a arte: ${erro.message}` });
     }
     artesGuardadas.set(sessao, guardadas);
   }
 
-  // O nome do arquivo também vem do navegador; nada dele entra no caminho sem
-  // passar por aqui.
-  const arquivo = path.join(guardadas.pasta, `${chave.replace(/[^A-Za-z0-9_-]/g, "")}.arte`);
+  // Chaves como "frente.1" e "frente1" são artes distintas. O nome no disco
+  // é interno; reenviar a mesma chave substitui apenas aquela arte.
+  const arquivo = guardadas.artes.get(chave)
+    || path.join(guardadas.pasta, `${guardadas.artes.size}.arte`);
   try {
     fs.writeFileSync(arquivo, req.body);
   } catch (erro) {
@@ -235,7 +236,7 @@ async function montarPdf({ larguraTecido, consumo, posicoes, buffers, lerArte },
    *
    * Enquanto existia um teto de envio isso passava despercebido, porque o teto
    * segurava o tamanho. Tirado o teto (a arte agora vem do disco, e a tela
-   * manda em 150 dpi sempre), a fila passaria a ser ela o limite — e o estouro
+   * preserva a resolução original das imagens), a fila passaria a ser ela o limite — e o estouro
    * teria só mudado de lugar, do envio para a montagem.
    *
    * Um `setImmediate` entre as peças basta: ele devolve a vez ao laço de
@@ -376,8 +377,9 @@ router.post("/pdf", (req, res) => {
     }
   };
 
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${nome || "encaixe"}.pdf"`);
+  // O nome da pasta escolhido na tela pode ter aspas ou caracteres Unicode.
+  // O Express monta o cabeçalho com o escape e o filename* adequados.
+  res.attachment(`${nome || "encaixe"}.pdf`);
 
   // `montarPdf` é assíncrona (ela cede a vez para o PDF escoar). O cabeçalho já
   // foi mandado a esta altura, então não dá para responder um JSON de erro: o

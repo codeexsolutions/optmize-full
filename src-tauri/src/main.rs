@@ -486,8 +486,12 @@ fn main() {
                      * agora, não de mais um terço de segundo de animação.
                      */
                     let _ = janela.unmaximize();
-                    if let Ok(url) = "erro.html".parse() {
-                        let _ = janela.navigate(url);
+                    // A navegação exige URL absoluta. Resolver a página na
+                    // origem da abertura funciona tanto no app quanto no dev.
+                    if let Ok(abertura) = janela.url() {
+                        if let Ok(url) = abertura.join("erro.html") {
+                            let _ = janela.navigate(url);
+                        }
                     }
                     return;
                 }

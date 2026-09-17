@@ -43,8 +43,9 @@ export function duracao(segundos: number | null | undefined): string {
   const total = Math.max(0, Math.round(Number(segundos || 0)));
   if (!total) return "—";
   if (total < 60) return "menos de 1 min";
-  const horas = Math.floor(total / 3600);
-  const minutos = Math.round((total % 3600) / 60);
+  const totalMinutos = Math.round(total / 60);
+  const horas = Math.floor(totalMinutos / 60);
+  const minutos = totalMinutos % 60;
   if (!horas) return `${minutos} min`;
   return minutos ? `${horas} h ${minutos} min` : `${horas} h`;
 }

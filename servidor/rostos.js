@@ -446,26 +446,34 @@ async function vetorDoRecorte(recorteRgb) {
  * frase, não de uma pilha de exceção.
  */
 async function vetorDaFoto(fotoBruta) {
-  if (!(await acordar())) return { erro: porqueNao };
+  try {
+    if (!(await acordar())) return { erro: porqueNao };
 
-  const rostos = await acharOsRostos(fotoBruta);
-  if (rostos.length === 0) {
-    return { erro: "Não achei nenhum rosto nesta foto." };
+    const rostos = await acharOsRostos(fotoBruta);
+    if (rostos.length === 0) {
+      return { erro: "Não achei nenhum rosto nesta foto." };
+    }
+
+    // O de maior nota. Numa foto de cadastro é o único; numa de terminal é o de
+    // quem está na frente da câmera, que é justamente quem está batendo.
+    const rosto = rostos.reduce((a, b) => (b.nota > a.nota ? b : a));
+
+    const recorte = await endireitar(fotoBruta, rosto.pontos);
+    if (!recorte) return { erro: "Não consegui endireitar o rosto." };
+
+    return {
+      vetor: await vetorDoRecorte(recorte),
+      nota: rosto.nota,
+      caixa: rosto.caixa,
+      quantosRostos: rostos.length,
+    };
+  } catch (erro) {
+    // Sharp e ONNX podem rejeitar fotos corrompidas ou falhar na inferência.
+    // As rotas recebem o mesmo contrato de erro dos outros casos, sem deixar
+    // uma rejeição assíncrona escapar e encerrar o servidor.
+    console.warn("[rostos] não deu para analisar a foto:", erro.message);
+    return { erro: "Não consegui analisar esta foto. Tente enviar outra imagem." };
   }
-
-  // O de maior nota. Numa foto de cadastro é o único; numa de terminal é o de
-  // quem está na frente da câmera, que é justamente quem está batendo.
-  const rosto = rostos.reduce((a, b) => (b.nota > a.nota ? b : a));
-
-  const recorte = await endireitar(fotoBruta, rosto.pontos);
-  if (!recorte) return { erro: "Não consegui endireitar o rosto." };
-
-  return {
-    vetor: await vetorDoRecorte(recorte),
-    nota: rosto.nota,
-    caixa: rosto.caixa,
-    quantosRostos: rostos.length,
-  };
 }
 
 /* ============================================================ comparar */
