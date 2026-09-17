@@ -105,8 +105,39 @@ function conferirJuntarGrupos(motor, erro) {
   if (motor.familiaDaUnidade(u(9, "A")) !== "A") {
     erro("familiaDaUnidade: peça agrupada não respondeu o grupo");
   }
-  if (motor.familiaDaUnidade(u(9, null)) !== "9") {
-    erro("familiaDaUnidade: peça sem grupo deixou de responder o formato");
+
+  /*
+   * Sem grupo, a família é a SILHUETA — e não o arquivo de onde a peça veio.
+   *
+   * É o que faz o pedido grande de produção voltar a agrupar: lá cada peça
+   * chega no seu arquivo (155 formatos para 175 peças, num trabalho real), e
+   * pelo índice elas eram todas estranhas entre si (ver `chaveDaSilhueta`, em
+   * encaixeMotor.js).
+   */
+  const feita = (nome) => prepararPeca(motor, nome, { passo: PASSO, raio: 0, qtd: 1, giro: "180" });
+  const item = (nome, indice) => ({ ...feita(nome), indice, copia: 1, grupo: null });
+  const unidade = (nome, indice) => ({ itens: [item(nome, indice)] });
+
+  if (motor.familiaDaUnidade(unidade("camiseta", 1))
+      !== motor.familiaDaUnidade(unidade("camiseta", 2))) {
+    erro("familiaDaUnidade: a mesma silhueta em dois arquivos saiu em famílias diferentes");
+  }
+  if (motor.familiaDaUnidade(unidade("camiseta", 1))
+      === motor.familiaDaUnidade(unidade("manga", 2))) {
+    erro("familiaDaUnidade: silhuetas diferentes caíram na mesma família");
+  }
+
+  // A mesma regra monta os blocos — e aqui ela tem que ser exata, porque o
+  // bloco mede as formas na primeira cópia e assenta as outras no mesmo
+  // desenho: agrupar peça diferente seria peça em cima de peça.
+  const duplas = motor.montarUnidades([item("camiseta", 1), item("camiseta", 2)], 2);
+  if (duplas.length !== 1 || duplas[0].itens.length !== 2) {
+    erro(`montarUnidades: dois arquivos com a mesma silhueta deram ${duplas.length}`
+      + " unidade(s), esperava uma dupla");
+  }
+  const separadas = motor.montarUnidades([item("camiseta", 1), item("manga", 2)], 2);
+  if (separadas.length !== 2) {
+    erro("montarUnidades: silhuetas diferentes entraram no mesmo bloco");
   }
 }
 

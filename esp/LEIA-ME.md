@@ -74,18 +74,37 @@ custaram dias. O que cada tela faz e por que ela é assim está em
 esp/
   main/
     tela.c                 sobe o hardware na ordem certa e entrega à casca
-    interface.c / .h       a barra de cima, o relógio e a troca de app
+    interface.c / .h       a barra de cima, o relógio, a tela inicial, a troca
+                           de app — e `interface.h` é onde moram as cores
     rede.c                 Wi-Fi pelo ESP32-C6, e a hora por SNTP
-    app-producao.c         câmera + leitura de QR
-    app-pontos.c           em construção
-    app-ajustes.c          rede, brilho, ganho do microfone
+    optmize.c              fala com o servidor: pedidos, pontos, rostos
+    voz.c                  toca o que o servidor sintetiza, e guarda o volume
+
+    app-producao.c         o assistente item a item: QR, visão geral, conferência
+    app-pontos.c           bater ponto, cadastrar rosto, lista de pessoas
+    app-ajustes.c          rede, servidor, brilho, volume, microfone
+    descanso.c             o relógio de parede depois de três minutos parado
+    sobre.c                a ficha do aparelho, no círculo `i`
+    ajuda.c                nove sintomas e o que fazer, no círculo `?`
+
+    mira.c                 peças repetidas: a mira, o checklist, a ficha
     video-da-camera.c      USB → JPEG → imagem do LVGL
     leitor-de-qr.c         acha e decodifica QR no quadro
+
+    logo.c                 a marca do Optmize, gerada (ver `estatico/`)
+    fonte-16/22/28/48.c    a Space Grotesk, gerada (ver `fontes/`)
+
     prova-de-painel.c      DIAGNÓSTICO: o painel recebe pixel?
     prova-de-camera.c      sobe a pilha USB e lista o que a câmera oferece
+    prova-de-audio.c       DIAGNÓSTICO: acha o codec e mede o microfone
   components/
     esp32_p4_function_ev_board/   o BSP, copiado e corrigido — ver abaixo
+  fontes/
+    SpaceGrotesk-Medium.ttf  a origem das quatro fontes geradas
+    gerar.sh                 o comando que as gera — ver abaixo
+    OFL.txt                  a licença da fonte
   sdkconfig.defaults       PSRAM, cache, partições, revisão do chip
+  dependencies.lock        as versões que REALMENTE compilaram — ver abaixo
   particoes.csv
   idf.ps1                  carrega o ESP-IDF nesta máquina
 ```
@@ -107,6 +126,65 @@ Pelo mesmo motivo, **todas as faixas de versão estão fechadas** no
 - um `*` trouxe o BSP feito para outra revisão de placa;
 - o `^2` que o BSP usa para o `esp_lvgl_port` resolve hoje para uma versão que
   nem compila com o LVGL que ele próprio exige.
+
+E pela mesma razão o **`dependencies.lock` está no repositório**, apesar de ser
+gerado. Fechar as faixas resolve o que *nós* pedimos; o lock é o que registra o
+que as dependências **das dependências** acabaram trazendo — inclusive esse `^2`
+que não é nosso e que não temos como fechar. Sem ele, quem clonar resolve tudo
+de novo, pega outra coisa, e o erro aparece no meio do LVGL, a uma dúzia de
+arquivos de distância da causa.
+
+Gerado não quer dizer descartável: quer dizer que ninguém o escreve à mão.
+
+### A fonte é gerada, e agora dá para gerar de novo
+
+Os quatro `main/fonte-*.c` são arquivos gerados a partir da Space Grotesk. Eles
+nasciam **de lugar nenhum**: o `.ttf` existia só numa máquina e o comando só no
+histórico de um terminal. Acrescentar um símbolo à interface seria impossível
+para quem clonasse o repositório — e ninguém descobriria isso até precisar.
+
+Agora o `.ttf` está em `fontes/`, junto com a licença e o `gerar.sh` que os
+produz. De dentro de `esp/`:
+
+```sh
+npm install -g lv_font_conv     # uma vez; vem do npm, não do ESP-IDF
+sh fontes/gerar.sh
+```
+
+Cada arquivo junta **duas** origens: as letras da Space Grotesk e os símbolos da
+FontAwesome que o LVGL traz. É isso que permite escrever `LV_SYMBOL_WIFI` no
+meio de uma frase — com duas fontes separadas, cada símbolo precisaria de um
+rótulo próprio, posicionado à mão e realinhado toda vez que o texto mudasse de
+corpo.
+
+O `gerar.sh` termina trocando `#include "lvgl/lvgl.h"` por `"lvgl.h"` nos quatro:
+o `lv_font_conv` escreve um caminho que não existe neste projeto, e sem a troca
+nenhum deles compila — apontando para a linha do include, que não é onde está o
+defeito.
+
+### A logo também é gerada — e o gerador tinha sumido
+
+`main/logo.c` dizia, no próprio cabeçalho, ter nascido de um `gera-logo.js`
+**que não existia em lugar nenhum do repositório**. Um arquivo gerado apontando
+para um gerador ausente é pior que um arquivo sem explicação: quem for trocar o
+ícone procura o script, não acha, e conclui que precisa editar 300 linhas de
+hexadecimal à mão.
+
+O script existe agora em `empacotar/gera-logo.js`:
+
+```sh
+npm run logo-esp
+```
+
+Ele lê a **mesma** `estatico/icone.png` do programa de computador, e é isso que
+garante que trocar o ícone troque a marca nos dois lugares. Sai em mapa de alfa
+(`LV_COLOR_FORMAT_A8`), sem canais de cor: a marca é de uma cor só, e guardando
+apenas a opacidade quem desenha escolhe a cor — ela aparece cinza na barra e
+laranja na tela inicial sem virar dois arquivos.
+
+Ele reproduz o `logo.c` que já estava versionado **byte a byte**, incluindo a
+falta de vírgula na última linha de cada vetor. Isso não é capricho: é a única
+prova de que o gerador reconstruído é mesmo equivalente ao que se perdeu.
 
 ---
 

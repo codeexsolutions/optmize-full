@@ -60,6 +60,13 @@ const CAB_PULO: usize = 15; // de quanto em quanto a varredura anda
 const CAB_ACUMULADO: usize = 16; // rascunho: soma acumulada do relevo (i64)
 const CAB_SAIDA: usize = 17; // saída: 4 números por unidade da ordem
 const CAB_LINHAS_BANCADA: usize = 18; // comprimento da bancada em células; 0 = rolo sem fim
+// 1 = o relevo já vem preenchido pelo JavaScript e esta rodada continua em
+// cima dele, em vez de começar com tecido novo. É o que deixa encaixar um
+// pedaço da fila de cada vez sem perder nada na emenda (ver
+// `encaixarPorBlocos`, em encaixeMotor.js): encaixar 1..k e continuar de k+1
+// dá exatamente o mesmo que encaixar tudo de uma vez, porque a peça só
+// enxerga o relevo que as anteriores deixaram.
+const CAB_MANTER_PERFIL: usize = 19;
 
 #[inline(always)]
 unsafe fn ler(base: *const i32, indice: i32) -> i32 {
@@ -125,9 +132,13 @@ pub unsafe extern "C" fn encaixar(cabecalho: *const i32) -> i32 {
     let acumulado = (zero.offset(ler(cab, CAB_ACUMULADO as i32) as isize)) as *mut i64;
     let saida = zero.offset(ler(cab, CAB_SAIDA as i32) as isize);
 
-    // O relevo começa zerado: tecido novo.
-    for c in 0..cols_tecido {
-        *perfil.offset(c as isize) = 0;
+    // O relevo começa zerado: tecido novo. A não ser que o JavaScript já tenha
+    // escrito nele o que sobrou de um pedaço anterior — aí esta rodada continua
+    // dali (ver CAB_MANTER_PERFIL).
+    if ler(cab, CAB_MANTER_PERFIL as i32) == 0 {
+        for c in 0..cols_tecido {
+            *perfil.offset(c as isize) = 0;
+        }
     }
 
     let mut fundo_max = 0i32;

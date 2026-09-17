@@ -24,6 +24,17 @@
  * `giro` segue o que a produção pede: malha lisa aceita 180°, e é o padrão.
  */
 
+/**
+ * A mesma peça, repetida como ARQUIVOS SOLTOS — uma entrada por cópia.
+ *
+ * É a diferença entre `{ nome: "uni-costa", qtd: 25 }` e vinte e cinco
+ * entradas de `qtd: 1`: no primeiro caso o motor vê uma peça com 25 cópias, no
+ * segundo vê 25 peças diferentes que por acaso têm a mesma silhueta. Para o
+ * tecido dá no mesmo; para o motor, não (ver `producao-avulsa`).
+ */
+const avulsas = (nome, quantas, extra) => Array.from({ length: quantas },
+  () => ({ nome, qtd: 1, ...extra }));
+
 const TRABALHOS = {
   "camiseta+manga+gola": {
     larguraTecido: 160, espaco: 1, comprimentoBancada: 0,
@@ -36,6 +47,19 @@ const TRABALHOS = {
   "so-camiseta": {
     larguraTecido: 180, espaco: 1, comprimentoBancada: 0,
     pecas: [{ nome: "camiseta", qtd: 12 }],
+  },
+  /*
+   * `so-camiseta`, peça por peça: doze arquivos de uma cópia em vez de um
+   * arquivo de doze. Mesma geometria, mesmo tecido.
+   *
+   * É o par mais limpo para ver o que o motor perde quando não reconhece que
+   * duas peças são a mesma coisa: aqui é o agrupamento em dupla e em trio que
+   * decide o resultado (ver o cabeçalho de `so-camiseta`), e ele nasce de
+   * cópias do mesmo índice.
+   */
+  "so-camiseta-avulsa": {
+    larguraTecido: 180, espaco: 1, comprimentoBancada: 0,
+    pecas: avulsas("camiseta", 12),
   },
   "calca-bolso": {
     larguraTecido: 160, espaco: 1, comprimentoBancada: 0,
@@ -182,6 +206,130 @@ const TRABALHOS = {
    * conjunto padrão por causa do tempo: ele sozinho custa o que os outros seis
    * custam juntos.
    */
+  /*
+   * ===========================================================================
+   * O PEDIDO GRANDE E MISTURADO — o caso que a bancada não tinha
+   * ===========================================================================
+   *
+   * Todos os lotes grandes daqui são de UM produto só: `producao-uniforme` e
+   * `lote-enorme` são 25 e 40 uniformes iguais. Neles o motor vai bem — 79% e
+   * 81% de aproveitamento, mais do que em qualquer lote pequeno — e por isso
+   * eles não sabem responder à queixa que veio da produção:
+   *
+   *   "em grandes produções o motor perde desempenho em coisas que ele
+   *    conseguia encaixar bem melhor se fossem tratadas separadamente"
+   *
+   * O que se junta num dia de trabalho não são 40 uniformes iguais: são o
+   * pedido do uniforme, o da camiseta e o de miudeza, com formatos e tamanhos
+   * que não têm nada a ver um com o outro, tudo num rolo só. A nota da ordem
+   * "familia" (em encaixeMotor.js) já dizia isto com todas as letras — "a
+   * bancada não reproduz o caso em que a observação de produção nasceu" — e
+   * media-se contra o alvo errado desde então.
+   *
+   * Os três pedidos existem separados E juntos de propósito, porque a pergunta
+   * da queixa é uma comparação:
+   *
+   *   node bancada/medir.js --tempo 3 --trabalhos pedido-uniforme,pedido-confeccao,pedido-miudeza
+   *   node bancada/medir.js --tempo 9 --trabalhos producao-misturada
+   *
+   * O tempo triplica no junto porque ele faz o trabalho dos três — do
+   * contrário a comparação seria entre orçamentos diferentes, e não entre
+   * encaixar junto e encaixar separado.
+   *
+   * **Encaixar junto TEM que ganhar.** Cada pedido separado paga um rabo de
+   * rolo mal aproveitado; juntos, a peça pequena de um tem o vão do outro para
+   * cair dentro. Quando a soma dos separados empata com o junto, ou ganha
+   * dele, o que está sendo medido é exatamente a queixa: o motor não está
+   * achando o que a mistura oferece.
+   *
+   * Todos no mesmo tecido e na mesma folga da produção (179 cm, 4 mm), senão
+   * não daria para somar um com o outro.
+   */
+  /*
+   * ===========================================================================
+   * O MESMO TRABALHO, COMO A PRODUÇÃO MANDA: UM ARQUIVO POR PEÇA
+   * ===========================================================================
+   *
+   * `producao-uniforme` são as mesmas 175 peças com a mesma geometria, mas
+   * declaradas como 5 peças de 25/50 cópias. O trabalho REAL de onde ela saiu
+   * está guardado no banco da loja e tem **155 formatos** para 175 peças: cada
+   * uniforme é personalizado, então cada um é um arquivo seu. A assinatura
+   * daquele trabalho mostra que, de silhueta, são só quatro peças diferentes.
+   *
+   * A diferença não é de arquivo, é de motor. Identificando a peça pelo índice
+   * do arquivo (e é o que `montarUnidades`, `familiaDaUnidade` e
+   * `montarUnidadesCruzadas` fazem), 155 arquivos de uma cópia cada desligam
+   * sozinhos toda a maquinaria de agrupar:
+   *
+   *   dupla e trio   nascem de cópias do MESMO índice — aqui não há nenhuma
+   *   familia        vira uma família por peça, ou seja, ordem por área
+   *   cruzada        desiste acima de CRUZADA_MAX_FORMATOS formatos
+   *
+   * Este trabalho existe para medir esse buraco, e a medida é a comparação
+   * entre os dois — mesma geometria, mesmo tecido, mesma folga:
+   *
+   *   node bancada/medir.js --trabalhos producao-uniforme,producao-avulsa
+   *
+   * O que os separar é só o que o motor deixa de enxergar.
+   */
+  "producao-avulsa": {
+    larguraTecido: 179, espaco: 0.4, comprimentoBancada: 0,
+    pecas: [
+      ...avulsas("uni-costa", 25),
+      ...avulsas("uni-frente", 25),
+      ...avulsas("uni-manga", 50),
+      ...avulsas("uni-short", 50),
+      ...avulsas("uni-gola", 25),
+    ],
+  },
+
+  "pedido-uniforme": {
+    larguraTecido: 179, espaco: 0.4, comprimentoBancada: 0,
+    pecas: [
+      { nome: "uni-costa", qtd: 20 },
+      { nome: "uni-frente", qtd: 20 },
+      { nome: "uni-manga", qtd: 40 },
+      { nome: "uni-short", qtd: 30 },
+      { nome: "uni-gola", qtd: 20 },
+    ],
+  },
+  "pedido-confeccao": {
+    larguraTecido: 179, espaco: 0.4, comprimentoBancada: 0,
+    pecas: [
+      { nome: "camiseta", qtd: 16 },
+      { nome: "manga", qtd: 32 },
+      { nome: "gola", qtd: 16 },
+    ],
+  },
+  "pedido-miudeza": {
+    larguraTecido: 179, espaco: 0.4, comprimentoBancada: 0,
+    pecas: [
+      { nome: "calca", qtd: 8 },
+      { nome: "regata", qtd: 10 },
+      { nome: "bolso", qtd: 24 },
+      { nome: "punho", qtd: 40 },
+    ],
+  },
+  /* Os três acima no mesmo rolo: 276 peças, cinco famílias de tamanho e
+   * formato bem diferentes. */
+  "producao-misturada": {
+    larguraTecido: 179, espaco: 0.4, comprimentoBancada: 0,
+    pecas: [
+      { nome: "uni-costa", qtd: 20 },
+      { nome: "uni-frente", qtd: 20 },
+      { nome: "uni-manga", qtd: 40 },
+      { nome: "uni-short", qtd: 30 },
+      { nome: "uni-gola", qtd: 20 },
+      { nome: "camiseta", qtd: 16 },
+      { nome: "manga", qtd: 32 },
+      { nome: "gola", qtd: 16 },
+      { nome: "calca", qtd: 8 },
+      { nome: "regata", qtd: 10 },
+      { nome: "bolso", qtd: 24 },
+      { nome: "punho", qtd: 40 },
+    ],
+  },
+
   "lote-enorme": {
     larguraTecido: 179, espaco: 0.4, comprimentoBancada: 0,
     pecas: [

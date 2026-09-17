@@ -65,7 +65,17 @@ CONFIG_LV_FONT_MONTSERRAT_48=y
 # nao e burocracia, e o binario e de fato compilado com as correcoes de
 # silicio do v3 -- gravado num v1.3 ele roda errado, quando roda.
 CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
-CONFIG_ESP32P4_REV_MIN_0=y
+#
+# A REVISAO MINIMA E A DESTA PLACA (v1.0), e nao zero.
+#
+# O chip aqui e um v1.3 -- conferido com `esptool chip_id`. Pedir REV_MIN_0
+# compila os contornos de silicio das revisoes v0.x, que este chip nao tem e
+# nunca vai ter: codigo morto carregado para sempre, e caminhos mais lentos nos
+# lugares onde o contorno troca uma instrucao por um rodeio.
+#
+# Se um dia esta placa for trocada por uma mais antiga, e aqui que se mexe --
+# e o sintoma seria o esptool recusando gravar, nao um defeito silencioso.
+CONFIG_ESP32P4_REV_MIN_100=y
 
 # --- Quantos framebuffers o painel DPI tem ---
 #

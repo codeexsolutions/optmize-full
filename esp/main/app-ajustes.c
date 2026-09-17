@@ -5,10 +5,23 @@
  *
  * Tres coisas que quem instala o aparelho precisa mexer sem compilador:
  *
- *   REDE     escolhida numa lista do que esta no ar, e a senha digitada
- *   BRILHO   a tela vai para uma parede -- o que serve numa sala escura cega
- *            numa sala clara, e vice-versa
- *   AUDIO    o ganho do microfone
+ *   REDE      escolhida numa lista do que esta no ar, e a senha digitada
+ *   SERVIDOR  o endereco do Optmize, sem o qual o QR lido nao quer dizer nada
+ *   BRILHO    a tela vai para uma parede -- o que serve numa sala escura cega
+ *             numa sala clara, e vice-versa
+ *   AUDIO     o volume da voz, e o ganho do microfone
+ *
+ * ---------------------------------------------------------------------------
+ * A GRADE
+ * ---------------------------------------------------------------------------
+ *
+ * Duas colunas de 482, tres cartoes. A rede ocupa a coluna inteira da esquerda
+ * porque e a unica coisa aqui com varios passos em ordem -- buscar, escolher,
+ * digitar, conectar --, e cortar isso em dois cartoes cortaria a sequencia.
+ *
+ * A direita, dois cartoes: o servidor em cima, curto, e tela e som embaixo.
+ * As medidas estao todas juntas num bloco de `#define` perto da montagem; foi
+ * assim que se descobriu que as duas colunas tinham alturas diferentes.
  *
  * ---------------------------------------------------------------------------
  * A REDE SE ESCOLHE, NAO SE DIGITA
@@ -47,12 +60,68 @@ static const char *TAG = "ajustes";
 
 #define CABEM 16
 
+/*
+ * A GRADE DESTA TELA, num lugar so.
+ *
+ * Os numeros estavam espalhados pelas chamadas, e foi assim que a coluna da
+ * direita ficou com 300 de altura enquanto a esquerda tinha 506: ninguem
+ * compara dois numeros escritos a duzentas linhas de distancia. Aqui embaixo
+ * eles ficam um sobre o outro, e um erro de conta se ve a olho nu.
+ */
+#define MARGEM        20
+#define TOPO          18
+#define COLUNA        482      /* (1024 - 3 * MARGEM) / 2 */
+#define DIREITA_X     (MARGEM + COLUNA + MARGEM)
+#define RESPIRO       18       /* o `pad_all` dos cartoes */
+#define DENTRO        (COLUNA - 2 * RESPIRO)   /* 446: a largura util */
+#define ALTURA_TOTAL  506      /* TOPO + isto + MARGEM = 544, a area inteira */
+#define ALTURA_DE_CIMA 176
+#define ENTRE_CARTOES   16
+
+/*
+ * A CONTA DE CIMA PARA BAIXO, com a altura de linha MEDIDA e nao chutada:
+ * `fonte_16` tem `line_height = 19` (ver `fonte-16.c`).
+ *
+ *   esquerda   470 uteis: ficha acaba em 440 + 19 = 459
+ *   direita, em cima      140 uteis: apoio comeca em 92 e cabe em DUAS linhas
+ *   direita, embaixo      278 uteis: o ultimo deslizante acaba em 270
+ *
+ * Tres cartoes com folga de um digito cada. Foi apertado assim de proposito:
+ * a versao anterior desta tela tinha a ficha cortada embaixo e o campo do
+ * servidor por cima do deslizante do microfone, e os dois defeitos eram a
+ * mesma coisa -- ninguem tinha somado nada.
+ */
+
+/*
+ * A ALTURA DO TECLADO, e o quanto o cartao da rede sobe quando ele aparece.
+ *
+ * A area util tem 544 (600 menos a barra do topo), entao o teclado ocupa de
+ * 334 para baixo. O campo da senha termina em 360 -- 26 debaixo do teclado --,
+ * e por isso o cartao sobe 40: os 26 que faltam, mais uma folga que impede o
+ * campo de ficar encostado na primeira fileira de teclas.
+ */
+#define ALTURA_DO_TECLADO 210
+#define SUBIDA_DO_CARTAO   40
+
 static lv_obj_t *lista_de_redes;
 static lv_obj_t *campo_senha;
 static lv_obj_t *teclado;
 static lv_obj_t *rot_estado;
 static lv_obj_t *rot_escolhida;
 static lv_obj_t *campo_servidor;
+
+/*
+ * O CARTAO DA REDE, guardado porque ele SE MEXE: quando o teclado sobe para a
+ * senha, ele sobe junto (ver `campo_em_foco`).
+ */
+static lv_obj_t *cartao_da_rede;
+
+/*
+ * O ultimo deslizante montado, e o rotulo do valor dele -- para quem precisa
+ * mexer neles depois de criados (o microfone, que sai apagado).
+ */
+static lv_obj_t *ultimo_deslizante;
+static lv_obj_t *ultimo_valor;
 
 static lv_timer_t *relogio_do_estado;
 static char escolhida[33];
@@ -76,8 +145,15 @@ static void conferir_o_estado(lv_timer_t *t)
         return;
     }
 
+    /*
+     * ESTE E O UNICO LUGAR QUE ESCREVE NESTE ROTULO.
+     *
+     * A montagem tambem escrevia, com outras palavras e outra cor, e um segundo
+     * depois este relogio apagava aquilo -- a tela trocava de aparencia sozinha
+     * sem nada ter acontecido. Agora a montagem so chama esta funcao.
+     */
     if (rede_conectada()) {
-        lv_label_set_text_fmt(rot_estado, "conectada -- %s", rede_endereco());
+        lv_label_set_text_fmt(rot_estado, LV_SYMBOL_WIFI "  %s", rede_endereco());
         lv_obj_set_style_text_color(rot_estado, COR_CERTO, 0);
         return;
     }
@@ -85,7 +161,7 @@ static void conferir_o_estado(lv_timer_t *t)
     const char *porque = rede_por_que_nao();
     if (porque != NULL) {
         lv_label_set_text(rot_estado, porque);
-        lv_obj_set_style_text_color(rot_estado, COR_DESTAQUE, 0);
+        lv_obj_set_style_text_color(rot_estado, COR_ATENCAO, 0);
     } else {
         lv_label_set_text(rot_estado, "sem conexao");
         lv_obj_set_style_text_color(rot_estado, COR_APOIO, 0);
@@ -196,7 +272,20 @@ static void tocou_salvar_servidor(lv_event_t *e)
     ESP_LOGI(TAG, "servidor do Optmize: %s", endereco);
 }
 
-/* O teclado so aparece quando o campo e tocado, e some quando ele sai. */
+/*
+ * O TECLADO SO APARECE QUANDO O CAMPO E TOCADO, e some quando ele sai.
+ *
+ * Duas coisas estavam erradas aqui:
+ *
+ * O CAMPO DA SENHA FICAVA DEBAIXO DO TECLADO. Ele termina em 360 da area util,
+ * o teclado comeca em 334, e a pessoa digitava a senha sem ver o campo -- que e
+ * exatamente o defeito que o botao de revelar existe para evitar. Agora o
+ * cartao da rede sobe enquanto o teclado esta no ar, e volta ao sair.
+ *
+ * O "X" DO TECLADO NAO FECHAVA NADA. Ele manda `LV_EVENT_CANCEL`, que nao
+ * estava na lista; quem tocava no X via o teclado continuar ali, o que parece
+ * travamento. O `LV_EVENT_READY` do "OK" ja estava.
+ */
 static void campo_em_foco(lv_event_t *e)
 {
     lv_obj_t *campo = lv_event_get_target(e);
@@ -205,9 +294,19 @@ static void campo_em_foco(lv_event_t *e)
     if (codigo == LV_EVENT_FOCUSED) {
         lv_keyboard_set_textarea(teclado, campo);
         lv_obj_remove_flag(teclado, LV_OBJ_FLAG_HIDDEN);
-    } else if (codigo == LV_EVENT_DEFOCUSED || codigo == LV_EVENT_READY) {
+
+        /* So a senha fica no caminho; o endereco do servidor esta bem acima. */
+        if (campo == campo_senha && cartao_da_rede != NULL) {
+            lv_obj_set_y(cartao_da_rede, TOPO - SUBIDA_DO_CARTAO);
+        }
+    } else if (codigo == LV_EVENT_DEFOCUSED || codigo == LV_EVENT_READY ||
+               codigo == LV_EVENT_CANCEL) {
         lv_keyboard_set_textarea(teclado, NULL);
         lv_obj_add_flag(teclado, LV_OBJ_FLAG_HIDDEN);
+
+        if (cartao_da_rede != NULL) {
+            lv_obj_set_y(cartao_da_rede, TOPO);
+        }
     }
 }
 
@@ -273,7 +372,7 @@ static void mudou_o_volume_da_voz(lv_event_t *e)
 /* ------------------------------------------------------------ montagem */
 
 /* Uma linha de ajuste: nome, barra, e o valor a direita. */
-static void deslizante(lv_obj_t *pai, const char *nome, int32_t y,
+static void deslizante(lv_obj_t *pai, const char *nome, int32_t y, int32_t largura,
                        int inicial, lv_event_cb_t ao_mudar)
 {
     lv_obj_t *rot = lv_label_create(pai);
@@ -292,11 +391,11 @@ static void deslizante(lv_obj_t *pai, const char *nome, int32_t y,
      */
     lv_obj_set_width(valor, 60);
     lv_obj_set_style_text_align(valor, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(valor, 350, y);
+    lv_obj_set_pos(valor, largura - 60, y);
     lv_label_set_text_fmt(valor, "%d%%", inicial);
 
     lv_obj_t *barra = lv_slider_create(pai);
-    lv_obj_set_size(barra, 410, 18);
+    lv_obj_set_size(barra, largura, 18);
     lv_obj_set_pos(barra, 0, y + 28);
     lv_slider_set_range(barra, 0, 100);
     lv_slider_set_value(barra, inicial, LV_ANIM_OFF);
@@ -318,6 +417,85 @@ static void deslizante(lv_obj_t *pai, const char *nome, int32_t y,
      * porque o codigo do evento esta no proprio evento.
      */
     lv_obj_add_event_cb(barra, ao_mudar, LV_EVENT_RELEASED, valor);
+
+    ultimo_deslizante = barra;
+    ultimo_valor = valor;
+}
+
+/* Um cartao vazio da grade. */
+static lv_obj_t *cartao(lv_obj_t *area, int32_t x, int32_t y, int32_t altura)
+{
+    lv_obj_t *c = lv_obj_create(area);
+    lv_obj_set_size(c, COLUNA, altura);
+    lv_obj_set_pos(c, x, y);
+    lv_obj_set_style_bg_color(c, COR_CARTAO, 0);
+    lv_obj_set_style_border_color(c, COR_BORDA, 0);
+    lv_obj_set_style_border_width(c, 1, 0);
+    lv_obj_set_style_radius(c, RAIO, 0);
+    lv_obj_set_style_pad_all(c, RESPIRO, 0);
+    lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
+    return c;
+}
+
+/* Um botao secundario: fundo de cartao claro, borda, sem sombra. */
+static lv_obj_t *botao_calado(lv_obj_t *pai, int32_t x, int32_t y, int32_t l,
+                              int32_t a, const char *texto, lv_event_cb_t ao_tocar)
+{
+    lv_obj_t *b = lv_button_create(pai);
+    lv_obj_set_size(b, l, a);
+    lv_obj_set_pos(b, x, y);
+    lv_obj_set_style_bg_color(b, COR_CARTAO_SUAVE, 0);
+    lv_obj_set_style_bg_color(b, COR_BORDA, LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(b, COR_BORDA, 0);
+    lv_obj_set_style_border_width(b, 1, 0);
+    lv_obj_set_style_radius(b, RAIO_MIUDO, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_add_event_cb(b, ao_tocar, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *r = lv_label_create(b);
+    lv_label_set_text(r, texto);
+    lv_obj_set_style_text_color(r, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(r, &fonte_16, 0);
+    lv_obj_center(r);
+    return b;
+}
+
+/*
+ * Um campo de texto escuro.
+ *
+ * Existe porque o campo do servidor nao tinha estilo nenhum e saia com as cores
+ * de fabrica do LVGL -- fundo claro, letra escura -- no meio de uma tela preta.
+ * Nao era uma escolha de design: era um campo que alguem esqueceu de vestir.
+ */
+static lv_obj_t *campo_escuro(lv_obj_t *pai, int32_t x, int32_t y, int32_t l,
+                              const char *dica)
+{
+    lv_obj_t *c = lv_textarea_create(pai);
+    lv_obj_set_size(c, l, 48);
+    lv_obj_set_pos(c, x, y);
+    lv_textarea_set_one_line(c, true);
+    lv_textarea_set_placeholder_text(c, dica);
+    lv_obj_set_style_bg_color(c, COR_FUNDO, 0);
+    lv_obj_set_style_border_color(c, COR_BORDA_SUAVE, 0);
+    lv_obj_set_style_border_color(c, COR_DESTAQUE, LV_STATE_FOCUSED);
+    lv_obj_set_style_border_width(c, 1, 0);
+    lv_obj_set_style_radius(c, RAIO_MIUDO, 0);
+    lv_obj_set_style_text_color(c, COR_TEXTO, 0);
+    lv_obj_set_style_text_font(c, &fonte_16, 0);
+    lv_obj_add_event_cb(c, campo_em_foco, LV_EVENT_ALL, NULL);
+    return c;
+}
+
+/* Uma linha de apoio: corpo pequeno, cor fraca, quebrando em varias linhas. */
+static void apoio(lv_obj_t *pai, int32_t y, int32_t l, const char *texto)
+{
+    lv_obj_t *r = lv_label_create(pai);
+    lv_label_set_text(r, texto);
+    lv_obj_set_style_text_color(r, COR_FRACA, 0);
+    lv_obj_set_style_text_font(r, &fonte_16, 0);
+    lv_label_set_long_mode(r, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(r, l);
+    lv_obj_set_pos(r, 0, y);
 }
 
 void app_ajustes_montar(lv_obj_t *area)
@@ -325,46 +503,17 @@ void app_ajustes_montar(lv_obj_t *area)
     montado = true;
     snprintf(escolhida, sizeof(escolhida), "%s", rede_nome_da_rede());
 
-    /* --- esquerda: a rede --- */
+    /* ================================================== esquerda: a rede */
 
-    lv_obj_t *esq = lv_obj_create(area);
-    lv_obj_set_size(esq, 490, 506);
-    lv_obj_set_pos(esq, 20, 18);
-    lv_obj_set_style_bg_color(esq, COR_CARTAO, 0);
-    lv_obj_set_style_border_color(esq, COR_BORDA, 0);
-    lv_obj_set_style_border_width(esq, 1, 0);
-    lv_obj_set_style_radius(esq, RAIO, 0);
-    lv_obj_set_style_pad_all(esq, 18, 0);
-    lv_obj_remove_flag(esq, LV_OBJ_FLAG_SCROLLABLE);
+    cartao_da_rede = cartao(area, MARGEM, TOPO, ALTURA_TOTAL);
+    lv_obj_t *esq = cartao_da_rede;
 
-    lv_obj_t *t1 = lv_label_create(esq);
-    lv_label_set_text(t1, "REDE SEM FIO");
-    lv_obj_set_style_text_color(t1, COR_DESTAQUE, 0);
-    lv_obj_set_style_text_font(t1, &fonte_16, 0);
-    /*
-     * Titulo de bloco em maiuscula, corpo pequeno e cor de acento -- o mesmo
-     * tratamento do "sobre". Titulo grande competiria com o conteudo; assim ele
-     * organiza sem chamar atencao para si.
-     */
-    lv_obj_set_style_text_letter_space(t1, 2, 0);
-    lv_obj_set_pos(t1, 0, 4);
-
-    lv_obj_t *procurar = lv_button_create(esq);
-    lv_obj_set_size(procurar, 130, 40);
-    lv_obj_set_pos(procurar, 320, 0);
-    lv_obj_set_style_bg_color(procurar, COR_CARTAO_SUAVE, 0);
-    lv_obj_set_style_border_color(procurar, COR_BORDA, 0);
-    lv_obj_set_style_border_width(procurar, 1, 0);
-    lv_obj_set_style_radius(procurar, RAIO_MIUDO, 0);
-    lv_obj_set_style_shadow_width(procurar, 0, 0);
-    lv_obj_add_event_cb(procurar, tocou_procurar, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *rp = lv_label_create(procurar);
-    lv_label_set_text(rp, LV_SYMBOL_REFRESH "  buscar");
-    lv_obj_set_style_text_font(rp, &fonte_16, 0);
-    lv_obj_center(rp);
+    titulo_de_bloco(esq, 4, "REDE SEM FIO");
+    botao_calado(esq, DENTRO - 130, 0, 130, 40,
+                 LV_SYMBOL_REFRESH "  buscar", tocou_procurar);
 
     lista_de_redes = lv_list_create(esq);
-    lv_obj_set_size(lista_de_redes, 450, 210);
+    lv_obj_set_size(lista_de_redes, DENTRO, 190);
     lv_obj_set_pos(lista_de_redes, 0, 48);
     /*
      * A lista e um degrau MAIS ESCURA que o cartao que a contem, e nao mais
@@ -380,7 +529,9 @@ void app_ajustes_montar(lv_obj_t *area)
 
     rot_escolhida = lv_label_create(esq);
     lv_obj_set_style_text_font(rot_escolhida, &fonte_16, 0);
-    lv_obj_set_pos(rot_escolhida, 0, 268);
+    lv_label_set_long_mode(rot_escolhida, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(rot_escolhida, DENTRO);
+    lv_obj_set_pos(rot_escolhida, 0, 250);
     if (escolhida[0]) {
         lv_label_set_text_fmt(rot_escolhida, "rede: %s", escolhida);
         lv_obj_set_style_text_color(rot_escolhida, COR_TEXTO, 0);
@@ -389,41 +540,20 @@ void app_ajustes_montar(lv_obj_t *area)
         lv_obj_set_style_text_color(rot_escolhida, COR_APOIO, 0);
     }
 
-    campo_senha = lv_textarea_create(esq);
-    lv_obj_set_size(campo_senha, 385, 48);
-    lv_obj_set_pos(campo_senha, 0, 296);
-    lv_textarea_set_one_line(campo_senha, true);
+    campo_senha = campo_escuro(esq, 0, 276, DENTRO - 65, "senha");
     lv_textarea_set_password_mode(campo_senha, true);
-    lv_textarea_set_placeholder_text(campo_senha, "senha");
-    lv_obj_set_style_bg_color(campo_senha, COR_FUNDO, 0);
-    lv_obj_set_style_border_color(campo_senha, COR_BORDA_SUAVE, 0);
-    lv_obj_set_style_border_color(campo_senha, COR_DESTAQUE, LV_STATE_FOCUSED);
-    lv_obj_set_style_border_width(campo_senha, 1, 0);
-    lv_obj_set_style_radius(campo_senha, RAIO_MIUDO, 0);
-    lv_obj_set_style_text_color(campo_senha, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(campo_senha, &fonte_16, 0);
-    lv_obj_add_event_cb(campo_senha, campo_em_foco, LV_EVENT_ALL, NULL);
 
-    lv_obj_t *revelar = lv_button_create(esq);
-    lv_obj_set_size(revelar, 55, 48);
-    lv_obj_set_pos(revelar, 395, 296);
-    lv_obj_set_style_bg_color(revelar, COR_CARTAO_SUAVE, 0);
-    lv_obj_set_style_border_color(revelar, COR_BORDA, 0);
-    lv_obj_set_style_border_width(revelar, 1, 0);
-    lv_obj_set_style_radius(revelar, RAIO_MIUDO, 0);
-    lv_obj_set_style_shadow_width(revelar, 0, 0);
-    lv_obj_add_event_cb(revelar, tocou_revelar, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *olho = lv_label_create(revelar);
-    lv_label_set_text(olho, LV_SYMBOL_EYE_CLOSE);
-    lv_obj_center(olho);
+    lv_obj_t *revelar = botao_calado(esq, DENTRO - 55, 276, 55, 48,
+                                     LV_SYMBOL_EYE_CLOSE, tocou_revelar);
+    lv_obj_set_style_text_font(lv_obj_get_child(revelar, 0), &fonte_22, 0);
 
     lv_obj_t *conectar = lv_button_create(esq);
     lv_obj_set_size(conectar, 170, 48);
-    lv_obj_set_pos(conectar, 0, 360);
+    lv_obj_set_pos(conectar, 0, 338);
     /*
      * O UNICO BOTAO LARANJA DESTA TELA. Tudo o mais aqui e secundario --
-     * buscar, revelar a senha --, e dar laranja a todos faria a tela inteira
-     * gritar igual. O acento so vale enquanto for raro.
+     * buscar, revelar a senha, salvar o endereco --, e dar laranja a todos
+     * faria a tela inteira gritar igual. O acento so vale enquanto for raro.
      */
     lv_obj_set_style_bg_color(conectar, COR_DESTAQUE, 0);
     lv_obj_set_style_bg_opa(conectar, LV_OPA_80, LV_STATE_PRESSED);
@@ -438,107 +568,122 @@ void app_ajustes_montar(lv_obj_t *area)
     lv_obj_center(rc);
 
     /*
-     * O ESTADO DA CONEXAO FICA NO PE DA COLUNA, ao lado do botao que o muda.
+     * O ESTADO DA CONEXAO FICA AO LADO DO BOTAO QUE O MUDA.
      *
      * E o unico lugar onde ele faz trabalho: quem acabou de tocar em "Conectar"
      * esta olhando para aquele botao, e a resposta tem de aparecer no campo de
-     * visao dele. No topo da coluna, seria lida antes de qualquer tentativa e
+     * visao dele. No topo do cartao, seria lida antes de qualquer tentativa e
      * ignorada depois.
+     *
+     * Alinhado pelo MEIO do botao (338 + (48 - 22) / 2), e nao pelo topo dele:
+     * uma linha de texto ao lado de um botao alto, encostada em cima, parece
+     * ter escorregado.
      */
     rot_estado = lv_label_create(esq);
     lv_obj_set_style_text_font(rot_estado, &fonte_16, 0);
     lv_label_set_long_mode(rot_estado, LV_LABEL_LONG_DOT);
-    lv_obj_set_width(rot_estado, 262);
-    lv_obj_set_pos(rot_estado, 188, 374);
-    if (rede_conectada()) {
-        lv_label_set_text_fmt(rot_estado, LV_SYMBOL_WIFI "  %s", rede_endereco());
-        lv_obj_set_style_text_color(rot_estado, COR_CERTO, 0);
-    } else {
-        const char *porque = rede_por_que_nao();
-        lv_label_set_text_fmt(rot_estado, "%s", porque ? porque : "sem conexao");
-        lv_obj_set_style_text_color(rot_estado, COR_ATENCAO, 0);
-    }
+    lv_obj_set_width(rot_estado, DENTRO - 186);
+    lv_obj_set_pos(rot_estado, 186, 351);
 
     /*
-     * A FICHA DA CONEXAO, embaixo de tudo: o que o terminal sabe da rede em que
+     * A FICHA DA CONEXAO, no pe do cartao: o que o terminal sabe da rede em que
      * esta. E o que alguem le por telefone quando o Optmize "nao aparece" --
      * endereco daqui, e endereco do servidor.
      */
-    lv_obj_t *risco_da_rede = lv_obj_create(esq);
-    lv_obj_set_size(risco_da_rede, 450, 1);
-    lv_obj_set_pos(risco_da_rede, 0, 416);
-    lv_obj_set_style_bg_color(risco_da_rede, COR_BORDA_SUAVE, 0);
-    lv_obj_set_style_border_width(risco_da_rede, 0, 0);
-    lv_obj_remove_flag(risco_da_rede, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_remove_flag(risco_da_rede, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *risco = lv_obj_create(esq);
+    lv_obj_set_size(risco, DENTRO, 1);
+    lv_obj_set_pos(risco, 0, 402);
+    lv_obj_set_style_bg_color(risco, COR_BORDA_SUAVE, 0);
+    lv_obj_set_style_border_width(risco, 0, 0);
+    lv_obj_remove_flag(risco, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(risco, LV_OBJ_FLAG_CLICKABLE);
 
-    par_da_ficha(esq, 430, "Endereco", rede_conectada() ? rede_endereco() : "--", 450);
-    par_da_ficha(esq, 456, "Servidor", optmize_servidor(), 450);
+    par_da_ficha(esq, 414, "Endereco",
+                 rede_conectada() ? rede_endereco() : "--", DENTRO);
+    par_da_ficha(esq, 440, "Servidor", optmize_servidor(), DENTRO);
 
-    /* --- direita: tela e audio --- */
-
-    lv_obj_t *dir = lv_obj_create(area);
-    lv_obj_set_size(dir, 470, 300);
-    lv_obj_set_pos(dir, 530, 18);
-    lv_obj_set_style_bg_color(dir, COR_CARTAO, 0);
-    lv_obj_set_style_border_color(dir, COR_BORDA, 0);
-    lv_obj_set_style_border_width(dir, 1, 0);
-    lv_obj_set_style_radius(dir, RAIO, 0);
-    lv_obj_set_style_pad_all(dir, 18, 0);
-    lv_obj_remove_flag(dir, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t *t2 = lv_label_create(dir);
-    lv_label_set_text(t2, "TELA E SOM");
-    lv_obj_set_style_text_color(t2, COR_DESTAQUE, 0);
-    lv_obj_set_style_text_font(t2, &fonte_16, 0);
-    lv_obj_set_style_text_letter_space(t2, 2, 0);
-    lv_obj_set_pos(t2, 0, 0);
-
-    deslizante(dir, "Brilho da tela", 50, 100, mudou_o_brilho);
-    deslizante(dir, "Volume da voz", 140, voz_volume(), mudou_o_volume_da_voz);
-    deslizante(dir, "Ganho do microfone", 230, 50, mudou_o_ganho);
+    /* ====================================== direita, em cima: o servidor */
 
     /*
-     * O ENDERECO DO SERVIDOR.
+     * O ENDERECO DO SERVIDOR SAIU DE DENTRO DE "TELA E SOM".
      *
-     * Sem ele a placa le o QR e nao tem a quem perguntar o que ele significa --
-     * o codigo impresso e opaco de proposito (ver `optmize.c`). Fica aqui, e nao
-     * no codigo, pelo mesmo motivo da senha: muda de grafica para grafica, e
-     * quem instala o aparelho na parede nao tem compilador.
+     * Ele estava no fim daquele cartao, debaixo do controle de volume, e nao
+     * tem nada a ver com tela nem com som: e o segundo ajuste de REDE desta
+     * pagina. Pior: ali embaixo ele passava POR CIMA do deslizante do
+     * microfone, os dois disputando as mesmas linhas.
      *
      * Vai com a porta junto (`192.168.0.194:8000`) porque o servidor nao
      * atende na 80, e um endereco sem porta falharia com "nao respondeu" --
      * mensagem que manda procurar problema na rede, e nao no campo.
      */
-    lv_obj_t *t3 = lv_label_create(dir);
-    lv_label_set_text(t3, "Servidor do Optmize");
-    lv_obj_set_style_text_color(t3, COR_TEXTO, 0);
-    lv_obj_set_style_text_font(t3, &fonte_16, 0);
-    lv_obj_set_pos(t3, 0, 200);
+    lv_obj_t *cima = cartao(area, DIREITA_X, TOPO, ALTURA_DE_CIMA);
+    titulo_de_bloco(cima, 4, "SERVIDOR DO OPTMIZE");
 
-    campo_servidor = lv_textarea_create(dir);
-    lv_obj_set_size(campo_servidor, 290, 48);
-    lv_obj_set_pos(campo_servidor, 0, 224);
-    lv_textarea_set_one_line(campo_servidor, true);
-    lv_textarea_set_placeholder_text(campo_servidor, "192.168.0.194:8000");
+    campo_servidor = campo_escuro(cima, 0, 36, DENTRO - 146, "192.168.0.194:8000");
     lv_textarea_set_text(campo_servidor, optmize_servidor());
-    lv_obj_add_event_cb(campo_servidor, campo_em_foco, LV_EVENT_ALL, NULL);
 
-    lv_obj_t *salvar = lv_button_create(dir);
-    lv_obj_set_size(salvar, 120, 48);
-    lv_obj_set_pos(salvar, 300, 224);
-    lv_obj_set_style_bg_color(salvar, COR_BORDA, 0);
-    lv_obj_add_event_cb(salvar, tocou_salvar_servidor, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *rsv = lv_label_create(salvar);
-    lv_label_set_text(rsv, "Salvar");
-    lv_obj_set_style_text_font(rsv, &fonte_16, 0);
-    lv_obj_center(rsv);
+    botao_calado(cima, DENTRO - 136, 36, 136, 48, "Salvar", tocou_salvar_servidor);
 
-    /* --- o teclado, escondido ate alguem tocar na senha --- */
+    apoio(cima, 92, DENTRO,
+          "Sem ele o terminal le o QR e nao tem a quem perguntar o que ele diz.");
 
+    /* ================================== direita, embaixo: a tela e o som */
+
+    lv_obj_t *baixo = cartao(area, DIREITA_X, TOPO + ALTURA_DE_CIMA + ENTRE_CARTOES,
+                             ALTURA_TOTAL - ALTURA_DE_CIMA - ENTRE_CARTOES);
+    titulo_de_bloco(baixo, 4, "TELA E SOM");
+
+    deslizante(baixo, "Brilho da tela", 48, DENTRO, 100, mudou_o_brilho);
+    deslizante(baixo, "Volume da voz", 136, DENTRO, voz_volume(),
+               mudou_o_volume_da_voz);
+
+    /*
+     * O GANHO DO MICROFONE SAI APAGADO, e nao igual aos outros dois.
+     *
+     * Ele mostra um numero e nao chega ao codec: o microfone existe (um ES7210
+     * em 0x40, ver `prova-de-audio.c`), mas nada no sistema o escuta ainda. Com
+     * a mesma cara dos outros, ele MENTE -- alguem arrasta, nada acontece, e
+     * passa a desconfiar tambem do volume, que funciona.
+     *
+     * Apagado e com o motivo escrito embaixo, ele deixa de mentir sem sumir da
+     * tela, que e onde ele precisa estar no dia em que alguem escutar o
+     * microfone.
+     */
+    deslizante(baixo, "Ganho do microfone", 224, DENTRO, 50, mudou_o_ganho);
+    lv_obj_set_style_opa(ultimo_deslizante, LV_OPA_40, 0);
+    /*
+     * ONDE OS OUTROS DOIS MOSTRAM A PORCENTAGEM, ESTE MOSTRA "sem uso".
+     *
+     * Um numero que nao governa nada e pior que nenhum: alguem arrasta, le
+     * "70%", nada acontece, e passa a desconfiar tambem do volume -- que
+     * funciona. A palavra ocupa a mesma linha, entao nao custa altura nenhuma
+     * (e a conta la em cima nao tem altura sobrando para uma linha a mais).
+     *
+     * Ele fica na tela, e nao sai dela, porque o microfone EXISTE: um ES7210 em
+     * 0x40, ver `prova-de-audio.c`. O que falta e alguem escutar.
+     */
+    lv_obj_set_width(ultimo_valor, 100);
+    lv_obj_set_pos(ultimo_valor, DENTRO - 100, 224);
+    lv_label_set_text(ultimo_valor, "sem uso");
+    lv_obj_set_style_text_color(ultimo_valor, COR_FRACA, 0);
+
+    /* ============================== o teclado, escondido ate alguem tocar */
+
+    /*
+     * 210 DE ALTURA, e nao 250. Com 250 o teclado subia ate o campo da senha e
+     * tapava justamente o campo que a pessoa estava digitando -- digitar senha
+     * as cegas e exatamente o defeito que o botao de revelar existe para
+     * evitar. Em 1024 de largura, 210 ainda dao teclas de 102 x 50.
+     */
     teclado = lv_keyboard_create(area);
-    lv_obj_set_size(teclado, LV_PCT(100), 250);
+    lv_obj_set_size(teclado, LV_PCT(100), ALTURA_DO_TECLADO);
     lv_obj_align(teclado, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_bg_color(teclado, COR_BARRA, 0);
+    lv_obj_set_style_bg_color(teclado, COR_CARTAO, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(teclado, COR_TEXTO, LV_PART_ITEMS);
+    lv_obj_set_style_border_color(teclado, COR_BORDA_SUAVE, LV_PART_ITEMS);
+    lv_obj_set_style_border_width(teclado, 1, LV_PART_ITEMS);
+    lv_obj_set_style_radius(teclado, RAIO_MIUDO, LV_PART_ITEMS);
     lv_obj_add_flag(teclado, LV_OBJ_FLAG_HIDDEN);
 
     relogio_do_estado = lv_timer_create(conferir_o_estado, 1000, NULL);
@@ -564,6 +709,9 @@ void app_ajustes_desmontar(void)
         relogio_do_estado = NULL;
     }
 
+    cartao_da_rede = NULL;
+    ultimo_deslizante = NULL;
+    ultimo_valor = NULL;
     lista_de_redes = NULL;
     campo_senha = NULL;
     teclado = NULL;

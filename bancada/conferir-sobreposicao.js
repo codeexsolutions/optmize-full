@@ -41,6 +41,59 @@ const { carregarMotor } = require("./motor");
 const { prepararPeca, expandir } = require("./pecas");
 const { TRABALHOS } = require("./trabalhos");
 
+/*
+ * OS TRABALHOS DA VARREDURA, E POR QUE NÃO SÃO TODOS
+ * ---------------------------------------------------
+ * Esta conferência é cara: ela PINTA cada peça na grade do rolo, célula por
+ * célula, uma vez por encaixe — e são cinco caminhos × duas bancadas × três
+ * agrupamentos por trabalho. Num lote de 276 peças e 33 m de rolo isso é
+ * dezenas de milhões de células, e a varredura passa de dezenas de minutos.
+ *
+ * Rodar todo trabalho do catálogo também não compra cobertura: o que esta
+ * conferência mede é GEOMETRIA — silhueta, giro, folga, bancada —, e dois lotes
+ * feitos das mesmas peças exercitam exatamente o mesmo código. Os lotes de
+ * medição (`pedido-*`, `producao-misturada`, `so-camiseta-avulsa`) existem para
+ * a metragem da bancada, e as peças deles já estão aqui dentro por outro lote.
+ *
+ * Então a lista é por caso geométrico, um lote de cada:
+ *
+ *   camiseta+manga+gola  concavidade de verdade, três famílias
+ *   misturado-pequeno    muitos formatos no mesmo rolo
+ *   arte-partida         silhueta em DOIS blocos soltos — o caso que derrubou
+ *                        o NFP, e o motivo de este arquivo existir
+ *   tamanhos-extremos    a peça pequena descendo no vão da grande
+ *   tiras                6:1 e 3:1, onde a folga fica mais apertada
+ *   quase-retangulo      sem concavidade nenhuma: a contraprova
+ *   giro-livre/giro-fixo os dois ramos de rotação (com "livre" o motor testa
+ *                        quatro rotações por peça; com "fixa", uma)
+ *   producao-avulsa      um arquivo por peça: é o único lote em que o BLOCO
+ *                        nasce de arquivos diferentes (ver `chaveDaSilhueta`,
+ *                        em encaixeMotor.js), que é o que pode montar bloco
+ *                        errado — e bloco errado é peça em cima de peça
+ *   lote-grande          volume, para o caso em que a bancada reparte muito
+ *
+ * O resto entra com `--trabalhos nome` ou `--todos`, quando a mexida pedir.
+ */
+const TRABALHOS_PADRAO = [
+  "camiseta+manga+gola", "misturado-pequeno", "arte-partida", "tamanhos-extremos",
+  "tiras", "quase-retangulo", "giro-livre", "giro-fixo", "producao-avulsa", "lote-grande",
+];
+
+/*
+ * OS AGRUPAMENTOS, E POR QUE ELES PRECISAVAM ENTRAR
+ * -------------------------------------------------
+ * A varredura encaixava só com a peça SOLTA (`montarUnidades(itens, 1)`), e
+ * assim nenhum bloco passava por aqui — nem a dupla, nem o trio. É um buraco
+ * antigo que ficou grave agora: o bloco mede as formas na PRIMEIRA cópia e
+ * assenta as outras no mesmo desenho, então juntar no mesmo bloco duas peças
+ * que não são idênticas põe, literalmente, peça em cima de peça.
+ *
+ * Enquanto "mesma peça" queria dizer "mesmo arquivo", isso não podia acontecer.
+ * Desde que o motor passou a reconhecer peça igual pela SILHUETA, pode — e é
+ * esta varredura que tem que provar que não acontece.
+ */
+const AGRUPAMENTOS_PADRAO = [1, 2, 3];
+
 /**
  * Pinta uma peça na grade do rolo e devolve as células que ela ocupa.
  *
@@ -216,7 +269,7 @@ const descrever = (pos) =>
   `${pos.item.nome}#${pos.item.copia} (${pos.rot}°, x=${pos.x.toFixed(2)} y=${pos.y.toFixed(2)})`;
 
 /** Roda um encaixador só, sem busca: o que se confere é o posicionamento. */
-function encaixarCom(motor, motorNome, itens, receita, passo) {
+function encaixarCom(motor, motorNome, itens, receita, passo, agrupamento) {
   const config = {
     larguraTecido: receita.larguraTecido, espaco: receita.espaco,
     comprimentoBancada: receita.comprimentoBancada || 0,
@@ -232,19 +285,37 @@ function encaixarCom(motor, motorNome, itens, receita, passo) {
   // espaço livre da caixa. Ele posiciona por lista de intervalos, um caminho
   // completamente diferente do relevo — e caminho novo de posicionamento é
   // exatamente onde sobreposição nasce.
-  if (motorNome === "vaos") return motor.encaixarPorVaos(motor.montarUnidades(itens, 1), config);
-  const comRepesca = motorNome === "contorno+repesca";
-  return motor.encaixarContorno(motor.montarUnidades(itens, 1),
-    comRepesca ? { ...config, repescar: true } : config);
+  if (motorNome === "vaos" || motorNome === "vaos+repesca") {
+    return motor.encaixarPorVaos(motor.montarUnidades(itens, agrupamento),
+      motorNome === "vaos+repesca" ? { ...config, repescar: true, repescaVoltas: 3 } : config);
+  }
+  // Várias voltas de repescagem ("contorno+repesca3") mexem na MESMA peça mais
+  // de uma vez, cada volta com os intervalos que a anterior deixou. Se a conta
+  // dos intervalos errasse ao devolver uma peça ao mapa, é aqui que apareceria.
+  const voltas = motorNome === "contorno+repesca3" ? 3
+    : motorNome === "contorno+repesca" ? 1 : 0;
+  return motor.encaixarContorno(motor.montarUnidades(itens, agrupamento),
+    voltas > 0 ? { ...config, repescar: true, repescaVoltas: voltas } : config);
 }
 
 function lerArgumentos(argv) {
-  const opcoes = { motores: ["contorno", "contorno+repesca", "vaos"], trabalhos: Object.keys(TRABALHOS) };
+  const opcoes = {
+    motores: ["contorno", "contorno+repesca", "contorno+repesca3", "vaos", "vaos+repesca"],
+    trabalhos: TRABALHOS_PADRAO,
+    agrupamentos: AGRUPAMENTOS_PADRAO,
+  };
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === "--motor") { opcoes.motores = argv[i + 1].split(","); i++; }
     else if (argv[i] === "--trabalhos") { opcoes.trabalhos = argv[i + 1].split(","); i++; }
+    else if (argv[i] === "--todos") { opcoes.trabalhos = Object.keys(TRABALHOS); }
+    else if (argv[i] === "--agrupamento") {
+      opcoes.agrupamentos = argv[i + 1].split(",").map(Number); i++;
+    }
     else throw new Error(`argumento desconhecido: ${argv[i]}`);
   }
+  opcoes.trabalhos.forEach((nome) => {
+    if (!TRABALHOS[nome]) throw new Error(`trabalho desconhecido: ${nome}`);
+  });
   return opcoes;
 }
 
@@ -266,13 +337,15 @@ async function principal() {
     // enfiaria uma peça dentro de outra se em algum motor "abaixo" não quisesse
     // dizer "livre".
     for (const bancada of [0, 200]) {
+    for (const agrupamento of opcoes.agrupamentos) {
     for (const motorNome of opcoes.motores) {
+      const bloco = agrupamento > 1 ? `bloco ${agrupamento}` : "solta  ";
       const r = encaixarCom(motor, motorNome, itens,
-        { ...receita, comprimentoBancada: bancada }, passo);
+        { ...receita, comprimentoBancada: bancada }, passo, agrupamento);
       // O encaixe por caixa não devolve máscara (ele trabalha só com o
       // retângulo), então não há silhueta para conferir.
       if (!r.posicoes.some((p) => p.mascara)) {
-        process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)}`
+        process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)} ${bloco}`
           + ` bancada ${bancada ? `${bancada} cm` : "sem   "} · sem máscara, nada a conferir\n`);
         continue;
       }
@@ -288,28 +361,29 @@ async function principal() {
             ? `FOLGA CURTA: ${(distancia.menor * 10).toFixed(1)} mm`
             : "limpo";
 
-      process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)}`
+      process.stdout.write(`  ${nome.padEnd(20)} ${motorNome.padEnd(18)} ${bloco} `
         + ` bancada ${bancada ? `${bancada} cm` : "sem   "} ·`
         + ` ${r.posicoes.length} peças · ${(r.consumo / 100).toFixed(2)} m`
         + ` · folga ${(distancia.menor * 10).toFixed(1)}/${(receita.espaco * 10).toFixed(0)} mm`
         + ` · ${situacao}\n`);
 
       if (distancia.abaixoDoPedido > 0) {
-        falhas.push(`${nome} · ${motorNome}: a folga entre peças ficou em`
+        falhas.push(`${nome} · ${motorNome} · ${bloco.trim()}: a folga entre peças ficou em`
           + ` ${(distancia.menor * 10).toFixed(1)} mm, abaixo dos`
           + ` ${(receita.espaco * 10).toFixed(0)} mm pedidos`
           + `\n      ${descrever(distancia.exemplo.a)}\n      ${descrever(distancia.exemplo.b)}`);
       }
 
       if (real.repetidas > 0) {
-        falhas.push(`${nome} · ${motorNome}: ${real.repetidas} células com duas peças`
+        falhas.push(`${nome} · ${motorNome} · ${bloco.trim()}: ${real.repetidas} células com duas peças`
           + `\n      ${real.exemplo.a}\n      ${real.exemplo.b}`
           + `\n      primeiro choque em x=${real.exemplo.cm[0]} y=${real.exemplo.cm[1]} cm`);
       } else if (comFolga.repetidas > 0) {
-        falhas.push(`${nome} · ${motorNome}: a folga entre peças foi comida em`
+        falhas.push(`${nome} · ${motorNome} · ${bloco.trim()}: a folga entre peças foi comida em`
           + ` ${comFolga.repetidas} células (as peças não se sobrepõem, mas encostam)`
           + `\n      ${comFolga.exemplo.a}\n      ${comFolga.exemplo.b}`);
       }
+    }
     }
     }
   }
