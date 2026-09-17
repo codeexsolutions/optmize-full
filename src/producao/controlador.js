@@ -24,7 +24,9 @@ import {
   bancadasDoResultado, cortesEntreBancadas, desenharArte, desenharEncaixe,
 } from "../motores/desenhoDoEncaixe";
 import { DPI_EXPORTACAO, prepararArtes } from "../motores/exportarEncaixe";
-import { chaveDoTrabalho, encaixeApi, posicoesParaGuardar } from "../api/encaixe";
+import {
+  chaveDoTrabalho, encaixeApi, pecasParaGuardar, posicoesParaGuardar, traduzirIndicesDoGuardado,
+} from "../api/encaixe";
 import { coresDePeca } from "../utils/coresDePeca";
 import { carregarImagem } from "../utils/arquivoDeImagem";
 import { criarEscopo } from "./escopo";
@@ -1729,19 +1731,25 @@ async function usarEncaixeGuardado(guardado) {
   const { passo, folgaReal } = grade(larguraTecido, espaco);
 
   // O "índice" de uma posição é a linha da tabela de peças, não um campo da
-  // peça: é assim que a busca numera os itens.
+  // peça: é assim que a busca numera os itens. E linha é posição na lista, que
+  // a chave do trabalho não guarda — então antes de acreditar num índice é
+  // preciso saber de que peça ele falava. Ver `traduzirIndicesDoGuardado`.
+  const paraHoje = traduzirIndicesDoGuardado(guardado.pecas, pecasEncaixe);
+  if (!paraHoje) return null;
+
   for (const peca of pecasEncaixe) {
     if (!peca._cacheMascaras) await mascarasDaPeca(peca, passo, 0);
   }
 
   const posicoes = [];
   for (const p of guardado.posicoes) {
-    const peca = pecasEncaixe[p.indice];
+    const indice = paraHoje[p.indice];
+    const peca = indice == null ? null : pecasEncaixe[indice];
     if (!peca) return null; // a tabela mudou: o guardado não serve mais
     const deitada = p.rot === 90 || p.rot === 270;
     const mascaras = peca._cacheMascaras;
     posicoes.push({
-      item: { ...peca, indice: p.indice, copia: p.copia, mascaras },
+      item: { ...peca, indice, copia: p.copia, mascaras },
       x: p.x,
       y: p.y,
       largura: deitada ? peca.altura : peca.largura,
@@ -2348,7 +2356,10 @@ async function optmizar() {
       chave, assinatura, larguraTecido, espaco, comprimentoBancada,
       consumo: ultimoResultado.consumo,
       aproveitamento,
-      pecas: pecasEncaixe.map((p) => ({ nome: p.nome, qtd: p.qtd })),
+      // A ORDEM importa: as posições são gravadas por índice de linha, e é
+      // esta lista que permite reencontrar a linha certa quando a tabela for
+      // remontada noutra ordem (ver `traduzirIndicesDoGuardado`).
+      pecas: pecasParaGuardar(pecasEncaixe),
       posicoes: posicoesParaGuardar(ultimoResultado),
       receita: ultimoResultado.receita,
     });
@@ -2402,11 +2413,15 @@ async function optmizar() {
           + `estas peças é ${metrosNaTela(guardadoAntes.consumo)} — a tela ficou com o melhor. · `
           + resumoDaBusca;
         encaixeAndamento.classList.remove("hidden");
-      } else {
+      } else if (traduzirIndicesDoGuardado(guardadoAntes.pecas, pecasEncaixe)) {
         // A tabela de peças mudou desde aquele encaixe: não dá para trazê-lo de
         // volta sozinho. Aí a oferta manual continua valendo.
         mostrarOfertaDoGuardado(guardadoAntes, consumoDaBusca);
       }
+      // E quando nem a oferta serve — guardado de uma tabela que não é mais
+      // esta, ou gravado antes de as peças irem para o banco na ordem — a tela
+      // não ganha botão nenhum. Um botão que vai falhar ao ser apertado é pior
+      // que a ausência dele; o resumo da busca já conta que existe um recorde.
     }
 
     finalizarCarregamento(pararBusca ? "interrompido" : "concluido");
