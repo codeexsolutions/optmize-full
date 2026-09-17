@@ -8,7 +8,8 @@ import { moldeParaImagem, ehArquivoDeMolde, FORMATOS_DE_MOLDE, lerMoldeVetorial 
 import { ehArquivoPDF, lerArteDoPDF } from "../motores/pdfParaArte";
 import { COR_SEGURA, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
-import { encaixar, posicoesDasColocacoes, assinaturaDoTrabalho, buscarMelhorEncaixe } from "../motores/encaixeMotor";
+import { encaixar, posicoesDasColocacoes, assinaturaDoTrabalho, buscarMelhorEncaixe,
+  midiaConsumida, aproveitamentoDaMidia, bancadasOcupadas } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
 import { prepararUnidadesNoWasm } from "../motores/encaixeWasm";
 import { grade, gradeDaPeca, tirarFundoDosPixels, silhuetaDeDados, mascarasDeSilhueta } from "../motores/encaixeMascara";
@@ -1753,12 +1754,16 @@ async function usarEncaixeGuardado(guardado) {
     });
   }
 
-  const areaTecido = (larguraTecido * guardado.consumo) / 10000;
   guardarResultado({
     posicoes,
     naoEncaixadas: [],
     consumo: guardado.consumo,
     larguraTecido,
+    // A mesa vem do campo da tela, como a largura e a folga: o encaixe guardado
+    // só é oferecido quando a chave do trabalho bate, e a chave inclui o
+    // comprimento da bancada (ver `chaveDoTrabalho`). Sem isto, um encaixe
+    // retomado do banco calculava a metragem como se não houvesse mesa.
+    comprimentoBancada: Math.max(0, Number(encaixeComprimentoInput.value) || 0),
     totalItens: posicoes.length,
     folgaPedida: espaco,
     folgaReal,
@@ -1777,7 +1782,7 @@ async function usarEncaixeGuardado(guardado) {
 
   renderResultado();
   encaixeAndamento.textContent =
-    `Este é o melhor encaixe já conseguido com estas peças: ${formatarMetros(guardado.consumo)}, `
+    `Este é o melhor encaixe já conseguido com estas peças: ${metrosNaTela(guardado.consumo, posicoes)}, `
     + `de ${new Date(guardado.atualizado_em || guardado.criado_em).toLocaleDateString("pt-BR")}.`;
   encaixeAndamento.classList.remove("hidden");
   esconderOfertaDoGuardado();
@@ -1789,7 +1794,7 @@ function mostrarOfertaDoGuardado(guardado, consumoAgora) {
   const texto = document.createElement("span");
   texto.textContent =
     `O melhor encaixe já conseguido com estas mesmas peças gastou `
-    + `${formatarMetros(guardado.consumo)} — este saiu ${formatarMetros(consumoAgora)}.`;
+    + `${metrosNaTela(guardado.consumo)} — este saiu ${metrosNaTela(consumoAgora)}.`;
   const botao = document.createElement("button");
   botao.type = "button";
   botao.className = "btn secondary btn-sm";
@@ -1970,8 +1975,32 @@ function tempoDeProcuraMs() {
   return Math.min(300, Math.max(1, segundos || 5)) * 1000;
 }
 
+/** O comprimento de mesa que está no campo agora. Zero = rolo sem corte. */
+function bancadaDaTela() {
+  return Math.max(0, Number(encaixeComprimentoInput && encaixeComprimentoInput.value) || 0);
+}
+
+/**
+ * TODA metragem que a tela mostra passa por aqui.
+ *
+ * O motor trabalha com `consumo` — do zero ao pé da silhueta mais baixa —, e
+ * com bancada isso não é o que sai do rolo: a mídia sai em mesas inteiras (ver
+ * "A MÍDIA QUE O TRABALHO CONSOME", em motores/encaixeMotor.js).
+ *
+ * A conversão precisa valer para os números de comparação também — o recorde, o
+ * andamento da busca, o "esta procura deu X". Eles são todos `consumo`, e
+ * mostrar uns em consumo e outros em mídia faria a tela discordar de si mesma:
+ * a faixa diria 6,00 m e o andamento, 4,88 m, no mesmo encaixe.
+ *
+ * `posicoes` é opcional, e quando vem deixa a contagem das mesas exata; sem
+ * ela sobra a divisão, que é boa o bastante para um número de comparação.
+ */
+function metrosNaTela(consumo, posicoes) {
+  return formatarMetros(midiaConsumida(consumo, bancadaDaTela(), posicoes));
+}
+
 function mostrarAndamento(estado, aprendido) {
-  const metros = estado.consumo ? formatarMetros(estado.consumo) : "—";
+  const metros = estado.consumo ? metrosNaTela(estado.consumo) : "—";
   const decorrido = formatarNumero(estado.decorridoMs / 1000, 1);
   const totalMs = tempoDeProcuraMs();
   const total = formatarNumero(totalMs / 1000, 0);
@@ -1983,7 +2012,7 @@ function mostrarAndamento(estado, aprendido) {
   // Quantas vezes a busca empacou e trocou de caminho em vez de desistir.
   if (estado.paredes > 0) partes.push(`${estado.paredes} recomeço(s)`);
   if (estado.fase === "perseguindo" && estado.alvo) {
-    partes.push(`buscando alcançar o recorde de ${formatarMetros(estado.alvo)}`);
+    partes.push(`buscando alcançar o recorde de ${metrosNaTela(estado.alvo)}`);
   } else if (estado.fase === "melhorando") {
     partes.push(`${estado.semGanho} sem ganho`);
   }
@@ -2279,6 +2308,9 @@ async function optmizar() {
     ultimoResultado.areaCaixas = ultimoResultado.posicoes.reduce(
       (soma, pos) => soma + pos.largura * pos.altura, 0);
     ultimoResultado.larguraTecido = larguraTecido;
+    // A mesa acompanha o resultado: é ela que decide se a metragem da tela é a
+    // tira contínua ou mesas inteiras (ver `midiaConsumida`).
+    ultimoResultado.comprimentoBancada = comprimentoBancada;
     ultimoResultado.totalItens = itens.length;
     ultimoResultado.folgaPedida = espaco;
     ultimoResultado.folgaReal = folgaReal;
@@ -2294,9 +2326,14 @@ async function optmizar() {
     renderPecasEncaixe(); // mostra quanto da caixa cada silhueta ocupa
     renderResultado();
 
-    const areaTecido = (larguraTecido * ultimoResultado.consumo) / 10000;
-    const aproveitamento = areaTecido > 0
-      ? (ultimoResultado.areaReal / 10000 / areaTecido) * 100 : 0;
+    // A MESMA conta do painel, e do mesmo lugar: com bancada, mesas inteiras.
+    // Ver "A MÍDIA QUE O TRABALHO CONSOME", em motores/encaixeMotor.js. Este
+    // número vai para o recorde guardado e para a memória, então ele tem que
+    // ser o mesmo que a pessoa leu na tela — senão o histórico conta uma
+    // história e a faixa conta outra.
+    const aproveitamento = aproveitamentoDaMidia(
+      ultimoResultado.areaReal, larguraTecido,
+      midiaConsumida(ultimoResultado.consumo, comprimentoBancada, ultimoResultado.posicoes)) * 100;
 
     // O encaixe inteiro fica guardado quando é o melhor já conseguido com
     // estas peças. Quando não é, a tela volta sozinha para o melhor — ver
@@ -2361,8 +2398,8 @@ async function optmizar() {
       const voltou = await usarEncaixeGuardado(guardadoAntes);
       if (voltou) {
         encaixeAndamento.textContent =
-          `Esta procura deu ${formatarMetros(consumoDaBusca)}, e o melhor já conseguido com `
-          + `estas peças é ${formatarMetros(guardadoAntes.consumo)} — a tela ficou com o melhor. · `
+          `Esta procura deu ${metrosNaTela(consumoDaBusca)}, e o melhor já conseguido com `
+          + `estas peças é ${metrosNaTela(guardadoAntes.consumo)} — a tela ficou com o melhor. · `
           + resumoDaBusca;
         encaixeAndamento.classList.remove("hidden");
       } else {
@@ -2410,7 +2447,7 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado, guardadoAntes) {
   if (recorde > 0) {
     const diferenca = ((recorde - resultado.consumo) / recorde) * 100;
     if (diferenca > 0.05) partes.push(`${formatarPorcento(diferenca)} melhor que o recorde deste trabalho`);
-    else if (diferenca < -0.05) partes.push(`o melhor deste trabalho segue em ${formatarMetros(recorde)}`);
+    else if (diferenca < -0.05) partes.push(`o melhor deste trabalho segue em ${metrosNaTela(recorde)}`);
     else partes.push("empatou com o melhor deste trabalho");
   }
 
@@ -2423,7 +2460,9 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado, guardadoAntes) {
  * outro teria gasto. É o número que decide se vale trocar o modo na mão.
  */
 function comoFoiEncaixado(r) {
-  const metros = formatarMetros;
+  // O placar por motor vem em `consumo`; quem lê a frase está lendo metragem.
+  // Ver `metrosNaTela`.
+  const metros = (consumo) => metrosNaTela(consumo);
   const porMotor = r.melhorPorMotor || {};
   const modo = r.modoDeEncaixe || "auto";
 
@@ -2509,12 +2548,23 @@ function medidasLateraisDoEncaixe(r) {
 
 function renderResultado() {
   const r = ultimoResultado;
-  const areaTecido = (r.larguraTecido * r.consumo) / 10000; // m²
+  /*
+   * A MÍDIA, E NÃO O CONSUMO.
+   *
+   * `consumo` é o que o motor minimiza: do zero ao pé da silhueta mais baixa.
+   * Com bancada isso não é o que sai do rolo — a mídia sai em mesas inteiras, e
+   * o rabo vazio de cada mesa é retalho que já foi pago. Ver "A MÍDIA QUE O
+   * TRABALHO CONSOME", em motores/encaixeMotor.js.
+   *
+   * Sem bancada os dois são o mesmo número, e nada muda.
+   */
+  const midia = midiaConsumida(r.consumo, r.comprimentoBancada, r.posicoes);
+  const areaTecido = (r.larguraTecido * midia) / 10000; // m²
   // A área das peças é sempre a da silhueta — o tecido que de fato vira peça.
   // Medir pela caixa em volta inflaria o número no modo retângulo, porque o
   // vazio ao redor da peça apareceria como aproveitado.
   const areaPecas = r.areaReal / 10000;
-  const aproveitamento = areaTecido > 0 ? (areaPecas / areaTecido) * 100 : 0;
+  const aproveitamento = aproveitamentoDaMidia(r.areaReal, r.larguraTecido, midia) * 100;
   const medidasLaterais = medidasLateraisDoEncaixe(r);
   const bancadas = bancadasDoResultado(r);
   // O mesmo aproveitamento, medido só na faixa em que as peças couberam.
@@ -2524,7 +2574,7 @@ function renderResultado() {
   // entre eles é a tira lateral que ninguém usou — e ela não sai do primeiro,
   // nem deve: é tecido que foi pago. Este NÃO substitui o de cima; separa o
   // que é culpa do encaixe do que é culpa da largura do rolo.
-  const areaFaixaUsada = (medidasLaterais.larguraOcupada * r.consumo) / 10000;
+  const areaFaixaUsada = (medidasLaterais.larguraOcupada * midia) / 10000;
   const aproveitamentoNaFaixa = areaFaixaUsada > 0 ? (areaPecas / areaFaixaUsada) * 100 : 0;
 
   /*
@@ -2537,7 +2587,7 @@ function renderResultado() {
     <div class="stat"><span class="stat-valor">${pecasEncaixe.length}</span><span class="stat-label">Arquivos</span></div>
     <div class="stat"><span class="stat-valor">${r.posicoes.length}</span><span class="stat-label">Peças</span></div>
     <div class="stat"><span class="stat-valor">${r.larguraTecido} cm</span><span class="stat-label">Mídia</span></div>
-    <div class="stat"><span class="stat-valor">${formatarMetros(r.consumo)}</span><span class="stat-label">Metragem</span></div>
+    <div class="stat"><span class="stat-valor">${formatarMetros(midia)}</span><span class="stat-label">Metragem</span></div>
     <div class="stat"><span class="stat-valor">${formatarPorcento(aproveitamento)}</span><span class="stat-label">Aproveitamento</span></div>
   `;
 
@@ -2561,7 +2611,7 @@ function renderResultado() {
     encaixeResumoLateral.classList.remove("hidden");
     encaixeResumoLateral.innerHTML = `
       <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span class="font-mono text-2xl leading-none font-bold text-ambar">${formatarNumero(r.consumo / 100, 2)}</span>
+        <span class="font-mono text-2xl leading-none font-bold text-ambar">${formatarNumero(midia / 100, 2)}</span>
         <span class="text-sm font-semibold text-ambar">m</span>
         <span class="text-[11px] text-tinta-apagada">em ${r.larguraTecido} cm</span>
       </div>
@@ -2583,12 +2633,25 @@ function renderResultado() {
         : ". ")
     : "";
 
-  // O que a bancada acrescenta ao resumo: quantas mesas o trabalho vira, e o
-  // maior corte, que é a medida que precisa caber na mesa.
+  /*
+   * O que a bancada acrescenta ao resumo: quantas mesas o trabalho vira, o
+   * maior corte (a medida que precisa caber na mesa) e — o que faltava — DE
+   * ONDE VEM A METRAGEM.
+   *
+   * Sem esta última frase, pôr bancada fazia o número da faixa subir sem nada
+   * na tela explicando por quê. A explicação é uma subtração: a mídia sai em
+   * mesas inteiras, a arte ocupa parte de cada mesa, e a diferença é retalho de
+   * ponta — que existe porque nenhuma peça pode cruzar a linha entre mesas.
+   */
+  const mesas = bancadasOcupadas(r.posicoes, r.consumo, r.comprimentoBancada);
+  const arteNasMesas = bancadas.reduce((soma, b) => soma + (b.fundo - b.topo), 0);
   const porBancada = bancadas.length > 1
     ? `O rolo sai em ${bancadas.length} bancadas, cortadas em `
       + `${cortesEntreBancadas(bancadas).map((c) => formatarCm(c)).join(", ")} — `
       + `a maior tem ${formatarCm(Math.max(...bancadas.map((b) => b.fundo - b.topo)))}. `
+      + `A metragem conta as mesas inteiras: ${mesas} × ${formatarCm(r.comprimentoBancada)} `
+      + `= ${formatarMetros(midia)}, dos quais ${formatarMetros(arteNasMesas)} têm arte e `
+      + `${formatarMetros(midia - arteNasMesas)} são retalho de ponta. `
     : "";
 
   /*
@@ -2603,7 +2666,7 @@ function renderResultado() {
     `${formatarCm(medidasLaterais.sobraEsquerda)} à esquerda e ` +
     `${formatarCm(medidasLaterais.sobraDireita)} à direita. ` + folga +
     `Aproveitamento = tecido que vira peça (${formatarM2(areaPecas)}) dividido pelo tecido gasto ` +
-    `(${formatarCm(r.larguraTecido)} × ${formatarMetros(r.consumo)} = ${formatarM2(areaTecido)}). ` +
+    `(${formatarCm(r.larguraTecido)} × ${formatarMetros(midia)} = ${formatarM2(areaTecido)}). ` +
     comoFoiEncaixado(r);
 
   if (r.naoEncaixadas.length > 0) {

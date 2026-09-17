@@ -215,7 +215,15 @@ async function buscarComoAProducao(motor, trabalho,
     if (melhor) campeao = resultado;
   }
 
-  const areaTecido = receita.larguraTecido * campeao.consumo;
+  // A mídia que o trabalho consome, que com bancada são mesas inteiras e não a
+  // tira contínua do `consumo` — ver "A MÍDIA QUE O TRABALHO CONSOME", em
+  // src/motores/encaixeMotor.js. Os trabalhos deste catálogo rodam sem bancada,
+  // então hoje isto dá exatamente o `consumo`; vem daqui para que o dia em que
+  // um trabalho com mesa entrar no catálogo a bancada não meça outra conta que
+  // não a da tela.
+  const midia = motor.midiaConsumida(campeao.consumo, receita.comprimentoBancada || 0,
+    campeao.posicoes);
+  const areaTecido = receita.larguraTecido * midia;
   // O encaixe por caixa não devolve `areaReal` — ele nem olha a silhueta. A
   // área real das peças é a mesma seja qual for o encaixador, então ela sai
   // daqui, das próprias peças, e o aproveitamento dos dois vira comparável.
@@ -223,6 +231,7 @@ async function buscarComoAProducao(motor, trabalho,
     (soma, p) => soma + (p.item.mascaras ? p.item.mascaras.areaReal : 0), 0);
   return {
     consumo: campeao.consumo,
+    midia,
     aproveitamento: areaTecido > 0 ? areaReal / areaTecido : 0,
     sobraram: campeao.naoEncaixadas.length,
     receita: campeao.receita,
