@@ -115,9 +115,25 @@ function maiorRetangulo(presa, cols, rows) {
 async function principal() {
   const motor = await carregarMotor({ comWasm: true });
   let quais = PADRAO;
+  /*
+   * Qual encaixe medir. O padrão continua sendo a passada gulosa do contorno
+   * com a peça solta, que é onde o vão preso aparece no estado mais cru.
+   *
+   * Só que o vão preso do encaixe CRU não é o que sobra na produção: quem vence
+   * o pedido grande é o encaixe por vãos, com as peças em dupla, e ele já nasce
+   * enxergando buraco fechado. Medir só o cru responde "quanto havia para
+   * ganhar", e não "quanto ainda há" — que é a pergunta de quem quer melhorar o
+   * motor de hoje.
+   *
+   *   node bancada/vaos.js --trabalhos producao-avulsa --motor vaos --agrupamento 2
+   */
+  let motorNome = "contorno";
+  let agrupamento = 1;
   for (let i = 2; i < process.argv.length; i++) {
     if (process.argv[i] === "--trabalhos") { quais = process.argv[i + 1].split(","); i++; }
     else if (process.argv[i] === "--todos") quais = Object.keys(TRABALHOS);
+    else if (process.argv[i] === "--motor") { motorNome = process.argv[i + 1]; i++; }
+    else if (process.argv[i] === "--agrupamento") { agrupamento = Number(process.argv[i + 1]); i++; }
   }
 
   console.log("trabalho              consumo   preso    aberto   maior vão preso   caberiam");
@@ -130,10 +146,14 @@ async function principal() {
       passo, raio, giro: p.giro || "180", qtd: p.qtd,
     }));
     const itens = expandir(pecas);
-    const r = motor.encaixarContorno(motor.montarUnidades(itens, 1), {
+    const config = {
       larguraTecido: receita.larguraTecido, espaco: receita.espaco,
       comprimentoBancada: receita.comprimentoBancada || 0, passo, heuristica: "fundo",
-    });
+    };
+    const unidades = motor.montarUnidades(itens, agrupamento);
+    const r = motorNome === "vaos"
+      ? motor.encaixarPorVaos(unidades, config)
+      : motor.encaixarContorno(unidades, config);
 
     const cols = Math.ceil(receita.larguraTecido / passo);
     const rows = Math.ceil(r.consumo / passo);
@@ -144,9 +164,13 @@ async function principal() {
     const cm2 = (celulas) => celulas * passo * passo;
     const areaRolo = receita.larguraTecido * r.consumo;
     // Quantos formatos do próprio trabalho caberiam, pela caixa, no maior vão.
-    const caberiam = pecas.filter((p) =>
+    // Por FORMATO, e não por peça: num lote com um arquivo por peça (ver
+    // `producao-avulsa`, em trabalhos.js) isto listava o mesmo nome setenta e
+    // cinco vezes e a linha virava ilegível.
+    const caberiam = [...new Set(pecas.filter((p) =>
       (p.largura <= maior.largura * passo && p.altura <= maior.altura * passo)
-      || (p.altura <= maior.largura * passo && p.largura <= maior.altura * passo)).map((p) => p.nome);
+      || (p.altura <= maior.largura * passo && p.largura <= maior.altura * passo))
+      .map((p) => p.nome))];
 
     console.log(`${nome.padEnd(21)} ${(r.consumo / 100).toFixed(2)} m`
       + ` ${(100 * cm2(preso) / areaRolo).toFixed(1).padStart(6)}%`

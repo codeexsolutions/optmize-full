@@ -241,14 +241,48 @@ static void montar_a_barra(lv_obj_t *pai)
     lv_obj_align(rot_data, LV_ALIGN_RIGHT_MID, -20, 14);
     lv_obj_align(rot_relogio, LV_ALIGN_RIGHT_MID, -20, -8);
 
-    sinal_de_rede = lv_label_create(barra);
-    lv_obj_set_style_text_font(sinal_de_rede, &fonte_22, 0);
-    lv_obj_align(sinal_de_rede, LV_ALIGN_RIGHT_MID, -120, 0);
+    /*
+     * O SIMBOLO E O ENDERECO VAO NUMA LINHA SO, e nao ancorados separadamente.
+     *
+     * Antes cada um se alinhava sozinho pela direita: o simbolo com a borda em
+     * -120, o texto com a borda em -140. O simbolo ocupa justamente de -140 a
+     * -120 -- entao os dois se encostavam em -140, com folga ZERO, e o ultimo
+     * algarismo do IP entrava no desenho do wi-fi.
+     *
+     * Duas ancoras independentes so nao colidem enquanto alguem fizer a conta a
+     * mao, e aqui a conta muda sozinha: o texto e o endereco quando ha rede
+     * ("192.168.0.145") e o MOTIVO quando nao ha ("senha recusada"), que e bem
+     * mais largo. Nenhum numero fixo serve para os dois.
+     *
+     * Numa linha flexivel a folga e uma propriedade, nao uma conta: os dois
+     * ficam lado a lado com 10 de intervalo, o bloco inteiro se alarga para a
+     * esquerda conforme o texto cresce, e nao ha mais o que colidir.
+     */
+    lv_obj_t *bloco_de_rede = lv_obj_create(barra);
+    lv_obj_set_size(bloco_de_rede, LV_SIZE_CONTENT, 44);
+    lv_obj_align(bloco_de_rede, LV_ALIGN_RIGHT_MID, -125, 0);
+    lv_obj_set_style_bg_opa(bloco_de_rede, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(bloco_de_rede, 0, 0);
+    lv_obj_set_style_pad_all(bloco_de_rede, 0, 0);
+    lv_obj_set_style_pad_column(bloco_de_rede, 10, 0);
+    lv_obj_remove_flag(bloco_de_rede, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(bloco_de_rede, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(bloco_de_rede, LV_FLEX_ALIGN_END,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    rot_rede = lv_label_create(barra);
+    rot_rede = lv_label_create(bloco_de_rede);
     lv_obj_set_style_text_font(rot_rede, &fonte_16, 0);
-    lv_obj_align(rot_rede, LV_ALIGN_RIGHT_MID, -140, 0);
+    /*
+     * TETO DE LARGURA, com reticencias. Sem ele, um motivo comprido empurraria
+     * o bloco para a esquerda ate por baixo do titulo do app -- um defeito que
+     * so apareceria no dia ruim, que e o unico dia em que esse texto e longo.
+     */
+    lv_label_set_long_mode(rot_rede, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(rot_rede, 230);
     lv_obj_set_style_text_align(rot_rede, LV_TEXT_ALIGN_RIGHT, 0);
+
+    sinal_de_rede = lv_label_create(bloco_de_rede);
+    lv_obj_set_style_text_font(sinal_de_rede, &fonte_22, 0);
 
     lv_timer_create(a_cada_segundo, 1000, NULL);
     a_cada_segundo(NULL);

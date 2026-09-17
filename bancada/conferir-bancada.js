@@ -35,7 +35,13 @@ const { carregarMotor } = require("./motor");
 const { prepararPeca, expandir } = require("./pecas");
 const { TRABALHOS } = require("./trabalhos");
 
-const MOTORES = ["contorno", "contorno+repesca", "vaos", "retangulo"];
+// "contorno+repesca3" e "vaos+repesca" são os caminhos que a repescagem
+// ganhou depois: várias voltas pelo rabo do rolo, e o encaixe por vãos
+// também repescando no fim (ver `repescarNosVaos`, em encaixeMotor.js).
+// Peça que muda de lugar é peça que pode mudar de bancada, então os dois
+// entram na conferência do corte.
+const MOTORES = ["contorno", "contorno+repesca", "contorno+repesca3", "vaos",
+  "vaos+repesca", "retangulo"];
 const BANCADAS_PADRAO = [150, 200, 300];
 
 /**
@@ -88,10 +94,14 @@ function bancadasDe(posicoes) {
 
 function encaixarCom(motor, motorNome, itens, config) {
   if (motorNome === "retangulo") return motor.encaixar(itens, { ...config, heuristica: "bl" });
-  if (motorNome === "vaos") return motor.encaixarPorVaos(motor.montarUnidades(itens, 1), config);
-  const comRepesca = motorNome === "contorno+repesca";
+  if (motorNome === "vaos" || motorNome === "vaos+repesca") {
+    return motor.encaixarPorVaos(motor.montarUnidades(itens, 1),
+      motorNome === "vaos+repesca" ? { ...config, repescar: true, repescaVoltas: 3 } : config);
+  }
+  const voltas = motorNome === "contorno+repesca3" ? 3
+    : motorNome === "contorno+repesca" ? 1 : 0;
   return motor.encaixarContorno(motor.montarUnidades(itens, 1),
-    comRepesca ? { ...config, repescar: true } : config);
+    voltas > 0 ? { ...config, repescar: true, repescaVoltas: voltas } : config);
 }
 
 function lerArgumentos(argv) {

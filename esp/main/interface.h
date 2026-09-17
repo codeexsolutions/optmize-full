@@ -74,7 +74,6 @@ void par_da_ficha(lv_obj_t *pai, int32_t y, const char *rotulo, const char *valo
  */
 void mira_desenhar(lv_obj_t *moldura, lv_color_t cor, int32_t folga);
 void checklist_linha(lv_obj_t *pai, int32_t y, lv_color_t cor, const char *texto);
-void titulo_de_bloco(lv_obj_t *pai, int32_t y, const char *texto);
 
 /* ------------------------------------------------------------ o sobre */
 
