@@ -38,6 +38,9 @@ const MODULOS = [
   "motores/encaixeGiro.js",
   "motores/encaixeRede.mjs",
   "motores/encaixeWasm.js",
+  // O guarda da sobreposicao: a bancada mede a MESMA conta que a tela usa
+  // para travar a producao, e nao uma copia dela.
+  "motores/encaixeSobreposicao.js",
   "utils/geometria.ts",
 ];
 

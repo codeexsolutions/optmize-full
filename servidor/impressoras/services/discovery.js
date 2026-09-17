@@ -71,25 +71,78 @@ async function readDir(target) {
 
 // -------------------------------------------------------------- alvos da rede
 
+// Quantos bits a máscara tem de 1 à esquerda: 255.255.255.0 -> 24.
+function bitsDaMascara(netmask) {
+  const bits = String(netmask || "").split(".").map(Number)
+    .map(octeto => (Number.isFinite(octeto) ? octeto : 0).toString(2).padStart(8, "0"))
+    .join("");
+  const primeiroZero = bits.indexOf("0");
+  return primeiroZero === -1 ? bits.length : primeiroZero;
+}
+
 // Subredes IPv4 locais, limitadas a /24 para a varredura não explodir em redes
 // grandes (uma /16 daria 65 mil endereços).
-function localTargets() {
-  const targets = [];
+//
+// ---------------------------------------------------------------------------
+// O QUE ESSE LIMITE DEIXA DE FORA, E POR QUE ELE PRECISA DIZER ISSO
+// ---------------------------------------------------------------------------
+//
+// Em rede de cabo o limite não custa nada: a LAN da loja é /24, e os 254
+// endereços varridos SÃO a rede inteira.
+//
+// Em VPN não. O Radmin VPN entrega máscara 255.0.0.0 — um /8, 16 milhões de
+// endereços —, e cada par cai num terceiro octeto diferente. Esta máquina está
+// em 26.220.102.241 e a impressora nova em 26.227.240.190: o mesmo /8, outro
+// /24. Ou seja, **nenhum par de Radmin é alcançável pela varredura
+// automática**, nunca, e não é uma máquina que é especial.
+//
+// Isso não tem conserto por varredura — 16 milhões de sondas de porta não é
+// uma opção, e por isso o limite fica. O que não pode ficar é a varredura
+// terminando com "nada encontrado" e a pessoa concluindo que a impressora não
+// está na rede, quando a verdade é que ninguém olhou. Máquina de VPN entra pelo
+// nome (`scanNetwork({ hosts: ["..."] })`, que é o campo "informar host" da
+// tela), e é isso que o aviso manda fazer.
+function faixasLocais() {
+  const faixas = [];
   const seen = new Set();
   for (const list of Object.values(os.networkInterfaces())) {
     for (const iface of list || []) {
       if (iface.family !== "IPv4" || iface.internal) continue;
-      const parts = iface.address.split(".");
-      const base = parts.slice(0, 3).join(".");
+      const base = iface.address.split(".").slice(0, 3).join(".");
       if (seen.has(base)) continue;
       seen.add(base);
-      for (let host = 1; host <= 254; host++) {
-        const ip = `${base}.${host}`;
-        if (ip !== iface.address) targets.push(ip);
-      }
+      faixas.push({ base, endereco: iface.address, bits: bitsDaMascara(iface.netmask) });
+    }
+  }
+  return faixas;
+}
+
+function localTargets() {
+  const targets = [];
+  for (const faixa of faixasLocais()) {
+    for (let host = 1; host <= 254; host++) {
+      const ip = `${faixa.base}.${host}`;
+      if (ip !== faixa.endereco) targets.push(ip);
     }
   }
   return targets;
+}
+
+/**
+ * As faixas em que a varredura vê só um pedaço — as mais largas que /24.
+ *
+ * Devolve o recado pronto para a tela, porque quem chama é o `scanNetwork` e
+ * ele não tem por que saber fazer conta de máscara.
+ */
+function faixasIncompletas() {
+  return faixasLocais()
+    .filter(faixa => faixa.bits > 0 && faixa.bits < 24)
+    .map(faixa => ({
+      ...faixa,
+      recado: `A rede ${faixa.endereco}/${faixa.bits} é maior que o que dá para varrer:`
+        + ` só os 254 endereços de ${faixa.base}.* foram testados.`
+        + " Máquina fora dessa faixa (o caso do Radmin VPN) precisa do nome informado.",
+    }));
 }
 
 function probePort(ip, port = SMB_PORT, timeout = PORT_TIMEOUT_MS) {
@@ -365,15 +418,35 @@ async function localDrives() {
   return drives;
 }
 
+// Onde software de impressora aparece quando não está no Desktop de alguém.
+// `Program Files` e `ProgramData` são o destino de instalador de verdade; a
+// pasta de trabalho do PrintExp costuma ser Desktop ou Downloads porque ele não
+// tem instalador, mas nada impede que alguém o mova para cá.
+const PASTAS_DE_PROGRAMA = ["Program Files", "Program Files (x86)", "ProgramData"];
+// Dentro da conta de cada pessoa. `Documents` entrou junto de Desktop e
+// Downloads: é o terceiro lugar onde um zip acaba descompactado.
+const PASTAS_DA_CONTA = [["Desktop", "PrinterManager"], ["Desktop"], ["Downloads"], ["Documents"]];
+
 async function localCandidateRoots(drive) {
   const roots = [drive];
-  for (const candidate of ["PrinterManager", "temp"]) {
+  for (const candidate of ["PrinterManager", "temp", ...PASTAS_DE_PROGRAMA]) {
     if (await isDir(sub(drive, candidate))) roots.push(sub(drive, candidate));
+  }
+
+  // Uma pasta abaixo das de programa: o instalador cria `<Program Files>\<nome
+  // do fabricante>\...`, e o detector precisa da pasta do programa, não da do
+  // fabricante.
+  for (const programas of PASTAS_DE_PROGRAMA) {
+    const base = sub(drive, programas);
+    if (!(await isDir(base))) continue;
+    for (const entry of (await readDir(base)).filter(item => item.isDirectory()).slice(0, 60)) {
+      roots.push(sub(base, entry.name));
+    }
   }
 
   const users = await readDir(sub(drive, "Users"));
   for (const entry of users.filter(item => item.isDirectory()).slice(0, 40)) {
-    for (const candidate of [["Desktop", "PrinterManager"], ["Desktop"], ["Downloads"]]) {
+    for (const candidate of PASTAS_DA_CONTA) {
       const dir = sub(drive, "Users", entry.name, ...candidate);
       if (await isDir(dir)) roots.push(dir);
     }
@@ -381,7 +454,96 @@ async function localCandidateRoots(drive) {
   return roots;
 }
 
-async function fingerprintLocal() {
+/*
+ * ===========================================================================
+ * A BUSCA FUNDA — quando a lista de lugares prováveis não dá conta
+ * ===========================================================================
+ *
+ * Tudo acima é lista: lugares onde software de impressora COSTUMA ficar. Ela
+ * acha em milissegundos e é o que roda em toda varredura.
+ *
+ * Só que "costuma" não é "sempre". O PrintExp não tem instalador — ele roda da
+ * pasta onde foi descompactado —, e a pasta onde alguém descompacta um zip não
+ * tem regra: `D:\coisas\teste2\`, `C:\Users\PC\Downloads\novo\PrintExp...`. Com
+ * o sistema rodando em outra loja, noutro computador, a chance de a lista errar
+ * é maior ainda, porque a lista foi escrita olhando as máquinas de UMA
+ * instalação — o mesmo defeito que o `config.js` descreve sobre caminho escrito
+ * à mão.
+ *
+ * Então existe a busca funda: desce os discos de verdade. Ela NÃO roda no
+ * automático, porque percorrer um disco custa segundos a minutos e a varredura
+ * é uma ação que a pessoa espera olhando; ela é o "procurar fundo" de quando o
+ * rápido não achou.
+ *
+ * O que a mantém honesta são três limites:
+ *
+ *   PROFUNDIDADE  software de impressora não mora a dez níveis do disco. Seis
+ *                 cobre `C:\Users\PC\Downloads\zip\PrintExp\PrintExp` com
+ *                 folga, e corta a árvore antes de ela explodir.
+ *   TEMPO         um orçamento, conferido a cada pasta. Disco cheio ou de rede
+ *                 lenta para no prazo em vez de pendurar a tela.
+ *   PULAR         Windows, node_modules, lixeira e afins. São dezenas de
+ *                 milhares de pastas onde nunca houve impressora, e pular isso
+ *                 é o que faz a busca caber no orçamento.
+ */
+const FUNDA_PROFUNDIDADE = 6;
+const FUNDA_TEMPO_MS = Number(process.env.SCAN_DEEP_TIMEOUT_MS || 45000);
+const FUNDA_MAX_PASTAS = Number(process.env.SCAN_DEEP_MAX_DIRS || 20000);
+
+// Pastas que nunca contêm software de impressora e custam caro para percorrer.
+const FUNDA_PULAR = [
+  /^windows$/i, /^\$recycle\.bin$/i, /^system volume information$/i,
+  /^node_modules$/i, /^\.git$/i, /^appdata$/i, /^winsxs$/i,
+  /^perflogs$/i, /^recovery$/i, /^msocache$/i, /^config\.msi$/i,
+];
+
+/**
+ * Desce um disco procurando pasta de impressora, em largura.
+ *
+ * Largura e não profundidade de propósito: o que está perto da raiz aparece
+ * primeiro, e é onde a chance é maior. Se o orçamento acabar no meio, o que
+ * já saiu é o mais provável, em vez de um galho fundo qualquer.
+ */
+async function buscaFunda(raiz, { onProgress = () => {}, aborted = () => false } = {}) {
+  const prazo = Date.now() + FUNDA_TEMPO_MS;
+  const achados = [];
+  let fila = [{ dir: raiz, nivel: 0 }];
+  let visitadas = 0;
+
+  while (fila.length > 0) {
+    const proxima = [];
+    for (const { dir, nivel } of fila) {
+      if (aborted() || Date.now() > prazo || visitadas >= FUNDA_MAX_PASTAS) return achados;
+      visitadas++;
+      if (visitadas % 200 === 0) {
+        onProgress({ visitadas, dir });
+      }
+
+      // Os dois detectores em cada pasta: a funda não sabe o que procura, e
+      // rodar só um deixaria metade das impressoras invisível justamente na
+      // busca que existe para achar o que a lista não achou.
+      const found = await detectAtRoot(null, null, dir, [])
+        || await detectPrintExp(null, null, dir);
+      if (found) {
+        achados.push({ ...found, root: dir });
+        // Não desce mais nesta: o que está dentro de uma pasta de programa são
+        // as pastas DELE (Data, Usage, Log), e nenhuma é outra impressora.
+        continue;
+      }
+
+      if (nivel >= FUNDA_PROFUNDIDADE) continue;
+      for (const entry of await readDir(dir)) {
+        if (!entry.isDirectory()) continue;
+        if (FUNDA_PULAR.some(padrao => padrao.test(entry.name))) continue;
+        proxima.push({ dir: sub(dir, entry.name), nivel: nivel + 1 });
+      }
+    }
+    fila = proxima;
+  }
+  return achados;
+}
+
+async function fingerprintLocal({ funda = false, onProgress = () => {}, aborted = () => false } = {}) {
   const drives = await localDrives();
 
   for (const drive of drives) {
@@ -395,6 +557,22 @@ async function fingerprintLocal() {
     for (const root of await printExpRoots(drive)) {
       const found = await detectPrintExp(null, null, root);
       if (found) return { ...found, root };
+    }
+  }
+
+  // Só agora, e só se pedirem: a lista acima não achou nada, então ou não há
+  // impressora neste computador ou ela está num lugar que a lista não prevê.
+  // Ver "A BUSCA FUNDA".
+  if (funda) {
+    for (const drive of drives) {
+      onProgress({ message: `Procurando fundo em ${drive}...` });
+      const achados = await buscaFunda(drive, {
+        aborted,
+        onProgress: ({ visitadas }) => onProgress({
+          message: `Procurando fundo em ${drive} — ${visitadas} pasta(s) olhada(s)...`,
+        }),
+      });
+      if (achados.length) return achados[0];
     }
   }
   return null;
@@ -432,7 +610,7 @@ function suggestIdentity(host, takenIds) {
 
 // ---------------------------------------------------------------- varredura
 
-async function scanNetwork({ hosts = [], onProgress = () => {}, signal } = {}) {
+async function scanNetwork({ hosts = [], funda = false, onProgress = () => {}, signal } = {}) {
   const aborted = () => signal && signal.aborted;
   let reachable;
 
@@ -442,7 +620,11 @@ async function scanNetwork({ hosts = [], onProgress = () => {}, signal } = {}) {
   let local = null;
   onProgress({ phase: "starting", message: "Procurando neste computador..." });
   try {
-    const print = await fingerprintLocal();
+    const print = await fingerprintLocal({
+      funda,
+      aborted,
+      onProgress: ({ message }) => onProgress({ phase: "starting", message }),
+    });
     if (print) {
       local = {
         host: os.hostname(),
@@ -471,6 +653,16 @@ async function scanNetwork({ hosts = [], onProgress = () => {}, signal } = {}) {
   } else {
     const targets = localTargets();
     onProgress({ phase: "sweep", message: `Varrendo ${targets.length} endereços na rede local...`, scanned: 0, total: targets.length });
+    // Antes de varrer, dizer o que a varredura NÃO vai cobrir. Vem aqui e não
+    // no fim porque no fim a pessoa já leu "nada encontrado" e foi embora; e
+    // só no ramo da varredura, porque quem informou o host não está contando
+    // com a cobertura da rede. Ver `faixasIncompletas`.
+    // Num campo PRÓPRIO, e não no `message`: aquele guarda um recado só, o
+    // último, e é reescrito a cada 25 endereços testados. O aviso de cobertura
+    // apareceria por alguns milissegundos e sumiria — ou seja, não apareceria.
+    for (const faixa of faixasIncompletas()) {
+      onProgress({ phase: "sweep", aviso: faixa.recado, scanned: 0, total: targets.length });
+    }
     let scanned = 0;
     const checked = await mapLimit(targets, PORT_CONCURRENCY, async ip => {
       if (aborted()) return null;
@@ -541,5 +733,9 @@ module.exports = {
   fingerprintHost, fingerprintLocal, TYPE_LABEL,
   // Expostos para conferir a varredura contra uma pasta montada à mão, sem
   // depender de haver uma impressora ligada na rede.
-  detectPrintExp, printExpRoots, localDrives, localCandidateRoots
+  detectPrintExp, printExpRoots, localDrives, localCandidateRoots,
+  // A conta de cobertura da rede, para conferir o aviso sem varrer nada.
+  faixasLocais, faixasIncompletas, bitsDaMascara,
+  // A busca funda, para conferi-la contra uma pasta de teste sem varrer disco.
+  buscaFunda, PASTAS_DE_PROGRAMA, PASTAS_DA_CONTA
 };

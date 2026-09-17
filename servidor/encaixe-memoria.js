@@ -349,19 +349,49 @@ router.get("/guardado", (req, res) => {
   });
 });
 
+/**
+ * A lista de peças gravada diz de que linha da tabela cada posição falava?
+ *
+ * Só quando é uma impressão por peça (ver `pecasParaGuardar`, na tela). O
+ * formato antigo — objetos com nome e quantidade — não serve, e `null` de
+ * quando nem lista havia, muito menos.
+ */
+function podeSerRemontado(pecasEmTexto, posicoesEmTexto, totalEsperado) {
+  if (!pecasEmTexto) return false;
+  try {
+    const lista = JSON.parse(pecasEmTexto);
+    const posicoes = JSON.parse(posicoesEmTexto);
+    return Array.isArray(lista) && lista.length > 0 && lista.every((p) => typeof p === "string")
+      && Array.isArray(posicoes) && (totalEsperado == null || posicoes.length === totalEsperado);
+  } catch (erro) {
+    return false;
+  }
+}
+
 /** Guarda o encaixe — mas só se ele for melhor que o que já estava lá. */
 router.post("/guardado", (req, res) => {
   const { chave, assinatura, larguraTecido, espaco, comprimentoBancada, consumo,
-    aproveitamento, pecas, posicoes, receita } = req.body || {};
+    aproveitamento, pecas, posicoes, receita, totalItens } = req.body || {};
 
   if (!chave || !Array.isArray(posicoes) || posicoes.length === 0 || !(Number(consumo) > 0)) {
     return res.status(400).json({ error: "Faltou a chave, o consumo ou as posições." });
   }
+  if (totalItens != null && (!Number.isInteger(totalItens) || totalItens !== posicoes.length)) {
+    return res.status(400).json({ error: "O recorde precisa conter todas as peças do trabalho." });
+  }
 
-  const antes = db.prepare("SELECT consumo FROM encaixe_guardados WHERE chave = ?").get(chave);
+  const antes = db.prepare("SELECT consumo, pecas, posicoes FROM encaixe_guardados WHERE chave = ?").get(chave);
   // Empate não troca: o encaixe que já estava guardado é o que a produção já
   // pode ter olhado, e trocar por outro igual só confunde.
-  if (antes && antes.consumo <= Number(consumo)) {
+  //
+  // Mas linha que a tela não consegue remontar não segura o lugar de ninguém.
+  // A lista de peças já foi gravada só com nome e quantidade, e com ela não dá
+  // para saber de que linha da tabela cada posição falava — é o que fazia o
+  // encaixe voltar com as peças trocadas, uma por cima da outra. Guardado
+  // assim é um recorde que não pode ser usado: ele cede a vez para o de agora,
+  // mesmo sendo melhor no número, e o próximo já nasce remontável.
+  if (antes && antes.consumo <= Number(consumo)
+    && podeSerRemontado(antes.pecas, antes.posicoes, totalItens)) {
     return res.json({ guardado: false, melhorGuardado: antes.consumo });
   }
 

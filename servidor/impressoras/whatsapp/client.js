@@ -140,7 +140,23 @@ function buildClient(executablePath) {
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-gpu"
+        "--disable-gpu",
+        /*
+         * O bot abre o navegador DA MÁQUINA (ver ./navegador.js), com um
+         * perfil recém-criado em `whatsapp-sessao`. Perfil novo é primeira
+         * execução, e primeira execução de Edge ou Chrome pergunta se ele
+         * deve ser o navegador padrão — em máquina de cliente isso aparece
+         * como uma janela de "escolha seu navegador" que ninguém pediu, no
+         * meio do trabalho, vinda de um programa que nem devia ter navegador.
+         *
+         * O Puppeteer já manda `--no-first-run` e `--disable-default-apps` por
+         * conta dele, mas não manda este: `--no-default-browser-check` é o que
+         * cala essa pergunta. Os dois abaixo vão junto porque a mesma primeira
+         * execução traz a tela de entrar na conta e a de escolher buscador.
+         */
+        "--no-default-browser-check",
+        "--no-first-run",
+        "--disable-sync"
       ]
     }
   });

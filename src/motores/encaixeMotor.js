@@ -199,6 +199,138 @@ export function bancadaEmCentimetros(config, quantasPecas) {
   return { altura: periodo, periodo, maximo: Math.max(1, quantasPecas) };
 }
 
+/*
+ * ===========================================================================
+ * A MÍDIA QUE O TRABALHO CONSOME — e por que ela não é o `consumo`
+ * ===========================================================================
+ *
+ * `consumo` é o que o MOTOR minimiza: do começo do rolo ao pé da silhueta mais
+ * baixa. É a medida certa para comparar dois encaixes, e é a errada para dizer
+ * quanto de mídia o trabalho gasta — porque com bancada o rolo deixa de ser uma
+ * tira contínua.
+ *
+ * Com a trava da bancada, nenhuma peça cruza a linha entre duas mesas, então
+ * **toda bancada termina com um rabo vazio**. Medido no trabalho de referência
+ * (camiseta+manga+gola, 32 peças, rolo de 160, bancada de 200 cm):
+ *
+ *   bancada 0    -1,00 ..  138,50 cm     5 peças
+ *   bancada 1   195,00 ..  388,50 cm    12 peças
+ *   bancada 2   392,00 ..  490,50 cm    15 peças
+ *
+ * O `consumo` daquele encaixe é 4,885 m — do zero ao pé da última silhueta. A
+ * mídia que vira três mesas de 200 cm é 6,00 m. São coisas diferentes, e a tela
+ * mostrava a primeira com o nome da segunda: pôr bancada fazia a metragem subir
+ * de um jeito que não correspondia a nada que se pudesse cortar.
+ *
+ * ---------------------------------------------------------------------------
+ * A REGRA: BANCADA INTEIRA
+ * ---------------------------------------------------------------------------
+ *
+ * A mídia sai em pedaços do tamanho da MESA, um por bancada. O que sobra no fim
+ * de cada pedaço é retalho — não dá para emendar no pedaço seguinte, porque o
+ * pedaço seguinte já nasce com o comprimento da mesa.
+ *
+ * Então: `mídia = quantas bancadas × comprimento da bancada`, e sem bancada
+ * nenhuma a mídia é o `consumo` de sempre.
+ *
+ * Há uma terceira conta possível, e ela foi descartada de propósito: somar só o
+ * que cada página do PDF ocupa (`servidor/encaixe-pdf.js` recorta cada bancada
+ * no que ela usa — 431,5 cm no exemplo acima). Ela responde "quanto de tinta e
+ * de avanço a impressora gastou", que é uma pergunta de impressora. A pergunta
+ * de quem compra tecido é quanta mídia saiu do rolo, e quem responde isso é a
+ * mesa.
+ *
+ * ---------------------------------------------------------------------------
+ * A ÚLTIMA MESA TAMBÉM SAI INTEIRA
+ * ---------------------------------------------------------------------------
+ *
+ * Esta é a parte que estranha à primeira vista, e ela é decisão da produção,
+ * não descuido. Um trabalho que ocupa 98 cm com a mesa em 300 cm conta **3,00 m
+ * de mídia**, e o aproveitamento cai de 63,9% para 20,9%:
+ *
+ *   quase-retangulo, 50 peças, rolo 160    consumo 0,98 m
+ *     mesa 300 cm   mídia 3,00 m   aproveitamento 20,9%
+ *     mesa 200 cm   mídia 2,00 m   aproveitamento 31,3%
+ *     mesa 150 cm   mídia 1,50 m   aproveitamento 41,8%
+ *
+ * A alternativa — cortar a última onde a arte acaba, e só as do meio inteiras —
+ * dá exatamente o `consumo` de volta, porque os cortes do meio já caem nas
+ * linhas das mesas. Ou seja, não é uma terceira regra: é a regra antiga com
+ * outro nome.
+ *
+ * Como aqui toda mesa sai no comprimento cheio, o número passa a dizer uma
+ * coisa que o `consumo` não dizia: **escolher uma mesa grande demais para o
+ * trabalho custa tecido**, e custa na hora, na tela. É para isso que ele serve.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE MORA AQUI
+ * ---------------------------------------------------------------------------
+ *
+ * Esta conta estava escrita QUATRO vezes — no painel da tela, no recorde
+ * guardado, na resposta ao Corel e na bancada de medição — e as quatro ignoravam
+ * a mesa do mesmo jeito. Quatro cópias da mesma regra são quatro chances de ela
+ * divergir; aqui é uma só, e todo mundo importa daqui.
+ */
+
+/**
+ * Quantas bancadas o trabalho ocupa. Sem bancada, zero.
+ *
+ * Conta pelo MAIOR NÚMERO DE BANCADA CARIMBADO nas peças, e não dividindo o
+ * consumo pelo comprimento: o número da bancada viaja com a peça desde que ela
+ * foi posicionada (ver `criarPacker` e `posicoesDasColocacoes`), enquanto a
+ * divisão erra por arredondamento — `1052,7999999999997 / 150,4` dá 6,999… e
+ * carimbaria sete mesas onde há oito. Foi esse mesmo erro que já fez a página
+ * do PDF sair com 230 cm para uma mesa de 150.
+ *
+ * A divisão fica só para quem não tem as peças em mãos — um recorde guardado no
+ * banco, que traz o consumo e o comprimento da mesa e mais nada. A folga de
+ * 1e-9 impede que um `400 / 200` que deu 2,0000000001 vire três mesas.
+ */
+export function bancadasOcupadas(posicoes, consumo, comprimentoBancada) {
+  if (!(comprimentoBancada > 0)) return 0;
+  let maior = -1;
+  if (posicoes) {
+    for (let i = 0; i < posicoes.length; i++) {
+      const numero = Number(posicoes[i].bancada) || 0;
+      if (numero > maior) maior = numero;
+    }
+  }
+  if (maior >= 0) return maior + 1;
+  if (!(consumo > 0)) return 0;
+  return Math.max(1, Math.ceil(consumo / comprimentoBancada - 1e-9));
+}
+
+/**
+ * A mídia que o trabalho consome, em centímetros. É ela que a tela chama de
+ * "Metragem" e é ela que divide o aproveitamento.
+ *
+ * `posicoes` é opcional e serve só para contar as bancadas com exatidão; ver
+ * `bancadasOcupadas`.
+ */
+export function midiaConsumida(consumo, comprimentoBancada, posicoes) {
+  if (!(consumo > 0)) return 0;
+  if (!(comprimentoBancada > 0)) return consumo;
+  return bancadasOcupadas(posicoes, consumo, comprimentoBancada) * comprimentoBancada;
+}
+
+/**
+ * Quanto da mídia virou peça.
+ *
+ * O de cima é a área das SILHUETAS — o tecido que de fato vira peça cortada.
+ * Medir pela caixa da arte inflaria o número em 40% no trabalho de referência,
+ * porque o fundo vazio em volta do desenho apareceria como aproveitado; e no
+ * modo retângulo inflaria mais ainda, já que ali a caixa É a peça.
+ *
+ * O de baixo é a mídia inteira, incluindo a tira lateral que ninguém usou. Ela
+ * não sai da conta, nem deve: é tecido que foi pago. Quem separa "culpa do
+ * encaixe" de "culpa da largura do rolo" é o segundo número da tela, o
+ * aproveitamento na faixa usada.
+ */
+export function aproveitamentoDaMidia(areaReal, larguraTecido, midia) {
+  const areaDaMidia = larguraTecido * midia;
+  return areaDaMidia > 0 ? areaReal / areaDaMidia : 0;
+}
+
 /**
  * Onde a peça pousa de verdade, respeitando a linha da bancada.
  *
@@ -635,8 +767,7 @@ export function formaDePartes(partes) {
 
 /**
  * Encosta mais uma peça num bloco: desliza a peça pela largura do bloco e, em
- * cada posição, deixa ela descer até tocar. Fica com o deslocamento que fizer
- * o bloco ocupar o menor retângulo.
+ * cada posição, procura a altura que fizer o bloco ocupar o menor retângulo.
  *
  * É o truque clássico do marcador de confecção: uma manga com outra manga
  * invertida fecham quase um retângulo, e aí o bloco ladrilha o tecido sem
@@ -645,8 +776,38 @@ export function formaDePartes(partes) {
  * O bloco entra aqui como uma forma qualquer — e forma de bloco se resume em
  * topo/base por coluna do mesmo jeito que a de uma peça. É isso que deixa a
  * mesma conta servir para a segunda peça, a terceira e a quarta.
+ *
+ * ---------------------------------------------------------------------------
+ * DUAS ALTURAS, E NÃO UMA
+ * ---------------------------------------------------------------------------
+ *
+ * Por muito tempo isto só sabia DESCER: em cada `dx`, a peça caía até ficar
+ * abaixo de tudo o que o bloco tinha nas colunas partilhadas. É o mesmo modelo
+ * de relevo do `encaixarContorno` — e tem o mesmo buraco que ele: o vão que
+ * fica ACIMA do material do bloco não existe no mapa.
+ *
+ * Só que aqui o buraco custa mais caro. No rolo, o vão perdido é recuperado
+ * pelo encaixe por vãos e pela repescagem; num BLOCO ele vira parte da caixa da
+ * unidade e viaja com ela por toda a busca. Um punho que caberia no gancho da
+ * calça era jogado abaixo da calça inteira, e a unidade nascia 8% mais alta do
+ * que precisava — em toda tentativa, em toda receita.
+ *
+ * Agora, em cada `dx`, o que se procura é o CONJUNTO das alturas onde a peça
+ * não bate em nada. Coluna a coluna, o `dy` proibido é um intervalo só (é onde
+ * as duas se sobrepõem); o que sobra depois de marcar todas é vaga — inclusive
+ * a que está no meio de um vão fechado por cima, que é justamente a que o
+ * modelo de relevo nunca enxergou.
+ *
+ * O pouso de sempre é medido PRIMEIRO, e o desempate é por "estritamente
+ * melhor". Ou seja: onde não houver vão que sirva, sai exatamente o bloco que
+ * saía antes; onde houver, sai um menor. Nunca um pior.
+ *
+ * `procurarVaos` desliga o crivo. Ele custa uma varredura da altura por `dx`
+ * (contra uma da largura), e `montarUnidadesCruzadas` o desliga quando há
+ * formato demais — ali o número de pares cresce com o quadrado e o preparo
+ * inteiro comeria o orçamento da busca.
  */
-export function encostarNaForma(bloco, movel) {
+export function encostarNaForma(bloco, movel, procurarVaos = true) {
   // A área de cada posição candidata é só a extensão da caixa combinada —
   // dá para medir isso sem montar o bloco de verdade, que é o caro (percorre
   // as partes todas e aloca duas grades novas). `formaDePartes` só é chamado
@@ -660,21 +821,69 @@ export function encostarNaForma(bloco, movel) {
   // e foi medindo isso que este trecho foi reescrito.
   let melhorDx = null, melhorDy = 0, melhorArea = Infinity, melhorRows = Infinity;
 
-  for (let dx = -(movel.mascara.cols - 1); dx <= bloco.cols - 1; dx++) {
-    let dy = 0;
-    for (let c = 0; c < movel.mascara.cols; c++) {
-      if (movel.mascara.topo[c] < 0) continue;
+  const mCols = movel.mascara.cols;
+  const mRows = movel.mascara.rows;
+  const mTopo = movel.mascara.topo;
+  const mBase = movel.mascara.base;
+
+  // O crivo de alturas, reaproveitado entre os `dx`: alocar um por posição
+  // testada seria mais lixo para o coletor do que conta de encaixe.
+  //
+  // O índice 0 vale `dy = -mRows` (peça inteira acima do bloco) e o último vale
+  // `dy = bloco.rows` (peça inteira abaixo dele). Fora dessa faixa não há o que
+  // procurar: os dois extremos já são o empilhamento simples.
+  const dyMin = -mRows;
+  const faixa = mRows + bloco.rows + 1;
+  const crivo = procurarVaos ? new Int32Array(faixa + 1) : null;
+
+  for (let dx = -(mCols - 1); dx <= bloco.cols - 1; dx++) {
+    const cols = Math.max(bloco.cols - 1, dx + mCols - 1) - Math.min(0, dx) + 1;
+    const anotar = (dy) => {
+      const rows = Math.max(bloco.rows - 1, dy + mRows - 1) - Math.min(0, dy) + 1;
+      const area = cols * rows;
+      if (melhorDx === null || area < melhorArea || (area === melhorArea && rows < melhorRows)) {
+        melhorDx = dx; melhorDy = dy; melhorArea = area; melhorRows = rows;
+      }
+    };
+
+    // 1) O pouso de sempre: abaixo de tudo o que o bloco tem nestas colunas.
+    let dyBaixo = 0;
+    let partilhadas = 0;
+    for (let c = 0; c < mCols; c++) {
+      if (mTopo[c] < 0) continue;
       const coluna = c + dx;
       if (coluna < 0 || coluna >= bloco.cols || bloco.topo[coluna] < 0) continue;
-      const precisa = bloco.base[coluna] + 1 - movel.mascara.topo[c];
-      if (precisa > dy) dy = precisa;
+      partilhadas++;
+      const precisa = bloco.base[coluna] + 1 - mTopo[c];
+      if (precisa > dyBaixo) dyBaixo = precisa;
+    }
+    anotar(dyBaixo);
+
+    // Sem coluna em comum, toda altura é livre e a menor caixa é a do topo —
+    // que `dyBaixo` já é (ele fica em zero). Não há crivo que ache melhor.
+    if (!procurarVaos || partilhadas === 0) continue;
+
+    // 2) As alturas que o pouso não enxerga. Marca o intervalo proibido de cada
+    //    coluna partilhada; onde a soma zera, a peça cabe.
+    crivo.fill(0);
+    for (let c = 0; c < mCols; c++) {
+      if (mTopo[c] < 0) continue;
+      const coluna = c + dx;
+      if (coluna < 0 || coluna >= bloco.cols || bloco.topo[coluna] < 0) continue;
+      // Sobrepõem-se enquanto o topo de uma fica acima da base da outra.
+      const hi = bloco.base[coluna] - mTopo[c];
+      if (hi < dyMin) continue;
+      let lo = bloco.topo[coluna] - mBase[c];
+      if (lo < dyMin) lo = dyMin;
+      crivo[lo - dyMin]++;
+      crivo[hi - dyMin + 1]--;
     }
 
-    const cols = Math.max(bloco.cols - 1, dx + movel.mascara.cols - 1) - Math.min(0, dx) + 1;
-    const rows = Math.max(bloco.rows - 1, dy + movel.mascara.rows - 1) - Math.min(0, dy) + 1;
-    const area = cols * rows;
-    if (melhorDx === null || area < melhorArea || (area === melhorArea && rows < melhorRows)) {
-      melhorDx = dx; melhorDy = dy; melhorArea = area; melhorRows = rows;
+    let soma = 0;
+    const ate = dyBaixo - dyMin; // acima disso não há o que ganhar
+    for (let i = 0; i < ate; i++) {
+      soma += crivo[i];
+      if (soma === 0) anotar(i + dyMin);
     }
   }
 
@@ -683,10 +892,184 @@ export function encostarNaForma(bloco, movel) {
   return { area: forma.cols * forma.rows, forma };
 }
 
+/*
+ * ===========================================================================
+ * A ROTAÇÃO QUE O MOTOR NÃO TEM COMO DISTINGUIR
+ * ===========================================================================
+ *
+ * `rotacoesDe` responde o que a PRODUÇÃO permite: a peça de malha entra de
+ * cabeça para baixo, a peça livre também deita. É uma permissão, e a lista
+ * dela não olha o desenho.
+ *
+ * Só que o encaixe olha, e olha pouco: ele trabalha **só com cols/rows/topo/
+ * base** (está dito no `prepararMascara`, que monta as máscaras; `desenho` é da
+ * tela, para traçar o contorno no resultado). Então duas rotações com esses
+ * quatro campos iguais assentam no mesmo lugar, deixam o mesmo vão e medem o
+ * mesmo consumo — o motor não tem por onde diferenciá-las.
+ *
+ * Peça centralmente simétrica é o caso: girar 180° devolve ela mesma. Medido
+ * nas peças da bancada, com a grade do rolo de 160 e folga de 4 mm:
+ *
+ *   punho      giro "180"   1 de 2 rotações distintas   (180 = 0)
+ *   uni-gola   giro "180"   1 de 2
+ *   punho      giro "livre" 2 de 4                      (180 = 0, 270 = 90)
+ *   uni-gola   giro "livre" 2 de 4
+ *
+ * E a rotação repetida não é de graça: **cada forma custa uma varredura do
+ * rolo por tentativa**. Contando as formas da receita "solta" — o custo por
+ * tentativa —, o que se varria duas vezes pelo mesmo resultado:
+ *
+ *   tiras               144 -> 96 formas   -33,3%
+ *   tamanhos-extremos    96 -> 66          -31,3%
+ *   quase-retangulo     100 -> 70          -30,0%
+ *   pedido-miudeza      164 -> 124         -24,4%
+ *   misturado-pequeno    50 -> 44          -12,0%
+ *   producao-misturada  552 -> 492         -10,9%
+ *   lote-grande         260 -> 238          -8,5%
+ *   ... e mais quatro entre -7% e -8%
+ *
+ * Em oito dos dezenove trabalhos não há sobra nenhuma (camiseta, manga, gola e
+ * calça têm concavidade, e girá-las muda tudo): ali isto não faz nada, nem
+ * para melhor nem para pior. Na conferência inteira — todos os trabalhos, os
+ * três tamanhos de agrupamento — são 6.910 formas contra 7.948: **13,1% menos
+ * varredura de rolo por tentativa**.
+ *
+ * ---------------------------------------------------------------------------
+ * O QUE ISSO RENDEU, MEDIDO: VELOCIDADE SIM, TECIDO NÃO
+ * ---------------------------------------------------------------------------
+ *
+ * 8 trabalhos, 5 fatias × 3 s, pareado por semente, máquina livre, contra o
+ * mesmo motor com `--extra rotacoesDistintas=false`:
+ *
+ *   tentativas por segundo    5 sementes        10 sementes
+ *     tiras                   556 ->  733 +32%   593 ->  684 +15%
+ *     tamanhos-extremos      1171 -> 1540 +32%  1217 -> 1399 +15%
+ *     quase-retangulo        1394 -> 1771 +27%  1418 -> 1736 +22%
+ *     pedido-miudeza           95 ->  134 +41%   102 ->  133 +30%
+ *     misturado-pequeno      1840 -> 2121 +15%  1910 -> 2129 +11%
+ *     calca-bolso                    (igual)    3152 -> 3469 +10%
+ *
+ *   consumo                 28,750 contra 28,775 m   -0,09%  (5 sementes)
+ *                           28,747 contra 28,752 m   -0,02%  (10 sementes)
+ *   pareado, 10 sementes    média -0,005 m · erro padrão 0,008 m
+ *   VEREDITO DO TECIDO      empate — 0,7x o erro padrão, e mais sementes
+ *                           APERTARAM o empate em vez de abrir sinal.
+ *
+ * A aceleração é o resultado, e ela bateu com a contagem de formas trabalho
+ * por trabalho. O tecido não mudou, e é isso que era esperado: a conferência
+ * (`bancada/conferir-rotacoes.js`) prova que cada tentativa dá o encaixe
+ * IDÊNTICO, então o que sobra é chegar antes no mesmo lugar.
+ *
+ * ---------------------------------------------------------------------------
+ * E ISSO DIZ UMA COISA SOBRE O PLATÔ
+ * ---------------------------------------------------------------------------
+ *
+ * A varredura concluiu que o motor está num platô e que mais botões só dariam
+ * mais zeros (ver `bancada/varredura.js`). Ficava em aberto se o platô era de
+ * ORÇAMENTO — a busca com fome de tentativas — ou de SATURAÇÃO, com a busca já
+ * achando tudo que aquele espaço tem.
+ *
+ * Isto responde: 10% a 30% mais tentativas por segundo rendeu 0,00% de tecido.
+ * O platô é de saturação. Otimizar a busca para ela ser mais rápida não é o
+ * caminho para gastar menos tecido — o caminho continua sendo a geometria do
+ * pedido, que é onde a varredura achou vários por cento.
+ *
+ * O corte fica porque o que ele entrega é TEMPO: o mesmo encaixe, achado mais
+ * cedo, na tela de quem está esperando. Não porque renda metro.
+ *
+ * NO BLOCO A SOBRA ERA DOBRADA. `formasDoBloco` monta um arranjo começando em
+ * cada giro e devolve os dois melhores. Com o punho, os dois começos davam o
+ * MESMO bloco — máscaras iguais, encosto igual —, e as duas formas idênticas
+ * iam para a busca. O rolo era varrido duas vezes pelo mesmo desenho, em toda
+ * tentativa de toda receita de bloco.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE ISTO NÃO É MAIS UM BOTÃO DO MOTOR
+ * ---------------------------------------------------------------------------
+ *
+ * A varredura (`bancada/varredura.js`) deu 0,00% em doze ajustes de busca, e
+ * concluiu que o motor está num platô. Todos os doze TROCAM o que a busca faz:
+ * mais poda, menos reparo, outro lote. Este não troca nada — o conjunto de
+ * encaixes alcançáveis é exatamente o mesmo, porque a rotação que sai é
+ * indistinguível da que fica. O que muda é caberem mais tentativas no mesmo
+ * orçamento de tempo.
+ *
+ * Qual rotação fica: a PRIMEIRA da lista de permissão, que é sempre 0°. A peça
+ * repetida simplesmente não aparece de cabeça para baixo — e como a produção
+ * autorizou os dois sentidos, sair no de cima está dentro do que ela pediu.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE O INTERRUPTOR É DO MÓDULO
+ * ---------------------------------------------------------------------------
+ *
+ * Mesmo motivo do `agruparPorArquivo` logo abaixo: quem pergunta "que rotações
+ * esta peça tem?" não é só a busca — são `formasDaPeca`, `formasDoBloco` e
+ * `formasDoBlocoMisto`, chamados de lugares diferentes do preparo. Passar o
+ * ajuste por parâmetro obrigaria a atravessá-lo por toda a cadeia para servir
+ * a um botão de medição, e o valor só muda no começo de uma busca.
+ */
+export let rotacoesDistintas = true;
+export function definirRotacoesDistintas(ligado) {
+  rotacoesDistintas = ligado !== false;
+}
+
+/**
+ * As duas máscaras assentam no mesmo lugar?
+ *
+ * Compara o que o ENCAIXE usa, e nada mais. `offX`/`offY` ficam de fora de
+ * propósito: eles dizem onde a arte entra dentro da moldura, e mudam entre 0°
+ * e 180° sem mudar uma célula do assentamento.
+ */
+function mesmaPegada(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.cols !== b.cols || a.rows !== b.rows) return false;
+  for (let c = 0; c < a.cols; c++) {
+    if (a.topo[c] !== b.topo[c] || a.base[c] !== b.base[c]) return false;
+  }
+  return true;
+}
+
+/**
+ * As rotações que vale a pena TENTAR: as permitidas, menos as que assentam
+ * igual a uma que já entrou.
+ *
+ * Fica guardado na máscara, como o `_chaveDaSilhueta`: a conta é uma varredura
+ * da largura por rotação, e as cópias de uma peça dividem o mesmo objeto de
+ * máscaras. Guardado por giro, porque duas peças da mesma arte podem chegar
+ * com permissões diferentes.
+ */
+export function rotacoesUteis(item) {
+  const permitidas = rotacoesDe(item);
+  if (!rotacoesDistintas || permitidas.length < 2) return permitidas;
+  const mascaras = item.mascaras;
+  if (!mascaras || !mascaras.rotacoes) return permitidas;
+
+  const giro = item.giro || "180";
+  if (!mascaras._rotacoesUteis) mascaras._rotacoesUteis = {};
+  const guardado = mascaras._rotacoesUteis[giro];
+  if (guardado) return guardado;
+
+  const uteis = [];
+  const vistas = [];
+  for (let i = 0; i < permitidas.length; i++) {
+    const rot = permitidas[i];
+    const m = mascaras.rotacoes[rot];
+    // Rotação sem máscara segue na lista: quem consome já testa `if (mascara)`,
+    // e tirá-la aqui esconderia um preparo incompleto em vez de mostrá-lo.
+    if (!m) { uteis.push(rot); continue; }
+    if (vistas.some((v) => mesmaPegada(v, m))) continue;
+    vistas.push(m);
+    uteis.push(rot);
+  }
+  mascaras._rotacoesUteis[giro] = uteis;
+  return uteis;
+}
+
 /** As formas de uma peça sozinha: uma por rotação que ela aceita. */
 export function formasDaPeca(item) {
   const formas = [];
-  rotacoesDe(item).forEach((rot) => {
+  rotacoesUteis(item).forEach((rot) => {
     const mascara = item.mascaras.rotacoes[rot];
     if (mascara) formas.push(formaDePartes([{ item, mascara, rot, dcol: 0, drow: 0 }]));
   });
@@ -712,20 +1095,45 @@ export function formasDaPeca(item) {
  * aperta nada é uma unidade grande e sem graça, mais difícil de posicionar que
  * as peças soltas.
  */
-export function formasDoBloco(copias, tamanho) {
+/*
+ * O BLOCO PODE NASCER EM QUALQUER GIRO QUE A PEÇA ACEITE.
+ *
+ * Isto só conhecia 0° e 180°, e para a peça de malha (`giro: "180"`) isso é
+ * tudo o que existe. Só que a peça "livre" aceita quatro posições, e as duas
+ * deitadas ficavam de fora do bloco — a camiseta em pé com a camiseta deitada
+ * ao lado nunca era sequer medida, embora a busca as aceitasse SOLTAS nessas
+ * mesmas posições.
+ *
+ * Fica com os DOIS melhores arranjos, como sempre foram dois. O bloco entra na
+ * busca como uma unidade com várias formas, e cada forma custa uma varredura do
+ * rolo por tentativa: guardar quatro dobraria o preço de toda tentativa de toda
+ * receita de bloco, para oferecer dois arranjos que já perderam em área.
+ *
+ * O corte mantém a ordem original entre os dois escolhidos. Empate de posição
+ * no encaixe fica com a primeira forma da lista, então mexer na ordem mexeria
+ * no resultado de trabalhos onde nada mais mudou.
+ */
+export function formasDoBloco(copias, tamanho, procurarVaos = true, giroCheio = true) {
   const mascaras = copias[0].mascaras;
   const m0 = mascaras.rotacoes[0];
-  const m180 = mascaras.rotacoes[180];
-  if (!m0 || !m180) return null;
+  if (!m0) return null;
+  // Os começos que dão blocos diferentes. Com a peça centralmente simétrica os
+  // dois começos de sempre davam o MESMO bloco, e as duas formas idênticas iam
+  // as duas para a busca — ver "A ROTAÇÃO QUE O MOTOR NÃO TEM COMO DISTINGUIR".
+  const girosUteis = rotacoesUteis(copias[0]);
+  const giros = (giroCheio ? girosUteis : girosUteis.filter((rot) => rot === 0 || rot === 180))
+    .filter((rot) => mascaras.rotacoes[rot]);
+  if (giros.length === 0) return null;
 
   const montar = (rotInicial) => {
-    const primeira = rotInicial === 0 ? m0 : m180;
-    let bloco = formaDePartes([{ item: copias[0], mascara: primeira, rot: rotInicial, dcol: 0, drow: 0 }]);
+    let bloco = formaDePartes([{
+      item: copias[0], mascara: mascaras.rotacoes[rotInicial], rot: rotInicial, dcol: 0, drow: 0,
+    }]);
     for (let k = 1; k < tamanho; k++) {
       let passo = null;
-      [0, 180].forEach((rot) => {
-        const m = rot === 0 ? m0 : m180;
-        const r = encostarNaForma(bloco, { item: copias[k], mascara: m, rot });
+      giros.forEach((rot) => {
+        const r = encostarNaForma(bloco,
+          { item: copias[k], mascara: mascaras.rotacoes[rot], rot }, procurarVaos);
         if (r && (!passo || r.area < passo.area)) passo = r;
       });
       if (!passo) return null;
@@ -734,11 +1142,15 @@ export function formasDoBloco(copias, tamanho) {
     return { area: bloco.cols * bloco.rows, forma: bloco };
   };
 
-  const arranjos = [montar(0), montar(180)].filter(Boolean);
+  const arranjos = giros.map(montar).filter(Boolean);
   if (arranjos.length === 0) return null;
 
   const solta = m0.cols * m0.rows * tamanho;
-  const uteis = arranjos.filter((a) => a.area < solta * 0.98).map((a) => a.forma);
+  // Os dois menores, na ordem em que nasceram.
+  const podio = arranjos.slice().sort((x, y) => x.area - y.area).slice(0, 2);
+  const uteis = arranjos
+    .filter((a) => podio.includes(a) && a.area < solta * 0.98)
+    .map((a) => a.forma);
   return uteis.length > 0 ? uteis : null;
 }
 
@@ -764,19 +1176,22 @@ export function areaDaPeca(item) {
  * escolhe qual delas rende mais, encostada no resto do tecido, é a busca de
  * posição de sempre — igual já acontece com os dois começos da dupla.
  */
-export function formasDoBlocoMisto(a, b) {
+export function formasDoBlocoMisto(a, b, procurarVaos = true) {
   const arranjos = [];
 
   const tentar = (base, movel) => {
-    rotacoesDe(base).forEach((rotBase) => {
+    // Rotação repetida sai dos DOIS lados: aqui o número de casamentos medidos
+    // é o produto das duas listas, então cortar uma corta o par inteiro.
+    rotacoesUteis(base).forEach((rotBase) => {
       const mascaraBase = base.mascaras.rotacoes[rotBase];
       if (!mascaraBase) return;
       const bloco = formaDePartes([{ item: base, mascara: mascaraBase, rot: rotBase, dcol: 0, drow: 0 }]);
       let melhor = null;
-      rotacoesDe(movel).forEach((rotMovel) => {
+      rotacoesUteis(movel).forEach((rotMovel) => {
         const mascaraMovel = movel.mascaras.rotacoes[rotMovel];
         if (!mascaraMovel) return;
-        const r = encostarNaForma(bloco, { item: movel, mascara: mascaraMovel, rot: rotMovel });
+        const r = encostarNaForma(bloco, { item: movel, mascara: mascaraMovel, rot: rotMovel },
+          procurarVaos);
         if (r && (!melhor || r.area < melhor.area)) melhor = r;
       });
       if (melhor) arranjos.push(melhor);
@@ -803,6 +1218,22 @@ export function formasDoBlocoMisto(a, b) {
 // já são 1770 pares conferidos antes da primeira tentativa de posição.
 export const CRUZADA_MAX_FORMATOS = 60;
 
+/*
+ * Até aqui o casamento entre formatos procura vão (ver `encostarNaForma`);
+ * acima, só o pouso por cima.
+ *
+ * O crivo de alturas custa uma varredura por `dx` — barato para um punhado de
+ * formatos, e o número de pares cresce com o quadrado deles. Com 16 formatos
+ * são 120 pares; com 60, 1770, e aí o PREPARO passaria a comer o orçamento da
+ * busca, que é exatamente o erro que este arquivo já cometeu uma vez (ver o
+ * cabeçalho de `encostarNaForma`).
+ *
+ * O trabalho grande não perde nada de essencial: com formato demais, o ganho de
+ * casar dois deles é justamente o que menos importa, porque sobra variedade
+ * para a busca aproveitar de outro jeito.
+ */
+export const CRUZADA_VAOS_MAX_FORMATOS = 16;
+
 /**
  * Monta unidades juntando peças de formatos DIFERENTES quando compensa — o
  * mesmo espírito da dupla/trio, mas para a peça pequena entrar no vão da
@@ -817,7 +1248,7 @@ export const CRUZADA_MAX_FORMATOS = 60;
  * hoje; esta receita nunca deixa uma peça pior do que ela já ficaria na
  * receita "solta" que compete ao lado dela.
  */
-export function montarUnidadesCruzadas(itens) {
+export function montarUnidadesCruzadas(itens, procurarVaosPedido = false) {
   // Por silhueta: com um arquivo por peça, contar formatos pelo índice dava
   // 155 onde há 4, e o teto lá embaixo desligava a cruzada justamente no
   // trabalho grande (ver `chaveDaSilhueta`).
@@ -830,12 +1261,16 @@ export function montarUnidadesCruzadas(itens) {
   // busca repetindo o que a "solta" já cobre.
   if (indices.length > CRUZADA_MAX_FORMATOS) return null;
 
+  // Ver `CRUZADA_VAOS_MAX_FORMATOS`: com poucos formatos vale procurar o vão
+  // de uma peça na outra; com muitos, o preparo passa a custar mais do que rende.
+  const procurarVaos = procurarVaosPedido && indices.length <= CRUZADA_VAOS_MAX_FORMATOS;
+
   const candidatos = [];
   for (let i = 0; i < indices.length; i++) {
     for (let j = i + 1; j < indices.length; j++) {
       const a = porPeca.get(indices[i])[0];
       const b = porPeca.get(indices[j])[0];
-      const resultado = formasDoBlocoMisto(a, b);
+      const resultado = formasDoBlocoMisto(a, b, procurarVaos);
       if (resultado) {
         candidatos.push({
           ia: indices[i], ib: indices[j], formas: resultado.formas,
@@ -1020,7 +1455,8 @@ export function agruparPorSilhueta(itens) {
   return baldes;
 }
 
-export function montarUnidades(itens, tamanho) {
+export function montarUnidades(itens, tamanho,
+  { procurarVaos = false, giroCheio = false } = {}) {
   const unidades = [];
   if (!(tamanho > 1)) {
     itens.forEach((item) => unidades.push({ itens: [item], formas: formasDaPeca(item) }));
@@ -1031,8 +1467,19 @@ export function montarUnidades(itens, tamanho) {
   const porPeca = agruparPorSilhueta(itens);
 
   porPeca.forEach(({ itens: copias }) => {
-    const formasBloco = copias.length >= tamanho && rotacoesDe(copias[0]).includes(180)
-      ? formasDoBloco(copias, tamanho)
+    // Com o giro cheio, até a peça FIXA forma bloco: duas cópias na mesma
+    // posição podem se encaixar por translação — a cabeça de uma entrando no
+    // vão que a outra deixa ao lado. O corte de 2% em `formasDoBloco` continua
+    // sendo quem decide se aquilo aperta alguma coisa.
+    // `rotacoesDe`, e NÃO `rotacoesUteis`: aqui a pergunta é de permissão —
+    // "a produção deixa esta peça virar?" —, e não de geometria. O punho deixa,
+    // e o bloco dele é bom, mesmo que virá-lo não mude o assentamento: duas
+    // cópias no mesmo sentido já se encaixam por translação. Trocar por
+    // `rotacoesUteis` fecharia a porta do bloco justamente para a peça
+    // simétrica, que é quem mais o aproveita.
+    const podeBloco = giroCheio || rotacoesDe(copias[0]).includes(180);
+    const formasBloco = copias.length >= tamanho && podeBloco
+      ? formasDoBloco(copias, tamanho, procurarVaos, giroCheio)
       : null;
 
     let i = 0;
@@ -1364,6 +1811,83 @@ export function intervalosDoRolo(colocacoes, colsTecido) {
   return colunas;
 }
 
+/*
+ * ===========================================================================
+ * O TECIDO VISTO PELOS VÃOS
+ * ===========================================================================
+ *
+ * O mesmo mapa de intervalos de `intervalosDoRolo`, mais os três resumos que
+ * tornam a busca barata. Eles não dizem nada que a lista já não diga; dizem
+ * numa leitura só:
+ *
+ *   perfil     até onde a coluna foi usada — o relevo do encaixe por contorno
+ *   topoLivre  a primeira linha livre; nem a descida pelos vãos sobe disso
+ *   maiorVao   o maior buraco FECHADO da coluna
+ *
+ * Quem precisa dos três é o `encaixarPorVaos`, e era ele mesmo quem os montava,
+ * à mão, coluna por coluna, no meio do laço que assenta as peças. Aqui eles
+ * ficam separados do encaixe — a criação, a atualização de uma coluna e o
+ * assentamento de uma colocação, cada um com um nome.
+ *
+ * Não muda conta nenhuma: é o mesmo cálculo, no mesmo lugar do laço. O que
+ * muda é que agora dá para ler o encaixe sem ler junto a contabilidade dele.
+ *
+ * A REPESCAGEM NÃO USA ISTO. Ela tem o mapa dela (`intervalosDoRolo` acima, sem
+ * resumo), porque desce do zero e não acompanha um encaixe em andamento.
+ */
+
+/** Um tecido de vãos vazio, com os resumos zerados. */
+export function criarTecidoDeVaos(colsTecido) {
+  const tecido = {
+    colunas: [],
+    perfil: new Int32Array(colsTecido),
+    topoLivre: new Int32Array(colsTecido),
+    maiorVao: new Int32Array(colsTecido),
+  };
+  for (let c = 0; c < colsTecido; c++) tecido.colunas.push([]);
+  return tecido;
+}
+
+/**
+ * Refaz os três resumos de UMA coluna a partir da lista de intervalos dela.
+ *
+ * Uma passada serve para os três: a lista vem ordenada por `ini`, o fundo é o
+ * maior `fim`, o topo livre é até onde os intervalos se emendam a partir do
+ * zero, e o maior vão é a maior distância entre o fim de um e o começo do
+ * seguinte — contando também o que sobra entre o começo do rolo e o primeiro,
+ * que é vaga como qualquer outra.
+ */
+export function revisarColunaDoTecido(tecido, coluna) {
+  const lista = tecido.colunas[coluna];
+  let fimAtual = -1;
+  let maior = 0;
+  let livre = 0;
+  let emendando = true;
+  for (let i = 0; i < lista.length; i++) {
+    const iv = lista[i];
+    const vao = iv.ini - (fimAtual + 1);
+    if (vao > maior) maior = vao;
+    if (emendando) {
+      if (iv.ini > livre) emendando = false;
+      else if (iv.fim + 1 > livre) livre = iv.fim + 1;
+    }
+    if (iv.fim > fimAtual) fimAtual = iv.fim;
+  }
+  tecido.perfil[coluna] = fimAtual + 1;
+  tecido.topoLivre[coluna] = livre;
+  tecido.maiorVao[coluna] = maior;
+}
+
+/** Assenta (`sinal` 1) ou retira (-1) a colocação, resumos inclusive. */
+export function ocuparNoTecido(tecido, colocacao, sinal) {
+  ocuparIntervalos(tecido.colunas, colocacao, sinal);
+  const { forma, x } = colocacao;
+  for (let c = 0; c < forma.cols; c++) {
+    if (forma.topo[c] < 0) continue;
+    if (tecido.colunas[x + c]) revisarColunaDoTecido(tecido, x + c);
+  }
+}
+
 /** Marca (`sinal` 1) ou desmarca (`sinal` -1) a colocação nos intervalos. */
 export function ocuparIntervalos(colunas, col, sinal) {
   const { forma, x, y } = col;
@@ -1515,7 +2039,6 @@ export const aceitaRepescagem = (motor) =>
 export const REPESCA_MAX_PECAS = 16;
 // Só entra na roda a peça que termina no último terço do rolo.
 export const REPESCA_FATIA_DO_RABO = 0.66;
-
 /*
  * `voltas` é quantas vezes a repescagem passa pelo rabo do rolo.
  *
@@ -1706,9 +2229,21 @@ export function encaixarContorno(unidades, config) {
  * onde o vão preso é pequeno, o contorno faz dez vezes mais tentativas e ganha;
  * onde o vão preso é grande, aqui é que está o tecido.
  */
-export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBancada) {
+/*
+ * `tetoFundo` é uma vaga que já se tem em mãos: nada que termine nela ou abaixo
+ * dela interessa. Com ele, a poda começa valendo desde a PRIMEIRA posição, em
+ * vez de só depois que alguma tiver passado — e é por isso que a repescagem
+ * (`repescarNosVaos`), que sempre conhece o lugar de onde a peça saiu,
+ * passou a caber no orçamento. No encaixe normal ele vem `Infinity` e tudo se
+ * comporta como sempre.
+ */
+export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBancada,
+  tetoFundo = Infinity) {
   const { colunas, perfil, topoLivre, maiorVao } = tecido;
   let melhor = null;
+  // O fundo que uma posição precisa bater para valer alguma coisa. Começa no
+  // teto de quem chamou e desce a cada posição aceita.
+  let limite = tetoFundo;
   const pulo = Math.max(1, Math.round(salto || 1));
 
   unidade.formas.forEach((forma) => {
@@ -1749,7 +2284,7 @@ export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBanc
        * em vez de trezentas, e só quem passa delas é medido de verdade. Sem
        * isto o motor fazia 14 tentativas por busca.
        */
-      if (melhor !== null) {
+      if (limite < Infinity) {
         let piso = 0;
         for (let i = 0; i < nSondas; i++) {
           const c = sondas[i];
@@ -1762,7 +2297,7 @@ export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBanc
             : topoLivre[coluna] - topo[c];
           if (v > piso) piso = v;
         }
-        if (piso + maxBase + 1 >= melhor.fundo) return;
+        if (piso + maxBase + 1 >= limite) return;
       }
 
       /*
@@ -1796,7 +2331,7 @@ export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBanc
         const livre = (cabeNoVao ? topoLivre[coluna] : perfil[coluna]) - t;
         if (livre > piso) {
           piso = livre;
-          if (melhor !== null && piso + maxBase + 1 >= melhor.fundo) { cortada = true; break; }
+          if (piso + maxBase + 1 >= limite) { cortada = true; break; }
         }
       }
       if (cortada) return;
@@ -1824,16 +2359,16 @@ export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBanc
         // Aqui pode haver buraco fechado por cima: vale a descida de verdade.
         // Ela nunca devolve `y` maior que o do relevo, então o relevo já serve
         // de teto e a busca desiste cedo.
-        const teto = Math.min(melhor ? melhor.fundo : Infinity, y + maxBase + 1);
-        const yVao = descerNosVaos(colunas, x, forma, teto + 1, piso, colunasComVao, comVao,
-          linhasBancada);
+        const tetoDaDescida = Math.min(limite, y + maxBase + 1);
+        const yVao = descerNosVaos(colunas, x, forma, tetoDaDescida + 1, piso, colunasComVao,
+          comVao, linhasBancada);
         if (yVao !== null && yVao < y) y = yVao;
       }
 
       const fundo = y + maxBase + 1;
       // Empate no fundo fica com o mais à esquerda, que é o que deixa o rolo
       // fechar por fileiras em vez de espalhar.
-      if (!melhor || fundo < melhor.fundo) melhor = { forma, x, y, fundo };
+      if (fundo < limite) { melhor = { forma, x, y, fundo }; limite = fundo; }
     };
 
     for (let x = 0; x <= ultimoX; x += pulo) olhar(x);
@@ -1854,29 +2389,10 @@ export function encaixarPorVaos(unidades, config) {
   const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
   const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
 
-  /*
-   * O tecido, guardado de dois jeitos ao mesmo tempo:
-   *
-   *   colunas  os intervalos ocupados — o mapa exato, que enxerga buraco
-   *   perfil   uma altura por coluna — o mapa barato, do encaixe por contorno
-   *   temVao   a coluna tem algum buraco fechado por cima?
-   *
-   * Os dois primeiros dizem a mesma coisa onde `temVao` é falso, e é o terceiro
-   * que decide qual consultar. Ver `melhorVagaPorVaos`.
-   */
-  const tecido = {
-    colunas: [],
-    perfil: new Int32Array(colsTecido),
-    temVao: new Uint8Array(colsTecido),
-    // A primeira linha livre de cada coluna. Nenhuma peça consegue subir acima
-    // dela, e é disso que sai a poda (ver `melhorVagaPorVaos`).
-    topoLivre: new Int32Array(colsTecido),
-    // O maior buraco FECHADO da coluna — o maior vão entre dois pedaços de
-    // peça. Peça que precisa de mais que isso não tem como parar no meio desta
-    // coluna, e é essa pergunta que transforma a poda fraca em poda forte.
-    maiorVao: new Int32Array(colsTecido),
-  };
-  for (let c = 0; c < colsTecido; c++) tecido.colunas.push([]);
+  // O tecido dos vãos, e os resumos que fazem a poda: ver "O TECIDO VISTO PELOS
+  // VÃOS", acima. Era montado aqui dentro, à mão; a repescagem tinha a própria
+  // versão, sem resumo nenhum. Hoje os dois usam o mesmo.
+  const tecido = criarTecidoDeVaos(colsTecido);
 
   const colocacoes = [];
   const naoEncaixadas = [];
@@ -1890,43 +2406,7 @@ export function encaixarPorVaos(unidades, config) {
       return;
     }
     const colocacao = { unidade, forma: escolha.forma, x: escolha.x, y: escolha.y };
-    ocuparIntervalos(tecido.colunas, colocacao, 1);
-    // O relevo e a marca de buraco acompanham. A peça abriu um vão nesta coluna
-    // se o topo dela ficou ABAIXO de onde o relevo estava — o que sobrou entre
-    // os dois é buraco fechado por cima.
-    const forma = escolha.forma;
-    for (let c = 0; c < forma.cols; c++) {
-      if (forma.topo[c] < 0) continue;
-      const coluna = escolha.x + c;
-      if (escolha.y + forma.topo[c] > tecido.perfil[coluna]) tecido.temVao[coluna] = 1;
-      const ate = escolha.y + forma.base[c] + 1;
-      if (ate > tecido.perfil[coluna]) tecido.perfil[coluna] = ate;
-      // A primeira linha livre anda para baixo enquanto os intervalos se
-      // emendarem a partir dela.
-      const lista = tecido.colunas[coluna];
-      // A primeira linha livre: anda enquanto os intervalos se emendarem a
-      // partir do zero.
-      let livre = 0;
-      for (let i = 0; i < lista.length; i++) {
-        if (lista[i].ini > livre) break;
-        if (lista[i].fim + 1 > livre) livre = lista[i].fim + 1;
-      }
-      tecido.topoLivre[coluna] = livre;
-
-      // O maior vão da coluna acima do relevo: os buracos entre um pedaço de
-      // peça e o seguinte, mais o que sobrou entre o começo do rolo e a
-      // primeira peça. Todos servem de vaga, e por isso todos contam — contar
-      // a menos aqui deixaria a poda forte demais e esconderia posição boa.
-      let maior = 0;
-      let fimAtual = -1;
-      for (let i = 0; i < lista.length; i++) {
-        const iv = lista[i];
-        const vao = iv.ini - (fimAtual + 1);
-        if (vao > maior) maior = vao;
-        if (iv.fim > fimAtual) fimAtual = iv.fim;
-      }
-      tecido.maiorVao[coluna] = maior;
-    }
+    ocuparNoTecido(tecido, colocacao, 1);
     colocacoes.push(colocacao);
     if (escolha.fundo > fundoMax) fundoMax = escolha.fundo;
     // O buraco morto que esta escolha deixou acima dela, para o reparo guiado
@@ -2922,6 +3402,10 @@ export async function buscarMelhorEncaixe(itens, config) {
   // tudo: as unidades são montadas logo abaixo, e a família é decidida na
   // primeira ordenação.
   definirAgrupamento(config.agruparPor);
+  // Idem: as rotações repetidas são cortadas no preparo das unidades, que
+  // acontece logo abaixo. `--extra rotacoesDistintas=false` devolve o motor que
+  // varria o rolo duas vezes pela mesma pegada, para a bancada poder comparar.
+  definirRotacoesDistintas(config.rotacoesDistintas);
   const motores = config.motores || ["contorno", "retangulo"];
   const temGiroLivre = itens.some(podeDeitar);
   const memoria = config.memoria || {};
@@ -2963,13 +3447,60 @@ export async function buscarMelhorEncaixe(itens, config) {
   // (ver `formasDoBloco`), mas bloco maior é mais difícil de posicionar: quem
   // decide é o resultado, e por isso os dois correm.
   let agrupamentos = config.agrupamentos || AGRUPAMENTOS_PADRAO;
+  /*
+   * ===========================================================================
+   * COMO OS BLOCOS SÃO MONTADOS — as duas estão DESLIGADAS, e foi medido
+   * ===========================================================================
+   *
+   *   procurarVaos  a peça pode parar num VÃO do bloco, e não só abaixo dele.
+   *                 `encostarNaForma` monta o crivo das alturas proibidas de
+   *                 cada coluna partilhada e considera toda altura livre —
+   *                 inclusive as que o pouso por relevo nunca enxergou. O pouso
+   *                 de sempre é medido primeiro e o desempate é por
+   *                 "estritamente melhor", então o bloco só muda quando fica
+   *                 menor.
+   *   giroCheio     o bloco nasce em qualquer giro que a peça aceite, e não só
+   *                 em 0° e 180°. Com peça "livre" isso abre as duas posições
+   *                 deitadas, que a busca já aceitava SOLTAS e nunca tinha
+   *                 medido em bloco; com peça "fixa", abre bloco por translação,
+   *                 que antes nem era tentado.
+   *
+   * MEDIDO NA BANCADA, e deu empate. 6 trabalhos, 5 fatias × 3 s × 5 sementes,
+   * comparação pareada por semente contra o motor sem elas:
+   *
+   *   diferença por semente  +0,045  -0,045  -0,060  +0,045  +0,035 m
+   *   média +0,004 m (+0,02%) · erro padrão 0,021 m
+   *   VEREDITO: dentro do ruído — a média é 0,2x o erro padrão (precisa de 2).
+   *
+   * E a corrida veio com o aviso de ritmo em 2 dos 6 trabalhos (-10% e -21% de
+   * tentativas por segundo), o que sozinho já invalida aqueles dois. Ou seja:
+   * não há medição limpa dizendo que elas pagam.
+   *
+   * POR ISSO ELAS NASCEM DESLIGADAS. A regra deste motor é que mexida sem
+   * corrida de bancada antes e depois é chute, e estas duas não são candidatas
+   * que disputam ao lado das outras — elas mudam TODO bloco de TODA receita.
+   * Empate aqui não é "entra porque às vezes ganha", é "fica de fora até alguém
+   * medir direito".
+   *
+   * Para remedir, com a máquina livre e sem mais nada rodando:
+   *   node bancada/medir.js --tempo 3 --sementes 5 \
+   *     --extra motores=contorno+retangulo+vaos+faixas --json antes.json \
+   *     --extra blocoComVaos=false,blocoGiroCheio=false
+   *   node bancada/medir.js --tempo 3 --sementes 5 \
+   *     --extra motores=contorno+retangulo+vaos+faixas,blocoComVaos=true,blocoGiroCheio=true \
+   *     --contra antes.json
+   */
+  const comoMontar = {
+    procurarVaos: config.blocoComVaos === true,
+    giroCheio: config.blocoGiroCheio === true,
+  };
   const unidades = {};
   if (motores.includes("contorno") || motores.includes("faixas") || motores.includes("vaos")
       || motores.includes("blocos")) {
     agrupamentos.forEach((nome) => {
       unidades[nome] = nome === "cruzada"
-        ? montarUnidadesCruzadas(itens)
-        : montarUnidades(itens, TAMANHO_DO_AGRUPAMENTO[nome] || 1);
+        ? montarUnidadesCruzadas(itens, comoMontar.procurarVaos)
+        : montarUnidades(itens, TAMANHO_DO_AGRUPAMENTO[nome] || 1, comoMontar);
     });
     // Sem par que valha a pena, a "cruzada" fica idêntica à "solta" — e
     // rodar as duas cobraria seis receitas de busca inteiras por nada. Nesse
@@ -2979,7 +3510,7 @@ export async function buscarMelhorEncaixe(itens, config) {
       delete unidades.cruzada;
     }
     // O encaixe por faixas parte sempre da dupla, esteja ela na disputa ou não.
-    if (!unidades.dupla) unidades.dupla = montarUnidades(itens, 2);
+    if (!unidades.dupla) unidades.dupla = montarUnidades(itens, 2, comoMontar);
   }
   const cortes = motores.includes("faixas") ? cortesDeFaixa(unidades.dupla, config) : [];
   const listasRetangulo = {};

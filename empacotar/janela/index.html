@@ -4,60 +4,267 @@
 <meta charset="UTF-8" />
 <title>CodeEx Optmize</title>
 <!--
-  A tela dos primeiros segundos: o servidor ainda está subindo e a janela já
-  está aberta. Sem ela o app abria em branco e parecia travado.
+  ===========================================================================
+  A TELA DOS PRIMEIROS SEGUNDOS
+  ===========================================================================
 
-  As cores estão escritas à mão aqui de propósito — é a única página do
-  sistema que não tem como carregar o `interface.css`, porque o servidor que
-  serve o CSS é justamente o que ainda não subiu.
+  O servidor ainda está subindo e a janela já está aberta. Sem esta página o
+  app abria em branco e parecia travado.
+
+  AS CORES ESTÃO ESCRITAS À MÃO, E SÃO AS MESMAS DE `estilo/tokens.css`. Esta é
+  a única página do sistema que não tem como carregar o CSS, porque o servidor
+  que serve o CSS é justamente o que ainda não subiu. Copiar os valores é o
+  preço disso — e o `#0b0b0c` aqui embaixo TEM que ser o mesmo `--bg` de lá,
+  senão a troca desta tela pelo sistema pisca uma mudança de fundo. É o mesmo
+  valor que o `main.rs` dá à janela em `background_color`, pelo mesmo motivo.
+
+  COMO A SAÍDA ACONTECE: o `main.rs` chama `window.encerrar()` quando o
+  servidor atende, espera a animação correr e só então navega. Sem esse aviso a
+  troca era um corte seco no meio do que estivesse na tela.
 -->
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+    --bg: #0b0b0c;
+    --text: #f4f2ef;
+    --text-dim: #a09a93;
+    --accent: #ff531f;
+  }
+
   html, body { height: 100%; }
+
   body {
     margin: 0;
     display: grid;
     place-items: center;
-    background: #0d0d0f;
-    color: #f5f2ee;
+    background: var(--bg);
+    color: var(--text);
     font-family: "Segoe UI", system-ui, sans-serif;
     user-select: none;
-  }
-  .bloco { display: grid; justify-items: center; gap: 22px; }
-  /*
-    A marca é o arquivo mesmo, e não mais as letras "OP" numa caixa laranja:
-    ele viaja junto nesta pasta (é o `frontendDist` do Tauri), então esta
-    página consegue mostrá-lo sem o servidor, que é justamente o que ainda
-    não subiu.
-  */
-  .marca { width: 68px; height: 68px; display: block; }
-  h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: .01em; }
-  p { margin: 0; color: #9d968d; font-size: 13.5px; }
-  .barra {
-    width: 190px; height: 3px;
-    border-radius: 999px;
-    background: #26262a;
     overflow: hidden;
   }
-  .barra i {
-    display: block;
-    width: 40%; height: 100%;
-    border-radius: 999px;
-    background: #ff531f;
-    animation: anda 1.1s ease-in-out infinite;
+
+  /*
+    O brilho atrás da marca.
+    Fica no `body` e não numa caixa própria porque ele precisa ser maior que o
+    bloco inteiro — é o que o faz parecer luz no ambiente, e não uma borda
+    acesa em volta do logo. Opacidade baixíssima de propósito: a 6% ele se lê
+    como profundidade; a 15% vira um borrão laranja no meio da tela.
+
+    É UM CÍRCULO BORRADO, E NÃO UM `radial-gradient`. O gradiente foi a primeira
+    tentativa e apareceu em anéis: sobre um fundo quase preto, a passagem de 10%
+    de laranja para transparente não tem tons suficientes num canal de 8 bits, e
+    o que se vê são as faixas entre um passo e o seguinte. O `blur` resolve pelo
+    outro lado — ele espalha a cor com o próprio erro de arredondamento, e a
+    passagem sai lisa.
+  */
+  body::before {
+    content: "";
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 300px;
+    height: 300px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--accent);
+    filter: blur(95px);
+    opacity: 0;
+    animation: acender-brilho 1.6s ease-out .1s forwards,
+               respirar 5.5s ease-in-out 1.7s infinite;
+    pointer-events: none;
+    will-change: opacity;
   }
-  @keyframes anda {
-    from { transform: translateX(-100%); }
-    to   { transform: translateX(250%); }
+
+  .bloco {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 26px;
+    transition: opacity .34s ease, transform .34s cubic-bezier(.4, 0, 1, 1);
+  }
+
+  /* ---------------------------------------------------------------- a marca */
+
+  .marca {
+    position: relative;
+    width: 132px;
+    height: 132px;
+    display: grid;
+    place-items: center;
+  }
+
+  .marca img {
+    width: 74px;
+    height: 74px;
+    display: block;
+    /*
+      A entrada é de baixo para cima e de dentro para fora, com a curva
+      `(.16,1,.3,1)`: ela chega rápido e freia devagar, que é o que dá o ar de
+      peso — uma curva linear no mesmo tempo parece um sobressalto.
+    */
+    opacity: 0;
+    transform: translateY(10px) scale(.86);
+    animation: entrar .9s cubic-bezier(.16, 1, .3, 1) .06s forwards,
+               pulsar 4.2s ease-in-out 1s infinite;
+  }
+
+  /*
+    O anel que roda em volta.
+
+    São DOIS círculos, e o de baixo é o que faz a coisa funcionar. Com só o arco
+    laranja, o desenho lia-se como um risco solto embaixo do logo — uma sujeira,
+    não um anel. O aro apagado por baixo dá ao arco um trilho para correr: aí a
+    volta inteira existe o tempo todo, e o laranja é só a parte acesa dela.
+
+    O arco tem um traço de 78 num perímetro de ~352, ~22% da volta. Ele ainda
+    estica e encolhe enquanto gira — sem isso o giro fica mecânico, de relógio.
+  */
+  .anel {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    animation: acender .8s ease-out .35s forwards;
+  }
+
+  .anel circle {
+    fill: none;
+    stroke-width: 1.5;
+    transform-origin: 50% 50%;
+  }
+
+  .anel .trilho {
+    stroke: rgba(244, 242, 239, 0.07);
+  }
+
+  .anel .arco {
+    stroke: var(--accent);
+    stroke-linecap: round;
+    stroke-dasharray: 78 352;
+    animation: girar 2.4s cubic-bezier(.62, .03, .38, .97) infinite,
+               esticar 2.4s ease-in-out infinite;
+  }
+
+  /* --------------------------------------------------------------- o texto */
+
+  .nome, .recado {
+    opacity: 0;
+    transform: translateY(6px);
+    animation: entrar .7s cubic-bezier(.16, 1, .3, 1) forwards;
+  }
+
+  .nome {
+    margin: 0;
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: .012em;
+    animation-delay: .34s;
+  }
+
+  .recado {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 13.5px;
+    letter-spacing: .01em;
+    animation-delay: .5s;
+  }
+
+  /* ---------------------------------------------------------------- a saída */
+
+  /*
+    O bloco sai crescendo um triquinho, e não encolhendo: crescer lê-se como
+    "entrou", encolher lê-se como "cancelou". O fundo NÃO mexe — ele é o mesmo
+    do sistema que vai aparecer, então o que a pessoa vê é o conteúdo trocando
+    sobre um fundo parado, e não uma tela indo embora.
+  */
+  body.saindo .bloco {
+    opacity: 0;
+    transform: scale(1.045);
+  }
+
+  body.saindo::before { opacity: 0; transition: opacity .34s ease; animation: none; }
+
+  /* ------------------------------------------------------------- os passos */
+
+  @keyframes entrar {
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes acender {
+    to { opacity: 1; }
+  }
+
+  @keyframes pulsar {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.035); }
+  }
+
+  /*
+    O brilho tem os passos dele, e não o `acender` genérico: um círculo de
+    laranja cheio a 100% de opacidade é uma tela laranja. O teto é 11% — abaixo
+    de 6% ele some no preto, acima de 15% deixa de ser luz de ambiente e vira
+    um borrão colorido no meio da tela.
+  */
+  @keyframes acender-brilho {
+    to { opacity: .11; }
+  }
+
+  @keyframes respirar {
+    0%, 100% { opacity: .11; }
+    50%      { opacity: .06; }
+  }
+
+  @keyframes girar {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes esticar {
+    0%, 100% { stroke-dasharray: 40 352; }
+    50%      { stroke-dasharray: 132 352; }
+  }
+
+  /*
+    Quem pediu ao Windows para reduzir animações tem motivo — enjoo, epilepsia
+    fotossensível, ou só não gostar. A tela continua a mesma, sem movimento
+    nenhum, e a saída vira um apagar simples.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    body::before, .marca img, .anel, .anel circle, .nome, .recado {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
+    .bloco { transition: opacity .2s ease; }
+    body.saindo .bloco { transform: none; }
   }
 </style>
 </head>
 <body>
   <div class="bloco">
-    <img class="marca" src="icone.png" alt="" />
-    <h1>CodeEx Optmize</h1>
-    <div class="barra"><i></i></div>
-    <p>Abrindo o sistema…</p>
+    <div class="marca">
+      <!-- O anel tem 112 de diâmetro (r=56), que dá uma folga de 19px em volta
+           do logo de 74 — perto o bastante para pertencer a ele, longe o
+           bastante para não encostar. O perímetro que sai daí (~352) é o número
+           que os `stroke-dasharray` lá em cima usam. -->
+      <svg class="anel" viewBox="0 0 132 132" aria-hidden="true">
+        <circle class="trilho" cx="66" cy="66" r="56" />
+        <circle class="arco" cx="66" cy="66" r="56" />
+      </svg>
+      <img src="icone.png" alt="" />
+    </div>
+    <h1 class="nome">CodeEx Optmize</h1>
+    <p class="recado">Abrindo o sistema…</p>
   </div>
+
+<script>
+  /*
+    Quem chama isto é o `main.rs`, por `eval`, quando o servidor atende. Ele
+    espera a animação correr antes de navegar — o tempo dele e o `.34s` das
+    transições lá em cima andam juntos, e mexer num pede mexer no outro.
+  */
+  window.encerrar = function () {
+    document.body.classList.add("saindo");
+  };
+</script>
 </body>
 </html>

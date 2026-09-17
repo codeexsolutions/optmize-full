@@ -23,8 +23,8 @@ const upsertStmt = db.prepare(`
     //    rede). Ela não pode zerar os canais que o monitor ao vivo já salvou.
     if (c === "inkMl" || c === "inkChannels" || c === "inkExperimental") {
       return `${c}=CASE
-        WHEN imp_records.sourceType='csv' AND imp_records.inkExperimental=0 AND imp_records.inkChannels IS NOT NULL AND excluded.inkExperimental=1 THEN imp_records.${c}
-        WHEN excluded.inkChannels IS NULL AND imp_records.inkChannels IS NOT NULL THEN imp_records.${c}
+        WHEN imp_records.sourceType='csv' AND imp_records.inkExperimental=0 AND imp_records.inkChannels IS NOT NULL AND imp_records.inkChannels<>'[]' AND excluded.inkExperimental=1 THEN imp_records.${c}
+        WHEN excluded.inkChannels IS NULL AND imp_records.inkChannels IS NOT NULL AND imp_records.inkChannels<>'[]' THEN imp_records.${c}
         ELSE excluded.${c} END`;
     }
     return `${c}=excluded.${c}`;
@@ -53,7 +53,7 @@ function toRow(r) {
     timeSeconds: Math.round(Number(r.timeSeconds || 0)),
     inkMl: Number(r.inkMl || 0),
     inkExperimental: r.inkExperimental ? 1 : 0,
-    inkChannels: Array.isArray(r.inkChannels) ? JSON.stringify(r.inkChannels) : null,
+    inkChannels: Array.isArray(r.inkChannels) && r.inkChannels.length ? JSON.stringify(r.inkChannels) : null,
     previewRef: r.previewRef || "",
     progressPercent: r.progressPercent ?? null,
     progressState: r.progressState || null,
@@ -110,4 +110,27 @@ function queryAll() {
   return rows.map(fromRow);
 }
 
-module.exports = { upsertMany, queryRange, queryByMachine, queryAll };
+/*
+ * Apagar registro por id — a única escrita destrutiva desta tabela.
+ *
+ * Ela existe por um motivo específico: o id de um registro embute o NOME do
+ * trabalho (ver `sources/printExp.js`), porque nome mais horário é o que
+ * identifica o trabalho de forma estável. A consequência é que consertar o
+ * leitor de nomes não corrige o passado — ele cria um registro novo, com o nome
+ * certo, ao lado do antigo, e o trabalho passa a contar duas vezes.
+ *
+ * NÃO existe "apagar por máquina", de propósito. Esta tabela não é um espelho
+ * descartável do arquivo da impressora: o PrintExp corta o começo do XML quando
+ * ele cresce, e os logs das outras rodam por data, então o banco guarda
+ * produção que a origem já não tem. Limpar e reimportar perderia isso calado.
+ * Quem chama daqui tem de saber exatamente quais ids está removendo, e por quê
+ * — ver `bancada/limpar-nomes-quebrados.js`.
+ */
+const deleteStmt = db.prepare("DELETE FROM imp_records WHERE id = ?");
+const deleteByIds = db.transaction((ids) => {
+  let removidos = 0;
+  for (const id of ids) removidos += deleteStmt.run(id).changes;
+  return removidos;
+});
+
+module.exports = { upsertMany, queryRange, queryByMachine, queryAll, deleteByIds };
