@@ -70,20 +70,141 @@ const STATUS = {
 
 // ------------------------------------------------------------------ leitura
 
-/**
- * Lê o XML respeitando a página de código do PrintExp.
+/*
+ * ===========================================================================
+ * O ARQUIVO MISTURA DUAS CODIFICAÇÕES, E NENHUMA ESTÁ DECLARADA
+ * ===========================================================================
  *
- * O arquivo não tem declaração de encoding e o programa é chinês: ele grava em
- * GBK. Ler como UTF-8 estraga tanto os nomes de trabalho acentuados quanto os
- * nomes que o próprio software cria (o trabalho de calibração chama-se 校准).
- * ASCII é subconjunto de GBK, então nome sem acento passa igual pelos dois.
+ * O `PrintData.xml` não tem `<?xml ... encoding=?>`: começa direto em
+ * `<PrintStatistic>`. E o que ele grava vem de duas mãos diferentes:
+ *
+ *   as strings DO SOFTWARE   em GBK, porque o programa é chinês. O trabalho de
+ *                            calibração chama-se 校准 — bytes D0 A3 D7 BC.
+ *   os nomes DO OPERADOR     na página ANSI do Windows da máquina, um byte por
+ *                            caractere. Aqui é cp1252: `Ã` é o byte C3.
+ *
+ * Ler tudo como GBK acerta o primeiro caso e estraga o segundo, de DOIS jeitos
+ * diferentes — e essa distinção é o que decide onde o conserto tem de morar.
+ *
+ * 1) ACENTO SEGUIDO DE CAUDA GBK VÁLIDA (0x40 a 0xFE): os dois bytes viram um
+ *    ideograma só.
+ *
+ *      4e 49 43 4b 20 46 41 4c 43 c3 4f 2e 70 72 74
+ *      N  I  C  K     F  A  L  C  Ã  O  .  p  r  t
+ *      como cp1252   "NICK FALCÃO.prt"    certo
+ *      como GBK      "NICK FALC肙.prt"    C3 4F virou um ideograma
+ *
+ * 2) ACENTO SEGUIDO DE QUALQUER OUTRA COISA — um espaço, por exemplo: o par não
+ *    é GBK válido, o decodificador devolve U+FFFD e O BYTE DO ACENTO MORRE ALI.
+ *
+ *      41 c7 20 42  ->  "A� B"   o Ç não é recuperável depois disso
+ *
+ * O primeiro caso seria reversível em cima da string (`肙` re-codificado devolve
+ * C3 4F). O segundo não é, de jeito nenhum — e é por isso que a decisão tem de
+ * ser tomada NOS BYTES, antes de decodificar, e não consertando o texto depois.
+ *
+ * Achado nos 489 trabalhos da máquina de teste: `ANTÔNIO`, `LAÇO` e `LEUDA`
+ * passavam e só `FALCÃO` quebrava. Não é aleatório, e nem é sorte que dure:
+ * `Ô` seguido de `N` (4e) e `Ç` seguido de `O` (4f) caem os dois na faixa de
+ * cauda e quebrariam igual. O que salvou os outros foi a letra que vinha depois.
+ *
+ * ---------------------------------------------------------------------------
+ * COMO A DECISÃO É TOMADA
+ * ---------------------------------------------------------------------------
+ *
+ * O arquivo é lido em LATIN-1, que é a única leitura garantidamente sem perda:
+ * os 256 bytes mapeiam nos 256 primeiros code points, um para um, e nada vira
+ * U+FFFD. O que sai daí não é texto certo — é os bytes preservados numa string.
+ *
+ * Depois, CAMPO POR CAMPO, `decodificarCampo` escolhe a codificação:
+ *
+ *   tem letra latina (A-Z, a-z)?  é nome de gente na página ANSI  -> cp1252
+ *   só bytes altos, em pares GBK válidos?  é string do software   -> GBK
+ *
+ * Por campo, e não pelo documento, porque o teste é de CONTEXTO: `校准` é só
+ * CJK e não tem letra latina nenhuma; `NICK FALCÃO.prt` é quase todo ASCII. O
+ * documento inteiro sempre tem letras latinas (as etiquetas XML), então o mesmo
+ * teste aplicado nele não distinguiria nada.
+ *
+ * O QUE ISTO PODE ERRAR, dito na cara: um nome de trabalho em chinês DE VERDADE
+ * que misturasse ideograma com letra latina sairia como cp1252, ou seja,
+ * ilegível. É uma gráfica no Brasil; os nomes são em português, e o único
+ * chinês no arquivo são as strings que o próprio programa cria, que são CJK
+ * puro. O risco é hipotético e o estrago que ele evita estava na tela.
+ */
+
+/** O campo tem letra latina? Então é nome digitado, não texto chinês. */
+function temLetraLatina(bytes) {
+  for (const b of bytes) {
+    if ((b >= 0x41 && b <= 0x5a) || (b >= 0x61 && b <= 0x7a)) return true;
+  }
+  return false;
+}
+
+/**
+ * Os bytes altos formam, TODOS eles, pares GBK válidos?
+ *
+ * "Todos" é o que importa: um único byte alto solto (o acento do caso 2) já
+ * reprova o campo, e é justamente ele que a leitura em GBK destruiria.
+ */
+function paresGbkFechados(bytes) {
+  let pares = 0;
+  let i = 0;
+  while (i < bytes.length) {
+    const b = bytes[i];
+    if (b < 0x80) { i++; continue; }
+    if (b < 0x81 || b > 0xfe) return 0;
+    const cauda = bytes[i + 1];
+    if (cauda == null || cauda < 0x40 || cauda > 0xfe || cauda === 0x7f) return 0;
+    pares++;
+    i += 2;
+  }
+  return pares;
+}
+
+/** Algum caractere fora do ASCII? Se não, os dois caminhos dão o mesmo texto. */
+function temByteAlto(texto) {
+  for (let i = 0; i < texto.length; i++) {
+    if (texto.charCodeAt(i) > 0x7f) return true;
+  }
+  return false;
+}
+
+/**
+ * Decide a codificação de UM campo e o devolve legível.
+ *
+ * Recebe a string latin-1 que saiu do `readXml` — bytes preservados — e não
+ * texto. Ver o cabeçalho acima.
+ */
+function decodificarCampo(bruto) {
+  if (!bruto) return bruto;
+  // Sem byte alto é ASCII puro, e aí as duas codificações dão o mesmo texto.
+  // Sai aqui a esmagadora maioria dos campos, inclusive datas e números.
+  if (!temByteAlto(bruto)) return bruto;
+
+  const bytes = Buffer.from(bruto, "latin1");
+  if (!temLetraLatina(bytes) && paresGbkFechados(bytes) > 0) {
+    return iconv.decode(bytes, "gbk");
+  }
+  return iconv.decode(bytes, "win1252");
+}
+
+/**
+ * Lê o XML preservando os bytes, e não adivinhando a codificação.
+ *
+ * Latin-1 é a leitura sem perda: 256 bytes, 256 code points, nada vira U+FFFD.
+ * O texto que sai daqui ainda NÃO está certo — quem decide a codificação de
+ * cada valor é o `text`, com o `decodificarCampo`. Ver o cabeçalho acima.
+ *
+ * BOM de UTF-8 é a exceção: aí o arquivo DECLARA o que é, e declaração vale
+ * mais que heurística. A marca `_utf8` avisa o `text` para não mexer.
  */
 async function readXml(file) {
   const buffer = await fs.readFile(file);
   if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
-    return buffer.slice(3).toString("utf8");
+    return { texto: buffer.slice(3).toString("utf8"), jaDecodificado: true };
   }
-  return iconv.decode(buffer, "gbk");
+  return { texto: buffer.toString("latin1"), jaDecodificado: false };
 }
 
 /**
@@ -172,7 +293,19 @@ async function readRange(machine, start, end) {
   const file = await resolveHistoryFile(machine.historyPath);
   if (!file) return [];
 
-  const parsed = await parser.parseStringPromise(await readXml(file));
+  const { texto, jaDecodificado } = await readXml(file);
+  const parsed = await parser.parseStringPromise(texto);
+  /*
+   * O leitor dos campos de TEXTO — os que podem ter acento ou ideograma.
+   *
+   * Vem de uma fábrica, e não de um global do módulo, porque duas máquinas
+   * PrintExp podem estar sendo lidas ao mesmo tempo: um `let` no topo do
+   * arquivo seria a codificação de uma vazando na leitura da outra.
+   *
+   * Data, número e status não passam por aqui: são ASCII, e as duas
+   * codificações dão o mesmo resultado neles.
+   */
+  const campo = jaDecodificado ? text : (valor) => decodificarCampo(text(valor));
   const items = parsed?.PrintStatistic?.StatisticData?.[0]?.DataItem || [];
 
   const out = [];
@@ -188,7 +321,7 @@ async function readRange(machine, start, end) {
     if (!started) continue;
     if (started.date < start || started.date > end) continue;
 
-    const task = text(item.TaskName) || "(sem nome)";
+    const task = campo(item.TaskName) || "(sem nome)";
     const key = `${started.dateTime}|${task}`;
     const seq = seen.get(key) || 0;
     seen.set(key, seq + 1);
@@ -222,7 +355,7 @@ async function readRange(machine, start, end) {
       time: started.time,
       endDateTime: ended?.dateTime || "",
       task,
-      material: text(item.MaterialName),
+      material: campo(item.MaterialName),
       copies: Math.round(num(item.PrintDoneCopys, 1)) || 1,
       pass: null,
       status: status.label,
@@ -259,4 +392,8 @@ async function signature(machine) {
   return `${stat.size}:${stat.mtimeMs}`;
 }
 
-module.exports = { readRange, signature, resolveHistoryFile };
+// `desfazerIdeogramaDeAcento` sai exposto para a conferência poder medi-lo
+// contra os bytes de verdade, sem depender de haver máquina na rede.
+// `decodificarCampo` sai exposto para a conferência poder medi-lo contra os
+// bytes de verdade, sem depender de haver máquina na rede.
+module.exports = { readRange, signature, resolveHistoryFile, decodificarCampo };

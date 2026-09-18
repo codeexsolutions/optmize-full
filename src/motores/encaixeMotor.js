@@ -892,10 +892,184 @@ export function encostarNaForma(bloco, movel, procurarVaos = true) {
   return { area: forma.cols * forma.rows, forma };
 }
 
+/*
+ * ===========================================================================
+ * A ROTAÇÃO QUE O MOTOR NÃO TEM COMO DISTINGUIR
+ * ===========================================================================
+ *
+ * `rotacoesDe` responde o que a PRODUÇÃO permite: a peça de malha entra de
+ * cabeça para baixo, a peça livre também deita. É uma permissão, e a lista
+ * dela não olha o desenho.
+ *
+ * Só que o encaixe olha, e olha pouco: ele trabalha **só com cols/rows/topo/
+ * base** (está dito no `prepararMascara`, que monta as máscaras; `desenho` é da
+ * tela, para traçar o contorno no resultado). Então duas rotações com esses
+ * quatro campos iguais assentam no mesmo lugar, deixam o mesmo vão e medem o
+ * mesmo consumo — o motor não tem por onde diferenciá-las.
+ *
+ * Peça centralmente simétrica é o caso: girar 180° devolve ela mesma. Medido
+ * nas peças da bancada, com a grade do rolo de 160 e folga de 4 mm:
+ *
+ *   punho      giro "180"   1 de 2 rotações distintas   (180 = 0)
+ *   uni-gola   giro "180"   1 de 2
+ *   punho      giro "livre" 2 de 4                      (180 = 0, 270 = 90)
+ *   uni-gola   giro "livre" 2 de 4
+ *
+ * E a rotação repetida não é de graça: **cada forma custa uma varredura do
+ * rolo por tentativa**. Contando as formas da receita "solta" — o custo por
+ * tentativa —, o que se varria duas vezes pelo mesmo resultado:
+ *
+ *   tiras               144 -> 96 formas   -33,3%
+ *   tamanhos-extremos    96 -> 66          -31,3%
+ *   quase-retangulo     100 -> 70          -30,0%
+ *   pedido-miudeza      164 -> 124         -24,4%
+ *   misturado-pequeno    50 -> 44          -12,0%
+ *   producao-misturada  552 -> 492         -10,9%
+ *   lote-grande         260 -> 238          -8,5%
+ *   ... e mais quatro entre -7% e -8%
+ *
+ * Em oito dos dezenove trabalhos não há sobra nenhuma (camiseta, manga, gola e
+ * calça têm concavidade, e girá-las muda tudo): ali isto não faz nada, nem
+ * para melhor nem para pior. Na conferência inteira — todos os trabalhos, os
+ * três tamanhos de agrupamento — são 6.910 formas contra 7.948: **13,1% menos
+ * varredura de rolo por tentativa**.
+ *
+ * ---------------------------------------------------------------------------
+ * O QUE ISSO RENDEU, MEDIDO: VELOCIDADE SIM, TECIDO NÃO
+ * ---------------------------------------------------------------------------
+ *
+ * 8 trabalhos, 5 fatias × 3 s, pareado por semente, máquina livre, contra o
+ * mesmo motor com `--extra rotacoesDistintas=false`:
+ *
+ *   tentativas por segundo    5 sementes        10 sementes
+ *     tiras                   556 ->  733 +32%   593 ->  684 +15%
+ *     tamanhos-extremos      1171 -> 1540 +32%  1217 -> 1399 +15%
+ *     quase-retangulo        1394 -> 1771 +27%  1418 -> 1736 +22%
+ *     pedido-miudeza           95 ->  134 +41%   102 ->  133 +30%
+ *     misturado-pequeno      1840 -> 2121 +15%  1910 -> 2129 +11%
+ *     calca-bolso                    (igual)    3152 -> 3469 +10%
+ *
+ *   consumo                 28,750 contra 28,775 m   -0,09%  (5 sementes)
+ *                           28,747 contra 28,752 m   -0,02%  (10 sementes)
+ *   pareado, 10 sementes    média -0,005 m · erro padrão 0,008 m
+ *   VEREDITO DO TECIDO      empate — 0,7x o erro padrão, e mais sementes
+ *                           APERTARAM o empate em vez de abrir sinal.
+ *
+ * A aceleração é o resultado, e ela bateu com a contagem de formas trabalho
+ * por trabalho. O tecido não mudou, e é isso que era esperado: a conferência
+ * (`bancada/conferir-rotacoes.js`) prova que cada tentativa dá o encaixe
+ * IDÊNTICO, então o que sobra é chegar antes no mesmo lugar.
+ *
+ * ---------------------------------------------------------------------------
+ * E ISSO DIZ UMA COISA SOBRE O PLATÔ
+ * ---------------------------------------------------------------------------
+ *
+ * A varredura concluiu que o motor está num platô e que mais botões só dariam
+ * mais zeros (ver `bancada/varredura.js`). Ficava em aberto se o platô era de
+ * ORÇAMENTO — a busca com fome de tentativas — ou de SATURAÇÃO, com a busca já
+ * achando tudo que aquele espaço tem.
+ *
+ * Isto responde: 10% a 30% mais tentativas por segundo rendeu 0,00% de tecido.
+ * O platô é de saturação. Otimizar a busca para ela ser mais rápida não é o
+ * caminho para gastar menos tecido — o caminho continua sendo a geometria do
+ * pedido, que é onde a varredura achou vários por cento.
+ *
+ * O corte fica porque o que ele entrega é TEMPO: o mesmo encaixe, achado mais
+ * cedo, na tela de quem está esperando. Não porque renda metro.
+ *
+ * NO BLOCO A SOBRA ERA DOBRADA. `formasDoBloco` monta um arranjo começando em
+ * cada giro e devolve os dois melhores. Com o punho, os dois começos davam o
+ * MESMO bloco — máscaras iguais, encosto igual —, e as duas formas idênticas
+ * iam para a busca. O rolo era varrido duas vezes pelo mesmo desenho, em toda
+ * tentativa de toda receita de bloco.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE ISTO NÃO É MAIS UM BOTÃO DO MOTOR
+ * ---------------------------------------------------------------------------
+ *
+ * A varredura (`bancada/varredura.js`) deu 0,00% em doze ajustes de busca, e
+ * concluiu que o motor está num platô. Todos os doze TROCAM o que a busca faz:
+ * mais poda, menos reparo, outro lote. Este não troca nada — o conjunto de
+ * encaixes alcançáveis é exatamente o mesmo, porque a rotação que sai é
+ * indistinguível da que fica. O que muda é caberem mais tentativas no mesmo
+ * orçamento de tempo.
+ *
+ * Qual rotação fica: a PRIMEIRA da lista de permissão, que é sempre 0°. A peça
+ * repetida simplesmente não aparece de cabeça para baixo — e como a produção
+ * autorizou os dois sentidos, sair no de cima está dentro do que ela pediu.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE O INTERRUPTOR É DO MÓDULO
+ * ---------------------------------------------------------------------------
+ *
+ * Mesmo motivo do `agruparPorArquivo` logo abaixo: quem pergunta "que rotações
+ * esta peça tem?" não é só a busca — são `formasDaPeca`, `formasDoBloco` e
+ * `formasDoBlocoMisto`, chamados de lugares diferentes do preparo. Passar o
+ * ajuste por parâmetro obrigaria a atravessá-lo por toda a cadeia para servir
+ * a um botão de medição, e o valor só muda no começo de uma busca.
+ */
+export let rotacoesDistintas = true;
+export function definirRotacoesDistintas(ligado) {
+  rotacoesDistintas = ligado !== false;
+}
+
+/**
+ * As duas máscaras assentam no mesmo lugar?
+ *
+ * Compara o que o ENCAIXE usa, e nada mais. `offX`/`offY` ficam de fora de
+ * propósito: eles dizem onde a arte entra dentro da moldura, e mudam entre 0°
+ * e 180° sem mudar uma célula do assentamento.
+ */
+function mesmaPegada(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.cols !== b.cols || a.rows !== b.rows) return false;
+  for (let c = 0; c < a.cols; c++) {
+    if (a.topo[c] !== b.topo[c] || a.base[c] !== b.base[c]) return false;
+  }
+  return true;
+}
+
+/**
+ * As rotações que vale a pena TENTAR: as permitidas, menos as que assentam
+ * igual a uma que já entrou.
+ *
+ * Fica guardado na máscara, como o `_chaveDaSilhueta`: a conta é uma varredura
+ * da largura por rotação, e as cópias de uma peça dividem o mesmo objeto de
+ * máscaras. Guardado por giro, porque duas peças da mesma arte podem chegar
+ * com permissões diferentes.
+ */
+export function rotacoesUteis(item) {
+  const permitidas = rotacoesDe(item);
+  if (!rotacoesDistintas || permitidas.length < 2) return permitidas;
+  const mascaras = item.mascaras;
+  if (!mascaras || !mascaras.rotacoes) return permitidas;
+
+  const giro = item.giro || "180";
+  if (!mascaras._rotacoesUteis) mascaras._rotacoesUteis = {};
+  const guardado = mascaras._rotacoesUteis[giro];
+  if (guardado) return guardado;
+
+  const uteis = [];
+  const vistas = [];
+  for (let i = 0; i < permitidas.length; i++) {
+    const rot = permitidas[i];
+    const m = mascaras.rotacoes[rot];
+    // Rotação sem máscara segue na lista: quem consome já testa `if (mascara)`,
+    // e tirá-la aqui esconderia um preparo incompleto em vez de mostrá-lo.
+    if (!m) { uteis.push(rot); continue; }
+    if (vistas.some((v) => mesmaPegada(v, m))) continue;
+    vistas.push(m);
+    uteis.push(rot);
+  }
+  mascaras._rotacoesUteis[giro] = uteis;
+  return uteis;
+}
+
 /** As formas de uma peça sozinha: uma por rotação que ela aceita. */
 export function formasDaPeca(item) {
   const formas = [];
-  rotacoesDe(item).forEach((rot) => {
+  rotacoesUteis(item).forEach((rot) => {
     const mascara = item.mascaras.rotacoes[rot];
     if (mascara) formas.push(formaDePartes([{ item, mascara, rot, dcol: 0, drow: 0 }]));
   });
@@ -943,7 +1117,11 @@ export function formasDoBloco(copias, tamanho, procurarVaos = true, giroCheio = 
   const mascaras = copias[0].mascaras;
   const m0 = mascaras.rotacoes[0];
   if (!m0) return null;
-  const giros = (giroCheio ? rotacoesDe(copias[0]) : [0, 180])
+  // Os começos que dão blocos diferentes. Com a peça centralmente simétrica os
+  // dois começos de sempre davam o MESMO bloco, e as duas formas idênticas iam
+  // as duas para a busca — ver "A ROTAÇÃO QUE O MOTOR NÃO TEM COMO DISTINGUIR".
+  const girosUteis = rotacoesUteis(copias[0]);
+  const giros = (giroCheio ? girosUteis : girosUteis.filter((rot) => rot === 0 || rot === 180))
     .filter((rot) => mascaras.rotacoes[rot]);
   if (giros.length === 0) return null;
 
@@ -1002,12 +1180,14 @@ export function formasDoBlocoMisto(a, b, procurarVaos = true) {
   const arranjos = [];
 
   const tentar = (base, movel) => {
-    rotacoesDe(base).forEach((rotBase) => {
+    // Rotação repetida sai dos DOIS lados: aqui o número de casamentos medidos
+    // é o produto das duas listas, então cortar uma corta o par inteiro.
+    rotacoesUteis(base).forEach((rotBase) => {
       const mascaraBase = base.mascaras.rotacoes[rotBase];
       if (!mascaraBase) return;
       const bloco = formaDePartes([{ item: base, mascara: mascaraBase, rot: rotBase, dcol: 0, drow: 0 }]);
       let melhor = null;
-      rotacoesDe(movel).forEach((rotMovel) => {
+      rotacoesUteis(movel).forEach((rotMovel) => {
         const mascaraMovel = movel.mascaras.rotacoes[rotMovel];
         if (!mascaraMovel) return;
         const r = encostarNaForma(bloco, { item: movel, mascara: mascaraMovel, rot: rotMovel },
@@ -1291,6 +1471,12 @@ export function montarUnidades(itens, tamanho,
     // posição podem se encaixar por translação — a cabeça de uma entrando no
     // vão que a outra deixa ao lado. O corte de 2% em `formasDoBloco` continua
     // sendo quem decide se aquilo aperta alguma coisa.
+    // `rotacoesDe`, e NÃO `rotacoesUteis`: aqui a pergunta é de permissão —
+    // "a produção deixa esta peça virar?" —, e não de geometria. O punho deixa,
+    // e o bloco dele é bom, mesmo que virá-lo não mude o assentamento: duas
+    // cópias no mesmo sentido já se encaixam por translação. Trocar por
+    // `rotacoesUteis` fecharia a porta do bloco justamente para a peça
+    // simétrica, que é quem mais o aproveita.
     const podeBloco = giroCheio || rotacoesDe(copias[0]).includes(180);
     const formasBloco = copias.length >= tamanho && podeBloco
       ? formasDoBloco(copias, tamanho, procurarVaos, giroCheio)
@@ -3216,6 +3402,10 @@ export async function buscarMelhorEncaixe(itens, config) {
   // tudo: as unidades são montadas logo abaixo, e a família é decidida na
   // primeira ordenação.
   definirAgrupamento(config.agruparPor);
+  // Idem: as rotações repetidas são cortadas no preparo das unidades, que
+  // acontece logo abaixo. `--extra rotacoesDistintas=false` devolve o motor que
+  // varria o rolo duas vezes pela mesma pegada, para a bancada poder comparar.
+  definirRotacoesDistintas(config.rotacoesDistintas);
   const motores = config.motores || ["contorno", "retangulo"];
   const temGiroLivre = itens.some(podeDeitar);
   const memoria = config.memoria || {};

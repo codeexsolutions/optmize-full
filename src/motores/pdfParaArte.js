@@ -44,7 +44,7 @@
  */
 
 import { PDF_PT_POR_CM } from "./moldes";
-import { DPI_EXPORTACAO } from "./exportarEncaixe";
+import { DPI_PREVIA } from "./resolucaoDaArte";
 
 /*
  * O pdf.js faz a leitura num worker. Ele é montado uma vez só, na primeira vez
@@ -74,16 +74,14 @@ function carregarPdfjs() {
 /**
  * Até onde vale a pena desenhar a página.
  *
- * Mesma conta do `ladoDeTrabalho` do `controlador.js`, e pela mesma razão: o
- * PDF sai em `DPI_EXPORTACAO` e o desenho nunca amplia, então pixel acima
- * disso é memória e espera, não qualidade. A folga de 30% cobre o dia em que
- * alguém subir o dpi de exportação sem lembrar desta conta.
+ * Mesma conta do `ladoDeTrabalho` do controlador: esta é a prévia usada pelo
+ * cálculo. A exportação reabre o PDF original com sua resolução de impressão.
  *
  * Quem chama pode mandar a sua própria régua em `tetoDeLado`; o Encaixe manda,
  * para que PDF e imagem parem exatamente no mesmo teto.
  */
 const FOLGA_DE_RESOLUCAO = 1.3;
-const tetoPadrao = (cm) => Math.max(600, Math.round((cm / 2.54) * DPI_EXPORTACAO * FOLGA_DE_RESOLUCAO));
+const tetoPadrao = (cm) => Math.max(600, Math.round((cm / 2.54) * DPI_PREVIA * FOLGA_DE_RESOLUCAO));
 
 /** Canvas para blob, que é `toBlob` com cara de promessa. */
 function paraBlob(canvas, tipo) {

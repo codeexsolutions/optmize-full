@@ -242,7 +242,15 @@ static void tarefa_de_ler(void *arg)
                 const cJSON *itens = cJSON_GetObjectItem(j, "items");
                 const int quantos = cJSON_IsArray(itens) ? cJSON_GetArraySize(itens) : 0;
 
-                for (int i = 0; i < quantos && lido.quantos < ITENS_MAXIMOS; i++) {
+                // Uma lista parcial permitiria fechar o pedido deixando itens
+                // que o operador nunca viu. Ate haver paginacao, recuse inteira.
+                if (quantos > ITENS_MAXIMOS) {
+                    erro = "pedido grande demais; divida a lista no Optmize";
+                    ESP_LOGW(TAG, "pedido recusado: %d itens, limite %d",
+                             quantos, ITENS_MAXIMOS);
+                }
+
+                for (int i = 0; erro == NULL && i < quantos; i++) {
                     const cJSON *it = cJSON_GetArrayItem(itens, i);
                     ItemDoPedido *d = &lido.itens[lido.quantos];
 
@@ -265,10 +273,6 @@ static void tarefa_de_ler(void *arg)
                     lido.quantos++;
                 }
 
-                if (quantos > ITENS_MAXIMOS) {
-                    ESP_LOGW(TAG, "o pedido tem %d itens; mostrando %d",
-                             quantos, ITENS_MAXIMOS);
-                }
                 ESP_LOGI(TAG, "pedido %s -- %d item(ns)", lido.id, lido.quantos);
             }
             cJSON_Delete(j);

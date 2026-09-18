@@ -120,6 +120,8 @@ export function Cor({ ativa = false }: { ativa?: boolean }) {
   const [erro, setErro] = useState("");
   const [arrastando, setArrastando] = useState(false);
   const entrada = useRef<HTMLInputElement>(null);
+  const fila = useRef<Promise<void>>(Promise.resolve());
+  const geracaoDaLista = useRef(0);
   const ligacao = useLigacao();
 
   /*
@@ -196,6 +198,7 @@ export function Cor({ ativa = false }: { ativa?: boolean }) {
    * derrubariam o processo. Em fila, o pico é sempre o de uma arte só.
    */
   const receberArquivos = useCallback(async (arquivos: File[]) => {
+    const geracao = geracaoDaLista.current;
     const imagens = arquivos.filter(
       (f) => /^image\//.test(f.type) || /\.(jpe?g|png)$/i.test(f.name));
     if (imagens.length === 0) {
@@ -207,6 +210,7 @@ export function Cor({ ativa = false }: { ativa?: boolean }) {
     const novos: Item[] = [];
     for (const arquivo of imagens) {
       const cor = await diagnosticoDeCorDoArquivo(arquivo);
+      if (geracao !== geracaoDaLista.current) return;
       const precisa = cor.risco !== COR_SEGURA;
       novos.push({
         id: proximoId++,
@@ -219,26 +223,33 @@ export function Cor({ ativa = false }: { ativa?: boolean }) {
     }
     setItens((atuais) => [...atuais, ...novos]);
 
-    for (const item of novos) {
-      if (item.estado !== "esperando") continue;
-      try {
-        await converterUm(item);
-      } catch (falha) {
-        console.error("[cor] falhou ao converter", item.arquivo.name, falha);
-        // "Failed to fetch" é o que o navegador diz quando a conexão caiu no
-        // meio — servidor reiniciado, ou a arte grande demais para o envio
-        // terminar. Sozinho não diz nada a quem lê.
-        let motivo = falha instanceof Error ? falha.message : String(falha);
-        if (/failed to fetch|networkerror|load failed/i.test(motivo)) {
-          motivo = "a conexão com o servidor do programa caiu no meio do envio";
+    // Todos os envios compartilham a fila, inclusive novos drops enquanto
+    // outro lote ainda converte. Cada conversão pode ocupar mais de 1 GB.
+    const trabalho = fila.current.then(async () => {
+      for (const item of novos) {
+        if (geracao !== geracaoDaLista.current) return;
+        if (item.estado !== "esperando") continue;
+        try {
+          await converterUm(item);
+        } catch (falha) {
+          console.error("[cor] falhou ao converter", item.arquivo.name, falha);
+          // "Failed to fetch" é o que o navegador diz quando a conexão caiu no
+          // meio — servidor reiniciado, ou a arte grande demais para o envio
+          // terminar. Sozinho não diz nada a quem lê.
+          let motivo = falha instanceof Error ? falha.message : String(falha);
+          if (/failed to fetch|networkerror|load failed/i.test(motivo)) {
+            motivo = "a conexão com o servidor do programa caiu no meio do envio";
+          }
+          atualizar(item.id, {
+            estado: "erro",
+            detalhe: `A conversão não rodou: ${motivo}. `
+              + "A arte não foi mexida e segue para o encaixe como está.",
+          });
         }
-        atualizar(item.id, {
-          estado: "erro",
-          detalhe: `A conversão não rodou: ${motivo}. `
-            + "A arte não foi mexida e segue para o encaixe como está.",
-        });
       }
-    }
+    });
+    fila.current = trabalho.catch(() => {});
+    await trabalho;
   }, [atualizar, converterUm]);
 
   /**
@@ -383,7 +394,7 @@ export function Cor({ ativa = false }: { ativa?: boolean }) {
               <button
                 type="button"
                 className="btn secondary"
-                onClick={() => { setItens([]); setErro(""); }}
+                onClick={() => { geracaoDaLista.current++; setItens([]); setErro(""); }}
               >
                 Limpar a lista
               </button>

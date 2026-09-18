@@ -87,9 +87,7 @@ async function acharInstalador(versao) {
     );
   }
 
-  const exe = arquivos.find(
-    (nome) => nome.endsWith(".exe") && nome.includes(versao),
-  );
+  const exe = selecionarInstalador(arquivos, versao);
   if (!exe) {
     morrer(
       `Não há instalador da versão ${versao} em:\n  ${BUNDLE}\n\n` +
@@ -98,6 +96,13 @@ async function acharInstalador(versao) {
     );
   }
   return exe;
+}
+
+function selecionarInstalador(arquivos, versao) {
+  // O NSIS inclui versão e arquitetura entre separadores. Comparar somente
+  // um trecho também aceitaria 1.0.260 ou uma prévia 1.0.26-beta para 1.0.26.
+  const sufixo = `_${versao}_x64-setup.exe`;
+  return arquivos.find(nome => nome.endsWith(sufixo));
 }
 
 async function main() {
@@ -166,4 +171,8 @@ async function main() {
   console.log("  Quem está com o programa aberto foi avisado agora.\n");
 }
 
-main().catch((erro) => morrer(erro?.message ?? String(erro)));
+if (require.main === module) {
+  main().catch((erro) => morrer(erro?.message ?? String(erro)));
+}
+
+module.exports = { selecionarInstalador };
