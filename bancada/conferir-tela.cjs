@@ -175,7 +175,10 @@ async function principal() {
           const pedacos = [];
           const fluxo = new WritableStream({
             write(d) { pedacos.push(d); },
-            close() { window.__salvo = { nome: suggestedName, tamanho: new Blob(pedacos).size }; },
+            async close() {
+              const blob = new Blob(pedacos);
+              window.__salvo = { nome: suggestedName, bytes: Array.from(new Uint8Array(await blob.arrayBuffer())) };
+            },
           });
           let escritor = null;
           fluxo.write = async (d) => {
@@ -263,7 +266,20 @@ async function principal() {
     const salvo = await p.evaluate(() => window.__salvo);
     assert.ok(salvo, 'a tela não gravou o PDF no destino escolhido');
     assert.match(salvo.nome, /^encaixe-\d+,\d+m\.pdf$/, `nome sugerido estranho: ${salvo.nome}`);
-    assert.ok(salvo.tamanho > 5000, `o PDF saiu pequeno demais para ter as artes (${salvo.tamanho} bytes)`);
+    // Cor chapada comprime muito bem: tamanho em bytes não prova que há arte.
+    // O leitor precisa encontrar os três desenhos, com seus pixels originais.
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const leituraPdf = pdfjs.getDocument({ data: Uint8Array.from(salvo.bytes) });
+    const pdf = await leituraPdf.promise;
+    try {
+      assert.equal(pdf.numPages, 1);
+      const pagina = await pdf.getPage(1);
+      const operadores = await pagina.getOperatorList();
+      const imagens = operadores.fnArray.flatMap((op, i) => op === pdfjs.OPS.paintImageXObject
+        ? [operadores.argsArray[i].slice(1, 3).sort((a, b) => a - b).join('x')] : []);
+      assert.deepEqual(imagens.sort(), ['200x400', '250x250', '300x400'],
+        'o PDF deve desenhar as três artes na resolução original, mesmo quando giradas');
+    } finally { await leituraPdf.destroy(); }
 
     const recado = await p.$eval('#encaixe-andamento', (n) => n.textContent);
     assert.match(recado, /^Salvo: encaixe-/, `a tela tinha que confirmar o arquivo (veio "${recado}")`);

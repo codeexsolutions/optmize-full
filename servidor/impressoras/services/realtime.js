@@ -137,9 +137,9 @@ function startRealtime(io, loadMachines) {
                 // todo o contador a um único trabalho e mantém a marca de
                 // estimado na divisão individual.
                 const weights = newOnes.map(r => Math.max(0, Number(r.printArea || r.timeSeconds || 0)));
-                const weightTotal = weights.reduce((sum, value) => sum + value, 0) || newOnes.length;
+                const weightTotal = weights.reduce((sum, value) => sum + value, 0);
                 newOnes.forEach((record, index) => {
-                  const ratio = weightTotal ? (weights[index] || 1) / weightTotal : 1 / newOnes.length;
+                  const ratio = weightTotal > 0 ? weights[index] / weightTotal : 1 / newOnes.length;
                   record.inkChannels = ink.channels.map(channel => ({ ...channel, ml: channel.ml * ratio }));
                   record.inkMl = record.inkChannels.reduce((sum, channel) => sum + channel.ml, 0);
                   record.inkExperimental = true;

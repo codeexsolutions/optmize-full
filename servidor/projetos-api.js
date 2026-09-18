@@ -24,7 +24,7 @@ const fs = require("fs");
 const path = require("path");
 const db = require("./db");
 const {
-  extensaoDaImagem, nomeDeArquivo, limparImagensSoltas, pastaDeUploads,
+  extensaoDaImagem, nomeDeArquivo, nomeDeImagemValido, limparImagensSoltas, pastaDeUploads,
 } = require("./uploads-arquivos");
 
 const router = express.Router();
@@ -147,6 +147,11 @@ router.put("/:id", (req, res) => {
 
   const nome = texto(req.body && req.body.nome);
   if (!nome) return res.status(400).json({ error: "Dê um nome ao projeto." });
+
+  if (Array.isArray(req.body.pecas)
+    && req.body.pecas.some((p) => p && p.arquivo && !nomeDeImagemValido(p.arquivo))) {
+    return res.status(400).json({ error: "O arquivo da peça precisa ser um nome de imagem, sem caminho." });
+  }
 
   const pecas = (Array.isArray(req.body.pecas) ? req.body.pecas : [])
     .map((p, ordem) => {

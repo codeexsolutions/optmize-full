@@ -43,6 +43,14 @@ function nomeDeArquivo(prefixo, extensao) {
   return `${prefixo}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extensao}`;
 }
 
+/** O banco guarda um nome simples, nunca um caminho ou um stream do Windows. */
+function nomeDeImagemValido(arquivo) {
+  return typeof arquivo === "string" && arquivo.length > 0
+    && arquivo !== "." && arquivo !== ".."
+    && !/[\\/:\x00-\x1f]/.test(arquivo)
+    && !/[. ]$/.test(arquivo);
+}
+
 /**
  * Apaga do disco o que não está mais em nenhuma linha da tabela.
  *
@@ -52,9 +60,13 @@ function nomeDeArquivo(prefixo, extensao) {
  */
 function limparImagensSoltas(pasta, consultaEmUso, arquivos) {
   if (!arquivos || arquivos.length === 0) return;
-  const emUso = new Set(consultaEmUso.all().map((r) => r.arquivo));
+  const chave = (arquivo) => process.platform === "win32" ? arquivo.toLowerCase() : arquivo;
+  const emUso = new Set(consultaEmUso.all()
+    .filter((r) => nomeDeImagemValido(r.arquivo)).map((r) => chave(r.arquivo)));
   [...new Set(arquivos)].forEach((arquivo) => {
-    if (!arquivo || emUso.has(arquivo)) return;
+    // Também protege bancos antigos: um caminho que já tenha sido gravado
+    // não pode fazer a exclusão de uma estampa apagar arquivos fora da pasta.
+    if (!nomeDeImagemValido(arquivo) || emUso.has(chave(arquivo))) return;
     try {
       fs.unlinkSync(path.join(pasta, arquivo));
     } catch (e) {
@@ -63,4 +75,6 @@ function limparImagensSoltas(pasta, consultaEmUso, arquivos) {
   });
 }
 
-module.exports = { extensaoDaImagem, nomeDeArquivo, limparImagensSoltas, pastaDeUploads };
+module.exports = {
+  extensaoDaImagem, nomeDeArquivo, nomeDeImagemValido, limparImagensSoltas, pastaDeUploads,
+};

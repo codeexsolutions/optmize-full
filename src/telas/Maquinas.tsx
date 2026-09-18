@@ -48,7 +48,12 @@ export function Maquinas() {
      aqui. */
   const { estado, rodando, falha, procurar, parar, recarregar: recarregarVarredura } = useVarredura(cadastradas.recarregar);
 
-  const comOsAlvosDoCampo = () => procurar(alvos.split(",").map((h) => h.trim()).filter(Boolean));
+  const alvosDoCampo = () => alvos.split(",").map((h) => h.trim()).filter(Boolean);
+  const comOsAlvosDoCampo = () => procurar(alvosDoCampo());
+  /* A busca funda desce os discos DESTE computador. Só faz sentido quando a
+     rápida não achou, e é por isso que ela é um segundo botão e não o padrão —
+     ver "A BUSCA FUNDA", em services/discovery.js. */
+  const procurarFundo = () => procurar(alvosDoCampo(), true);
 
   const pendentes = (estado?.results || []).filter((r) => r.action === "pending");
   const reconhecidas = (estado?.results || []).filter((r) => r.action !== "pending");
@@ -69,14 +74,25 @@ export function Maquinas() {
               Parar
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={comOsAlvosDoCampo}
-              className="flex items-center gap-2 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro"
-            >
-              <Icone referencia="icones.svg#radar" className="size-4" />
-              Procurar máquinas
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={procurarFundo}
+                title="Desce os discos deste computador, pasta por pasta. Demora, e só vale quando a busca normal não achou."
+                className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-3.5 py-2 text-[0.85rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta"
+              >
+                <Icone referencia="icones.svg#search" className="size-4" />
+                Procurar fundo
+              </button>
+              <button
+                type="button"
+                onClick={comOsAlvosDoCampo}
+                className="flex items-center gap-2 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro"
+              >
+                <Icone referencia="icones.svg#radar" className="size-4" />
+                Procurar máquinas
+              </button>
+            </div>
           )
         }
       >

@@ -208,6 +208,27 @@ export function traduzirIndicesDoGuardado(
   return paraHoje;
 }
 
+/** Um resultado parcial não pode voltar do histórico como trabalho completo. */
+export function posicoesGuardadasValidas(
+  posicoes: unknown, pecas: { qtd: number }[], paraHoje: number[],
+): boolean {
+  if (!Array.isArray(posicoes) || posicoes.length !== pecas.reduce((s, p) => s + p.qtd, 0)) return false;
+  const vistas = new Set<string>();
+  for (const p of posicoes) {
+    if (!p || !Number.isInteger(p.indice) || !Number.isInteger(p.copia)) return false;
+    const indice = paraHoje[p.indice];
+    const peca = indice === undefined ? undefined : pecas[indice];
+    if (!peca || p.copia < 1 || p.copia > peca.qtd) return false;
+    // A borda transparente da arte pode ficar fora do tecido, com origem negativa.
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)
+      || ![0, 90, 180, 270].includes(p.rot)) return false;
+    const chave = `${indice}/${p.copia}`;
+    if (vistas.has(chave)) return false;
+    vistas.add(chave);
+  }
+  return true;
+}
+
 /**
  * A identidade de um trabalho: as mesmas peças, no mesmo tecido, com a mesma
  * folga e a mesma bancada.

@@ -39,10 +39,18 @@ export function useVarredura(aoTerminar?: () => void) {
     if (estado.phase === "done") terminou.current?.();
   });
 
-  const procurar = useCallback(async (hosts: string[] = []) => {
+  /*
+   * `funda` manda descer os discos DESTE computador, e não só olhar os lugares
+   * onde software de impressora costuma ficar.
+   *
+   * Ela é um pedido, nunca o automático: percorrer um disco custa segundos a
+   * minutos, e a varredura é uma ação que a pessoa espera olhando. Ver "A BUSCA
+   * FUNDA", em servidor/impressoras/services/discovery.js.
+   */
+  const procurar = useCallback(async (hosts: string[] = [], funda = false) => {
     setFalha(null);
     try {
-      await api.post("/impressoras/machines/scan", { hosts });
+      await api.post("/impressoras/machines/scan", { hosts, funda });
       recarregar();
     } catch (erro) {
       setFalha(erro instanceof Error ? erro.message : "Não consegui começar a varredura.");

@@ -67,41 +67,48 @@ export function podePrepararEmWorker() {
  * vez de receber um bloco fixo no começo: peça grande e peça pequena custam
  * muito diferente, e com bloco fixo um worker terminava cedo e ficava parado.
  */
-export function repartirEntreWorkers(workers, tarefas) {
+export async function repartirEntreWorkers(workers, tarefas) {
+  if (tarefas.length === 0) return [];
+  if (workers.length === 0) throw new Error("Nenhum worker disponível para o preparo.");
   const respostas = new Array(tarefas.length);
   let proxima = 0;
+  const desligar = [];
 
-  return Promise.all(workers.map((w) => new Promise((pronto) => {
-    const mandarProxima = () => {
-      if (proxima >= tarefas.length) { pronto(); return; }
-      const indice = proxima++;
-      const { mensagem, transferir } = tarefas[indice];
-      w.__indice = indice;
-      w.postMessage(mensagem, transferir || []);
-    };
+  try {
+    await Promise.all(workers.map((w) => new Promise((pronto, falhou) => {
+      let indice;
+      const mandarProxima = () => {
+        if (proxima >= tarefas.length) { pronto(); return; }
+        indice = proxima++;
+        const { mensagem, transferir } = tarefas[indice];
+        try { w.postMessage(mensagem, transferir || []); }
+        catch (erro) { falhou(erro); }
+      };
 
-    const aoResponder = (evento) => {
-      respostas[w.__indice] = evento.data;
+      const aoResponder = (evento) => {
+        respostas[indice] = evento.data;
+        mandarProxima();
+      };
+      const aoQuebrar = (evento) => {
+        // Worker que não carregou não atende a próxima tarefa. Rejeitar permite
+        // ao chamador descartar o pool e refazer o lote na tela.
+        falhou(new Error(String(evento.message || "Falha no worker de preparo.")));
+      };
+
+      w.addEventListener("message", aoResponder);
+      w.addEventListener("error", aoQuebrar);
+      // Guarda para poder desligar no fim: worker do pool é reaproveitado, e sem
+      // isto os ouvintes de uma rodada continuariam vivos na próxima.
+      desligar.push(() => {
+        w.removeEventListener("message", aoResponder);
+        w.removeEventListener("error", aoQuebrar);
+      });
       mandarProxima();
-    };
-    const aoQuebrar = (evento) => {
-      respostas[w.__indice] = { tipo: "falhou", erro: String(evento.message || evento) };
-      mandarProxima();
-    };
-
-    w.addEventListener("message", aoResponder);
-    w.addEventListener("error", aoQuebrar);
-    // Guarda para poder desligar no fim: worker do pool é reaproveitado, e sem
-    // isto os ouvintes de uma rodada continuariam vivos na próxima.
-    w.__desligar = () => {
-      w.removeEventListener("message", aoResponder);
-      w.removeEventListener("error", aoQuebrar);
-    };
-    mandarProxima();
-  }))).then(() => {
-    workers.forEach((w) => { if (w.__desligar) w.__desligar(); });
+    })));
     return respostas;
-  });
+  } finally {
+    desligar.forEach((limpar) => limpar());
+  }
 }
 
 /**
@@ -246,6 +253,7 @@ export async function tirarFundoEmParalelo(imagens, forcar = false, aoAndar = nu
     return emSerie();
   }
 
+  const bitmapsDoLote = [];
   try {
     // Mesma regra do preparo das máscaras: os pixels são lidos aqui e mandados
     // prontos. Aqui não há redimensionamento envolvido, mas a porta única
@@ -263,10 +271,14 @@ export async function tirarFundoEmParalelo(imagens, forcar = false, aoAndar = nu
       // travada. Lá dentro o desenho é 1:1, sem redução, então os bytes são os
       // mesmos que a página leria.
       if (typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap) {
+        // Transfere uma cópia: o original ainda é usado pela peça e precisa
+        // continuar válido se o worker falhar ou a remoção for repetida.
+        const bitmap = await createImageBitmap(img);
+        bitmapsDoLote.push(bitmap);
         tarefas.push({
           indice: i,
-          mensagem: { tipo: "fundo", bitmap: img, forcar },
-          transferir: [img],
+          mensagem: { tipo: "fundo", bitmap, forcar },
+          transferir: [bitmap],
         });
         continue;
       }
@@ -290,12 +302,7 @@ export async function tirarFundoEmParalelo(imagens, forcar = false, aoAndar = nu
       const i = tarefas[k].indice;
       if (!resposta || resposta.tipo !== "fundo") {
         console.warn("[encaixe] tirar o fundo falhou:", resposta && resposta.erro);
-        // Refazer na tela só é possível quando a imagem ainda existe aqui. O
-        // bitmap foi transferido (e fechado) ao ser mandado, então não dá para
-        // relê-lo: a arte segue com o fundo, que é ruim mas não quebra nada.
-        const img = imagens[i];
-        const foiTransferida = typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap;
-        saida[i] = foiTransferida ? null : removerFundoDaImagem(img, forcar);
+        saida[i] = removerFundoDaImagem(imagens[i], forcar);
         return;
       }
       saida[i] = resposta.semMudanca ? null
@@ -315,5 +322,8 @@ export async function tirarFundoEmParalelo(imagens, forcar = false, aoAndar = nu
     console.warn("[encaixe] tirar o fundo em paralelo falhou, indo em série:", erro);
     derrubarPoolPrepara();
     return emSerie();
+  } finally {
+    // Também libera cópias que não chegaram a ser transferidas após um erro.
+    bitmapsDoLote.forEach((bitmap) => bitmap.close());
   }
 }

@@ -190,6 +190,7 @@ export function Imagem() {
      * apagados, sem dizer por quê. Foi assim que a primeira versão travou.
      */
     w.onerror = (evento) => {
+      w.terminate();
       setTrabalhando(null);
       mexerNoItem(item.id, {
         andamento: null,

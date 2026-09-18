@@ -32,8 +32,23 @@ import type { RespostaDeHistorico, Registro } from "../impressoras/tipos";
 
 type Modo = "lista" | "producao";
 
+/*
+ * O período é de UM DIA ou de um INTERVALO, e a diferença não é só de datas.
+ *
+ * "Como foi a produção de ontem?" e "quanto saiu no mês?" são duas perguntas
+ * que a mesma dupla de campos atendia mal: para ver um dia era preciso acertar
+ * as duas datas no mesmo valor, e para andar um dia para trás, acertar as duas
+ * outra vez. Daí o escopo virar um botão, e o modo de um dia ganhar setas.
+ *
+ * As datas continuam sendo as mesmas duas por baixo (`inicio` e `fim`), porque
+ * é o que o servidor recebe. No dia, elas andam juntas.
+ */
+type Escopo = "dia" | "intervalo";
+
 /** O último modo escolhido fica no navegador: quem usa a Produção quase sempre volta nela. */
 const CHAVE_DO_MODO = "optimize:impressoras:modo";
+/** Idem para o escopo: quem confere dia a dia abre sempre no dia. */
+const CHAVE_DO_ESCOPO = "optimize:impressoras:escopo";
 
 function lerModoGuardado(): Modo {
   try {
@@ -45,12 +60,25 @@ function lerModoGuardado(): Modo {
   }
 }
 
+function lerEscopoGuardado(): Escopo {
+  try {
+    return localStorage.getItem(CHAVE_DO_ESCOPO) === "dia" ? "dia" : "intervalo";
+  } catch {
+    return "intervalo";
+  }
+}
+
 export function Historico() {
-  const [inicio, setInicio] = useState(() => somarDias(hojeIso(), -6));
+  /* A data inicial respeita o escopo guardado: abrir no "dia" com um intervalo
+     de sete dias carregado seria o botão dizendo uma coisa e a consulta outra. */
+  const [inicio, setInicio] = useState(
+    () => (lerEscopoGuardado() === "dia" ? hojeIso() : somarDias(hojeIso(), -6)),
+  );
   const [fim, setFim] = useState(hojeIso);
   const [maquinaId, setMaquinaId] = useState("all");
   const [busca, setBusca] = useState("");
   const [modo, setModoBruto] = useState<Modo>(lerModoGuardado);
+  const [escopo, setEscopoBruto] = useState<Escopo>(lerEscopoGuardado);
   const [marcados, setMarcados] = useState<Set<string>>(() => new Set());
   const [lancando, setLancando] = useState(false);
   const [pedidoCriado, setPedidoCriado] = useState(false);
@@ -59,6 +87,22 @@ export function Historico() {
     setModoBruto(novo);
     try { localStorage.setItem(CHAVE_DO_MODO, novo); } catch { /* ver lerModoGuardado */ }
   };
+
+  /*
+   * Trocar de escopo não joga fora o que a pessoa estava olhando: o dia herda
+   * a data "Até" (o fim do que estava na tela), e o intervalo volta à janela de
+   * sete dias terminando nela. Zerar para "hoje" nas duas trocas obrigaria a
+   * digitar de novo a data que já estava certa.
+   */
+  const setEscopo = (novo: Escopo) => {
+    setEscopoBruto(novo);
+    try { localStorage.setItem(CHAVE_DO_ESCOPO, novo); } catch { /* ver lerEscopoGuardado */ }
+    if (novo === "dia") setInicio(fim);
+    else setInicio(somarDias(fim, -6));
+  };
+
+  /** No dia, as duas datas andam juntas. */
+  const irParaODia = (dia: string) => { setInicio(dia); setFim(dia); };
 
   const { dados, carregando, erro, recarregar } = useDados<RespostaDeHistorico>(
     () => api.get<RespostaDeHistorico>(
@@ -120,13 +164,65 @@ export function Historico() {
           </a>
         }
       >
+        {/* Um dia ou um intervalo. Vem ANTES dos campos porque é ele que decide
+            quais campos existem — ver o comentário do tipo `Escopo`. */}
+        <div className="mb-3 flex w-fit gap-1 rounded-[9px] border border-linha bg-painel-suave p-1">
+          <BotaoDeEscopo atual={escopo} valor="dia" aoEscolher={setEscopo}
+            icone="icones.svg#calendar" rotulo="Um dia" />
+          <BotaoDeEscopo atual={escopo} valor="intervalo" aoEscolher={setEscopo}
+            icone="icones.svg#calendar-range" rotulo="Intervalo" />
+        </div>
+
         <div className="flex flex-wrap items-end gap-3">
-          <Campo rotulo="De">
-            <input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} className={ESTILO_CAMPO} />
-          </Campo>
-          <Campo rotulo="Até">
-            <input type="date" value={fim} onChange={(e) => setFim(e.target.value)} className={ESTILO_CAMPO} />
-          </Campo>
+          {escopo === "dia" ? (
+            <Campo rotulo="Dia">
+              {/* As setas são o ponto do modo de um dia: conferir a produção é
+                  andar para trás um dia de cada vez, e com dois campos de data
+                  isso eram quatro edições por passo. */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => irParaODia(somarDias(fim, -1))}
+                  aria-label="Dia anterior"
+                  className="rounded-[9px] border border-linha bg-painel-suave px-2 py-2 text-tinta-fraca transition-colors hover:text-tinta"
+                >
+                  <Icone referencia="icones.svg#chevron-left" className="size-4" />
+                </button>
+                <input
+                  type="date"
+                  value={fim}
+                  onChange={(e) => irParaODia(e.target.value)}
+                  className={ESTILO_CAMPO}
+                />
+                <button
+                  type="button"
+                  onClick={() => irParaODia(somarDias(fim, 1))}
+                  disabled={fim >= hojeIso()}
+                  aria-label="Dia seguinte"
+                  className="rounded-[9px] border border-linha bg-painel-suave px-2 py-2 text-tinta-fraca transition-colors hover:text-tinta disabled:opacity-40 disabled:hover:text-tinta-fraca"
+                >
+                  <Icone referencia="icones.svg#chevron-right" className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => irParaODia(hojeIso())}
+                  disabled={fim === hojeIso()}
+                  className="rounded-[9px] border border-linha bg-painel-suave px-3 py-2 text-[0.8rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta disabled:opacity-40 disabled:hover:text-tinta-fraca"
+                >
+                  Hoje
+                </button>
+              </div>
+            </Campo>
+          ) : (
+            <>
+              <Campo rotulo="De">
+                <input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} className={ESTILO_CAMPO} />
+              </Campo>
+              <Campo rotulo="Até">
+                <input type="date" value={fim} onChange={(e) => setFim(e.target.value)} className={ESTILO_CAMPO} />
+              </Campo>
+            </>
+          )}
           <Campo rotulo="Máquina">
             <select value={maquinaId} onChange={(e) => setMaquinaId(e.target.value)} className={ESTILO_CAMPO}>
               <option value="all">Todas</option>
@@ -267,6 +363,29 @@ function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode
 
 function BotaoDeModo({ atual, valor, aoEscolher, icone, rotulo }: {
   atual: Modo; valor: Modo; aoEscolher: (m: Modo) => void; icone: string; rotulo: string;
+}) {
+  const ligado = atual === valor;
+  return (
+    <button
+      type="button"
+      onClick={() => aoEscolher(valor)}
+      aria-pressed={ligado}
+      className={`flex items-center gap-2 rounded-[7px] px-3 py-1.5 text-[0.8rem] font-semibold transition-colors ${
+        ligado ? "bg-ambar text-ambar-tinta" : "text-tinta-fraca hover:text-tinta"
+      }`}
+    >
+      <Icone referencia={icone} className="size-4" />
+      {rotulo}
+    </button>
+  );
+}
+
+/* Mesmo desenho do `BotaoDeModo`, outro par de valores. Ficam separados porque
+   os dois seletores respondem perguntas diferentes e vivem em lugares
+   diferentes do cartão; um componente genérico com dois tipos de união não
+   pagaria a indireção. */
+function BotaoDeEscopo({ atual, valor, aoEscolher, icone, rotulo }: {
+  atual: Escopo; valor: Escopo; aoEscolher: (e: Escopo) => void; icone: string; rotulo: string;
 }) {
   const ligado = atual === valor;
   return (
