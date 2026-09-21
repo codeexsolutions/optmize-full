@@ -28,7 +28,6 @@ impressoras-cancelamento-csv.json
 *.bak
 Thumbs.db
 .DS_Store
-dist/
 
 # Rust: o compilado do encaixe em WebAssembly. Gerado por `npm run build:wasm`;
 # o que vale é o `estatico/encaixe.wasm` que sai dele.
