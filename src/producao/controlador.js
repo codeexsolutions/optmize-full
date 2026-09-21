@@ -3534,12 +3534,14 @@ marcarGiro();
  */
 
 /*
- * Aqui morava a TELA DE COR, em 352 linhas imperativas. Ela foi para o React:
- * `src/telas/Cor.tsx` tem o estado, e `src/motores/miniaturaDaArte.js` e
- * `src/api/cor.ts` têm o que era domínio e chamada de servidor.
+ * Aqui morava a TELA DE COR, em 352 linhas imperativas. Ela foi para o React
+ * (`src/telas/Cor.tsx`) e depois saiu do programa, em 2026-09-21 — junto com
+ * as de Vetor e Imagem. O aviso de cor do próprio Encaixe (`renderAvisosDeCor`)
+ * não dependia dela e ficou.
  *
- * O que ficou deste lado é só a ponte: o `adicionarArquivos` sai no objeto de
- * controle lá embaixo, e é por ele que a Cor entrega as artes ao Encaixe.
+ * A ponte `adicionarArquivos` continua no objeto de controle lá embaixo: era
+ * por ela que a Cor entregava as artes ao Encaixe, e é a porta que uma tela
+ * React usaria para fazer o mesmo.
  */
 
 return {

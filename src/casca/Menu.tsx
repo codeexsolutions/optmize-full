@@ -197,14 +197,20 @@ export function Menu({ aberto, aoFechar }: Props) {
                     to={`/${tela.nome}`}
                     onClick={aoFechar}
                     /* A linha de apoio não é mais desenhada: vive aqui, no balão. */
-                    title={`${tela.rotulo} — ${tela.apoioMenu}`}
-                    className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO].join(" ")}
+                    title={tela.trancada ? `${tela.rotulo} — trancada` : `${tela.rotulo} — ${tela.apoioMenu}`}
+                    className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO,
+                      tela.trancada && !isActive ? "opacity-60" : ""].join(" ")}
                   >
                     {({ isActive }) => (
                       <>
                         {isActive && <span aria-hidden="true" className={TRILHO} />}
+                        {/*
+                          Tela trancada troca o ícone pelo cadeado (ver `trancada`,
+                          em rotas.ts). No lugar do ícone, e não ao lado do nome,
+                          porque na barra estreita o nome some e o ícone fica.
+                        */}
                         <Icone
-                          referencia={tela.icone}
+                          referencia={tela.trancada ? "icones.svg#lock" : tela.icone}
                           className={`${ICONE} ${isActive ? "text-ambar" : ""}`}
                         />
                         <span className={TEXTO_DO_ITEM}>{tela.rotulo}</span>
