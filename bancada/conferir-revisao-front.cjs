@@ -10,7 +10,6 @@ const compilado = buildSync({
     contents: `export { useDados } from './src/api/useDados';
       export { ProvedorDeDialogo, useDialogo } from './src/casca/Dialogo';
       export { Projetos } from './src/telas/Projetos';
-      export { Cor } from './src/telas/Cor';
       export { Funcionarios } from './src/telas/Funcionarios';
       export { Moldes } from './src/telas/Moldes';
       export { duracao } from './src/utils/formato';`,
@@ -28,7 +27,7 @@ for (const nome of ['window', 'document', 'HTMLElement', 'Node', 'Event', 'Mouse
 global.IS_REACT_ACT_ENVIRONMENT = true;
 dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 mod._compile(compilado, mod.filename);
-const { useDados, ProvedorDeDialogo, useDialogo, Projetos, Cor, Funcionarios, Moldes, duracao } = mod.exports;
+const { useDados, ProvedorDeDialogo, useDialogo, Projetos, Funcionarios, Moldes, duracao } = mod.exports;
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
@@ -161,39 +160,6 @@ async function conferirProjetos() {
   await act(async () => root.unmount());
 }
 
-async function conferirFilaDeCor() {
-  const conversoes = [];
-  global.fetch = async url => {
-    assert.equal(url, '/api/cor/converter');
-    const resposta = adiada(); conversoes.push(resposta); return resposta.promise;
-  };
-  const root = await montar(elemento(Cor, { ativa: true }));
-  const soltar = async nome => {
-    // JPEG com quatro componentes: o diagnóstico real o identifica como CMYK.
-    const file = new File([Buffer.from('ffd8ffc00008080001000104ffd9', 'hex')], nome, { type: 'image/jpeg' });
-    await act(async () => {
-      const evento = new dom.window.Event('drop', { bubbles: true, cancelable: true });
-      Object.defineProperty(evento, 'dataTransfer', { value: { files: [file] } });
-      document.querySelector('.vetor-solta').dispatchEvent(evento);
-    });
-  };
-  await soltar('primeira.jpg');
-  await soltar('segunda.jpg');
-  assert.equal(conversoes.length, 1, 'dois drops simultâneos usam uma só conversão por vez');
-  assert.equal(document.querySelectorAll('.cor-item').length, 2, 'o lote seguinte já aparece na fila');
-  await act(async () => conversoes[0].resolve(Response.json({ convertido: false, motivo: 'sem perfil' })));
-  assert.equal(conversoes.length, 2, 'a conversão seguinte começa ao terminar a anterior');
-  await soltar('descartada.jpg');
-  await clicar(botao('Limpar a lista'));
-  await act(async () => conversoes[1].resolve(Response.json({ convertido: false, motivo: 'sem perfil' })));
-  assert.equal(conversoes.length, 2, 'limpar a lista cancela as conversões que ainda estavam na fila');
-  assert.equal(document.querySelectorAll('.cor-item').length, 0);
-  await soltar('nova.jpg');
-  assert.equal(conversoes.length, 3, 'a fila aceita um lote novo depois de limpar');
-  await act(async () => conversoes[2].resolve(Response.json({ convertido: false })));
-  await act(async () => root.unmount());
-}
-
 async function conferirCamera() {
   global.fetch = async url => {
     if (url === '/api/ponto/funcionarios?todos=1') return Response.json([{ id: 1, nome: 'Pessoa', ativo: 1 }]);
@@ -260,7 +226,6 @@ async function main() {
   await conferirConsultas();
   await conferirDialogos();
   await conferirProjetos();
-  await conferirFilaDeCor();
   await conferirCamera();
   await conferirMoldes();
   assert.equal(duracao(3599), '1 h');
@@ -269,6 +234,6 @@ async function main() {
   assert.equal(duracao(30), 'menos de 1 min');
   assert.equal(duracao(0), '—');
   dom.window.close();
-  console.log('Revisão frontend: recargas, eventos, filtros, diálogos, projetos, moldes, fila de cor, câmera e duração passaram.');
+  console.log('Revisão frontend: recargas, eventos, filtros, diálogos, projetos, moldes, câmera e duração passaram.');
 }
 main().catch(erro => { console.error(erro); process.exitCode = 1; dom.window.close(); });

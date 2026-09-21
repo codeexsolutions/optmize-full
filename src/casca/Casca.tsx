@@ -4,7 +4,7 @@
  * ===========================================================================
  *
  * Menu à esquerda, cabeçalho no topo, a tela da rota no miolo. Não sabe o que
- * é molde, encaixe ou vetor: só qual linha da tabela de rotas está aberta.
+ * é molde, encaixe ou projeto: só qual linha da tabela de rotas está aberta.
  *
  * Ela é a rota-mãe do `react-router`, e não um componente que o `App` desenha
  * por fora. A diferença importa: o `<Outlet/>` troca só o miolo, então o menu
@@ -69,7 +69,7 @@ export function Casca() {
    * (`.producao[data-tela="encaixe"] .pageheader`, em producao.css).
    */
   const bancada = tela.nome === "encaixe" || tela.nome === "projetos"
-    || tela.nome === "vetor" || tela.nome === "moldes";
+    || tela.nome === "moldes";
 
   /* Bancada ou tela que pediu (ver `useSemCabecalho`): as duas trocam o
      cabeçalho pelo botão flutuante da gaveta. */
