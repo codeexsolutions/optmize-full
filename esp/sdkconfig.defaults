@@ -89,6 +89,31 @@ CONFIG_ESP32P4_REV_MIN_100=y
 # que ficou no padrao o dia inteiro.
 CONFIG_BSP_LCD_DPI_BUFFER_NUMS=3
 
+# --- E, com tres deles, a protecao contra rasgo LIGADA ---
+#
+# Os tres framebuffers acima existem desde sempre; o que faltava era usa-los.
+# Com a protecao desligada o LVGL desenhava num buffer de 50 linhas e o COPIAVA
+# para dentro do framebuffer que o painel estava varrendo naquele instante --
+# escrever no quadro que esta sendo exibido e a definicao de rasgo.
+#
+# HONESTIDADE SOBRE O PORQUE DISTO ESTAR AQUI: foi ligado enquanto se cacava um
+# piscar da tela, na suspeita de que fosse rasgo. NAO ERA -- o piscar era
+# ATERRAMENTO, defeito eletrico, e o mesmo terra ruim respondia tambem pelo
+# GT911 falhando no I2C e pela placa caindo em modo de gravacao sozinha. Esta
+# opcao nao consertou nada daquilo.
+#
+# Ficou porque se sustenta por conta propria: nao custa memoria nova (os
+# framebuffers ja estavam alocados e pagos), o buffer de 50 linhas deixa de
+# existir, e o painel nunca mais e escrito enquanto esta sendo lido. Medido
+# depois de ligada: nenhum `underrun` em toda a captura.
+#
+# Depende de BSP_LCD_DPI_BUFFER_NUMS > 1 -- por isso vem logo abaixo dele -- e e
+# incompativel com giro por software. Aqui nao ha: esta tela gira 180 graus no
+# proprio painel (`esp_lcd_panel_mirror`, ver `girar_de_cabeca_para_baixo`), e
+# `sw_rotate` ja estava desligado.
+CONFIG_BSP_DISPLAY_LVGL_AVOID_TEAR=y
+CONFIG_BSP_DISPLAY_LVGL_FULL_REFRESH=y
+
 # ===========================================================================
 # BANDA DE MEMORIA -- o que o painel DPI precisa para nao secar
 # ===========================================================================

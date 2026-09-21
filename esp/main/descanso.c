@@ -454,6 +454,21 @@ void descanso_conferir(void)
         descanso_atualizar();
         return;
     }
+
+    /*
+     * SEM TOQUE O DESCANSO NAO ENTRA, porque nao teria como sair.
+     *
+     * Ele acorda no `LV_EVENT_CLICKED` da cortina, e a ociosidade que o chama
+     * vem do LVGL, que so a zera com evento de entrada. Com o GT911 mudo os
+     * dois lados falham juntos: passados tres minutos a cortina subiria e
+     * ficaria para sempre -- por cima, justamente, do aviso que explica que o
+     * toque morreu. O aparelho pareceria um relogio de parede caro, e o defeito
+     * de verdade ficaria escondido atras da hora certa.
+     */
+    if (!ha_toque()) {
+        return;
+    }
+
     if (lv_display_get_inactive_time(NULL) >= ESPERA_MS) {
         montar();
     }

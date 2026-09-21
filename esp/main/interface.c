@@ -34,6 +34,7 @@
 #include "esp_log.h"
 
 #include "bsp/esp-bsp.h"
+#include "bsp/touch.h"
 #include "interface.h"
 
 static const char *TAG = "casca";
@@ -138,6 +139,67 @@ static void a_cada_segundo(lv_timer_t *t)
         lv_label_set_text(rot_rede, porque ? porque : "sem rede");
         lv_obj_set_style_text_color(rot_rede, COR_APOIO, 0);
     }
+}
+
+/* ---------------------------------------------------------- o toque */
+
+/*
+ * Uma pergunta so, respondida pelo BSP: ele guarda o controlador que conseguiu
+ * montar na partida, e NULL quando nao conseguiu. Guardar uma copia disto aqui
+ * seria criar um segundo lugar para a mesma verdade, e um deles ficaria velho.
+ */
+bool ha_toque(void)
+{
+    return bsp_touch_get_handle() != NULL;
+}
+
+/*
+ * O AVISO FICA POR CIMA DE TUDO, e de proposito.
+ *
+ * Sem toque ninguem troca de tela, entao um aviso dentro de um app seria um
+ * aviso que talvez nunca aparecesse. Na CAMADA DE CIMA do LVGL ele sobrevive a
+ * troca de app e a qualquer coisa que a casca desenhe depois.
+ *
+ * O texto diz o que fazer, e nao o que houve. "GT911 init failed" esta no log,
+ * onde serve; na parede da grafica o que resolve e a frase que manda olhar o
+ * conector.
+ */
+static void avisar_que_falta_o_toque(void)
+{
+    lv_obj_t *faixa = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(faixa, LV_HOR_RES, 72);
+    lv_obj_align(faixa, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_bg_color(faixa, COR_CARTAO, 0);
+    lv_obj_set_style_radius(faixa, 0, 0);
+    lv_obj_set_style_border_side(faixa, LV_BORDER_SIDE_TOP, 0);
+    lv_obj_set_style_border_color(faixa, COR_ALERTA, 0);
+    lv_obj_set_style_border_width(faixa, 2, 0);
+    lv_obj_set_style_pad_all(faixa, 0, 0);
+    lv_obj_remove_flag(faixa, LV_OBJ_FLAG_SCROLLABLE);
+
+    /*
+     * A camada de cima intercepta o toque de tudo que esta embaixo dela. Como
+     * esta faixa cobre 72 pixels da tela inteira, sem isto ela roubaria os
+     * toques daquela tira -- e um dia, com o toque de volta, alguem passaria a
+     * tarde procurando por que um botao daquela altura nao responde.
+     */
+    lv_obj_remove_flag(faixa, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_bg_opa(lv_layer_top(), LV_OPA_TRANSP, 0);
+
+    lv_obj_t *titulo = lv_label_create(faixa);
+    lv_label_set_text(titulo, LV_SYMBOL_WARNING "  A tela nao responde ao toque");
+    lv_obj_set_style_text_color(titulo, COR_ALERTA, 0);
+    lv_obj_set_style_text_font(titulo, &fonte_22, 0);
+    lv_obj_align(titulo, LV_ALIGN_LEFT_MID, 28, -13);
+
+    lv_obj_t *o_que_fazer = lv_label_create(faixa);
+    lv_label_set_text(o_que_fazer,
+                      "Desligue da tomada e reencaixe o cabo do toque no verso da placa.");
+    lv_obj_set_style_text_color(o_que_fazer, COR_APOIO, 0);
+    lv_obj_set_style_text_font(o_que_fazer, &fonte_16, 0);
+    lv_obj_align(o_que_fazer, LV_ALIGN_LEFT_MID, 28, 13);
+
+    ESP_LOGW(TAG, "sem toque: aviso fixo na tela, e o descanso nao entra");
 }
 
 static void tocou_voltar(lv_event_t *e)
@@ -626,6 +688,12 @@ void interface_iniciar(void)
     lv_obj_remove_flag(area, LV_OBJ_FLAG_SCROLLABLE);
 
     abrir_inicio();
+
+    /* Depois da tela montada, para ficar por cima do que ela desenhou. */
+    if (!ha_toque()) {
+        avisar_que_falta_o_toque();
+    }
+
     bsp_display_unlock();
 
     ESP_LOGI(TAG, "casca no ar");
