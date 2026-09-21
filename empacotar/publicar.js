@@ -10,6 +10,11 @@
  *     npm run build:app     (compila e ASSINA — ver a nota sobre a chave)
  *     npm run publicar
  *
+ * DESDE 2026-09-21 QUEM RODA ISTO É O GITHUB, a cada mudança na main — ver
+ * `.github/workflows/lancar.yml` e docs/LANCAMENTO.md. Rodar à mão continua
+ * funcionando e fica para emergência; o lançamento de todo dia não passa mais
+ * pela pasta de ninguém.
+ *
  * O que ele faz: acha o `.exe` e o `.sig` que o Tauri acabou de gerar, confere
  * que a assinatura está lá e os envia para `POST /admin/app/releases`. A partir
  * do "ok" do servidor, `GET /download` já entrega esta versão e todo Optimize
@@ -19,19 +24,27 @@
  * A CHAVE DE ASSINATURA
  * ---------------------------------------------------------------------------
  * O `.sig` só nasce se o build enxergar a chave privada. Ela NÃO mora no
- * repositório — o repositório está dentro do OneDrive, e chave privada de
- * assinatura não sobe para nuvem nenhuma. Ela fica em:
+ * repositório. Mora em dois lugares:
+ *
+ *   no GitHub, como o Secret `TAURI_SIGNING_PRIVATE_KEY` — é com ela que o
+ *   lançamento automático assina. A regra antiga era "a chave não sobe para
+ *   nuvem nenhuma"; ela mudou em 2026-09-21, de propósito, para nenhuma
+ *   máquina precisar ficar ligada para lançar. No Secret ela fica cifrada, e
+ *   depois de salva nem quem administra o repositório lê o conteúdo.
+ *
+ *   na máquina de quem lança à mão, em
  *
  *     C:\Users\<voce>\.optmize\optmize-updater.key
  *
- * e o build a recebe assim (PowerShell), antes do `npm run build:app`:
+ *   e o build a recebe assim (PowerShell), antes do `npm run build:app`:
  *
  *     $env:TAURI_SIGNING_PRIVATE_KEY = "$HOME\.optmize\optmize-updater.key"
  *
- * Perder esse arquivo é perder a capacidade de atualizar quem já instalou: a
+ * Perder a chave é perder a capacidade de atualizar quem já instalou: a
  * chave pública correspondente está compilada dentro de cada cópia que saiu
- * daqui, e um instalador assinado com outra chave é recusado pelo app. Faça
- * cópia dela num lugar que não seja este computador.
+ * daqui, e um instalador assinado com outra chave é recusado pelo app. O
+ * Secret não serve de cópia de segurança — ele não se lê de volta. Guarde uma
+ * cópia do arquivo num lugar que não seja este computador.
  *
  * ---------------------------------------------------------------------------
  * A CHAVE DE ADMINISTRAÇÃO
