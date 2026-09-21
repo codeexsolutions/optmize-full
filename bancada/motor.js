@@ -41,6 +41,8 @@ const MODULOS = [
   // O guarda da sobreposicao: a bancada mede a MESMA conta que a tela usa
   // para travar a producao, e nao uma copia dela.
   "motores/encaixeSobreposicao.js",
+  // A ponte do encolhedor (o sparrow): a segunda fase da busca da produção.
+  "motores/encaixeEncolher.js",
   "utils/geometria.ts",
 ];
 
@@ -50,6 +52,12 @@ const MODULOS = [
  * `comWasm` liga o motor rápido (o mesmo `estatico/encaixe.wasm` que o
  * navegador carrega). Vale medir dos dois jeitos: sem ele o JavaScript é a
  * referência de correção, com ele é o que a produção roda de verdade.
+ *
+ * O encolhedor sobe sempre que o arquivo existir: ele não tem caminho em
+ * JavaScript para comparar, e sem ele a segunda fase simplesmente não roda.
+ * `motor.comEncolhedor` diz se subiu — quem pede a fase (`--extra
+ * encolher=true`) confere isso e falha alto, em vez de medir a busca sozinha
+ * achando que mediu as duas fases.
  */
 async function carregarMotor({ comWasm = true } = {}) {
   const motor = await carregarDosMotores(MODULOS);
@@ -58,6 +66,9 @@ async function carregarMotor({ comWasm = true } = {}) {
     const bytes = fs.readFileSync(path.join(RAIZ, "estatico/encaixe.wasm"));
     motor.comWasm = await motor.carregarMotorWasm(bytes);
   }
+  const encolhedor = path.join(RAIZ, "src/motores/encolher/encolher_bg.wasm");
+  motor.comEncolhedor = fs.existsSync(encolhedor)
+    && await motor.carregarEncolhedor(fs.readFileSync(encolhedor));
   return motor;
 }
 
