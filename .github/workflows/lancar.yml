@@ -67,7 +67,7 @@ jobs:
 
     steps:
       - name: O código da main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # O histórico inteiro: o número da versão é a contagem de commits.
           fetch-depth: 0
@@ -92,7 +92,7 @@ jobs:
         # O instalador leva o node.exe desta máquina, e o servidor vira bytecode
         # casado com ele (ver empacotar/compilar.js). A versão fica fixada no
         # `.node-version` para todo lançamento sair com o mesmo.
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: .node-version
           cache: npm
