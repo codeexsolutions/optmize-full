@@ -179,40 +179,34 @@ async function main() {
   assert.equal(document.body.classList.contains('dialog-open'),false);
   document.getElementById('encaixe-largura').value='179';
 
-  // ---------- Cor: React, dentro do editor de producao ----------
-  await irPara('cor');
-  const cor = () => document.querySelector('.page:not([data-page])');
-  const listaDeCor = () => cor().querySelector('.cor-lista');
-  const png = new dom.window.File([Buffer.from('89504e470d0a1a0a','hex')],'arte.png',{type:'image/png'});
-  await act(async()=>{
-    const drop=new dom.window.Event('drop',{bubbles:true,cancelable:true});
-    Object.defineProperty(drop,'dataTransfer',{value:{files:[png]}});
-    cor().querySelector('.vetor-solta').dispatchEvent(drop);
-    await new Promise(r=>setTimeout(r,10));
-  });
-  assert.equal(cor().hidden,false,'a tela de Cor aparece quando e a vez dela');
-  assert.match(listaDeCor().textContent,/arte.png/);
-  assert.match(listaDeCor().textContent,/já estava certa/);
-
+  // A tela de Cor, que morava dentro do editor de producao ao lado do
+  // Encaixe e era conferida aqui, saiu do programa em 2026-09-21 (junto com
+  // Vetor e Imagem). O que ela conferia de geral — o editor escondido e o
+  // ajuste do Encaixe sobrevivendo a troca de aba — continua abaixo.
   await irPara('impressoras');
   assert.equal(document.querySelector('.producao').hidden,true);
   await irPara('encaixe');
   assert.equal(document.getElementById('encaixe-largura').value,'179',
     'o ajuste do Encaixe sobrevive a ida e volta');
-  // A Cor esconde-se sozinha pelo `hidden`, e nao pela classe `active` que o
-  // controlador liga nas outras: se alguem devolver o `data-page` a ela, o
-  // controlador volta a mexer na classe e o proximo render desfaz.
-  assert.equal(cor().hidden,true,'a tela de Cor some quando nao e a vez dela');
-  assert.match(listaDeCor().textContent,/arte.png/,'e a lista sobrevive escondida');
+
+  // ---------- Macros: trancada ----------
+  // Aparece no menu, com o cadeado no lugar do icone, e o endereco abre o
+  // aviso de tela trancada em vez das macros (ver `trancada`, em rotas.ts).
+  const itemMacros = document.querySelector('a[href="/macros"]');
+  assert.ok(itemMacros,'a Macros continua no menu');
+  assert.match(itemMacros.querySelector('use').getAttribute('href'),/icones\.svg#lock$/,
+    'o item trancado mostra o cadeado');
+  await irPara('macros');
+  assert.match(document.body.textContent,/Esta tela está trancada/,
+    'o endereco da Macros abre o aviso, e nao as macros');
   await irPara('cor');
-  assert.match(listaDeCor().textContent,/arte.png/);
-  await click(botao('Limpar a lista',cor()));
-  assert.equal(listaDeCor(),null,'lista vazia nao desenha o painel');
+  assert.equal(dom.window.location.pathname,'/moldes',
+    'endereco de tela que saiu cai na tela inicial');
 
   await act(async()=>app.unmount());
   assert.equal(dom.window.uiConfirm,undefined);
   assert.equal(dom.window.carregarProjetos,undefined);
   fs.unlinkSync(bundle); dom.window.close();
-  console.log('React: rotas, StrictMode, modais, moldes, clientes, editor de projeto, Cor e preservação de ajustes passaram.');
+  console.log('React: rotas, StrictMode, modais, moldes, clientes, editor de projeto, preservação de ajustes e a Macros trancada passaram.');
 }
 main().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1);});

@@ -1972,12 +1972,16 @@ function mostrarAndamento(estado, aprendido) {
     partes.push(`buscando alcançar o recorde de ${metrosNaTela(estado.alvo)}`);
   } else if (estado.fase === "melhorando") {
     partes.push(`${estado.semGanho} sem ganho`);
+  } else if (estado.fase === "encolhendo" && estado.consumoDaBusca) {
+    // A segunda fase: o sparrow partiu do encaixe da busca e vai encolhendo.
+    partes.push(`encolhendo o rolo a partir de ${metrosNaTela(estado.consumoDaBusca)}`);
   }
   if (aprendido && aprendido.encaixesDoTipo > 0) {
     partes.push(`aprendeu com ${aprendido.encaixesDoTipo} encaixe(s) parecido(s)`);
   }
   encaixeAndamento.textContent = partes.join(" · ");
   const titulo = estado.fase === "perseguindo" ? "Buscando alcançar o melhor já conhecido"
+    : estado.fase === "encolhendo" ? "Encolhendo o rolo"
     : estado.fase === "base" ? "Montando o primeiro encaixe"
       : estado.fase === "pronto" ? "Finalizando o resultado"
         : estado.modo === "explorar" ? "Tentando um caminho diferente"
@@ -2411,6 +2415,16 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado, guardadoAntes) {
     partes.push(`melhorou ${resultado.ganhos.length}x durante a procura`);
   }
   if (resultado.receita) partes.push(`receita vencedora: ${resultado.receita}`);
+  // A segunda fase (o sparrow, ver motores/encaixeEncolher.js): quanto o rolo
+  // encolheu depois da busca, ou por que ela não rodou. O motivo aparece
+  // porque queda calada para o caminho de sempre já escondeu defeito aqui.
+  const encolhimento = resultado.encolhimento;
+  if (encolhimento && encolhimento.depois < encolhimento.antes) {
+    partes.push(`o rolo encolheu ${formatarCm(encolhimento.antes - encolhimento.depois)}`
+      + ` depois da busca (de ${metrosNaTela(encolhimento.antes)})`);
+  } else if (encolhimento && encolhimento.motivo) {
+    partes.push(`sem encolher o rolo: ${encolhimento.motivo}`);
+  }
 
   const total = anotado ? anotado.encaixesDoTipo : (aprendido ? aprendido.encaixesDoTipo : 0);
   if (total > 0) partes.push(`memória: ${total} encaixe(s) deste tipo`);
@@ -3534,12 +3548,14 @@ marcarGiro();
  */
 
 /*
- * Aqui morava a TELA DE COR, em 352 linhas imperativas. Ela foi para o React:
- * `src/telas/Cor.tsx` tem o estado, e `src/motores/miniaturaDaArte.js` e
- * `src/api/cor.ts` têm o que era domínio e chamada de servidor.
+ * Aqui morava a TELA DE COR, em 352 linhas imperativas. Ela foi para o React
+ * (`src/telas/Cor.tsx`) e depois saiu do programa, em 2026-09-21 — junto com
+ * as de Vetor e Imagem. O aviso de cor do próprio Encaixe (`renderAvisosDeCor`)
+ * não dependia dela e ficou.
  *
- * O que ficou deste lado é só a ponte: o `adicionarArquivos` sai no objeto de
- * controle lá embaixo, e é por ele que a Cor entrega as artes ao Encaixe.
+ * A ponte `adicionarArquivos` continua no objeto de controle lá embaixo: era
+ * por ela que a Cor entregava as artes ao Encaixe, e é a porta que uma tela
+ * React usaria para fazer o mesmo.
  */
 
 return {

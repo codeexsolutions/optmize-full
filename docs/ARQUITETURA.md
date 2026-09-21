@@ -182,6 +182,10 @@ src/                     O FRONT (React + TypeScript)
 ├── api/                 cliente.ts (o fetch) e useDados.ts (os 3 estados)
 ├── utils/               ajuda pura e sem dono: geometria, números, formato
 └── motores/             DOMÍNIO — sem React e sem a tela (ver a regra abaixo)
+    └── encolher/        gerado: o sparrow em WASM e a cola do wasm-bindgen
+
+wasm-encolher/           a crate que embrulha o sparrow (`npm run build:encolher`);
+                         a segunda fase do encaixe — ver motores/encaixeEncolher.js
 
 estilo/
 ├── tokens.css           a paleta. O ÚNICO arquivo com hex no projeto

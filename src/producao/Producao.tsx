@@ -2,7 +2,6 @@ import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "reac
 import { Estrutura } from "./Estrutura";
 import { montarProducao } from "./controlador";
 import { ProvedorDaLigacao, type Ligacao } from "./ligacao";
-import { Cor } from "../telas/Cor";
 import type { NomeDeTela } from "../rotas";
 import "./producao.css";
 
@@ -12,9 +11,10 @@ import "./producao.css";
  * Elas têm rota, mas a rota não desenha nada: quem as desenha é este
  * componente, que fica montado o tempo todo para não perder o trabalho em
  * memória ao trocar de aba (ver `casca/Casca.tsx`). A lista encolhendo é a
- * medida do quanto a migração andou — Cor, Projetos e Moldes já saíram dela.
+ * medida do quanto a migração andou — Projetos e Moldes já saíram dela, e a
+ * Cor saiu do programa (2026-09-21).
  */
-export const ehProducaoIntegrada = (pagina: string) => ["encaixe", "cor"].includes(pagina);
+export const ehProducaoIntegrada = (pagina: string) => ["encaixe"].includes(pagina);
 
 /** Mantém o trabalho em memória ao navegar; desmontar libera os recursos. */
 export function Producao({ pagina, irPara, children }: {
@@ -41,8 +41,8 @@ export function Producao({ pagina, irPara, children }: {
 
   /*
    * A ponte para as telas que já são React. Ela chama o controlador pelo `ref`,
-   * então não muda de identidade a cada render e não faz a Cor redesenhar à
-   * toa; e cai fora com um aviso se o controlador não tiver subido, em vez de
+   * então não muda de identidade a cada render e não faz as telas redesenharem
+   * à toa; e cai fora com um aviso se o controlador não tiver subido, em vez de
    * estourar no clique.
    */
   const ligacao = useMemo<Ligacao>(() => ({
@@ -72,13 +72,6 @@ export function Producao({ pagina, irPara, children }: {
     <div ref={raiz} className="producao h-full" hidden={!ehProducaoIntegrada(pagina)}>
       {erro && <p role="alert">{erro} <button type="button" onClick={() => setErro("")}>Fechar aviso</button></p>}
       <Estrutura />
-      {/*
-        A Cor é React de verdade, então fica FORA da `Estrutura`: aquela é
-        memoizada para o controlador poder mexer nos nós dela sem o React desfazer,
-        e esta precisa redesenhar a cada arte convertida. Montada sempre, escondida
-        quando não é a vez — é o que conserva a lista ao navegar.
-      */}
-      <Cor ativa={pagina === "cor"} />
     </div>
     {children}
   </ProvedorDaLigacao>;

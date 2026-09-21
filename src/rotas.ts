@@ -25,11 +25,9 @@
  *
  *   - **Produção** — o molde e o trabalho: a biblioteca, o projeto do cliente,
  *     o encaixe no tecido e as macros do Corel.
- *   - **Design** — o que se faz com a ARTE antes de ela virar trabalho:
- *     vetorizar um desenho, tirar o molde de uma foto, aumentar a resolução e
- *     acertar a cor. Eram quatro telas soltas dentro de Produção, e Produção
- *     tinha oito itens — quase o menu inteiro num grupo só, que é o mesmo que
- *     não ter grupo nenhum.
+ *   - **Design** — o que se faz com a ARTE antes de ela virar trabalho: hoje,
+ *     tirar o molde de uma foto. Eram quatro telas (Vetor, Digitalizar, Imagem
+ *     e Cor); três saíram do programa em 2026-09-21, e o Digitalizar ficou.
  *   - **Impressão** — o que acontece ENQUANTO se imprime, e as máquinas em si.
  *   - **Relatórios** — o que se olha DEPOIS, para conferir e comparar.
  *
@@ -58,20 +56,17 @@ import { useLocation } from "react-router-dom";
  * A troca de tela passa por um `<Suspense>` (ver `casca/Casca.tsx`), e o
  * pedaço fica no cache do navegador: a espera acontece uma vez por tela.
  *
- * As que ainda são do editor de produção NÃO entram aqui (Encaixe e Cor). Elas não são desenhadas pela rota — quem as desenha é o
+ * A que ainda é do editor de produção NÃO entra aqui (o Encaixe). Ela não é desenhada pela rota — quem a desenha é o
  * `<Producao/>`, que fica montado o tempo todo (ver `casca/Casca.tsx`), então
- * dividi-las não adiantaria nada: o pacote viria junto de qualquer forma, na
+ * dividi-la não adiantaria nada: o pacote viria junto de qualquer forma, na
  * primeira tela.
  */
 import { Encaixe } from "./telas/Encaixe";
-import { Cor } from "./telas/Cor";
+import { TelaTrancada } from "./casca/TelaTrancada";
 
 const Moldes = lazy(() => import("./telas/Moldes").then((m) => ({ default: m.Moldes })));
 const Projetos = lazy(() => import("./telas/Projetos").then((m) => ({ default: m.Projetos })));
-const Vetor = lazy(() => import("./telas/Vetor").then((m) => ({ default: m.Vetor })));
 const Digitalizar = lazy(() => import("./telas/Digitalizar").then((m) => ({ default: m.Digitalizar })));
-const Imagem = lazy(() => import("./telas/Imagem").then((m) => ({ default: m.Imagem })));
-const Macros = lazy(() => import("./telas/Macros").then((m) => ({ default: m.Macros })));
 const Impressoras = lazy(() => import("./telas/Impressoras").then((m) => ({ default: m.Impressoras })));
 const Pedidos = lazy(() => import("./telas/Pedidos").then((m) => ({ default: m.Pedidos })));
 const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m.Maquinas })));
@@ -82,7 +77,7 @@ const Ponto = lazy(() => import("./telas/Ponto").then((m) => ({ default: m.Ponto
 const Funcionarios = lazy(() => import("./telas/Funcionarios").then((m) => ({ default: m.Funcionarios })));
 
 export type NomeDeTela =
-  | "cor" | "moldes" | "projetos" | "encaixe" | "vetor" | "digitalizar" | "imagem" | "macros"
+  | "moldes" | "projetos" | "encaixe" | "digitalizar" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
   | "historico" | "reposicao" | "ponto" | "funcionarios";
 
@@ -127,6 +122,13 @@ export interface Tela {
    * é o mesmo. O que sai é só a linha do menu.
    */
   foraDoMenu?: boolean;
+  /**
+   * A tela está TRANCADA: aparece no menu com um cadeado, e o endereço abre o
+   * aviso de tela trancada (`casca/TelaTrancada.tsx`) — que é o `Componente`
+   * da linha enquanto ela estiver assim. É o contrário do `foraDoMenu`: lá a
+   * tela funciona e não aparece; aqui ela aparece e não funciona.
+   */
+  trancada?: boolean;
   Componente: ComponentType;
 }
 
@@ -160,28 +162,26 @@ export const TELAS: readonly Tela[] = [
     Componente: Encaixe,
   },
   {
+    /*
+     * TRANCADA desde 2026-09-21. Para destrancar: tirar o `trancada`, trocar
+     * o `Componente` por `Macros` e devolver lá em cima a linha
+     *   const Macros = lazy(() => import("./telas/Macros").then((m) => ({ default: m.Macros })));
+     * O arquivo da tela (`telas/Macros.tsx`) continua no repositório.
+     */
     nome: "macros",
     grupo: "producao",
     rotulo: "Macros",
     apoioMenu: "Ferramentas no CorelDRAW",
     apoioTopo: "Baixe e instale as macros que rodam dentro do Corel e falam com este sistema.",
     icone: "icones.svg#puzzle",
-    Componente: Macros,
+    trancada: true,
+    Componente: TelaTrancada,
   },
 
 
   // --------------------------------------------------------------- Design
-  // O que acontece com a ARTE antes de ela virar trabalho: o traço, o molde
-  // tirado de uma foto, a resolução e a cor.
-  {
-    nome: "vetor",
-    grupo: "design",
-    rotulo: "Vetor",
-    apoioMenu: "Traço a partir da imagem",
-    apoioTopo: "Transforme uma imagem em desenho vetorial para corte e impressão.",
-    icone: "icones.svg#spline",
-    Componente: Vetor,
-  },
+  // O que acontece com a ARTE antes de ela virar trabalho: o molde tirado de
+  // uma foto.
   {
     nome: "digitalizar",
     grupo: "design",
@@ -193,20 +193,6 @@ export const TELAS: readonly Tela[] = [
   },
 
   // ------------------------------------------------------------ Impressão
-  {
-    nome: "imagem",
-    grupo: "design",
-    rotulo: "Imagem",
-    apoioMenu: "Resolução para imprimir",
-    apoioTopo: "Aumenta a resolução da arte com rede neural, para imprimir grande sem borrar.",
-    icone: "icones.svg#zoom-in",
-    Componente: Imagem,
-  },
-  {
-    nome: "cor", grupo: "design", rotulo: "Cor",
-    apoioMenu: "Arte na cor certa", apoioTopo: "Confira e corrija a cor antes de mandar ao encaixe.",
-    icone: "icones.svg#palette", Componente: Cor,
-  },
   {
     nome: "impressoras",
     grupo: "impressao",

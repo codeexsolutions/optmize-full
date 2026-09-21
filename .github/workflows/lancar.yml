@@ -1,0 +1,174 @@
+# ===========================================================================
+# LANÇAR — o que entra na main vira versão nova em todas as lojas, sozinho
+# ===========================================================================
+#
+# O lado das máquinas já existia: o Optimize instalado pergunta ao backend, 90 s
+# depois de abrir e a cada 2 horas, se há versão nova, e oferece "Atualizar
+# agora" (ver `procurar_atualizacao`, em src-tauri/src/main.rs). Faltava o
+# gatilho: alguém tinha de rodar `npm run build:app` e `npm run publicar` na
+# máquina que tem a chave. Isto é esse gatilho, rodando nas máquinas do GitHub.
+#
+# E sai sempre do que está NA MAIN — nunca da pasta de alguém, com mudança sem
+# commit no meio (ver docs/LANCAMENTO.md).
+#
+# O caminho: conferências → compila e assina → publica → etiqueta v<versão>.
+# Qualquer passo que falhe para tudo, e nada é publicado.
+#
+# Os Secrets (Settings → Secrets and variables → Actions):
+#   TAURI_SIGNING_PRIVATE_KEY           o CONTEÚDO da chave de assinatura
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  a senha dela (vazio se não tiver)
+#   OPTMIZE_ADMIN_KEY                   a chave de administração do backend
+
+name: Lançar
+
+on:
+  push:
+    branches: [main]
+    # Só o que vai para dentro do instalador. Commit de documentação, de
+    # bancada ou do firmware do ESP não é versão nova para as lojas.
+    paths:
+      - "src/**"
+      - "servidor/**"
+      - "estatico/**"
+      - "empacotar/**"
+      - "src-tauri/**"
+      - "corel/**"
+      - "estilo/**"
+      - "index.html"
+      - "vite.config.mts"
+      - "tsconfig.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".node-version"
+      - ".github/workflows/lancar.yml"
+  # O botão "Run workflow", para relançar sem precisar de commit novo.
+  workflow_dispatch:
+
+# Um lançamento de cada vez, na ordem em que os pushes chegaram. Cancelar o
+# anterior poderia interromper uma publicação no meio.
+concurrency:
+  group: lancamento
+  cancel-in-progress: false
+
+# Escrever no repositório só para a etiqueta v<versão> do fim.
+permissions:
+  contents: write
+
+jobs:
+  lancar:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        # bash para todos os passos: com ele, o primeiro comando que falha
+        # derruba o passo. No PowerShell, só o código de saída do ÚLTIMO comando
+        # conta — uma conferência quebrada no meio passaria calada.
+        shell: bash
+
+    steps:
+      - name: O código da main
+        uses: actions/checkout@v4
+        with:
+          # O histórico inteiro: o número da versão é a contagem de commits.
+          fetch-depth: 0
+
+      - name: As chaves estão cadastradas?
+        # Sem a chave de assinatura o build não falha — ele sai SEM assinatura
+        # (ver empacotar/instalador.js), e só o `publicar` recusaria, no fim.
+        # Aqui a falta aparece no primeiro minuto, dizendo o que falta.
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          OPTMIZE_ADMIN_KEY: ${{ secrets.OPTMIZE_ADMIN_KEY }}
+        run: |
+          falta=""
+          [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || falta="$falta TAURI_SIGNING_PRIVATE_KEY"
+          [ -n "$OPTMIZE_ADMIN_KEY" ] || falta="$falta OPTMIZE_ADMIN_KEY"
+          if [ -n "$falta" ]; then
+            echo "::error::Faltam os Secrets:$falta — cadastre em Settings > Secrets and variables > Actions (ver docs/LANCAMENTO.md)."
+            exit 1
+          fi
+
+      - name: Node (o mesmo que vai dentro do instalador)
+        # O instalador leva o node.exe desta máquina, e o servidor vira bytecode
+        # casado com ele (ver empacotar/compilar.js). A versão fica fixada no
+        # `.node-version` para todo lançamento sair com o mesmo.
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache do Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Dependências
+        run: npm ci
+
+      - name: Modelos do reconhecimento de rosto
+        # Não moram no git (39 MB, ver empacotar/modelos.js): sem este passo o
+        # instalador sairia sem reconhecimento facial no Ponto.
+        run: npm run modelos
+
+      - name: Número da versão
+        id: versao
+        run: node empacotar/versao-do-lancamento.js
+
+      - name: Conferências
+        # Se qualquer uma falhar, nada é publicado.
+        run: |
+          npm run tipos
+          npm run bancada:revisao
+          npm run bancada:conferir
+          npm run bancada:encolher
+
+      - name: Compilar e assinar
+        env:
+          CONTEUDO_DA_CHAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          # A chave vai por ARQUIVO, e não pelo conteúdo na variável: o
+          # empacotar/instalador.js trata como caminho todo valor de uma linha
+          # só com menos de 4096 caracteres — e a chave do Tauri é exatamente
+          # isso. Com o conteúdo direto, ele procuraria um arquivo com esse
+          # nome, não acharia e compilaria SEM assinar. O arquivo mora na pasta
+          # temporária desta máquina, que o GitHub apaga ao fim do trabalho.
+          CHAVE="$RUNNER_TEMP/optmize-updater.key"
+          printf '%s' "$CONTEUDO_DA_CHAVE" > "$CHAVE"
+          TAURI_SIGNING_PRIVATE_KEY="$CHAVE" npm run build:app
+
+      - name: Publicar
+        env:
+          OPTMIZE_ADMIN_KEY: ${{ secrets.OPTMIZE_ADMIN_KEY }}
+          ANTES: ${{ github.event.before }}
+        run: |
+          # As notas são o que aparece no "Atualizar agora" das lojas: a
+          # primeira linha de cada commit desde o lançamento anterior. Vão por
+          # variável, e não escritas no comando, porque texto de commit não é
+          # código para rodar.
+          if [ -z "$ANTES" ] || ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+            ANTES=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          fi
+          if [ -n "$ANTES" ]; then
+            NOTAS=$(git log --no-merges --format='- %s' "$ANTES..HEAD" | head -n 8)
+          else
+            NOTAS=$(git log --no-merges --format='- %s' -n 5)
+          fi
+          npm run publicar -- "$NOTAS"
+
+      - name: Etiqueta
+        # Qual commit virou qual versão, para achar depois.
+        env:
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: |
+          # Relançar o mesmo commit pelo botão dá a mesma versão, e a etiqueta
+          # já existe: aí não há o que marcar.
+          if git rev-parse -q --verify "refs/tags/v$VERSAO" >/dev/null; then
+            echo "a etiqueta v$VERSAO já existe"
+          else
+            git tag "v$VERSAO"
+            git push origin "v$VERSAO"
+          fi
