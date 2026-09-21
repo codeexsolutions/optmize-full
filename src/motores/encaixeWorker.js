@@ -24,6 +24,7 @@
 
 import { buscarMelhorEncaixe } from "./encaixeMotor";
 import { carregarMotorWasm, temMotorWasm } from "./encaixeWasm";
+import { carregarEncolhedor, encolherEncaixe, temEncolhedor } from "./encaixeEncolher";
 
 // Só o que a BUSCA precisa. O encaixe-mascara.js não está aqui de propósito:
 // máscara é feita na página (e no prepara-worker.js), e aqui dentro ela chega
@@ -32,6 +33,10 @@ import { carregarMotorWasm, temMotorWasm } from "./encaixeWasm";
 // O motor em WebAssembly é carregado uma vez, quando o worker nasce. Se não
 // der, `encaixarContornoWasm` devolve null e tudo segue em JavaScript.
 const motorPronto = carregarMotorWasm();
+// O encolhedor (o sparrow) também: é ele que roda a segunda fase. Se não
+// subir, o worker diz isso no "pronto" e a segunda fase fica de fora — com o
+// motivo no resultado, e não em silêncio (ver encaixeEncolher.js).
+const encolhedorPronto = carregarEncolhedor();
 
 let itens = null;      // as peças desta rodada, já com as máscaras
 let pararAgora = false;
@@ -94,15 +99,51 @@ self.onmessage = async (evento) => {
   if (msg.tipo === "preparar") {
     // Espera o WASM antes de dizer que está pronto: assim a primeira busca já
     // pega o motor rápido, em vez de fazer a primeira tentativa em JavaScript.
-    await motorPronto;
+    await Promise.all([motorPronto, encolhedorPronto]);
     itens = msg.itens;
     // As cópias da mesma peça compartilham o objeto de máscaras do outro lado,
     // e o postMessage manteve esse compartilhamento — nada a refazer aqui.
     //
     // `wasm` diz se o motor rápido subiu. Serve para a tela poder mostrar, e
     // para o teste conseguir provar que o encaixe não caiu no caminho lento
-    // sem ninguém perceber.
-    self.postMessage({ tipo: "pronto", wasm: temMotorWasm() });
+    // sem ninguém perceber. `encolher`, o mesmo para o sparrow.
+    self.postMessage({ tipo: "pronto", wasm: temMotorWasm(), encolher: temEncolhedor() });
+    return;
+  }
+
+  /*
+   * A SEGUNDA FASE: encolher o rolo do melhor encaixe da busca.
+   *
+   * O sparrow roda numa chamada SÍNCRONA que dura o tempo inteiro, então este
+   * worker não lê mensagem nenhuma enquanto ela roda — nem o "parar". Por isso
+   * cada encaixe válido e mais curto sai daqui na hora (`encolhido`): se a
+   * pessoa parar, quem está na página encerra o worker e fica com o último que
+   * chegou. A partida vem com o endereço das peças, e a máscara é remontada do
+   * lado de cá, como na volta da busca.
+   */
+  if (msg.tipo === "encolher") {
+    const k = msg.k;
+    try {
+      const porEndereco = new Map(itens.map((item) => [`${item.indice}#${item.copia}`, item]));
+      const posicoes = msg.partida.posicoes.map((p) => {
+        const item = porEndereco.get(`${p.item.indice}#${p.item.copia}`);
+        return { ...p, item, mascara: item && item.mascaras ? item.mascaras.rotacoes[p.rot] : null };
+      });
+      const partida = { posicoes, naoEncaixadas: [], consumo: msg.partida.consumo };
+      const saida = encolherEncaixe(itens, partida, msg.config, {
+        tempoMs: msg.config.tempoMs,
+        semente: msg.semente,
+        trabalhadores: msg.config.trabalhadores,
+        partir: msg.config.partir,
+        aoMelhorar: (novo) => self.postMessage({ tipo: "encolhido", k, resultado: resultadoParaEnviar(novo) }),
+      });
+      self.postMessage({
+        tipo: "encolheu", k, motivo: saida.motivo,
+        relatos: saida.relatos, rejeitados: saida.rejeitados, partiu: saida.partiu,
+      });
+    } catch (erro) {
+      self.postMessage({ tipo: "falhou", k, erro: String((erro && erro.message) || erro) });
+    }
     return;
   }
 

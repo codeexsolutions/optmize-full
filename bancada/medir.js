@@ -412,7 +412,10 @@ async function principal() {
         // O relógio de parede da rodada. Ele é somado SEMPRE, inclusive das
         // rodadas que perderam: o que se quer medir aqui é quanto trabalho a
         // máquina entregou, e não quanto o vencedor custou.
-        msDeBusca += Date.now() - relogio;
+        // Com a segunda fase (`--extra encolher=true`), o relógio que vale é o
+        // da busca: o sparrow não faz tentativas, e contá-lo derrubaria o ritmo
+        // e dispararia o alarme de máquina ocupada à toa.
+        msDeBusca += desta.msDaBusca != null ? desta.msDaBusca : Date.now() - relogio;
         tentativasFeitas += desta.tentativas || 0;
         if (!melhorDasRodadas
           || desta.sobraram < melhorDasRodadas.sobraram
@@ -461,7 +464,7 @@ async function principal() {
       // A receita que venceu mais vezes, para saber de onde veio o resultado.
       receita: corridas.map((c) => c.receita).sort()[Math.floor(corridas.length / 2)],
       pecas: trabalho.itens.length,
-      corridas: corridas.map((c) => ({ consumo: c.consumo, receita: c.receita })),
+      corridas: corridas.map((c) => ({ consumo: c.consumo, receita: c.receita, encolhimento: c.encolhimento })),
     };
     linhas.push(linha);
     saida.trabalhos[nome] = linha;
@@ -470,6 +473,15 @@ async function principal() {
         ? `   mediana ${metros(linha.mediana)} · melhor ${metros(linha.melhor)}`
           + ` · pior ${metros(linha.pior)} · desvio ${(linha.desvio * 10).toFixed(1)} mm`
         : "") + "\n");
+    // A segunda fase conta o que fez: de quanto a quanto, e se partiu da busca.
+    corridas.forEach((c) => {
+      const e = c.encolhimento;
+      if (!e) return;
+      const dif = e.antes > 0 ? ((e.depois - e.antes) / e.antes) * 100 : 0;
+      process.stdout.write(`    encolher: busca ${metros(e.antes)} -> ${metros(e.depois)}`
+        + ` (${dif.toFixed(2)}%) · ${e.relatos} relatos, ${e.rejeitados} recusados`
+        + `${e.partiu ? "" : " · sem partida"}${e.motivos.length ? ` · ${e.motivos.join(", ")}` : ""}\n`);
+    });
   }
 
   console.log("");

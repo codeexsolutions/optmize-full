@@ -34,6 +34,9 @@
 import {
   buscarMelhorEncaixe, fatiaDoPortfolio, melhorQue, motoresDaFatia, papelDaFatia,
 } from "./encaixeMotor";
+import {
+  ENCOLHER_MINIMO_MS, ENCOLHER_RESERVA_MS, motivoDoTrabalho, motivoParaNaoEncolher, tempoDaBusca,
+} from "./encaixeEncolher";
 
 // Um núcleo fica de fora para a tela continuar respondendo (é ela que desenha
 // a barra de progresso e escuta o botão de parar). O teto de 8 é para não
@@ -287,10 +290,270 @@ export function devolverAsPecas(resultado, itens) {
 }
 
 /**
+ * ===========================================================================
+ * AS DUAS FASES — a busca de sempre, e depois o sparrow encolhendo o rolo
+ * ===========================================================================
+ *
  * Mesma assinatura e mesmo resultado de `buscarMelhorEncaixe`, só que usando
- * todos os núcleos. Cai na versão de uma thread sozinha se algo der errado.
+ * todos os núcleos — e, quando o trabalho deixa, em duas fases dentro do
+ * tempo pedido:
+ *
+ *   1. a busca por fatias de sempre (`buscarPorFatias`), com uma fatia pequena
+ *      do tempo (`tempoDaBusca`): ela satura cedo;
+ *   2. o sparrow (`encolherEmParalelo`), em todos os workers, cada um com uma
+ *      semente, partindo do melhor encaixe da busca, pelo resto do tempo.
+ *
+ * Fica o melhor. Encaixe do sparrow só vale depois de passar pela trava da
+ * produção (a conferência mora em encaixeEncolher.js), então o resultado
+ * nunca é pior que o da busca. O que a segunda fase fez — ou por que ela não
+ * rodou — vai em `resultado.encolhimento`.
+ *
+ * A receita do resultado continua sendo a da busca. A memória das receitas e
+ * a rede leem esse texto como "encaixador/agrupamento/ordem/heurística", e o
+ * sparrow não é receita de nada: ele parte do encaixe que a receita montou.
  */
 export async function buscarMelhorEncaixeEmParalelo(itens, config) {
+  const inicio = Date.now();
+  const total = config.tempoMaximoMs || 20000;
+  const antesDeBuscar = config.encolher === false ? "desligado" : motivoDoTrabalho(itens, config);
+  const tempoBusca = antesDeBuscar ? total : tempoDaBusca(total);
+
+  const base = await buscarPorFatias(itens, antesDeBuscar ? config : {
+    ...config,
+    tempoMaximoMs: tempoBusca,
+    // O "desistir por empacar" acompanha o tempo desta fase, e não o total.
+    msSemGanho: Math.max(800, tempoBusca * 0.25),
+  });
+  if (!base) return base;
+
+  const resto = total - (Date.now() - inicio);
+  const motivo = antesDeBuscar
+    || (config.deveParar && config.deveParar() ? "parado" : null)
+    || (base.alcancouMeta ? "meta alcançada" : null)
+    || (resto < ENCOLHER_MINIMO_MS + ENCOLHER_RESERVA_MS ? "sem tempo" : null)
+    || (!podeUsarWorkers() || quantosWorkers() < 1 ? "sem workers" : null)
+    || motivoParaNaoEncolher(itens, base, config);
+  if (motivo) {
+    base.encolhimento = { motivo, antes: base.consumo, depois: base.consumo };
+    return base;
+  }
+  return encolherEmParalelo(itens, base, config, resto, inicio);
+}
+
+/** O encaixe da busca, enxuto para atravessar o postMessage (como a volta dele). */
+export function partidaParaWorker(resultado) {
+  return {
+    consumo: resultado.consumo,
+    posicoes: resultado.posicoes.map((p) => ({
+      item: { indice: p.item.indice, copia: p.item.copia },
+      x: p.x, y: p.y, largura: p.largura, altura: p.altura,
+      rot: p.rot || 0, girado: p.girado, passo: p.passo, bancada: p.bancada || 0,
+    })),
+  };
+}
+
+// Folga do prazo duro da segunda fase, além do tempo pedido. O sparrow para no
+// relógio dele; o que passa disso é importar a instância e conferir a volta.
+const MARGEM_DO_ENCOLHER_MS = 10000;
+
+/**
+ * A segunda fase: o sparrow em todos os workers.
+ *
+ * O WASM roda numa chamada síncrona, então o worker não lê o "parar". O que
+ * chega daqui é cada encaixe válido e mais curto (`encolhido`), na hora — e é
+ * por isso que parar funciona: o worker é ENCERRADO, e vale o último encaixe
+ * que ele mandou. Worker encerrado não volta para a piscina (o estado dele
+ * morreu junto); a próxima busca sobe workers novos, como no prazo duro.
+ */
+export async function encolherEmParalelo(itens, base, config, restoMs, inicioGeral) {
+  const n = quantosWorkers();
+  let workers;
+  try {
+    workers = pegarPool(n);
+  } catch (erro) {
+    console.warn("[encaixe] sem workers para encolher o rolo:", erro);
+    base.encolhimento = { motivo: "sem workers", antes: base.consumo, depois: base.consumo };
+    return base;
+  }
+
+  const tempoDoSparrow = Math.max(0, restoMs - ENCOLHER_RESERVA_MS);
+  const ultimos = new Array(workers.length).fill(null);
+  const estados = new Array(workers.length).fill(null);
+  const encerrar = new Array(workers.length).fill(null);
+  const respondeu = new Array(workers.length).fill(false);
+  let parouNaMao = false;
+  let matouAlguem = false;
+  let falhaGeral = null;
+
+  const melhorAgora = () => ultimos.reduce(
+    (menor, r) => (r && r.consumo < menor ? r.consumo : menor), base.consumo);
+  const relatar = () => {
+    if (!config.aoProgredir) return;
+    config.aoProgredir({
+      fase: "encolhendo",
+      tentativas: base.tentativas || 0,
+      semGanho: 0,
+      alvo: config.alvo || null,
+      consumo: melhorAgora(),
+      consumoDaBusca: base.consumo,
+      receita: base.receita,
+      paredes: base.paredes || 0,
+      modo: null,
+      decorridoMs: Date.now() - inicioGeral,
+      workers: workers.length,
+    });
+  };
+
+  const vigia = setInterval(() => {
+    const parar = config.deveParar && config.deveParar();
+    const passou = Date.now() - inicioGeral > (config.tempoMaximoMs || 20000) + MARGEM_DO_ENCOLHER_MS;
+    if (!parar && !passou) return;
+    if (parar) parouNaMao = true;
+    workers.forEach((w, k) => {
+      if (respondeu[k]) return;
+      respondeu[k] = true;
+      matouAlguem = true;
+      if (!parar) {
+        console.warn(`[encaixe] o encolhedor ${k} passou do prazo; encerrando e ficando com o que ele mandou.`);
+      }
+      try { w.terminate(); } catch { /* já estava morto */ }
+      if (encerrar[k]) encerrar[k]();
+    });
+  }, 120);
+
+  try {
+    relatar();
+    // 1) As peças outra vez: o pool pode ter sido refeito na primeira fase (um
+    //    worker encerrado no prazo duro), e worker novo nasce sem elas.
+    //
+    //    A porta de saída (`encerrar[k]`) já vale aqui: se a pessoa parar
+    //    enquanto os workers se preparam, o vigia encerra o worker, e sem a
+    //    porta esta espera ficaria pendurada para sempre num "pronto" que um
+    //    worker encerrado nunca manda.
+    const leves = itens.map(pecaParaWorker);
+    const prontos = new Array(workers.length).fill(false);
+    await Promise.all(workers.map((w, k) => new Promise((pronto) => {
+      encerrar[k] = pronto;
+      const aoResponder = (evento) => {
+        if (evento.data && evento.data.tipo === "pronto") {
+          w.removeEventListener("message", aoResponder);
+          w.__temWasm = evento.data.wasm === true;
+          w.__temEncolher = evento.data.encolher === true;
+          prontos[k] = true;
+          pronto();
+        }
+      };
+      w.addEventListener("message", aoResponder);
+      w.addEventListener("error", (evento) => {
+        console.warn(`[encaixe] o worker ${k} quebrou ao se preparar:`, evento.message);
+        respondeu[k] = true;
+        matouAlguem = true;
+        pronto();
+      }, { once: true });
+      w.postMessage({ tipo: "preparar", itens: leves });
+    })));
+
+    // Só recebe tarefa quem se preparou, não foi encerrado e tem o sparrow.
+    const aptos = workers.map((w, k) => prontos[k] && !respondeu[k] && w.__temEncolher);
+    if (!parouNaMao && !aptos.some(Boolean)) {
+      falhaGeral = "encolhedor indisponível";
+    }
+
+    // 2) Cada worker encolhe com a sua semente.
+    const partida = partidaParaWorker(base);
+    const configDoSparrow = {
+      larguraTecido: config.larguraTecido,
+      passo: config.passo,
+      comprimentoBancada: config.comprimentoBancada || 0,
+      tempoMs: tempoDoSparrow,
+      trabalhadores: config.encolherTrabalhadores,
+      partir: config.encolherPartir !== false,
+    };
+    const rodadas = workers.map((w, k) => new Promise((pronto) => {
+      encerrar[k] = pronto;
+      if (parouNaMao || falhaGeral || !aptos[k]) { respondeu[k] = true; pronto(); return; }
+      const aoResponder = (evento) => {
+        const msg = evento.data;
+        if (!msg) return;
+        if (msg.tipo === "encolhido") {
+          ultimos[k] = msg.resultado;
+          relatar();
+          return;
+        }
+        if (msg.tipo === "encolheu" || msg.tipo === "falhou") {
+          w.removeEventListener("message", aoResponder);
+          respondeu[k] = true;
+          estados[k] = msg.tipo === "falhou" ? { motivo: `sparrow falhou: ${msg.erro}` } : msg;
+          pronto();
+        }
+      };
+      w.addEventListener("message", aoResponder);
+      w.addEventListener("error", (evento) => {
+        console.warn(`[encaixe] o encolhedor ${k} quebrou:`, evento.message);
+        respondeu[k] = true;
+        matouAlguem = true;
+        estados[k] = { motivo: `worker quebrou: ${evento.message}` };
+        pronto();
+      }, { once: true });
+      w.postMessage({
+        tipo: "encolher", k, partida, config: configDoSparrow,
+        semente: sementeDaFatia(config.semente, k),
+      });
+    }));
+    await Promise.all(rodadas);
+  } catch (erro) {
+    console.warn("[encaixe] a segunda fase falhou, ficando com o encaixe da busca:", erro);
+    matouAlguem = true;
+    falhaGeral = `a segunda fase falhou: ${(erro && erro.message) || erro}`;
+  } finally {
+    clearInterval(vigia);
+  }
+  if (matouAlguem) derrubarPool();
+
+  const soma = (campo) => estados.reduce((s, e) => s + ((e && e[campo]) || 0), 0);
+  const info = {
+    antes: base.consumo,
+    relatos: soma("relatos"),
+    rejeitados: soma("rejeitados"),
+    workers: workers.length,
+    parou: parouNaMao,
+  };
+
+  let campeao = null;
+  ultimos.forEach((r) => { if (r && (!campeao || r.consumo < campeao.consumo)) campeao = r; });
+  if (!campeao || !(campeao.consumo < base.consumo - 1e-9)) {
+    const motivoDeUm = estados.find((e) => e && e.motivo);
+    base.encolhimento = {
+      ...info,
+      depois: base.consumo,
+      motivo: parouNaMao ? "parado"
+        : falhaGeral || (motivoDeUm ? motivoDeUm.motivo : "não encurtou"),
+    };
+    return base;
+  }
+
+  devolverAsPecas(campeao, itens);
+  const final = {
+    ...base,
+    posicoes: campeao.posicoes,
+    naoEncaixadas: campeao.naoEncaixadas,
+    consumo: campeao.consumo,
+    areaReal: campeao.areaReal != null ? campeao.areaReal : base.areaReal,
+    // O sparrow encaixa pela silhueta (a máscara), como o contorno.
+    venceuContorno: true,
+    venceuFaixas: false,
+    alcancouRecorde: base.alvo == null ? null : campeao.consumo <= base.alvo * 1.0001,
+    decorridoMs: Date.now() - inicioGeral,
+  };
+  final.encolhimento = { ...info, depois: campeao.consumo, motivo: null };
+  return final;
+}
+
+/**
+ * A busca de sempre, repartida pelos núcleos: uma fatia do portfólio por
+ * worker. Cai na versão de uma thread sozinha se algo der errado.
+ */
+export async function buscarPorFatias(itens, config) {
   const n = quantosWorkers();
   if (!podeUsarWorkers() || n < 2) return buscarMelhorEncaixe(itens, config);
 

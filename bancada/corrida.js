@@ -76,6 +76,25 @@ async function buscarComoAProducao(motor, trabalho,
   const { receita, itens, passo, alturaMax } = trabalho;
   const vetorTrabalho = motor.vetorDoTrabalho(trabalho.pecas, receita.larguraTecido);
 
+  /*
+   * AS DUAS FASES (`--extra encolher=true`), como a produção roda: a busca de
+   * sempre fica com `tempoDaBusca(tempo)` e o sparrow com o resto (ver
+   * src/motores/encaixeEncolher.js). O tempo total por fatia é o MESMO da
+   * corrida sem a segunda fase — é isso que deixa as duas comparáveis.
+   *
+   * `encolherBuscaMs` fixa o tempo da busca à mão, para medir a divisão.
+   */
+  const encolher = extra.encolher === true;
+  if (encolher && !motor.comEncolhedor) {
+    throw new Error("--extra encolher=true pedido, mas o WASM do encolhedor não carregou"
+      + " (rode `npm run build:encolher`). Medir só a busca achando que mediu as duas"
+      + " fases é o engano que esta mensagem existe para impedir.");
+  }
+  const tempoBusca = encolher
+    ? Math.min(tempoMs, Number(extra.encolherBuscaMs) || motor.tempoDaBusca(tempoMs))
+    : tempoMs;
+  const relogioDaBusca = Date.now();
+
   let campeao = null;
   let tentativas = 0;
   const motoresPedidos = extra.motores
@@ -102,8 +121,8 @@ async function buscarComoAProducao(motor, trabalho,
       memoria: null, alvo: null, rede: null, redeMadura: false,
       vetorTrabalho,
       metaAproveitamento: meta,
-      tempoMaximoMs: tempoMs,
-      msSemGanho: Math.max(800, tempoMs * 0.25),
+      tempoMaximoMs: tempoBusca,
+      msSemGanho: Math.max(800, tempoBusca * 0.25),
       tentativasPorLote: itens.length >= 120 ? 1 : 8,
       /*
        * O corte do portfólio por fatia serve para N fatias dividirem A MESMA
@@ -129,6 +148,46 @@ async function buscarComoAProducao(motor, trabalho,
           && resultado.consumo < campeao.consumo);
     if (melhor) campeao = resultado;
   }
+  const msDaBusca = Date.now() - relogioDaBusca;
+
+  /*
+   * A SEGUNDA FASE. Na produção os workers rodam o sparrow ao mesmo tempo, um
+   * por semente, cada um com o resto do tempo; aqui as sementes vão uma depois
+   * da outra, pelo mesmo motivo que as fatias vão (ver o cabeçalho do
+   * medir.js): o tempo de cada uma é o tempo pedido de verdade.
+   */
+  let encolhimento = null;
+  if (encolher) {
+    const antes = campeao.consumo;
+    const config = {
+      larguraTecido: receita.larguraTecido, passo,
+      comprimentoBancada: receita.comprimentoBancada || 0,
+    };
+    let melhorEncolhido = null;
+    let relatos = 0;
+    let rejeitados = 0;
+    let partiu = false;
+    const motivos = new Set();
+    for (let k = 0; k < fatias; k++) {
+      const r = motor.encolherEncaixe(itens, campeao, config, {
+        tempoMs: Math.max(0, tempoMs - tempoBusca),
+        semente: sementeDaFatia(semente, k, true),
+        trabalhadores: extra.encolherTrabalhadores,
+        partir: extra.encolherPartir !== false,
+      });
+      relatos += r.relatos;
+      rejeitados += r.rejeitados;
+      partiu = partiu || r.partiu;
+      if (r.motivo) motivos.add(r.motivo);
+      if (r.resultado && (!melhorEncolhido || r.resultado.consumo < melhorEncolhido.consumo)) {
+        melhorEncolhido = r.resultado;
+      }
+    }
+    if (melhorEncolhido && melhorEncolhido.consumo < campeao.consumo) {
+      campeao = { ...campeao, ...melhorEncolhido, receita: `encolher/${campeao.receita}` };
+    }
+    encolhimento = { antes, depois: campeao.consumo, relatos, rejeitados, partiu, motivos: [...motivos] };
+  }
 
   // A mídia que o trabalho consome, que com bancada são mesas inteiras e não a
   // tira contínua do `consumo` — ver "A MÍDIA QUE O TRABALHO CONSOME", em
@@ -151,6 +210,10 @@ async function buscarComoAProducao(motor, trabalho,
     sobraram: campeao.naoEncaixadas.length,
     receita: campeao.receita,
     tentativas,
+    // O relógio da BUSCA, sem o sparrow: é sobre ele que o ritmo da máquina
+    // (tentativas por segundo) é contado — o sparrow não faz tentativas.
+    msDaBusca,
+    encolhimento,
   };
 }
 
