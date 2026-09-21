@@ -91,14 +91,26 @@ if (temChave) {
   );
 }
 
-// `shell: true` porque no Windows o `tauri` é um .cmd, e sem shell o spawn não
-// o encontra. Os argumentos são nossos, não de quem chama, então não há aqui o
-// risco que o shell costuma trazer.
-const r = spawnSync("npx", argumentos, {
+/*
+ * O Tauri roda pelo NODE, direto no script dele — e não por `npx` com
+ * `shell: true`, como era.
+ *
+ * Com o shell, o Node junta os argumentos numa linha de comando do cmd.exe sem
+ * proteger nada, e o cmd come as aspas de dentro deles. O `--config` do build
+ * sem chave chegava ao Tauri como `{bundle:{createUpdaterArtifacts:false}}` —
+ * JSON sem aspas, recusado —, então compilar SEM a chave nunca funcionou no
+ * Windows: parava ali, com um erro que parecia do Tauri. Sem shell, cada
+ * argumento chega inteiro, com aspas ou com espaço no caminho (o repositório
+ * mora no OneDrive, e pasta do OneDrive costuma ter espaço no nome).
+ *
+ * O shell existia porque no Windows o `tauri` do npx é um `.cmd`, que não roda
+ * sem ele. O `tauri.js` que o `.cmd` chama roda com qualquer Node.
+ */
+const tauri = require.resolve("@tauri-apps/cli/tauri.js", { paths: [RAIZ] });
+const r = spawnSync(process.execPath, [tauri, ...argumentos.slice(1)], {
   cwd: RAIZ,
   stdio: "inherit",
   env: ambiente,
-  shell: true,
 });
 
 process.exit(r.status ?? 1);
