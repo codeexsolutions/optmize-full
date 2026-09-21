@@ -14,6 +14,8 @@
  */
 #pragma once
 
+#include <stdbool.h>
+
 #include "esp_err.h"
 #include "lvgl.h"
 
@@ -24,6 +26,21 @@ void interface_iniciar(void);
 
 /* Volta para a tela inicial, desmontando o app aberto. */
 void interface_voltar_ao_inicio(void);
+
+/* ------------------------------------------------------------ o toque */
+
+/*
+ * Falso quando o GT911 nao respondeu na partida -- flat do toque solto, quase
+ * sempre. Antes isto nem era uma pergunta: a placa abortava na init e
+ * reiniciava em laco, e ninguem via tela nenhuma (ver `bsp_display_indev_init`
+ * no BSP).
+ *
+ * Duas partes da casca precisam saber: a barra, que poe o aviso fixo, e o
+ * DESCANSO, que nao pode entrar -- ele so sai por toque, e sem toque viraria
+ * um relogio de parede permanente por cima justamente do aviso que explica o
+ * defeito.
+ */
+bool ha_toque(void);
 
 /* ------------------------------------------------------------- a voz */
 

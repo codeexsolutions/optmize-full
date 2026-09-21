@@ -847,7 +847,33 @@ static lv_display_t *bsp_display_lcd_init(const bsp_display_cfg_t *cfg)
 #if !CONFIG_BSP_LCD_TYPE_HDMI
 static lv_indev_t *bsp_display_indev_init(lv_display_t *disp)
 {
-    BSP_ERROR_CHECK_RETURN_NULL(bsp_touch_new(NULL, &tp));
+    /*
+     * O TOQUE FALTANDO NAO PODE DERRUBAR O APARELHO.
+     *
+     * O BSP original faz `ESP_ERROR_CHECK` aqui. Com o flat do toque solto o
+     * GT911 nao responde no I2C, o `ESP_ERROR_CHECK` chama `abort()`, e a placa
+     * passa a REINICIAR EM LACO -- sete partidas em doze segundos, a tela
+     * piscando no ritmo do painel subindo e morrendo junto. Quem esta na frente
+     * dela ve uma tela que pisca e nenhuma pista do motivo: nem a ajuda, que
+     * tem este sintoma na lista e nunca chega a aparecer.
+     *
+     * Sem o toque o terminal fica LIMITADO, e nao morto. A hora, o estado da
+     * rede e o aviso do cabo continuam de pe -- e e isso que faz alguem ir
+     * olhar um conector em vez de condenar a placa.
+     */
+    esp_err_t err = bsp_touch_new(NULL, &tp);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "toque nao respondeu (%s): seguindo sem ele",
+                 esp_err_to_name(err));
+        /*
+         * O `bsp_touch_new` cria o canal de I2C ANTES de falar com o GT911,
+         * entao a falha deixa um canal aberto. Sem solta-lo aqui ele fica
+         * pendurado pelo resto da vida do aparelho.
+         */
+        tp = NULL;
+        bsp_touch_delete();
+        return NULL;
+    }
     assert(tp);
 
     /* Add touch input (for selected screen) */
@@ -927,7 +953,11 @@ lv_display_t *bsp_display_start_with_config(const bsp_display_cfg_t *cfg)
 
     BSP_NULL_CHECK(disp = bsp_display_lcd_init(cfg), NULL);
 #if !CONFIG_BSP_LCD_TYPE_HDMI
-    BSP_NULL_CHECK(disp_indev = bsp_display_indev_init(disp), NULL);
+    /*
+     * Pode voltar NULL, e esta certo: sem toque a tela ainda mostra.
+     * Ver `bsp_display_indev_init`.
+     */
+    disp_indev = bsp_display_indev_init(disp);
 #endif
     return disp;
 }
@@ -936,7 +966,9 @@ void bsp_display_stop(lv_display_t *display)
 {
     /* Deinit LVGL */
 #if !CONFIG_BSP_LCD_TYPE_HDMI
-    lvgl_port_remove_touch(disp_indev);
+    if (disp_indev != NULL) {   /* pode nao existir: ver `bsp_display_indev_init` */
+        lvgl_port_remove_touch(disp_indev);
+    }
 #endif
     lvgl_port_remove_disp(display);
     lvgl_port_deinit();

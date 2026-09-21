@@ -30,10 +30,10 @@
  *
  *   1. a tela, porque tudo depois dela tem onde aparecer
  *   2. o giro de 180 graus, porque a placa esta montada de ponta-cabeca
- *   3. a rede, que demora e roda sozinha -- a casca mostra "sem rede" enquanto
- *      ela nao conecta, e a hora chega quando chegar
- *   4. a pilha USB, uma vez so (a transmissao de video abre e fecha com o app)
- *   5. a casca
+ *   3. a casca, que passa a subir ANTES da rede -- ver `app_main`
+ *   4. a rede, que demora e roda sozinha; a casca ja esta de pe mostrando
+ *      "sem rede", e a hora chega quando chegar
+ *   5. a pilha USB, uma vez so (a transmissao de video abre e fecha com o app)
  */
 
 #include <stdio.h>
@@ -123,7 +123,29 @@ void app_main(void)
      */
     bsp_display_backlight_on();
 
-    /* Demora e roda sozinha. A casca mostra o estado enquanto isso. */
+    /*
+     * A CASCA SOBE ANTES DA REDE, e nao depois.
+     *
+     * O cabecalho deste arquivo sempre disse que a rede "demora e roda
+     * sozinha" e que a casca mostra "sem rede" enquanto ela nao conecta. A
+     * ordem dizia o contrario: `rede_iniciar` vinha primeiro, na mesma tarefa,
+     * e a casca so era montada depois que ela voltasse.
+     *
+     * Enquanto ela voltava, ninguem notava a diferenca. Mas as chamadas de
+     * Wi-Fi desta placa NAO SAO LOCAIS: viajam por SDIO ate o ESP32-C6 ao
+     * lado. Com o firmware do C6 incompativel -- ele se anuncia como versao
+     * 0.0.0 --, o `esp_wifi_connect` nunca retorna, e a partida inteira ficava
+     * pendurada nele: luz de fundo acesa sobre uma tela vazia, preta, sem uma
+     * palavra dizendo por que.
+     *
+     * Montada antes, a casca aparece em qualquer caso -- relogio em `--:--`,
+     * "sem rede" na barra, e o aviso do toque quando for o caso. O que a rede
+     * trouxer chega depois, pelo temporizador de um segundo, que e como a
+     * barra sempre se atualizou.
+     */
+    interface_iniciar();
+
+    /* Demora e roda sozinha. A casca ja esta de pe para mostrar o estado. */
     rede_iniciar();
 
     /* So le o endereco guardado; nao fala com ninguem ainda. */
@@ -164,6 +186,5 @@ void app_main(void)
      */
     voz_iniciar();
 
-    interface_iniciar();
     ESP_LOGI(TAG, "no ar");
 }
