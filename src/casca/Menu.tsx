@@ -58,7 +58,6 @@
 import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { Icone } from "./Icone";
-import { useRelogio } from "./useRelogio";
 import { GRUPOS, telasDoGrupo } from "../rotas";
 
 interface Props {
@@ -115,8 +114,6 @@ const TRILHO = "absolute left-0 top-[6px] bottom-[6px] w-[3px] rounded-r-full bg
 const ICONE = "size-[18px] shrink-0 transition-colors duration-100";
 
 export function Menu({ aberto, aoFechar }: Props) {
-  const relogio = useRelogio();
-
   useEffect(() => {
     if (!aberto) return;
     const noEsc = (evento: KeyboardEvent) => { if (evento.key === "Escape") aoFechar(); };
@@ -288,13 +285,6 @@ export function Menu({ aberto, aoFechar }: Props) {
                 CodeEx Optmize
               </span>
             </div>
-
-            <strong
-              title={relogio.data}
-              className="shrink-0 font-mono text-[11px] font-medium text-tinta-apagada tabular-nums"
-            >
-              {relogio.hora}
-            </strong>
           </div>
         </div>
       </aside>
