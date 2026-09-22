@@ -54,7 +54,7 @@
  *     $env:OPTMIZE_ADMIN_KEY = "..."
  */
 
-const { readFile, readdir } = require("node:fs/promises");
+const { readFile, readdir, stat } = require("node:fs/promises");
 const path = require("node:path");
 
 const RAIZ = path.resolve(__dirname, "..");
@@ -152,8 +152,25 @@ async function main() {
     );
   }
 
-  const bytes = await readFile(caminhoExe);
   const notas = process.argv.slice(2).join(" ").trim();
+
+  /*
+    ONDE OS BYTES VÃO.
+
+    `OPTMIZE_RELEASE_URL` é o endereço público do instalador quando ele JÁ está
+    hospedado — hoje, na release do GitHub que o lançamento cria. Nesse caso o
+    servidor recebe só a ficha: versão, notas, tamanho e a assinatura.
+
+    NÃO É PREFERÊNCIA, É LIMITE: o Storage do Supabase deste projeto recusa
+    arquivo acima de 50 MB, e o instalador tem 96. Enquanto o plano for esse,
+    mandar os bytes por aqui devolve 500 depois de dez minutos de compilação.
+
+    Sem a variável, o caminho antigo continua valendo inteiro — é o que roda na
+    mão de quem publica da própria máquina, contra um servidor cujo Storage
+    aceite o tamanho.
+  */
+  const hospedado = process.env.OPTMIZE_RELEASE_URL?.trim();
+  const tamanho = (await stat(caminhoExe)).size;
 
   const url = new URL(`${API}/admin/app/releases`);
   url.searchParams.set("version", versao);
@@ -161,10 +178,18 @@ async function main() {
   url.searchParams.set("fileName", exe);
   url.searchParams.set("signature", assinatura);
   if (notas) url.searchParams.set("notes", notas);
+  if (hospedado) {
+    url.searchParams.set("url", hospedado);
+    url.searchParams.set("sizeBytes", String(tamanho));
+  }
 
-  const mb = (bytes.length / 1024 / 1024).toFixed(1);
+  const mb = (tamanho / 1024 / 1024).toFixed(1);
   console.log(`\n  Optimize ${versao} — ${exe} (${mb} MB)`);
-  console.log(`  enviando para ${API} ...`);
+  console.log(
+    hospedado
+      ? `  hospedado em ${hospedado}\n  mandando a ficha para ${API} ...`
+      : `  enviando para ${API} ...`,
+  );
 
   const resposta = await fetch(url, {
     method: "POST",
@@ -172,7 +197,7 @@ async function main() {
       "x-admin-key": adminKey,
       "content-type": "application/octet-stream",
     },
-    body: bytes,
+    body: hospedado ? "" : await readFile(caminhoExe),
   });
 
   const corpo = await resposta.text();

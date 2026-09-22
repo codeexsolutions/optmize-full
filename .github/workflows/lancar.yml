@@ -50,7 +50,8 @@ concurrency:
   group: lancamento
   cancel-in-progress: false
 
-# Escrever no repositório só para a etiqueta v<versão> do fim.
+# Escrever no repositório para a etiqueta v<versão> e para a release que
+# hospeda o instalador.
 permissions:
   contents: write
 
@@ -140,9 +141,43 @@ jobs:
           printf '%s' "$CONTEUDO_DA_CHAVE" > "$CHAVE"
           TAURI_SIGNING_PRIVATE_KEY="$CHAVE" npm run build:app
 
+      # ---------------------------------------------------------------------
+      # ONDE O INSTALADOR FICA HOSPEDADO
+      # ---------------------------------------------------------------------
+      # Na release do GitHub, e não no Storage do backend. Não é preferência:
+      # o Supabase deste projeto recusa arquivo acima de 50 MB e o instalador
+      # tem 96 — o envio morria com 500 depois de dez minutos de compilação.
+      #
+      # O repositório é público, então o endereço do anexo é público e
+      # permanente. O backend guarda a ficha (versão, notas, tamanho,
+      # assinatura) e o `/download` redireciona para cá.
+      - name: Hospedar o instalador
+        id: hospedar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: |
+          EXE=$(ls src-tauri/target/release/bundle/nsis/*_"$VERSAO"_x64-setup.exe | head -1)
+          [ -n "$EXE" ] || { echo "::error::não achei o instalador da $VERSAO"; exit 1; }
+          NOME=$(basename "$EXE")
+
+          # `--clobber` porque relançar o mesmo commit pelo botão reenvia o
+          # mesmo arquivo: sem ele, o segundo envio falharia com "já existe".
+          if gh release view "v$VERSAO" >/dev/null 2>&1; then
+            gh release upload "v$VERSAO" "$EXE" "$EXE.sig" --clobber
+          else
+            gh release create "v$VERSAO" "$EXE" "$EXE.sig" \
+              --title "Optmize $VERSAO" \
+              --notes "Instalador do CodeEx Optmize para Windows 64 bits."
+          fi
+
+          REPO="${{ github.repository }}"
+          echo "url=https://github.com/$REPO/releases/download/v$VERSAO/$NOME" >> "$GITHUB_OUTPUT"
+
       - name: Publicar
         env:
           OPTMIZE_ADMIN_KEY: ${{ secrets.OPTMIZE_ADMIN_KEY }}
+          OPTMIZE_RELEASE_URL: ${{ steps.hospedar.outputs.url }}
           ANTES: ${{ github.event.before }}
         run: |
           # As notas são o que aparece no "Atualizar agora" das lojas: a
@@ -159,13 +194,15 @@ jobs:
           fi
           npm run publicar -- "$NOTAS"
 
+      # A etiqueta v<versão> agora nasce junto da release do GitHub, no passo
+      # de hospedar — `gh release create` cria a tag no commit atual. Este
+      # passo ficou só para o caso de a release já existir de um relançamento:
+      # aí a tag também já existe, e não há o que fazer.
       - name: Etiqueta
-        # Qual commit virou qual versão, para achar depois.
         env:
           VERSAO: ${{ steps.versao.outputs.versao }}
         run: |
-          # Relançar o mesmo commit pelo botão dá a mesma versão, e a etiqueta
-          # já existe: aí não há o que marcar.
+          git fetch --tags --quiet || true
           if git rev-parse -q --verify "refs/tags/v$VERSAO" >/dev/null; then
             echo "a etiqueta v$VERSAO já existe"
           else
