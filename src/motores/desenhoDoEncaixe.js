@@ -444,22 +444,22 @@ export function escreverNome(ctx, p, x, y, w, h) {
  * O DESENHO VEM DO OPTMIZE LITE
  * ---------------------------------------------------------------------------
  *
- * O rolo do Lite (`components/NestingCanvas.tsx`, lá no outro projeto) resolve
+ * O rolo do painel web (`components/NestingCanvas.tsx`, lá no outro projeto) resolve
  * isto há tempos, e resolve bem: superfície própria, grade dupla nos dois
  * eixos, régua de traços laranja e a borda da mídia em três lados. Não há
  * motivo para inventar outro — e há um bom motivo para não inventar: são dois
  * programas da mesma casa que encaixam a mesma coisa, e quem usa os dois não
  * deveria ter de reaprender a olhar.
  *
- * Do Lite vem a ESTRUTURA. As cores exatas, não:
+ * Do painel web vem a ESTRUTURA. As cores exatas, não:
  *
- *   - o laranja do Lite é `#f97316`, e o desta casa é `#ff531f` — o da MARCA,
+ *   - o laranja do painel web é `#f97316`, e o desta casa é `#ff531f` — o da MARCA,
  *     lido do arquivo do logo (ver `estilo/tokens.css`). O acento daqui era
  *     justamente `#f97316` e foi trocado de propósito, porque lado a lado com
  *     a marca eram duas laranjas diferentes na mesma tela. Copiar o hex do
- *     Lite desfaria aquilo;
+ *     painel web desfaria aquilo;
  *
- *   - os cinzas do Lite são quentes (`#1a1817`, um marrom escuro) e os desta
+ *   - os cinzas do painel web são quentes (`#1a1817`, um marrom escuro) e os desta
  *     folha são frios (`#171d21`, um azul escuro). Aqui ficam os frios, pelo
  *     mesmo motivo: é a paleta em que o resto do programa está pintado, e é a
  *     do risco de verdade, que vai substituir este desenho no lugar exato em
@@ -469,14 +469,14 @@ export function escreverNome(ctx, p, x, y, w, h) {
  * A BORDA ABERTA E O DEGRADÊ DIZEM A MESMA COISA
  * ---------------------------------------------------------------------------
  *
- * O Lite desenha a borda da mídia em TRÊS lados — começo, cima e baixo — e
+ * O painel web desenha a borda da mídia em TRÊS lados — começo, cima e baixo — e
  * deixa a direita aberta. O comentário de lá explica: "o comprimento não tem
  * fim; fechar o retângulo à direita desenhava uma parede onde a mídia
  * continua, e o operador lia aquilo como acabou o material".
  *
  * Um risco PRONTO tem comprimento, e ali o corte reto na ponta é a informação.
  * Um rolo vazio não tem: quanto dele vai ser gasto é justamente o que ninguém
- * sabe ainda. Por isso aqui vão as duas coisas — a borda aberta do Lite E o
+ * sabe ainda. Por isso aqui vão as duas coisas — a borda aberta do painel web E o
  * degradê, que faz o desenho inteiro (grade, borda, régua) rarear até sumir em
  * vez de ser cortado pela beirada do canvas.
  *
@@ -543,7 +543,7 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
   /*
    * ── A GRADE, nos dois eixos ──────────────────────────────────────────────
    *
-   * É a peça que o Lite tem e que faltava aqui. Duas espessuras de informação
+   * É a peça que o painel web tem e que faltava aqui. Duas espessuras de informação
    * na mesma malha: a linha fraca a cada 5 cm e a forte a cada 10. Uma grade
    * de um nível só vira papel quadriculado — com dois, o olho conta de dez em
    * dez sem parar para contar.
@@ -554,7 +554,7 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
    * simplesmente não aparecia. O que some agora não é cor quase igual a
    * outra — é um desenho que rareia até não haver mais nenhum.
    *
-   * O `passo5 > 3` é o do Lite, e pela mesma razão: abaixo de uns três pixels
+   * O `passo5 > 3` é o do painel web, e pela mesma razão: abaixo de uns três pixels
    * as linhas fracas encostam umas nas outras e a grade vira um chapado mais
    * claro. Some a malha fina e fica só a de 10 em 10.
    */
@@ -601,7 +601,7 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
    * ── A RÉGUA ──────────────────────────────────────────────────────────────
    *
    * Traço a cada 10 cm, mais alto e com o número a cada metro, em laranja
-   * claro como a do Lite. Ela some marca a marca, e não por degradê: um traço
+   * claro como a do painel web. Ela some marca a marca, e não por degradê: um traço
    * meio apagado ainda é um traço, e é o que mantém a régua legível até onde o
    * tecido já está quase transparente. Abaixo de 4% de opacidade não se
    * desenha — parar é mais barato que desenhar o que ninguém vê.

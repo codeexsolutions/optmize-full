@@ -31,6 +31,7 @@ import { Suspense, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
 import { Entrar } from "../telas/Entrar";
+import { Espera } from "../telas/Espera";
 import { useSessao } from "./usuario";
 import { ProvedorDeDialogo } from "./Dialogo";
 import { Cabecalho } from "./Cabecalho";
@@ -120,6 +121,25 @@ export function Casca() {
    */
   if (sessao.estado === "carregando") return null;
   if (sessao.estado === "fora") return <Entrar aoEntrar={sessao.recarregar} />;
+
+  /*
+    O TERCEIRO ESTADO: entrou, e ainda não pode trabalhar.
+
+    Antes eram dois — fora e dentro —, e quem cadastrava num plano pago
+    entrava e via o programa inteiro com a assinatura pendente, enquanto a
+    tela de cadastro prometia o contrário. Quem decide é o backend; esta linha
+    só obedece.
+  */
+  if (sessao.estado === "bloqueado" && sessao.acesso) {
+    return (
+      <Espera
+        acesso={sessao.acesso}
+        nome={sessao.usuario?.nome ?? ""}
+        aoConferir={sessao.conferir}
+        aoSair={sair}
+      />
+    );
+  }
 
   /*
    * O provedor do diálogo envolve a casca inteira: a caixa de confirmar e a de

@@ -4,7 +4,7 @@
  * ===========================================================================
  *
  * Duas colunas no computador: a marca e o que o programa faz à esquerda, um
- * cartão à direita. É o desenho do Optmize Lite (`layouts/AuthLayout.tsx`, no
+ * cartão à direita. É o desenho do painel web (`layouts/AuthLayout.tsx`, no
  * outro repositório), e é por isso que ele é um arquivo à parte aqui também:
  * há DUAS telas antes de entrar — o login e o cadastro da empresa —, e elas
  * têm de ser a mesma casa.
@@ -65,7 +65,7 @@ export function Porta({
   return (
     <div className="grid h-screen w-full overflow-hidden bg-fundo font-texto text-tinta antialiased tela:grid-cols-[1.05fr_1fr]">
       {/*
-        A COLUNA DA ESQUERDA some abaixo de 801px (`tela:`), como no Lite: numa
+        A COLUNA DA ESQUERDA some abaixo de 801px (`tela:`), como no painel web: numa
         janela estreita ela empurraria o cartão para fora da vista, e o cartão
         é a única coisa aqui que alguém precisa alcançar.
       */}
@@ -88,12 +88,12 @@ export function Porta({
             className="size-10 shrink-0 rounded-[10px]"
           />
           {/*
-            O NOME É "CodeEx Optmize", e não "Optmize Full".
+            O NOME é "CodeEx Optmize", e nada mais.
 
-            "Full" é como se distingue este programa do Lite numa conversa
-            interna — não é o nome dele. Na porta de entrada, o que a pessoa
-            tem de ler é o nome do produto, o mesmo que está no instalador, na
-            aba do navegador e na tela Sobre.
+            Não há edição, versão nem sufixo a distinguir: é um programa só, e o
+            que muda entre os planos é como se paga por ele. Na porta de
+            entrada, o que a pessoa lê é o mesmo nome que está no instalador,
+            na aba do navegador e na tela Sobre.
           */}
           <span className="font-titulo text-[20px] tracking-tight">
             <span className="text-tinta-fraca">CodeEx </span>
@@ -131,7 +131,7 @@ export function Porta({
       </aside>
 
       <div className="relative flex h-full w-full justify-center overflow-y-auto px-4 py-6">
-        {/* Os brilhos presos à coluna do cartão, como no Lite. */}
+        {/* Os brilhos presos à coluna do cartão, como no painel web. */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-24 -left-24 size-[420px] rounded-full bg-ambar opacity-[0.10] blur-[130px]" />
           <div className="absolute -right-24 -bottom-24 size-[420px] rounded-full bg-ambar opacity-[0.07] blur-[130px]" />
@@ -165,7 +165,7 @@ export function Porta({
           </div>
 
           <div className="relative rounded-2xl border border-linha bg-painel/90 p-8 backdrop-blur transition-[border-color,box-shadow] duration-300 shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85)] focus-within:border-[var(--accent-line)] focus-within:shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85),0_0_0_1px_var(--accent-line)]">
-            {/* O fio de luz no topo do cartão — o detalhe que o Lite tem. */}
+            {/* O fio de luz no topo do cartão — o detalhe que o painel web tem. */}
             <span
               aria-hidden="true"
               className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-60"
@@ -179,6 +179,39 @@ export function Porta({
       </div>
     </div>
   );
+}
+
+/**
+ * O CNPJ **ou** o CPF com máscara enquanto se digita.
+ *
+ * UM CAMPO SÓ, sem escolher o tipo antes. Onze dígitos viram
+ * `529.982.247-25`; catorze viram `11.222.333/0001-81`. Como nenhum CPF tem
+ * catorze dígitos e nenhum CNPJ tem onze, o tamanho decide sozinho — e um
+ * seletor "CPF/CNPJ" seria um clique a mais para dizer o que o próprio número
+ * já diz.
+ *
+ * NO CAMINHO ATÉ ONZE DÍGITOS a máscara é a do CPF, porque é o formato que os
+ * dois compartilham no começo (`000.000.000`). Ao chegar no décimo segundo,
+ * ela vira CNPJ inteira. O pulo é visível e é o certo: quem está digitando um
+ * CNPJ vê a barra aparecer na hora em que ele deixa de caber num CPF.
+ *
+ * A máscara é só da TELA: o que viaja é o que a pessoa escreveu, e quem
+ * normaliza e confere os dígitos verificadores é o servidor
+ * (`domain/documento.ts`). Conferir aqui também daria duas respostas para a
+ * mesma pergunta no dia em que uma das duas mudasse.
+ */
+export function mascararDocumento(texto: string): string {
+  const d = texto.replace(/\D/g, "").slice(0, 14);
+
+  if (d.length <= 11) {
+    if (d.length <= 3) return d;
+    if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+    if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  }
+
+  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
 
 /**

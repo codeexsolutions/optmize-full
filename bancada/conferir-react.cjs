@@ -119,7 +119,7 @@ async function main() {
   // tras, a tela seguinte simplesmente nao rolava -- ja aconteceu.
   assert.equal(document.body.classList.contains('modal-aberto'),false,
     'e devolve a rolagem da pagina');
-  // A tela de Projetos ganhou o desenho do Optmize Lite: a arvore de clientes
+  // A tela de Projetos ganhou o desenho do painel web: a arvore de clientes
   // fica numa <aside>, e o projeto aberto ocupa a area principal.
   const arvore = () => [...document.querySelectorAll('aside')].find(a=>/CLIENTES|Clientes/.test(a.textContent));
   // A arvore chega depois do pedido ao servidor: sem esta volta ao laco, ela

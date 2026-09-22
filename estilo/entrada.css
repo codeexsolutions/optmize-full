@@ -244,7 +244,7 @@
  * A ENTRADA DE UM ITEM DE LISTA
  * ===========================================================================
  *
- * A tela de Projetos veio do Optmize Lite, e lá cada item da árvore entra
+ * A tela de Projetos veio do painel web, e lá cada item da árvore entra
  * deslizando da esquerda — é `framer-motion` naquele projeto.
  *
  * Aqui é CSS: o que se anima é a entrada de um item, uma transição de 150ms
@@ -367,7 +367,7 @@
  * A TELA DE ENTRAR
  * ===========================================================================
  *
- * As animações que o Optmize Lite faz com `framer-motion`, aqui em CSS. São
+ * As animações que o painel web faz com `framer-motion`, aqui em CSS. São
  * três, e nenhuma delas justifica 40 KB de biblioteca dentro de um programa
  * instalado: o cartão subindo ao aparecer, os campos entrando em degrau, e o
  * tremor do aviso de erro.
@@ -433,7 +433,7 @@
 
 /*
  * A CORTINA entre o login e a área de trabalho (`telas/Cortina.tsx`).
- * As três animações que o Lite faz com framer-motion.
+ * As três animações que o painel web faz com framer-motion.
  */
 
 @keyframes cortina-entra {

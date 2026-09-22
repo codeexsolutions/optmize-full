@@ -3,7 +3,7 @@
  * A SESSÃO — quem está usando o Optmize
  * ===========================================================================
  *
- * O Optmize Full abria sozinho desde sempre: um programa por máquina, e quem
+ * O Optmize abria sozinho desde sempre: um programa por máquina, e quem
  * alcançasse a porta via tudo. Isto é a entrada da conta.
  *
  * ---------------------------------------------------------------------------
@@ -32,7 +32,7 @@
  * aqui DERRUBA o painel web que a mesma pessoa tenha aberto, e vice-versa.
  *
  * Não é descuido, é uma etapa: o desenho aprovado (ver
- * `docs/superpowers/specs/2026-09-21-identidade-no-full-design.md`) dá ao Full
+ * `docs/superpowers/specs/2026-09-21-identidade-no-full-design.md`) dá ao programa
  * um TOKEN DE DISPOSITIVO, que vive em outra tabela e não derruba sessão
  * nenhuma. Quando `/device/authorize` e `/device/token` existirem no backend,
  * o que muda é só a função `entrar()` abaixo — as rotas, o formato do perfil e
@@ -97,8 +97,8 @@ function apagar() {
 /** O que a tela pode ver. Nunca inclui token. */
 function perfilDaTela() {
   const atual = ler();
-  if (!atual) return { entrou: false, perfil: null };
-  return { entrou: true, perfil: atual.perfil };
+  if (!atual) return { entrou: false, perfil: null, acesso: null };
+  return { entrou: true, perfil: atual.perfil, acesso: atual.acesso ?? null };
 }
 
 async function falarComOBackend(rota, corpo) {
@@ -111,23 +111,186 @@ async function falarComOBackend(rota, corpo) {
   return { ok: resposta.ok, status: resposta.status, dados };
 }
 
+/*
+ * ===========================================================================
+ * O ACESSO — a conta pode trabalhar hoje?
+ * ===========================================================================
+ *
+ * Entrar e PODER TRABALHAR são duas perguntas diferentes, e o programa tratava
+ * as duas como uma só: quem passava pelo login via o Optmize inteiro. A conta
+ * que escolheu um plano pago e ainda não acertou o pagamento entrava igual —
+ * enquanto a própria tela de cadastro prometia que o plano seria liberado
+ * quando a CodeEx confirmasse. A promessa existia sem nada atrás dela.
+ *
+ * Quem decide é o backend, em `GET /billing/subscription`, e a decisão vem
+ * pronta: `allowed`, `pendingRelease` e um motivo escrito em português. Nada
+ * disso é recalculado aqui — repetir a regra criaria uma segunda verdade, e é
+ * sempre a segunda que fica desatualizada.
+ *
+ * ---------------------------------------------------------------------------
+ * SEM INTERNET, O PROGRAMA CONTINUA ABRINDO
+ * ---------------------------------------------------------------------------
+ *
+ * Esta é a decisão que mais importa neste arquivo. O Optmize é instalado na
+ * gráfica e fica aberto o dia inteiro; o link da rua cai. Barrar quem já
+ * trabalhava porque o Railway não respondeu transformaria queda de internet em
+ * expediente parado — e o prejuízo seria de quem PAGA, não de quem deve.
+ *
+ * Então: a última resposta conhecida fica gravada junto da sessão, e vale
+ * enquanto não houver uma nova. Sem resposta nenhuma (primeira vez, sem rede),
+ * abre. A trava de verdade não é esta tela, e o comentário de `Casca.tsx` já
+ * dizia isso antes de eu chegar aqui: quem barra o trabalho é o servidor, a
+ * cada operação que depende dele.
+ *
+ * ---------------------------------------------------------------------------
+ * DE QUANTO EM QUANTO
+ * ---------------------------------------------------------------------------
+ *
+ * Uma vez por hora, e sempre que a tela pedir de propósito (o botão "conferir
+ * de novo" de quem está esperando a liberação). Conferir a cada `GET /eu`
+ * faria uma ida ao Railway por abertura de menu, para uma resposta que muda
+ * uma vez na vida da conta.
+ */
+
+const ACESSO_VALE_POR_MS = 60 * 60 * 1000;
+
+/** Foi conferido há pouco? */
+function acessoFresco(atual) {
+  const acesso = atual && atual.acesso;
+  if (!acesso || !acesso.conferidoEm) return false;
+  return Date.now() - Date.parse(acesso.conferidoEm) < ACESSO_VALE_POR_MS;
+}
+
+/**
+ * Uma chamada autenticada ao backend, renovando o token uma vez se preciso.
+ *
+ * O `accessToken` dura meia hora e o programa fica aberto o dia inteiro, então
+ * a primeira conferência do dia cai num token vencido — sem o refresh, ela
+ * responderia 401 e a tela diria "aguardando liberação" para quem está em dia.
+ * Uma tentativa só: se o refresh também falhar, a sessão acabou de verdade.
+ */
+async function pedirComToken(rota) {
+  const atual = ler();
+  if (!atual) return null;
+
+  const tentar = async (token) =>
+    fetch(BACKEND + rota, { headers: { Authorization: `Bearer ${token}` } });
+
+  let resposta = await tentar(atual.accessToken);
+  if (resposta.status !== 401) return resposta;
+
+  const renovada = await falarComOBackend("/auth/refresh", {
+    refreshToken: atual.refreshToken,
+  });
+  if (!renovada.ok || !renovada.dados.accessToken) return resposta;
+
+  gravar({
+    ...atual,
+    accessToken: renovada.dados.accessToken,
+    refreshToken: renovada.dados.refreshToken || atual.refreshToken,
+  });
+  return tentar(renovada.dados.accessToken);
+}
+
+/**
+ * Pergunta ao backend e grava a resposta junto da sessão.
+ *
+ * Devolve o acesso como a tela o vê. `forcar` pula a validade de uma hora —
+ * é o botão de quem está olhando a tela de espera e acabou de falar com a
+ * CodeEx pelo WhatsApp.
+ */
+async function conferirAcesso(forcar = false) {
+  const atual = ler();
+  if (!atual) return null;
+  if (!forcar && acessoFresco(atual)) return atual.acesso;
+
+  let resposta;
+  try {
+    resposta = await pedirComToken("/billing/subscription");
+  } catch {
+    // Sem rede. Fica valendo o que já se sabia — ver a nota acima.
+    return atual.acesso ?? null;
+  }
+  if (!resposta || !resposta.ok) return atual.acesso ?? null;
+
+  const dados = await resposta.json().catch(() => null);
+  if (!dados) return atual.acesso ?? null;
+
+  const acesso = {
+    liberado: Boolean(dados.allowed),
+    /** `true` quando o que falta é a CodeEx liberar, e não a pessoa pagar. */
+    pendente: Boolean(dados.pendingRelease),
+    motivo: dados.blockedReason || null,
+    plano: dados.planName || "",
+    status: dados.status || "none",
+    conferidoEm: new Date().toISOString(),
+  };
+
+  gravar({ ...ler(), acesso });
+  return acesso;
+}
+
 const rotas = express.Router();
 
-/** Quem está usando agora. A tela chama isto ao abrir. */
+/**
+ * Quem está usando agora, e se pode trabalhar. A tela chama isto ao abrir.
+ *
+ * RESPONDE COM O QUE JÁ SABE e confere depois, sem segurar a resposta: a tela
+ * espera este pedido para desenhar qualquer coisa, e uma ida ao Railway no
+ * caminho dela seria meio segundo de tela vazia a cada abertura. O que estava
+ * gravado é de uma hora atrás, no máximo — e o que muda nele muda uma vez na
+ * vida da conta.
+ */
 rotas.get("/eu", (_req, res) => {
+  res.json(perfilDaTela());
+  const atual = ler();
+  if (atual && !acessoFresco(atual)) {
+    conferirAcesso().catch(() => {
+      // Já está tratado lá dentro; aqui é só não derrubar o processo.
+    });
+  }
+});
+
+/**
+ * Confere agora, e responde com o resultado.
+ *
+ * É o botão da tela de espera. Diferente do `/eu`, este ESPERA a resposta:
+ * quem apertou está olhando para a tela querendo saber se já liberou.
+ */
+rotas.post("/conferir", async (_req, res) => {
+  await conferirAcesso(true).catch(() => null);
   res.json(perfilDaTela());
 });
 
 rotas.post("/entrar", async (req, res) => {
   const email = String((req.body && req.body.email) || "").trim().toLowerCase();
   const senha = String((req.body && req.body.senha) || "");
+  /*
+    O DOCUMENTO DA EMPRESA (CNPJ ou CPF) VAI JUNTO, só com os dígitos.
+
+    Quem confere se aquela conta é daquela empresa é o backend, no mesmo
+    `/auth/login` — aqui ele só atravessa. Conferir neste arquivo exigiria uma
+    segunda ida ao servidor para descobrir a empresa da conta, e daria uma
+    segunda regra de acesso para manter em dia.
+  */
+  const documento = String((req.body && req.body.documento) || "").replace(/\D/g, "");
   if (!email || !senha) {
     return res.status(400).json({ code: "faltou", message: "Informe e-mail e senha." });
+  }
+  if (!documento) {
+    return res.status(400).json({
+      code: "faltou",
+      message: "Informe o CNPJ ou o CPF da empresa.",
+    });
   }
 
   let entrada;
   try {
-    entrada = await falarComOBackend("/auth/login", { email, password: senha });
+    entrada = await falarComOBackend("/auth/login", {
+      email,
+      password: senha,
+      documento,
+    });
   } catch {
     // Sem rede, ou servidor fora do ar. É um caso distinto de senha errada, e
     // a tela precisa poder dizer isso — "não foi possível validar" manda a
@@ -174,6 +337,15 @@ rotas.post("/entrar", async (req, res) => {
     perfil,
     entrouEm: new Date().toISOString(),
   });
+
+  /*
+    O ACESSO É CONFERIDO AQUI, ANTES DE RESPONDER, e só aqui a espera se
+    justifica: é a única vez em que a tela não tem nada gravado para mostrar.
+    Sem isto, quem entra numa conta pendente veria o programa inteiro por um
+    instante e a tela de espera depois — que é pior do que meio segundo a mais
+    no login.
+  */
+  await conferirAcesso(true).catch(() => null);
 
   res.json(perfilDaTela());
 });

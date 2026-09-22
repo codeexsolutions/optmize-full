@@ -3,10 +3,10 @@
  * ENTRAR — a porta do CodeEx Optmize
  * ===========================================================================
  *
- * O desenho é o do Optmize Lite (`features/auth/LoginPage.tsx`, lá no outro
+ * O desenho é o do painel web (`features/auth/LoginPage.tsx`, lá no outro
  * repositório): duas colunas no computador — a marca e o que o programa faz à
  * esquerda, o cartão do formulário à direita —, brilhos no fundo e um fio de
- * luz no topo do cartão. Quem já viu o Lite reconhece a casa.
+ * luz no topo do cartão. Quem já viu o painel web reconhece a casa.
  *
  * A MOLDURA NÃO ESTÁ MAIS AQUI: as duas colunas, os brilhos e o cartão viraram
  * a `Porta` (`Porta.tsx`), porque o cadastro da empresa é a segunda tela de
@@ -17,7 +17,7 @@
  * O QUE NÃO VEIO JUNTO, E POR QUÊ
  * ---------------------------------------------------------------------------
  *
- * O Lite anima tudo com `framer-motion` e desenha os ícones com
+ * O painel web anima tudo com `framer-motion` e desenha os ícones com
  * `lucide-react`. Nenhuma das duas entra aqui:
  *
  *   as ANIMAÇÕES são CSS. São quatro entradas escalonadas e um tremor no
@@ -25,14 +25,14 @@
  *   resolve igual, sem 40 KB a mais dentro de um programa instalado;
  *
  *   os ÍCONES saem do sprite (`Icone`, com `icones.svg#nome`), que é como
- *   todo o resto do Full desenha ícone. Trazer os mesmos desenhos como
+ *   todo o resto do programa desenha ícone. Trazer os mesmos desenhos como
  *   componentes faria o programa ter duas maneiras de fazer a mesma coisa.
  *
- * As CORES também não vieram: `surface-*` e `brand-*` são do tema do Lite e
- * não existem aqui. O que existe são os tokens do Full (`tinta`, `painel`,
+ * As CORES também não vieram: `surface-*` e `brand-*` são do tema do painel web e
+ * não existem aqui. O que existe são os tokens daqui (`tinta`, `painel`,
  * `linha`, `ambar`, em `estilo/tokens.css`), e é deles que sai cada cor
  * abaixo. É o que faz a tela de entrada parecer a mesma casa que o programa
- * que ela abre — copiar o hex do Lite daria uma porta de outro prédio.
+ * que ela abre — copiar o hex do painel web daria uma porta de outro prédio.
  *
  * ---------------------------------------------------------------------------
  * O QUE ACONTECE AO ENTRAR
@@ -49,9 +49,19 @@ import { useState } from "react";
 import { Icone } from "../casca/Icone";
 import { Cortina, CORTINA_MS } from "./Cortina";
 import { CriarConta } from "./CriarConta";
-import { Porta } from "./Porta";
+import { mascararDocumento, Porta } from "./Porta";
 
 export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
+  /*
+    O DOCUMENTO DA EMPRESA — CNPJ ou CPF — É O PRIMEIRO CAMPO.
+
+    Ele responde DE QUAL EMPRESA é este acesso, e essa é a primeira pergunta
+    numa máquina de chão de fábrica: a mesma pessoa cuida de duas gráficas, o
+    mesmo computador atende dois turnos. O e-mail diz quem é; o documento diz
+    onde. O servidor confere os dois juntos e recusa a conta que não for
+    daquela empresa.
+  */
+  const [documento, setDocumento] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
@@ -74,7 +84,11 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
       const resposta = await fetch("/api/sessao/entrar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), senha }),
+        body: JSON.stringify({
+          documento,
+          email: email.trim().toLowerCase(),
+          senha,
+        }),
       });
       if (!resposta.ok) {
         const corpo = await resposta.json().catch(() => ({}));
@@ -144,7 +158,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
             mais na altura do "Entrar". Aqui embaixo ele existe para quem
             procura, sem atrapalhar quem não procura.
 
-            Este botão só passou a fazer sentido quando o Full ganhou plano sem
+            Este botão só passou a fazer sentido quando o programa ganhou plano sem
             mensalidade: antes, mandar alguém se cadastrar levaria a um
             pagamento que não destrava o programa instalado. Com o Padrão, o
             cadastro TERMINA em alguém trabalhando.
@@ -184,6 +198,26 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
           clique mais óbvio da linha seria justamente o pedaço morto.
         */}
         <label className="entrada-degrau flex flex-col gap-1.5">
+          <span className="text-[11px] font-medium text-tinta-fraca">
+            CNPJ ou CPF da empresa
+          </span>
+          <span className="relative flex items-center">
+            <Icone
+              referencia="icones.svg#file-text"
+              className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
+            />
+            <input
+              inputMode="numeric"
+              required
+              autoFocus
+              value={documento}
+              onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
+              className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 font-mono text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+            />
+          </span>
+        </label>
+
+        <label className="entrada-degrau flex flex-col gap-1.5">
           <span className="text-[11px] font-medium text-tinta-fraca">E-mail</span>
           <span className="relative flex items-center">
             <Icone
@@ -194,10 +228,8 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
               type="email"
               autoComplete="email"
               required
-              autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="voce@empresa.com"
               className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
             />
           </span>
@@ -216,7 +248,6 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
               required
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
-              placeholder="••••••••"
               className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-11 pl-10 text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
             />
             {/*

@@ -1,22 +1,22 @@
 /**
  * ===========================================================================
- * BOTÃO — o mesmo desenho do Optmize Lite
+ * BOTÃO — o mesmo desenho do painel web
  * ===========================================================================
  *
  * Quatro jeitos (`primario`, `secundario`, `fantasma`, `perigo`) e três
- * tamanhos, copiados do `components/ui/Button.tsx` da Lite para a tela de
+ * tamanhos, copiados do `components/ui/Button.tsx` do painel web para a tela de
  * Projetos sair igual à de lá.
  *
  * As cores saem dos TOKENS deste projeto, e não da escala `brand-*`/`surface-*`
- * da Lite. Quando esta tela veio de lá as duas paletas eram a mesma — o
- * laranja da Lite é `#f97316`, que era o `--accent` daqui. Hoje o acento é o
+ * do painel web. Quando esta tela veio de lá as duas paletas eram a mesma — o
+ * laranja do painel web é `#f97316`, que era o `--accent` daqui. Hoje o acento é o
  * laranja do logo (`#ff531f`, ver `estilo/tokens.css`), e é justamente por
  * ler o token que este botão mudou junto com o resto do sistema, sem ninguém
- * precisar abrir este arquivo. Escrever a escala da Lite aqui seria uma
+ * precisar abrir este arquivo. Escrever a escala do painel web aqui seria uma
  * segunda paleta no projeto, esperando divergir da primeira.
  *
  * Os cantos são `rounded-xl` como lá — mais redondos que os do resto desta
- * casca, e é isso que dá o ar da Lite à tela.
+ * casca, e é isso que dá o ar do painel web à tela.
  */
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";

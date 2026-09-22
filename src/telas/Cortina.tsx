@@ -3,7 +3,7 @@
  * A CORTINA — entre o login e a área de trabalho
  * ===========================================================================
  *
- * Vem do Optmize Lite (`features/auth/EntranceCurtain.tsx`), e existe por dois
+ * Vem do painel web (`features/auth/EntranceCurtain.tsx`), e existe por dois
  * motivos que se somam:
  *
  *   1. COBRE UMA ESPERA QUE EXISTE. Entrar não é instantâneo: a casca monta, o
@@ -17,7 +17,7 @@
  *      ela mostra o PRIMEIRO NOME, e não o e-mail: é como as pessoas se
  *      chamam ali dentro.
  *
- * No Full ela dura o mesmo tempo do Lite e é escrita com as cores e o sprite
+ * Aqui ela dura o mesmo tempo de lá e é escrita com as cores e o sprite
  * daqui; as animações do `framer-motion` viraram CSS, em `estilo/entrada.css`.
  */
 
@@ -26,7 +26,7 @@ import { Icone } from "../casca/Icone";
 /**
  * Quanto tempo a cortina fica na tela.
  *
- * 1,5 s é o número do Lite, e é deliberadamente MAIS do que a casca leva para
+ * 1,5 s é o número do painel web, e é deliberadamente MAIS do que a casca leva para
  * montar: uma cortina que sai antes da tela estar pronta devolve o branco que
  * ela existe para cobrir. Errar para o lado longo custa um segundo por dia a
  * quem abre o programa uma vez; errar para o curto devolve o problema.
