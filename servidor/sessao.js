@@ -218,6 +218,12 @@ async function conferirAcesso(forcar = false) {
 
   const acesso = {
     liberado: Boolean(dados.allowed),
+    /*
+      O QUE O PLANO LIBERA. A tela usa para trancar o que não foi comprado —
+      hoje, a central das impressoras de quem está no Padrão. Quem decide é o
+      catálogo no servidor; aqui isto só atravessa.
+    */
+    escopos: Array.isArray(dados.scopes) ? dados.scopes.map(String) : null,
     /** `true` quando o que falta é a CodeEx liberar, e não a pessoa pagar. */
     pendente: Boolean(dados.pendingRelease),
     motivo: dados.blockedReason || null,

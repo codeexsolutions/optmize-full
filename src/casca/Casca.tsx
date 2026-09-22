@@ -32,6 +32,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
 import { Entrar } from "../telas/Entrar";
 import { Espera } from "../telas/Espera";
+import { ProvedorDeEscopos } from "./Escopos";
 import { useSessao } from "./usuario";
 import { ProvedorDeDialogo } from "./Dialogo";
 import { Cabecalho } from "./Cabecalho";
@@ -147,6 +148,13 @@ export function Casca() {
    * montar a sua para poder perguntar alguma coisa.
    */
   return (
+    /*
+      OS ESCOPOS ENVOLVEM TUDO porque duas peças precisam deles e elas estão
+      em lugares distantes: o MENU, para pôr o cadeado, e a ROTA, para trocar
+      a tela pelo aviso. Passar por propriedade atravessaria meia dúzia de
+      componentes que não têm nada com plano nenhum.
+    */
+    <ProvedorDeEscopos escopos={sessao.acesso?.escopos ?? null}>
     <ProvedorDeDialogo>
     <ProvedorSemCabecalho value={setSemCabecalho}>
     <div data-tela={tela.nome} className="app-react h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
@@ -247,5 +255,6 @@ export function Casca() {
     </div>
     </ProvedorSemCabecalho>
     </ProvedorDeDialogo>
+    </ProvedorDeEscopos>
   );
 }

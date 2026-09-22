@@ -57,6 +57,14 @@ export interface Usuario {
  */
 export interface Acesso {
   liberado: boolean;
+  /**
+   * O que o plano libera (ver `ALL_SCOPES` em `domain/plans.ts`, no backend).
+   *
+   * `null` quando o servidor não disse — e aí tudo aparece, que é a mesma
+   * escolha do portão da conta: link caído não pode esconder do cliente o
+   * programa que ele pagou.
+   */
+  escopos: readonly string[] | null;
   /** `true` quando o que falta é a CodeEx liberar, e não a pessoa pagar. */
   pendente: boolean;
   /** O motivo como o servidor o escreveu, em português. */

@@ -48,6 +48,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Casca } from "./casca/Casca";
 import { ehProducaoIntegrada } from "./producao/Producao";
+import { ComEscopo } from "./casca/Escopos";
 import { TELAS, TELA_PADRAO } from "./rotas";
 
 export function App() {
@@ -58,11 +59,22 @@ export function App() {
           {/* A raiz leva à tela inicial, sem deixar o endereço vazio. */}
           <Route index element={<Navigate to={`/${TELA_PADRAO}`} replace />} />
 
-          {TELAS.map(({ nome, Componente }) => (
+          {/*
+            `ComEscopo` fica ENTRE a rota e a tela: se o plano da conta não
+            libera aquela parte, o que abre é o aviso, com o mesmo endereço e
+            o mesmo cabeçalho. A tela em si não sabe que plano existe.
+          */}
+          {TELAS.map((tela) => (
             <Route
-              key={nome}
-              path={nome}
-              element={ehProducaoIntegrada(nome) ? null : <Componente />}
+              key={tela.nome}
+              path={tela.nome}
+              element={
+                ehProducaoIntegrada(tela.nome) ? null : (
+                  <ComEscopo tela={tela}>
+                    <tela.Componente />
+                  </ComEscopo>
+                )
+              }
             />
           ))}
 

@@ -94,7 +94,8 @@ import { NavLink } from "react-router-dom";
 import { Icone } from "./Icone";
 import { useDialogo } from "./Dialogo";
 import { iniciais, type Usuario } from "./usuario";
-import { GRUPOS, telasDoGrupo } from "../rotas";
+import { GRUPOS, telasDoGrupo, type Tela } from "../rotas";
+import { useForaDoPlano } from "./Escopos";
 
 interface Props {
   aberto: boolean;
@@ -495,31 +496,7 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
                 </h2>
 
                 {telas.map((tela) => (
-                  <NavLink
-                    key={tela.nome}
-                    to={`/${tela.nome}`}
-                    onClick={aoFechar}
-                    /* A linha de apoio não é mais desenhada: vive aqui, no balão. */
-                    title={tela.trancada ? `${tela.rotulo} — trancada` : `${tela.rotulo} — ${tela.apoioMenu}`}
-                    className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO,
-                      tela.trancada && !isActive ? "opacity-60" : ""].join(" ")}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {isActive && <span aria-hidden="true" className={TRILHO} />}
-                        {/*
-                          Tela trancada troca o ícone pelo cadeado (ver `trancada`,
-                          em rotas.ts). No lugar do ícone, e não ao lado do nome,
-                          porque na barra estreita o nome some e o ícone fica.
-                        */}
-                        <Icone
-                          referencia={tela.trancada ? "icones.svg#lock" : tela.icone}
-                          className={`${ICONE} ${isActive ? ICONE_ATIVO : ""}`}
-                        />
-                        <span className={TEXTO_DO_ITEM}>{tela.rotulo}</span>
-                      </>
-                    )}
-                  </NavLink>
+                  <ItemDoMenu key={tela.nome} tela={tela} aoFechar={aoFechar} />
                 ))}
 
               </nav>
@@ -593,5 +570,56 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
         </div>
       </aside>
     </>
+  );
+}
+
+
+/**
+ * Uma linha do menu.
+ *
+ * Virou componente por causa do cadeado: saber se a tela está no plano é uma
+ * pergunta de hook (`useForaDoPlano`), e hook não se chama dentro de um
+ * `map`. O desenho é o mesmo de antes.
+ *
+ * DUAS RAZÕES PARA O CADEADO, e a linha não distingue: `trancada` é decisão
+ * nossa e vale para todo mundo; fora do plano é decisão do plano da conta. O
+ * que muda entre as duas é o que a pessoa vê ao clicar — e aí aí ela já está
+ * na tela, que explica qual dos dois é.
+ */
+function ItemDoMenu({ tela, aoFechar }: { tela: Tela; aoFechar: () => void }) {
+  const foraDoPlano = useForaDoPlano(tela);
+  const comCadeado = Boolean(tela.trancada) || foraDoPlano;
+
+  const balao = tela.trancada
+    ? `${tela.rotulo} — trancada`
+    : foraDoPlano
+      ? `${tela.rotulo} — não está no seu plano`
+      : `${tela.rotulo} — ${tela.apoioMenu}`;
+
+  return (
+    <NavLink
+      to={`/${tela.nome}`}
+      onClick={aoFechar}
+      /* A linha de apoio não é mais desenhada: vive aqui, no balão. */
+      title={balao}
+      className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO,
+        comCadeado && !isActive ? "opacity-60" : ""].join(" ")}
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && <span aria-hidden="true" className={TRILHO} />}
+          {/*
+            Tela com cadeado troca o ícone pelo cadeado (ver `trancada` e
+            `escopo`, em rotas.ts). No lugar do ícone, e não ao lado do nome,
+            porque na barra estreita o nome some e o ícone fica.
+          */}
+          <Icone
+            referencia={comCadeado ? "icones.svg#lock" : tela.icone}
+            className={`${ICONE} ${isActive ? ICONE_ATIVO : ""}`}
+          />
+          <span className={TEXTO_DO_ITEM}>{tela.rotulo}</span>
+        </>
+      )}
+    </NavLink>
   );
 }

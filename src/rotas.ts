@@ -148,6 +148,17 @@ export interface Tela {
    * tela funciona e não aparece; aqui ela aparece e não funciona.
    */
   trancada?: boolean;
+  /**
+   * A tela só existe para quem tem este escopo no plano.
+   *
+   * Diferente de `trancada`, que é decisão nossa e vale para todo mundo: aqui
+   * quem decide é o PLANO da conta, e a mesma tela abre para uns e não para
+   * outros. Sem escopo escrito, a tela é de todos.
+   *
+   * Quem confere é `casca/Escopos.tsx`, entre a rota e o componente — a tela
+   * não precisa saber que existe plano.
+   */
+  escopo?: "impressoras";
   Componente: ComponentType;
 }
 
@@ -221,6 +232,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "O que está saindo agora",
     apoioTopo: "Acompanhe a produção das impressoras em tempo real.",
     icone: "icones.svg#printer",
+    escopo: "impressoras",
     Componente: Impressoras,
   },
   {
@@ -230,6 +242,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "A fila da calandra",
     apoioTopo: "A lista de produção na ordem da calandra, e o que já passou por lá.",
     icone: "icones.svg#list-checks",
+    escopo: "impressoras",
     Componente: Pedidos,
   },
   {
@@ -240,6 +253,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Achar na rede",
     apoioTopo: "Encontre as impressoras da rede e cadastre-as — os caminhos vêm sozinhos.",
     icone: "icones.svg#radar",
+    escopo: "impressoras",
     Componente: Maquinas,
   },
   {
@@ -250,6 +264,8 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Avisos automáticos",
     apoioTopo: "Avise num grupo quando uma impressão começa e quando termina.",
     icone: "icones.svg#message-circle",
+    /* Os avisos são da produção: sem a central, não há o que avisar. */
+    escopo: "impressoras",
     Componente: Whatsapp,
   },
 
