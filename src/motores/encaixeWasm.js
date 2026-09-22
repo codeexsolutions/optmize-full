@@ -48,7 +48,8 @@
  */
 
 import {
-  bancadaEmCelulas, encaixar, posicoesDasColocacoes, reservaDaArte, sondasDaForma,
+  bancadaEmCelulas, colunasDoTecido, consumoDoFundo, encaixar, posicoesDasColocacoes,
+  reservaDaArte, sondasDaForma,
 } from "./encaixeMotor";
 
 // Os campos do cabeçalho, na mesma ordem do lib.rs.
@@ -313,8 +314,8 @@ export function prepararUnidadesNoWasm(unidades) {
 export function encaixarContornoWasm(unidades, config) {
   if (!temMotorWasm() || unidades.length === 0) return null;
 
-  const { larguraTecido, passo, heuristica } = config;
-  const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
+  const { passo, heuristica } = config;
+  const colsTecido = config.colsForcado || colunasDoTecido(config);
   const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
 
   /*
@@ -413,7 +414,7 @@ export function encaixarContornoWasm(unidades, config) {
 
   const resultado = {
     posicoes, colocacoes, naoEncaixadas,
-    consumo: fundoMax > 0 ? fundoMax * passo : 0,
+    consumo: consumoDoFundo(fundoMax, passo, config, posicoes),
     areaReal: posicoes.reduce((soma, p) => soma + p.item.mascaras.areaReal, 0),
     piorUnidade, piorVazio,
   };

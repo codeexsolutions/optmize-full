@@ -56,17 +56,25 @@ function ocupacaoDaPeca(pos) {
   const m = pos.mascara;
   if (!m) return { silhueta: arte, arte };
 
+  // A silhueta DE VERDADE (o `desenho`), na posição física. O engorde da
+  // folga pode passar da linha da mesa — a mesa é borda, e borda não leva
+  // folga (ver "A BORDA DO TECIDO NÃO LEVA FOLGA", em encaixeMotor.js) —, a
+  // peça não. `offY` traz o recuo da borda, que aqui sai de volta para cair
+  // na moldura da máscara.
   const passo = pos.passo;
-  const row0 = Math.round((pos.y + m.offY) / passo);
+  const y0 = pos.y + m.offY - (m.recuo || 0);
   let primeira = Infinity;
   let ultima = -Infinity;
-  for (let c = 0; c < m.cols; c++) {
-    if (m.topo[c] < 0) continue;
-    if (m.topo[c] < primeira) primeira = m.topo[c];
-    if (m.base[c] > ultima) ultima = m.base[c];
+  for (let r = 0; r < m.rows; r++) {
+    for (let c = 0; c < m.cols; c++) {
+      if (!m.desenho[r * m.cols + c]) continue;
+      if (r < primeira) primeira = r;
+      if (r > ultima) ultima = r;
+      break;
+    }
   }
   return {
-    silhueta: { topo: (row0 + primeira) * passo, fundo: (row0 + ultima + 1) * passo },
+    silhueta: { topo: y0 + primeira * passo, fundo: y0 + (ultima + 1) * passo },
     arte,
   };
 }
@@ -138,7 +146,8 @@ async function principal() {
     const alturaMax = itens.reduce((s, i) => s + Math.max(i.largura, i.altura) + receita.espaco, 0);
     const base = {
       larguraTecido: receita.larguraTecido, espaco: receita.espaco,
-      passo, alturaMax, heuristica: "fundo",
+      // O raio do engorde, como a tela manda (ver `colunasDoTecido`).
+      passo, raio, alturaMax, heuristica: "fundo",
     };
 
     for (const motorNome of opcoes.motores) {

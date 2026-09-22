@@ -2210,7 +2210,7 @@ async function optmizar() {
     // de todas as fatias. Sem worker disponível, ela mesma cai na busca de uma
     // thread só — daqui não muda nada: mesma chamada, mesmo resultado.
     guardarResultado(await buscarMelhorEncaixeEmParalelo(itens, {
-      larguraTecido, espaco, comprimentoBancada, passo, alturaMax, motores,
+      larguraTecido, espaco, comprimentoBancada, passo, raio, alturaMax, motores,
       memoria: aprendido ? aprendido.memoria : null,
       // O RECORDE VEM DA CHAVE EXATA, NÃO DO BALDE.
       //

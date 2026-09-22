@@ -240,7 +240,11 @@ export function chaveDoTrabalho(
   // O "b" antes do comprimento não é enfeite: sem ele, uma chave nova de
   // bancada 1 cm cairia em cima da chave velha de margem 1 cm, e o trabalho
   // abriria com um encaixe guardado que não respeita bancada nenhuma.
-  return `${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
+  // O "f2/" é a regra da folga: desde ela a folga nunca fica abaixo da pedida
+  // e não vai para a borda do tecido (ver "A BORDA DO TECIDO NÃO LEVA FOLGA",
+  // em motores/encaixeMotor.js). Um encaixe guardado antes dela pode ter folga
+  // curta, e não pode voltar como "o melhor já conseguido".
+  return `f2/${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
 }
 
 /** O encaixe do jeito que ele vai para o banco: só o essencial de cada peça. */

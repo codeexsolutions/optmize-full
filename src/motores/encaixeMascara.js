@@ -155,12 +155,36 @@ export function grade(larguraTecido, espaco) {
   return { passo, raio, folgaReal: raio * passo * 2 };
 }
 
-/** A grade de uma peça: quantas células de lado ela tem. */
+/**
+ * A grade de uma peça: quantas células de lado ela tem.
+ *
+ * ARREDONDA PARA CIMA, e a arte entra na grade no tamanho de verdade (ver
+ * `pixelsDaArteNaGrade`, em pecaNaGrade.js). Já foi `Math.round`, com a arte
+ * esticada ou espremida para caber num número inteiro de células — e o encaixe
+ * enxergava a peça com a medida da grade, não com a dela. Uma arte de 30,2 cm
+ * na grade de 0,5 virava 30,0 cm: os 2 mm que faltavam saíam da folga, e pedir
+ * 10 mm entregava 8. Arredondando para cima, a silhueta nunca fica menor que a
+ * arte, e a folga nunca fica menor que a pedida.
+ */
 export function gradeDaPeca(peca, passo) {
   return {
-    cols: Math.max(1, Math.round(peca.largura / passo)),
-    rows: Math.max(1, Math.round(peca.altura / passo)),
+    cols: Math.max(1, Math.ceil(peca.largura / passo - 1e-9)),
+    rows: Math.max(1, Math.ceil(peca.altura / passo - 1e-9)),
   };
+}
+
+/**
+ * Quanto de cada célula da grade é arte de verdade, coluna por coluna e linha
+ * por linha: 1 nas cheias, a fração na última (a grade arredonda para cima, e
+ * a última célula passa da arte). Sem a medida da peça, toda célula conta
+ * inteira, que é como a área era medida antes.
+ */
+function pesosDaGrade(celulas, medida, passo) {
+  const pesos = new Float64Array(celulas).fill(1);
+  if (!(medida > 0)) return pesos;
+  const util = medida / passo;
+  for (let i = 0; i < celulas; i++) pesos[i] = Math.max(0, Math.min(1, util - i));
+  return pesos;
 }
 
 
@@ -401,7 +425,15 @@ export function silhuetaDeDados(dados, cols, rows) {
     // Fundo transparente. O limite é baixo de propósito: ao reduzir a imagem
     // para a grade, a borda vira meio-transparente e não pode ser comida.
     for (let i = 0, a = 3; i < total; i++, a += 4) bits[i] = dados[a] >= 40 ? 1 : 0;
-    return validarSilhueta(bits, total, "alfa");
+    const validada = validarSilhueta(bits, total, "alfa");
+    // A área sai do alfa, e não do bit: a célula de borda meio transparente é
+    // meia peça, e contá-la inteira inflava o aproveitamento.
+    if (validada.modo === "alfa") {
+      const cobertura = new Float32Array(total);
+      for (let i = 0, a = 3; i < total; i++, a += 4) cobertura[i] = dados[a] / 255;
+      validada.cobertura = cobertura;
+    }
+    return validada;
   }
 
   const fundo = corDoFundoNaBorda(dados, cols, rows);
@@ -418,32 +450,62 @@ export function silhuetaDeDados(dados, cols, rows) {
 /**
  * Da silhueta às quatro máscaras giradas. É o miolo do `mascarasDaPeca`, sem
  * a parte do cache, que é da tela.
+ *
+ * `medida` é a peça em centímetros ({ largura, altura }). É com ela que a área
+ * sai na medida real, e não na da grade — ver `pesosDaGrade`.
+ *
+ * A FOLGA NÃO VAI PARA A BORDA DO TECIDO
+ * --------------------------------------
+ * Cada peça carrega meia folga em volta (o engorde), e é isso que deixa a folga
+ * inteira entre duas peças vizinhas. Só que a meia folga também ia para a
+ * beira do rolo: a peça ficava a meia folga da borda esquerda e do começo, e a
+ * da direita perdia o mesmo tanto. Na borda não há vizinho, e não há por que
+ * afastar.
+ *
+ * A saída é deixar o engorde passar da beira. Os motores de grade enxergam o
+ * rolo com `raio` células a mais de cada lado (ver `colunasDoTecido`, em
+ * encaixeMotor.js), e toda posição volta para o tecido de verdade descontando
+ * `recuo` — que entra aqui, no `offX`/`offY`. É por eles que TODA conversão de
+ * célula para centímetro passa (o motor, o sparrow, a volta do WASM), então
+ * nenhuma delas precisa saber que o recuo existe. Quem mede dentro da grade e
+ * precisa do lugar antigo desconta `recuo` de volta.
  */
-export function mascarasDeSilhueta(silhueta, cols, rows, passo, raio) {
+export function mascarasDeSilhueta(silhueta, cols, rows, passo, raio, medida = null) {
   const gordo = engordarComBorda(silhueta.bits, cols, rows, raio);
   const real = comMesmaBorda(silhueta.bits, cols, rows, gordo.borda);
+  const recuo = gordo.borda * passo;
 
   const rotacoes = {};
   [0, 90, 180, 270].forEach((rot) => {
     const cheia = girarBits(gordo.bits, gordo.cols, gordo.rows, rot);
     const original = girarBits(real.bits, real.cols, real.rows, rot);
     const m = prepararMascara(cheia.bits, original.bits, cheia.cols, cheia.rows, passo);
-    // A moldura cresceu para o engorde caber; o desenho da arte continua no
-    // mesmo lugar de antes, então o deslocamento desconta essa borda.
-    if (m && gordo.borda > 0) {
-      m.offX -= gordo.borda * passo;
-      m.offY -= gordo.borda * passo;
-    }
+    // A moldura cresceu `borda` células para o engorde caber, e o rolo da
+    // grade cresceu o mesmo tanto de cada lado: as duas coisas se anulam, e o
+    // deslocamento fica o do recorte. Ver o cabeçalho desta função.
+    if (m) m.recuo = recuo;
     rotacoes[rot] = m;
   });
 
   let cheias = 0;
   for (let i = 0; i < silhueta.bits.length; i++) cheias += silhueta.bits[i];
 
+  // A área de cada célula é a fração dela que é peça: o alfa na silhueta
+  // transparente, o bit nas outras, e na última coluna e linha só o pedaço que
+  // a arte ocupa. Na peça-retângulo isso dá exatamente largura x altura.
+  const pesoX = pesosDaGrade(cols, medida && medida.largura, passo);
+  const pesoY = pesosDaGrade(rows, medida && medida.altura, passo);
+  const valor = silhueta.cobertura || silhueta.bits;
+  let area = 0;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) area += valor[y * cols + x] * pesoX[x] * pesoY[y];
+  }
+
   return {
     rotacoes,
     modo: silhueta.modo,
-    areaReal: cheias * passo * passo,
+    raio,
+    areaReal: area * passo * passo,
     ocupacao: cheias / (cols * rows), // quanto da caixa a peça realmente usa
   };
 }

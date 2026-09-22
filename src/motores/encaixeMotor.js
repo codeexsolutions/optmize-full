@@ -133,14 +133,21 @@ export function sobraDaArte(forma, passo) {
   let acima = 0;
   let abaixo = 0;
   if (Number.isFinite(primeira)) {
-    const silhuetaTopo = primeira * passo;
-    const silhuetaFundo = (ultima + 1) * passo;
     forma.partes.forEach((parte) => {
       const m = parte.mascara;
       if (!m) return;
       const deitada = parte.rot === 90 || parte.rot === 270;
       const altura = deitada ? parte.item.largura : parte.item.altura;
-      const arteTopo = parte.drow * passo - m.offY;
+      // `offY` já desconta o recuo da borda (ver `mascarasDeSilhueta`); aqui a
+      // conta é dentro da grade, então o recuo volta.
+      const recuo = m.recuo || 0;
+      const arteTopo = parte.drow * passo - m.offY + recuo;
+      // A sobra conta da silhueta DE VERDADE, e não da engordada. O engorde
+      // pode passar da linha da mesa (ver `bancadaEmCelulas`), e é a peça que
+      // fica dentro dela — a de verdade começa `recuo` abaixo do topo
+      // engordado e termina `recuo` acima do pé.
+      const silhuetaTopo = primeira * passo + recuo;
+      const silhuetaFundo = (ultima + 1) * passo - recuo;
       acima = Math.max(acima, silhuetaTopo - arteTopo);
       abaixo = Math.max(abaixo, (arteTopo + altura) - silhuetaFundo);
     });
@@ -181,7 +188,64 @@ export function reservaDaArte(unidades, passo) {
 export function bancadaEmCelulas(config, reserva = 0) {
   if (!(config.comprimentoBancada > 0)) return null;
   const linhas = Math.floor((config.comprimentoBancada - reserva) / config.passo);
-  return linhas > 0 ? linhas : null;
+  // A mesa também é borda: o engorde das peças pode passar da linha dela, dos
+  // dois lados, como passa da beira do rolo (ver `colunasDoTecido`). Cada
+  // mesa sai com as peças encostadas no começo, e duas mesas vizinhas
+  // continuam separadas, porque são pedaços de tecido diferentes.
+  return linhas > 0 ? linhas + 2 * raioDaBorda(config) : null;
+}
+
+/*
+ * ===========================================================================
+ * A BORDA DO TECIDO NÃO LEVA FOLGA
+ * ===========================================================================
+ *
+ * A folga é entre PEÇAS. Cada peça carrega meia folga em volta dela (o
+ * engorde, ver `mascarasDeSilhueta` em encaixeMascara.js), e duas vizinhas
+ * ficam com a folga inteira entre elas. Na beira do rolo não há vizinha — e
+ * a meia folga ia para lá do mesmo jeito: a peça ficava afastada da borda
+ * esquerda e do começo do rolo, e a da direita perdia o mesmo pedaço. Medido
+ * com folga de 10 mm: toda peça começava a 5 mm da borda.
+ *
+ * Nos motores de grade, o rolo passa a ter `raio` células a mais de cada lado.
+ * O engorde pode ocupar essas células, a peça de verdade não — ela fica
+ * dentro do tecido, encostando na borda. Na volta para centímetros, as
+ * posições descontam essas células pelo `recuo` que mora no `offX`/`offY` das
+ * máscaras, e o consumo desconta o engorde de cima e o de baixo.
+ *
+ * `config.raio` é o raio do engorde das peças deste trabalho (o mesmo de
+ * `grade`). Sem ele, o rolo continua do tamanho de antes: as posições saem
+ * certas do mesmo jeito, só com a sobra na borda que havia antes.
+ */
+export function raioDaBorda(config) {
+  return Math.max(0, Math.round(Number(config.raio) || 0));
+}
+
+/** Quantas colunas o rolo tem na grade, contando a borda do engorde. */
+export function colunasDoTecido(config) {
+  return Math.max(1, Math.floor(config.larguraTecido / config.passo + 1e-9)) + 2 * raioDaBorda(config);
+}
+
+/**
+ * O consumo em centímetros a partir do fundo em células: tira o engorde de
+ * cima e de baixo.
+ *
+ * Com as posições, ele também não passa do pé da arte mais baixa. A grade
+ * arredonda a peça para cima (ver `gradeDaPeca`), então o fundo em células
+ * pode sobrar até uma célula depois da arte — e a peça de verdade nunca passa
+ * da caixa da arte. Os dois são tetos para onde a última peça termina; o menor
+ * deles é o mais justo.
+ */
+export function consumoDoFundo(fundo, passo, config, posicoes = null) {
+  if (!(fundo > 0)) return 0;
+  const pelaGrade = Math.max(0, fundo - 2 * raioDaBorda(config)) * passo;
+  if (!posicoes || posicoes.length === 0) return pelaGrade;
+  let peDaArte = 0;
+  for (let i = 0; i < posicoes.length; i++) {
+    const pe = posicoes[i].y + posicoes[i].altura;
+    if (pe > peDaArte) peDaArte = pe;
+  }
+  return Math.min(pelaGrade, peDaArte);
 }
 
 /**
@@ -660,7 +724,11 @@ export function ocupar(packer, usado) {
 export function encaixar(itens, config) {
   const { larguraTecido, espaco, alturaMax } = config;
 
-  const packer = criarPacker(larguraTecido, alturaMax, bancadaEmCentimetros(config, itens.length));
+  // Cada peça reserva a folga à direita dela, e a última da fileira não tem
+  // vizinha à direita: o rolo ganha essa folga, e a peça pode encostar na
+  // borda. Sem isso, cinco peças de 31,2 cm com 1 cm entre elas (160 cm
+  // exatos) não cabiam num rolo de 160. Ver "A BORDA DO TECIDO NÃO LEVA FOLGA".
+  const packer = criarPacker(larguraTecido + espaco, alturaMax, bancadaEmCentimetros(config, itens.length));
   const posicoes = [];
   const naoEncaixadas = [];
   let consumo = 0;
@@ -2086,10 +2154,11 @@ export function repescarNosVaos(colocacoes, colsTecido, linhasBancada, voltas = 
   return fundoMax;
 }
 
-export function resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo) {
+export function resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo, config = {}) {
   return {
     posicoes, naoEncaixadas,
-    consumo: fundoMax > 0 ? fundoMax * passo : 0,
+    // Sem o engorde de cima e de baixo: ver "A BORDA DO TECIDO NÃO LEVA FOLGA".
+    consumo: consumoDoFundo(fundoMax, passo, config, posicoes),
     areaReal: posicoes.reduce((soma, p) => soma + p.item.mascaras.areaReal, 0),
   };
 }
@@ -2110,13 +2179,13 @@ export function encaixarContorno(unidades, config) {
       if (config.repescar && !config.perfilInicial && pelaViaRapida.colocacoes) {
         const { passo } = config;
         const colsDoTecido = config.colsForcado
-          || Math.max(1, Math.floor(config.larguraTecido / passo));
+          || colunasDoTecido(config);
         const linhas = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
         const fundo = repescarNosVaos(pelaViaRapida.colocacoes, colsDoTecido, linhas,
           config.repescaVoltas, config.repescaMaxPecas, config.repescaFatiaDoRabo);
         const refeito = resultadoDoEncaixe(
           posicoesDasColocacoes(pelaViaRapida.colocacoes, passo, linhas),
-          pelaViaRapida.naoEncaixadas, fundo, passo);
+          pelaViaRapida.naoEncaixadas, fundo, passo, config);
         refeito.piorUnidade = pelaViaRapida.piorUnidade;
         refeito.piorVazio = pelaViaRapida.piorVazio;
         return refeito;
@@ -2125,10 +2194,10 @@ export function encaixarContorno(unidades, config) {
     }
   }
 
-  const { larguraTecido, passo, heuristica } = config;
+  const { passo, heuristica } = config;
   // `colsForcado` é usado pelo encaixe por faixas: ali a largura não é a do
   // rolo, é a da faixa.
-  const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
+  const colsTecido = config.colsForcado || colunasDoTecido(config);
   // `linhasBancadaForcado` vem de quem encaixa a fila em pedaços: a trava tem
   // que ser a do conjunto inteiro, e não a que este pedaço calcularia sozinho
   // (ver `encaixarPorBlocos`).
@@ -2186,7 +2255,7 @@ export function encaixarContorno(unidades, config) {
   }
 
   const resultado = resultadoDoEncaixe(
-    posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundoMax, passo);
+    posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundoMax, passo, config);
   resultado.colocacoes = colocacoes;
   resultado.piorUnidade = piorUnidade;
   resultado.piorVazio = piorVazio;
@@ -2385,8 +2454,8 @@ export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBanc
 }
 
 export function encaixarPorVaos(unidades, config) {
-  const { larguraTecido, passo } = config;
-  const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
+  const { passo } = config;
+  const colsTecido = config.colsForcado || colunasDoTecido(config);
   const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
 
   // O tecido dos vãos, e os resumos que fazem a poda: ver "O TECIDO VISTO PELOS
@@ -2440,7 +2509,7 @@ export function encaixarPorVaos(unidades, config) {
   }
 
   const resultado = resultadoDoEncaixe(
-    posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundoMax, passo);
+    posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundoMax, passo, config);
   resultado.colocacoes = colocacoes;
   resultado.piorUnidade = piorUnidade;
   resultado.piorVazio = piorVazio;
@@ -2640,8 +2709,8 @@ export function assinaturaDaEscolha(corridas) {
 }
 
 export function encaixarPorBlocos(unidades, config) {
-  const { passo, larguraTecido } = config;
-  const colsTecido = config.colsForcado || Math.max(1, Math.floor(larguraTecido / passo));
+  const { passo } = config;
+  const colsTecido = config.colsForcado || colunasDoTecido(config);
   // A trava da bancada sai do conjunto INTEIRO, uma vez. Deixá-la nascer
   // dentro de cada bloco daria uma linha diferente por bloco — a reserva da
   // arte depende de quais peças estão na mão (ver `reservaDaArte`) — e a
@@ -2748,7 +2817,7 @@ export function encaixarPorBlocos(unidades, config) {
   }
 
   const resultado = resultadoDoEncaixe(
-    posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundo, passo);
+    posicoesDasColocacoes(colocacoes, passo, linhasBancada), naoEncaixadas, fundo, passo, config);
   resultado.colocacoes = colocacoes;
   resultado.piorUnidade = piorUnidade;
   resultado.piorVazio = piorVazio;
@@ -2793,7 +2862,7 @@ export function larguraDaUnidade(unidade, passo) {
  */
 export function cortesDeFaixa(unidades, config) {
   const { passo, larguraTecido } = config;
-  const colsUtil = Math.max(1, Math.floor(larguraTecido / passo));
+  const colsUtil = colunasDoTecido(config);
   const larguras = [...new Set(unidades.map((u) => larguraDaUnidade(u, passo)))].sort((a, b) => b - a);
   if (larguras.length < 2) return [];
 
@@ -2857,8 +2926,8 @@ export function repartirEntreFaixas(unidades, colsEsquerda, colsDireita, passo) 
 }
 
 export function encaixarPorFaixas(unidades, config) {
-  const { passo, larguraTecido, corteCols } = config;
-  const colsUtil = Math.max(1, Math.floor(larguraTecido / passo));
+  const { passo, corteCols } = config;
+  const colsUtil = colunasDoTecido(config);
   const colsDireita = colsUtil - corteCols;
   if (corteCols <= 0 || colsDireita <= 0) {
     return { posicoes: [], naoEncaixadas: unidades.flatMap((u) => u.itens), consumo: 0, areaReal: 0 };

@@ -39,7 +39,7 @@ function montar(motor, nome) {
   const pecas = receita.pecas.map((p) => prepararPeca(motor, p.nome, {
     passo, raio, giro: p.giro || "180", qtd: p.qtd,
   }));
-  return { receita, passo, itens: expandir(pecas) };
+  return { receita, passo, raio, itens: expandir(pecas) };
 }
 
 /**
@@ -109,6 +109,9 @@ async function principal() {
                 larguraTecido: a.receita.larguraTecido,
                 comprimentoBancada,
                 passo: a.passo,
+                // O rolo com a borda do engorde, como a tela manda: é a conta
+                // de colunas que o WASM e o JavaScript têm de fazer igual.
+                raio: a.raio,
                 heuristica, saltoX,
               };
               const rA = comWasm.encaixarContorno(listaA, config);

@@ -294,11 +294,16 @@ function prepararPeca(motor, nome, { passo, raio, giro = "180", qtd = 1 }) {
   // `blocos` é para a peça cuja silhueta são vários pedaços soltos; o normal é
   // um polígono só. Os dois viram a mesma grade de bits.
   const bits = new Uint8Array(cols * rows);
+  // O polígono é da PEÇA (0..1 na medida dela); a grade arredonda para cima
+  // (ver `gradeDaPeca`), então ele vai para a fração da grade sem esticar.
+  const ex = molde.largura / (cols * passo);
+  const ey = molde.altura / (rows * passo);
   (molde.blocos || [molde.poligono]).forEach((poligono) => {
-    const parte = rasterizar(poligono, cols, rows);
+    const parte = rasterizar(poligono.map(([x, y]) => [x * ex, y * ey]), cols, rows);
     for (let i = 0; i < bits.length; i++) if (parte[i]) bits[i] = 1;
   });
-  const mascaras = motor.mascarasDeSilhueta({ bits, modo: "alfa" }, cols, rows, passo, raio);
+  const mascaras = motor.mascarasDeSilhueta({ bits, modo: "alfa" }, cols, rows, passo, raio,
+    { largura: molde.largura, altura: molde.altura });
 
   return {
     nome, giro, qtd,
