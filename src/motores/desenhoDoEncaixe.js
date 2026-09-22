@@ -424,3 +424,366 @@ export function escreverNome(ctx, p, x, y, w, h) {
   ctx.fillText(texto, x + 7, y + 12);
   ctx.restore();
 }
+
+
+/*
+ * ===========================================================================
+ * A MÍDIA VAZIA — o rolo antes de existir trabalho
+ * ===========================================================================
+ *
+ * A mesa vazia era um retângulo preto com um cartão no meio, e só. Quem abria
+ * o Encaixe não via NADA do tecido que estava prestes a usar: nem a largura,
+ * nem a escala, nem que aquilo é um rolo que corre para a direita. O primeiro
+ * arquivo solto fazia tudo isso aparecer de uma vez, e até lá a tela não
+ * ensinava nada.
+ *
+ * ---------------------------------------------------------------------------
+ * O DESENHO VEM DO OPTMIZE LITE
+ * ---------------------------------------------------------------------------
+ *
+ * O rolo do Lite (`components/NestingCanvas.tsx`, lá no outro projeto) resolve
+ * isto há tempos, e resolve bem: superfície própria, grade dupla nos dois
+ * eixos, régua de traços laranja e a borda da mídia em três lados. Não há
+ * motivo para inventar outro — e há um bom motivo para não inventar: são dois
+ * programas da mesma casa que encaixam a mesma coisa, e quem usa os dois não
+ * deveria ter de reaprender a olhar.
+ *
+ * Do Lite vem a ESTRUTURA. As cores exatas, não:
+ *
+ *   - o laranja do Lite é `#f97316`, e o desta casa é `#ff531f` — o da MARCA,
+ *     lido do arquivo do logo (ver `estilo/tokens.css`). O acento daqui era
+ *     justamente `#f97316` e foi trocado de propósito, porque lado a lado com
+ *     a marca eram duas laranjas diferentes na mesma tela. Copiar o hex do
+ *     Lite desfaria aquilo;
+ *
+ *   - os cinzas do Lite são quentes (`#1a1817`, um marrom escuro) e os desta
+ *     folha são frios (`#171d21`, um azul escuro). Aqui ficam os frios, pelo
+ *     mesmo motivo: é a paleta em que o resto do programa está pintado, e é a
+ *     do risco de verdade, que vai substituir este desenho no lugar exato em
+ *     que ele está.
+ *
+ * ---------------------------------------------------------------------------
+ * A BORDA ABERTA E O DEGRADÊ DIZEM A MESMA COISA
+ * ---------------------------------------------------------------------------
+ *
+ * O Lite desenha a borda da mídia em TRÊS lados — começo, cima e baixo — e
+ * deixa a direita aberta. O comentário de lá explica: "o comprimento não tem
+ * fim; fechar o retângulo à direita desenhava uma parede onde a mídia
+ * continua, e o operador lia aquilo como acabou o material".
+ *
+ * Um risco PRONTO tem comprimento, e ali o corte reto na ponta é a informação.
+ * Um rolo vazio não tem: quanto dele vai ser gasto é justamente o que ninguém
+ * sabe ainda. Por isso aqui vão as duas coisas — a borda aberta do Lite E o
+ * degradê, que faz o desenho inteiro (grade, borda, régua) rarear até sumir em
+ * vez de ser cortado pela beirada do canvas.
+ *
+ * O fundo do canvas fica TRANSPARENTE (o `desenharEncaixe` pinta o seu de
+ * `#0d1113`): é o degradê que tem de revelar a mesa por baixo, e um fundo
+ * opaco sob ele daria um retângulo acabando no nada — o corte reto que se quer
+ * evitar.
+ */
+export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
+  const REGUA = 34;
+  const pai = canvas.parentElement;
+
+  // Os mesmos 22px de padding que o `desenharEncaixe` desconta — ver lá.
+  const larguraDisponivel = pai ? pai.clientWidth - 22 : 900;
+  const alturaDisponivel = pai ? pai.clientHeight - 22 : 500;
+
+  const ctx = canvas.getContext("2d");
+
+  // Sem largura de tecido não há rolo para desenhar: some, em vez de inventar
+  // um. É o estado de quem apagou o campo da largura para digitar outro.
+  if (!larguraTecido || larguraTecido <= 0 || larguraDisponivel < 40 || alturaDisponivel < 40) {
+    canvas.width = 0;
+    canvas.height = 0;
+    return;
+  }
+
+  // Deitado, como a tela sempre mostra: a largura do tecido é a ALTURA na
+  // tela, e o comprimento corre para a direita.
+  const px = Math.max(0.6, (alturaDisponivel - REGUA) / larguraTecido);
+  const alturaDoTecido = larguraTecido * px;
+  const largura = larguraDisponivel;
+  const altura = Math.round(alturaDoTecido) + REGUA;
+
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(largura * dpr);
+  canvas.height = Math.round(altura * dpr);
+  canvas.style.width = `${largura}px`;
+  canvas.style.height = `${altura}px`;
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, largura, altura);
+  ctx.textBaseline = "middle";
+
+  /*
+   * Onde o sumiço começa. 30% deixa o começo do rolo em cor cheia — o
+   * bastante para a superfície ser lida como tecido — e dá ao degradê os
+   * outros 70% para morrer sem virar uma faixa dura.
+   */
+  const INICIO_DO_SUMICO = 0.3;
+
+  /** O mesmo degradê, para qualquer cor que precise desaparecer junto. */
+  const sumindo = (cor, corTransparente) => {
+    const g = ctx.createLinearGradient(0, 0, largura, 0);
+    g.addColorStop(0, cor);
+    g.addColorStop(INICIO_DO_SUMICO, cor);
+    g.addColorStop(1, corTransparente);
+    return g;
+  };
+
+  // ── A superfície ─────────────────────────────────────────────────────────
+  ctx.fillStyle = sumindo("#171d21", "rgba(23, 29, 33, 0)");
+  ctx.fillRect(0, 0, largura, alturaDoTecido);
+
+  /*
+   * ── A GRADE, nos dois eixos ──────────────────────────────────────────────
+   *
+   * É a peça que o Lite tem e que faltava aqui. Duas espessuras de informação
+   * na mesma malha: a linha fraca a cada 5 cm e a forte a cada 10. Uma grade
+   * de um nível só vira papel quadriculado — com dois, o olho conta de dez em
+   * dez sem parar para contar.
+   *
+   * Ela também é o que torna o degradê VISÍVEL. Na primeira versão disto o
+   * rolo era liso, e o tecido (`#171d21`) e a mesa por baixo são cores
+   * próximas demais para alguém enxergar uma virando a outra: o sumiço
+   * simplesmente não aparecia. O que some agora não é cor quase igual a
+   * outra — é um desenho que rareia até não haver mais nenhum.
+   *
+   * O `passo5 > 3` é o do Lite, e pela mesma razão: abaixo de uns três pixels
+   * as linhas fracas encostam umas nas outras e a grade vira um chapado mais
+   * claro. Some a malha fina e fica só a de 10 em 10.
+   */
+  const passo10 = 10 * px;
+  const passo5 = 5 * px;
+
+  const malha = (espacamento, comeco, cor, corTransparente) => {
+    ctx.strokeStyle = sumindo(cor, corTransparente);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = comeco; x < largura; x += espacamento) {
+      const ex = Math.round(x) + 0.5;
+      ctx.moveTo(ex, 0);
+      ctx.lineTo(ex, alturaDoTecido);
+    }
+    for (let y = comeco; y < alturaDoTecido; y += espacamento) {
+      const ey = Math.round(y) + 0.5;
+      ctx.moveTo(0, ey);
+      ctx.lineTo(largura, ey);
+    }
+    ctx.stroke();
+  };
+
+  if (passo5 > 3) malha(passo10, passo5, "#1e262b", "rgba(30, 38, 43, 0)");
+  malha(passo10, 0, "#2b3438", "rgba(43, 52, 56, 0)");
+
+  /*
+   * ── A BORDA DA MÍDIA, em três lados ──────────────────────────────────────
+   *
+   * Começo, cima e baixo, no laranja da marca. A direita fica aberta — ver o
+   * cabeçalho. É o traço mais forte do desenho de propósito: é ele que diz
+   * onde o tecido COMEÇA, e é contra ele que a primeira peça vai encostar.
+   */
+  ctx.strokeStyle = sumindo("#ff531f", "rgba(255, 83, 31, 0)");
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(largura, 0.75);
+  ctx.lineTo(0.75, 0.75);
+  ctx.lineTo(0.75, alturaDoTecido - 0.75);
+  ctx.lineTo(largura, alturaDoTecido - 0.75);
+  ctx.stroke();
+
+  /*
+   * ── A RÉGUA ──────────────────────────────────────────────────────────────
+   *
+   * Traço a cada 10 cm, mais alto e com o número a cada metro, em laranja
+   * claro como a do Lite. Ela some marca a marca, e não por degradê: um traço
+   * meio apagado ainda é um traço, e é o que mantém a régua legível até onde o
+   * tecido já está quase transparente. Abaixo de 4% de opacidade não se
+   * desenha — parar é mais barato que desenhar o que ninguém vê.
+   */
+  const baseDaRegua = altura - REGUA;
+  const xDoSumico = largura * INICIO_DO_SUMICO;
+  const opacidadeEm = (x) =>
+    x <= xDoSumico ? 1 : Math.max(0, 1 - (x - xDoSumico) / (largura - xDoSumico));
+
+  ctx.font = "bold 9px ui-monospace, monospace";
+  ctx.lineWidth = 1;
+
+  for (let cm = 0; cm * px < largura; cm += 10) {
+    const x = Math.round(cm * px) + 0.5;
+    const opacidade = opacidadeEm(x);
+    if (opacidade < 0.04) break;
+
+    const metro = cm % 100 === 0;
+    ctx.globalAlpha = opacidade * (metro ? 1 : 0.55);
+    ctx.strokeStyle = "#ff8556";
+    ctx.beginPath();
+    ctx.moveTo(x, baseDaRegua);
+    ctx.lineTo(x, baseDaRegua + (metro ? 9 : 4));
+    ctx.stroke();
+
+    if (metro && cm > 0) {
+      ctx.globalAlpha = opacidade;
+      ctx.fillStyle = "#ff8556";
+      ctx.fillText(`${cm / 100}m`, x + 4, baseDaRegua + 18);
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  /*
+   * A LARGURA ESCRITA, encostada na borda de cima.
+   *
+   * É a única coisa que a mesa vazia diz e o risco não: com peças em cima, a
+   * largura está no rodapé e na própria proporção do desenho. Vazia, sem um
+   * número, a faixa poderia ser 160 cm ou 320 — e é o número que a pessoa
+   * precisa conferir ANTES de soltar arquivo, não depois de encaixar.
+   */
+  ctx.font = "bold 10px ui-monospace, monospace";
+  ctx.fillStyle = "#ff8556";
+  ctx.fillText(`${larguraTecido} cm`, 10, 14);
+}
+
+/*
+ * ===========================================================================
+ * O RASCUNHO — o encaixe enquanto ele ainda está sendo procurado
+ * ===========================================================================
+ *
+ * A tela mostrava uma barra de carregamento durante a procura. Agora mostra o
+ * rolo encolhendo: o melhor encaixe até agora, cheio, e por cima o fantasma do
+ * que está sendo tentado neste instante.
+ *
+ * ISTO NÃO É O `desenharEncaixe`, e a diferença é o ponto:
+ *
+ *   `desenharEncaixe`   desenha o RESULTADO — arte de cada peça, nome, régua,
+ *                       legenda, linha de corte entre bancadas, seleção. É
+ *                       caro, e tem de ser: é o que a pessoa vai conferir
+ *                       antes de mandar cortar tecido de verdade.
+ *
+ *   `desenharRascunho`  desenha a SILHUETA e nada mais. Chega dezesseis vezes
+ *                       por segundo enquanto a busca corre, e carregar arte a
+ *                       esse ritmo tiraria da tela a folga que ela tem para
+ *                       animar.
+ *
+ * Por isso duas funções, e não uma com bandeira: as duas só coincidem no
+ * retângulo do rolo, e tudo o que uma faz bem a outra não pode fazer.
+ *
+ * O QUE CHEGA AQUI é o quadro compacto que o worker transferiu — um
+ * `Float32Array` de seis números por peça (x, y, largura, altura, rotação,
+ * girado). Ele não tem máscara nem contorno, então a peça é um retângulo. Num
+ * fantasma que dura 60 ms isso é fiel o bastante; no resultado, jamais.
+ */
+
+/** Seis números por peça, na ordem que `quadroDoEncaixe` empacota. */
+const POR_PECA = 6;
+
+export function desenharRascunho(canvas, {
+  larguraTecido, consumo, pecas, fantasma, pulso = 0,
+  /*
+    O tamanho, quando quem chama já sabe qual é.
+
+    A miniatura da faixa de tentativas tem medida própria e NÃO pode medir o
+    pai: as miniaturas dividem o mesmo contêiner, então o pai delas é o mesmo
+    para todas e mede a faixa inteira. Sem esta saída, as oito sairiam do
+    tamanho da coluna, empilhadas por cima uma da outra.
+  */
+  caixa = null,
+} = {}) {
+  // A miniatura não tem régua: 34px de faixa numa caixa de 54 seria a régua
+  // com um fiapo de encaixe embaixo.
+  const REGUA = caixa ? 0 : 34;
+  const pai = canvas.parentElement;
+  const larguraDisponivel = caixa ? caixa.largura : (pai ? pai.clientWidth - 22 : 900);
+  const alturaDisponivel = caixa ? caixa.altura : (pai ? pai.clientHeight - 22 : 500);
+
+  if (!larguraTecido || larguraTecido <= 0 || !consumo || consumo <= 0) return;
+  if (larguraDisponivel < 20 || alturaDisponivel < 20) return;
+
+  const ctx = canvas.getContext("2d");
+
+  /*
+    A ESCALA É A DO ROLO INTEIRO NA CAIXA, e ela muda a cada quadro de
+    propósito: o rolo encolhe conforme a busca melhora, e uma escala fixa faria
+    o desenho ir minguando para um canto. Recalculada, o rolo ocupa sempre a
+    caixa toda e o que a pessoa vê é a densidade das peças aumentando — que é
+    exatamente o que "melhorou" quer dizer aqui.
+  */
+  const porAltura = (alturaDisponivel - REGUA) / larguraTecido;
+  const porLargura = larguraDisponivel / consumo;
+  const px = Math.max(0.2, Math.min(porAltura, porLargura));
+
+  // Na miniatura a caixa manda: o rolo é desenhado centrado dentro dela, em vez
+  // de o canvas crescer com o rolo. Oito canvas de tamanhos diferentes numa
+  // coluna dariam uma escada, e o que se quer comparar de relance é a DENSIDADE
+  // das peças, não o tamanho do quadrinho.
+  const largura = caixa ? caixa.largura : Math.round(consumo * px);
+  const altura = caixa ? caixa.altura : Math.round(larguraTecido * px) + REGUA;
+
+  const dpr = window.devicePixelRatio || 1;
+  // Só mexe no tamanho do canvas quando ele realmente mudou: atribuir
+  // `canvas.width` LIMPA o bitmap e refaz o buffer, e fazer isso dezesseis
+  // vezes por segundo à toa é o tipo de desperdício que este arquivo existe
+  // para evitar.
+  const larguraCrua = Math.round(largura * dpr);
+  const alturaCrua = Math.round(altura * dpr);
+  if (canvas.width !== larguraCrua || canvas.height !== alturaCrua) {
+    canvas.width = larguraCrua;
+    canvas.height = alturaCrua;
+    canvas.style.width = `${largura}px`;
+    canvas.style.height = `${altura}px`;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, largura, altura);
+
+  // O rolo: o retângulo do tecido, abaixo da régua.
+  ctx.fillStyle = "rgba(255,255,255,0.03)";
+  ctx.fillRect(0, REGUA, largura, altura - REGUA);
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, REGUA + 0.5, largura - 1, altura - REGUA - 1);
+
+  /*
+    O FANTASMA É TRAÇO; O RECORDE É CHEIO.
+
+    A diferença tem de ser de ESPÉCIE, e não de tom, porque as duas camadas se
+    sobrepõem o tempo todo. Dois preenchimentos em opacidades diferentes viram
+    uma sopa em que não se distingue o que já foi conquistado do que está só
+    sendo experimentado; contorno contra massa se lê de relance.
+  */
+  const n = pecas ? Math.floor(pecas.length / POR_PECA) : 0;
+  if (fantasma) {
+    ctx.strokeStyle = "rgba(255,133,86,0.28)";
+    ctx.lineWidth = 1;
+  } else {
+    // O pulso é o clarão curto de quando um recorde acaba de cair: some em
+    // poucos quadros e é o que faz a melhora ser PERCEBIDA, não só mostrada.
+    ctx.fillStyle = `rgba(255,133,86,${0.22 + pulso * 0.45})`;
+    ctx.strokeStyle = `rgba(255,133,86,${0.45 + pulso * 0.4})`;
+    ctx.lineWidth = 1;
+  }
+
+  for (let i = 0; i < n; i++) {
+    const b = i * POR_PECA;
+    const x = pecas[b] * px;
+    const y = REGUA + pecas[b + 1] * px;
+    const w = pecas[b + 2] * px;
+    const h = pecas[b + 3] * px;
+    // Peça menor que um pixel não vira desenho, vira ruído cinza no canvas.
+    if (w < 0.7 || h < 0.7) continue;
+    if (fantasma) ctx.strokeRect(x, y, w, h);
+    else {
+      ctx.fillRect(x, y, w, h);
+      if (w > 3 && h > 3) ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    }
+  }
+
+  // Os metros, no alto: é o número que a pessoa está esperando ver cair.
+  if (!caixa) {
+    ctx.font = "bold 11px ui-monospace, monospace";
+    ctx.fillStyle = fantasma ? "rgba(255,133,86,0.45)" : "#ff8556";
+    ctx.textBaseline = "middle";
+    if (!fantasma) ctx.fillText(`${(consumo / 100).toFixed(2).replace(".", ",")} m`, 10, 15);
+  }
+}

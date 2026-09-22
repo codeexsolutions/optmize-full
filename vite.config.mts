@@ -30,11 +30,26 @@
  *   tela chama sempre caminho relativo e não sabe em que porta está rodando.
  */
 
+import { readFileSync } from "node:fs";
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwind from "@tailwindcss/vite";
 
 export default defineConfig({
+  /*
+    A VERSÃO, para a tela Sobre.
+
+    Sai do `package.json` na compilação e vira um texto fixo dentro do pacote.
+    Pedi-la ao servidor em execução seria mais uma rota e mais uma espera para
+    mostrar um número que não muda enquanto o programa está aberto — e que, no
+    app instalado, É a versão do pacote que está rodando.
+  */
+  define: {
+    __VERSAO__: JSON.stringify(
+      JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")).version,
+    ),
+  },
   base: "/",
   publicDir: "estatico",
   plugins: [react(), tailwind()],

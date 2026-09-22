@@ -52,13 +52,16 @@ ao mesmo tempo: a antiga em `/` e a nova em `/app`. **Não é preciso saber
 disso**: as duas listam as mesmas treze telas no menu, e clicar numa que mora
 do outro lado leva você até lá. O endereço de entrada é sempre o `/`.
 
-São treze telas, separadas no menu por momento do trabalho:
+As telas ficam separadas no menu por momento do trabalho:
 
 | Grupo | Telas |
 | --- | --- |
-| **Produção** — antes de imprimir | Moldes, Projetos, Encaixe, Vetor, Imagem, Macros, Cor |
+| **Produção** — antes de imprimir | Moldes, Digitalizar, Projetos, Encaixe, Macros |
 | **Impressão** — enquanto imprime | Impressoras, Pedidos, Máquinas, WhatsApp |
-| **Relatórios** — depois, para conferir | Histórico, Reposição |
+| **Relatórios** — depois, para conferir | Histórico, Ponto, Funcionários, Reposição |
+
+Quem manda nessa tabela é `src/rotas.ts`: uma tela é uma linha lá, e o menu, o
+cabeçalho e as rotas saem todos dela.
 
 Não há login nem identificação: quem abre o painel entra direto na tela de
 Moldes.

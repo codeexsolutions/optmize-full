@@ -21,7 +21,8 @@ import {
 } from "../motores/medidaDoArquivo";
 import { lerQuantidadeDoNome } from "../motores/nomeDeArquivo";
 import {
-  bancadasDoResultado, cortesEntreBancadas, desenharEncaixe,
+  bancadasDoResultado, cortesEntreBancadas, desenharEncaixe, desenharMidiaVazia,
+  desenharRascunho,
 } from "../motores/desenhoDoEncaixe";
 import { prepararArtes } from "../motores/exportarEncaixe";
 import { DPI_PREVIA } from "../motores/resolucaoDaArte";
@@ -183,8 +184,10 @@ const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/<
  * tecido, folga a menos estraga o corte. É a mesma regra que a `grade()`
  * já segue quando não consegue a folga exata.
  *
- * A tela avisa quando os dois números diferem — ver `avisarEixo()`. Campo
- * que promete o que não cumpre, calado, é pior que campo que não existe.
+ * A tela AVISAVA quando os dois números diferiam. O aviso saiu em
+ * 2026-09-21, a pedido, e com ele saiu o único lugar que contava isto a quem
+ * usa: hoje os dois campos aceitam números diferentes e o encaixe usa o
+ * maior, sem dizer nada.
  */
 function folgaPedida() {
   const x = Math.max(0, Number(encaixeEspacoInput.value) || 0);
@@ -232,6 +235,9 @@ const encaixeStats = document.getElementById("encaixe-stats");
 const encaixeResumo = document.getElementById("encaixe-resumo");
 const encaixeSobras = document.getElementById("encaixe-sobras");
 const encaixeCanvas = document.getElementById("encaixe-canvas");
+const encaixeCanvasVazio = document.getElementById("encaixe-canvas-vazio");
+const encaixePrevia = document.getElementById("encaixe-previa");
+const encaixePreviaCanvas = document.getElementById("encaixe-previa-canvas");
 const btnBaixarEncaixe = document.getElementById("btn-baixar-encaixe");
 const btnEncaixePdf = document.getElementById("btn-encaixe-pdf");
 const btnImprimirEncaixe = document.getElementById("btn-imprimir-encaixe");
@@ -981,6 +987,7 @@ escopo.ouvir(btnLimparPecas, "click", () => {
   encaixeResultado.classList.add("hidden");
   limparErroEncaixe();
   renderPecasEncaixe();
+  redesenharMesaVazia();
 });
 
 // Arrastar as imagens direto para a tabela também adiciona as peças.
@@ -1807,6 +1814,141 @@ function atualizarTempoDoCarregamento() {
   })} s`;
 }
 
+/*
+ * ===========================================================================
+ * A ANIMAÇÃO DA BUSCA — peças entrando e se encaixando
+ * ===========================================================================
+ *
+ * Fica no lugar do poço de tetris, dentro da caixa de carregamento, enquanto o
+ * motor procura. É ILUSTRAÇÃO, e está escrito aqui em voz alta para ninguém
+ * confundir depois: as peças que entram na tela NÃO são as que o motor está
+ * testando neste instante.
+ *
+ * Houve uma tentativa de mostrar as tentativas de verdade — o motor avisando
+ * cada encaixe experimentado, o worker transferindo as posições, a tela
+ * desenhando. Ela não chegou à tela e foi trocada por isto a pedido: o que se
+ * quer aqui é dizer "estou trabalhando" de um jeito que combine com o que o
+ * programa faz, e para isso a ilustração basta e custa quase nada.
+ *
+ * O que ela desenha: um rolo de tecido, e peças que chegam de fora e vão se
+ * assentando nele, uma a uma, até fechar. Cheio, recomeça com outro arranjo.
+ *
+ * O CUSTO É PROPOSITADAMENTE BAIXO. A busca está nos workers, mas a thread da
+ * tela precisa continuar atendendo o botão de parar, e é a mesma thread que
+ * desenha aqui: são retângulos, sem imagem, sem sombra e sem filtro, num
+ * canvas de 396x96.
+ */
+
+const PREVIA_LARGURA = 396;
+const PREVIA_ALTURA = 96;
+
+let lacoDaPrevia = 0;
+let pecasDaAnimacao = [];
+let inicioDaAnimacao = 0;
+
+/**
+ * Monta um arranjo de peças que preenche o rolo em fileiras.
+ *
+ * Não é o encaixe do motor e não tenta ser: é um empacotamento simples, em
+ * linhas, com larguras sorteadas. O que ele precisa entregar é a LEITURA de
+ * peças de tamanhos diferentes se ajeitando até não sobrar vão — que é o que a
+ * pessoa reconhece como encaixe.
+ */
+function sortearArranjo() {
+  const pecas = [];
+  const margem = 6;
+  const alturaUtil = PREVIA_ALTURA - margem * 2;
+  const fileiras = 3;
+  const altura = alturaUtil / fileiras - 4;
+  for (let f = 0; f < fileiras; f++) {
+    let x = margem;
+    const y = margem + f * (altura + 4);
+    while (x < PREVIA_LARGURA - margem - 12) {
+      const largura = 18 + Math.random() * 46;
+      const cabe = Math.min(largura, PREVIA_LARGURA - margem - x);
+      if (cabe < 12) break;
+      pecas.push({
+        x, y, largura: cabe - 3, altura,
+        // De onde ela vem: fora da tela, pelo lado mais perto.
+        deX: x < PREVIA_LARGURA / 2 ? -60 - Math.random() * 80 : PREVIA_LARGURA + 60 + Math.random() * 80,
+        deY: y + (Math.random() - 0.5) * 50,
+        // O atraso escalonado é o que faz parecer uma peça DEPOIS da outra, em
+        // vez de um bloco inteiro deslizando junto.
+        atraso: pecas.length * 90,
+      });
+      x += cabe;
+    }
+  }
+  return pecas;
+}
+
+/** Suaviza o movimento: rápido no começo, parando de leve no lugar. */
+const suavizar = (t) => 1 - Math.pow(1 - t, 3);
+
+function pintarPrevia(agora) {
+  lacoDaPrevia = requestAnimationFrame(pintarPrevia);
+  if (!encaixePreviaCanvas) return;
+  if (!inicioDaAnimacao) inicioDaAnimacao = agora;
+  const decorrido = agora - inicioDaAnimacao;
+
+  const ctx = encaixePreviaCanvas.getContext("2d");
+  ctx.clearRect(0, 0, PREVIA_LARGURA, PREVIA_ALTURA);
+
+  // O rolo.
+  ctx.fillStyle = "rgba(255,255,255,0.03)";
+  ctx.fillRect(0, 0, PREVIA_LARGURA, PREVIA_ALTURA);
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, PREVIA_LARGURA - 1, PREVIA_ALTURA - 1);
+
+  const DURACAO = 620;
+  let assentadas = 0;
+  for (const p of pecasDaAnimacao) {
+    const t = Math.max(0, Math.min(1, (decorrido - p.atraso) / DURACAO));
+    if (t <= 0) continue;
+    if (t >= 1) assentadas++;
+    const e = suavizar(t);
+    const x = p.deX + (p.x - p.deX) * e;
+    const y = p.deY + (p.y - p.deY) * e;
+    // A peça chega apagada e ACENDE ao assentar: é o que marca o encaixe dela
+    // sem precisar de um efeito à parte.
+    ctx.fillStyle = `rgba(255,133,86,${0.14 + e * 0.28})`;
+    ctx.fillRect(x, y, p.largura, p.altura);
+    ctx.strokeStyle = `rgba(255,133,86,${0.25 + e * 0.45})`;
+    ctx.strokeRect(x + 0.5, y + 0.5, p.largura - 1, p.altura - 1);
+  }
+
+  // Cheio o rolo, espera um instante e recomeça com outro arranjo: a busca
+  // continua, e uma tela parada diria que ela travou.
+  if (pecasDaAnimacao.length && assentadas === pecasDaAnimacao.length
+      && decorrido > pecasDaAnimacao[pecasDaAnimacao.length - 1].atraso + DURACAO + 700) {
+    pecasDaAnimacao = sortearArranjo();
+    inicioDaAnimacao = agora;
+  }
+}
+
+/** Liga a animação e troca o poço de tetris por ela. */
+function abrirPrevia() {
+  if (!encaixePreviaCanvas) return;
+  encaixePreviaCanvas.width = PREVIA_LARGURA;
+  encaixePreviaCanvas.height = PREVIA_ALTURA;
+  pecasDaAnimacao = sortearArranjo();
+  inicioDaAnimacao = 0;
+  if (encaixeCarregamento) encaixeCarregamento.classList.add("mostrando-previa");
+  if (encaixePrevia) encaixePrevia.classList.remove("hidden");
+  if (!lacoDaPrevia) lacoDaPrevia = requestAnimationFrame(pintarPrevia);
+}
+
+/** Desliga a animação. Sem isto, o rAF continua rodando depois da busca. */
+function fecharPrevia() {
+  if (lacoDaPrevia) cancelAnimationFrame(lacoDaPrevia);
+  lacoDaPrevia = 0;
+  pecasDaAnimacao = [];
+  if (encaixeCarregamento) encaixeCarregamento.classList.remove("mostrando-previa");
+  if (encaixePrevia) encaixePrevia.classList.add("hidden");
+}
+
+
 function atualizarCarregamento({ etapa, titulo, detalhe, progresso } = {}) {
   if (etapa) encaixeLoadingEtapa.textContent = String(etapa).toUpperCase();
   if (titulo) encaixeLoadingTitulo.textContent = titulo;
@@ -1828,6 +1970,9 @@ function iniciarCarregamento(totalPecas, modo) {
   inicioDoCarregamento = Date.now();
   encaixeCarregamento.classList.remove("hidden", "concluido", "interrompido", "com-erro");
   encaixeCarregamento.setAttribute("aria-busy", "true");
+  // Só o carregamento do ENCAIXE abre a prévia: a leitura de arquivos não tem
+  // encaixe nenhum para desenhar, e lá o véu continua sendo o certo.
+  abrirPrevia();
   encaixeLoadingPecas.textContent = `${totalPecas} peça${totalPecas === 1 ? "" : "s"} no trabalho`;
   atualizarCarregamento({
     etapa: "Iniciando",
@@ -1886,6 +2031,9 @@ function concluirCarregamentoArquivo(indice, total) {
 }
 
 function finalizarCarregamento(tipo = "concluido", mensagem = {}) {
+  // O véu volta antes do desfecho: a caixa de "concluído" ou "interrompido"
+  // tem de aparecer sobre o resultado inteiro, e não sobre o rascunho.
+  fecharPrevia();
   if (!carregamentoAtivo) return;
   carregamentoAtivo = false;
   definirPrioridadeDoProcessamento(false, false);
@@ -2014,6 +2162,17 @@ async function optmizar() {
   const espaco = folgaPedida();
   // Vazio ou zero: rolo sem fim, como o programa sempre funcionou.
   const comprimentoBancada = Math.max(0, Number(encaixeComprimentoInput.value) || 0);
+
+  /*
+   * O rolo da mesa vazia acerta a largura AQUI, e não enquanto se digita.
+   *
+   * Vem antes das recusas de propósito: se a largura for inválida, ou se o
+   * cálculo falhar mais adiante, a mesa continua vazia — e é melhor que ela
+   * esteja mostrando o número que a pessoa acabou de confirmar do que o de
+   * quando a tela abriu. Se o encaixe der certo, o risco cobre este desenho
+   * em seguida e o trabalho foi de um quadro.
+   */
+  redesenharMesaVazia();
 
   if (!larguraTecido || larguraTecido <= 0) {
     mostrarErroEncaixe("Informe a largura do tecido em centímetros.");
@@ -3104,18 +3263,74 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") fecharMenuExportar(true);
 });
 
+/*
+ * ---------------------------------------------------------------------------
+ * A MESA VAZIA
+ * ---------------------------------------------------------------------------
+ *
+ * Desenha o rolo de tecido enquanto não há risco nenhum — ver o cabeçalho de
+ * `desenharMidiaVazia`, em `motores/desenhoDoEncaixe.js`, para o porquê de ele
+ * sumir na ponta em vez de terminar.
+ *
+ * Sai fora quando o risco está na tela: ali a camada está escondida pelo CSS,
+ * e desenhar num canvas que ninguém vê é trabalho jogado fora — o pai tem
+ * `clientWidth` zero, e o desenho sairia errado se um dia a camada voltasse
+ * sem redesenho.
+ */
+function redesenharMesaVazia() {
+  if (!encaixeCanvasVazio) return;
+  if (!encaixeResultado.classList.contains("hidden")) return;
+  desenharMidiaVazia(encaixeCanvasVazio, {
+    larguraTecido: Number(encaixeLarguraInput.value) || 0,
+  });
+}
+
+/*
+ * O ROLO NÃO SEGUE O CAMPO DA LARGURA ENQUANTO SE DIGITA.
+ *
+ * Aqui havia um `ouvir(encaixeLarguraInput, "input", ...)`: a faixa engordava
+ * e emagrecia a cada tecla. Parecia útil e não era. Trocar 160 por 320 passa
+ * por "3", "32" e só então "320" — o rolo ia a três centímetros de largura,
+ * depois a trinta e dois, e só no fim ao número certo. Três redesenhos, dois
+ * deles de um rolo que ninguém pediu, piscando embaixo do cartão.
+ *
+ * Saiu em 2026-09-21, a pedido. Quem redesenha agora é o Optmizar (ver
+ * `encaixarAgora`), o primeiro quadro da tela e o redimensionamento da
+ * janela — momentos em que a medida já está inteira.
+ */
+
 // Redesenha ao mudar o tamanho da janela para o encaixe continuar cabendo.
 let redimensionarTimer = null;
 window.addEventListener("resize", () => {
-  if (!ultimoResultado || encaixeResultado.classList.contains("hidden")) return;
   clearTimeout(redimensionarTimer);
   redimensionarTimer = setTimeout(() => {
+    // Mesa vazia e risco pronto usam a mesma espera: são o mesmo gesto de
+    // arrastar a janela, e quem decide qual dos dois desenhar é o estado.
+    if (!ultimoResultado || encaixeResultado.classList.contains("hidden")) {
+      redesenharMesaVazia();
+      return;
+    }
     vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
       { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
   }, 150);
 });
 
 renderPecasEncaixe();
+
+/*
+ * O PRIMEIRO DESENHO DO ROLO.
+ *
+ * Vai num `requestAnimationFrame` porque a medida do rolo sai do TAMANHO da
+ * caixa que o contém, e neste ponto o navegador ainda não fez a conta: o
+ * controlador roda quando o React monta a tela, antes do primeiro quadro, e
+ * ali `clientWidth` e `clientHeight` ainda são zero. Desenhar agora daria um
+ * canvas de tamanho nenhum, e nada na tela acusaria — só a mesa continuaria
+ * preta, como antes.
+ *
+ * `requestAnimationFrame` espera exatamente o que falta: o quadro em que o
+ * espaço já foi repartido.
+ */
+requestAnimationFrame(redesenharMesaVazia);
 // ==================== SELEÇÃO POR ÁREA NO RISCO ====================
 
 /**
@@ -3373,7 +3588,6 @@ const btnFecharAjustes = document.getElementById("btn-fechar-ajustes");
 const btnAjustesCancelar = document.getElementById("btn-ajustes-cancelar");
 const btnAjustesOptmizar = document.getElementById("btn-ajustes-optmizar");
 const ajustesContagem = document.getElementById("ajustes-contagem");
-const ajustesAvisoEixo = document.getElementById("ajustes-aviso-eixo");
 const giroOpcoes = [...document.querySelectorAll(".giro-op")];
 
 let saidaDoModalAjustes = null;
@@ -3482,37 +3696,19 @@ for (const op of giroOpcoes) {
 }
 
 /*
- * O aviso do eixo.
+ * AQUI FICAVA O AVISO DO EIXO.
  *
- * A tela pergunta X e Y separados porque é assim que a produção pensa o vão.
- * O motor ainda engorda a peça por um disco de raio único, então um vão por
- * eixo não tem como sair diferente hoje — ver `folgaPedida()` lá em cima.
+ * Quando o vão de X e o de Y eram diferentes, uma nota aparecia no modal
+ * explicando que o encaixe usaria só um deles — o maior. Ela saiu em
+ * 2026-09-21, a pedido.
  *
- * Some quando os dois são iguais, que é o caso normal: aviso que fica na
- * tela o tempo todo deixa de ser lido em uma semana.
+ * O QUE ELA DIZIA CONTINUA VERDADE: o motor engorda a peça por um disco de
+ * raio único, então um vão por eixo não tem como sair diferente hoje, e quem
+ * decide é o `folgaPedida()` lá em cima — o maior dos dois. Só não é mais
+ * dito na tela.
  */
-function avisarEixo() {
-  const x = Math.max(0, Number(encaixeEspacoInput.value) || 0);
-  const y = Math.max(0, Number(encaixeEspacoYInput.value) || 0);
-  if (x === y) {
-    ajustesAvisoEixo.classList.add("hidden");
-    return;
-  }
-  // `toFixed` e de volta a número: com passo de 0,1 cm a soma de ponto
-  // flutuante produz "0.30000000000000004", que não é jeito de mostrar uma
-  // medida a ninguém.
-  const maior = Number(Math.max(x, y).toFixed(2));
-  ajustesAvisoEixo.textContent =
-    `Por enquanto o encaixe aplica um vão só, igual nos dois sentidos, e vai usar ${maior} cm — `
-    + `o maior dos dois. Folga a mais gasta um pouco de tecido; folga a menos estragaria o corte.`;
-  ajustesAvisoEixo.classList.remove("hidden");
-}
-
-escopo.ouvir(encaixeEspacoInput, "input", avisarEixo);
-escopo.ouvir(encaixeEspacoYInput, "input", avisarEixo);
 escopo.ouvir(encaixeGiroTodasSelect, "change", marcarGiro);
 
-avisarEixo();
 marcarGiro();
 
 /*

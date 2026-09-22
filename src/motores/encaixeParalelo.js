@@ -223,6 +223,10 @@ export function configParaWorker(config) {
   const copia = { ...config };
   delete copia.deveParar;
   delete copia.aoProgredir;
+  // O desenho ao vivo: a função é da página, e quem a implementa do lado de lá
+  // é o próprio worker (é ele que decide o que vira mensagem). Esquecer esta
+  // linha faz o `postMessage` estourar com "could not be cloned".
+  delete copia.aoDesenhar;
   delete copia.fatia;
   return copia;
 }
@@ -641,6 +645,12 @@ export async function buscarPorFatias(itens, config) {
   // tiverem. Sem isso a fatia mais lenta seguraria o Promise.all até o fim, e a
   // meta batida cedo por uma fatia não economizaria tempo nenhum.
   let pediuPararPorMeta = false;
+  /**
+   * O menor consumo já MANDADO PARA A TELA, que não é o mesmo que o melhor da
+   * busca: serve só para o rolo desenhado nunca crescer. Ver o repasse do
+   * quadro, no tratador de mensagens abaixo.
+   */
+  let melhorDesenhado = null;
 
   try {
     // 1) Manda as peças. As máscaras atravessam uma vez por worker e ficam lá.
@@ -667,6 +677,29 @@ export async function buscarPorFatias(itens, config) {
       const aoResponder = (evento) => {
         const msg = evento.data;
         if (!msg) return;
+        /*
+          O QUADRO DO DESENHO AO VIVO.
+
+          Cada fatia persegue o próprio recorde e não sabe das outras, então
+          "recorde" aqui quer dizer "melhor DESTA fatia". Com oito núcleos, a
+          fatia que está indo mal mandaria recordes piores que o já desenhado e
+          a tela veria o rolo CRESCER — que é mentira sobre o que a busca está
+          fazendo. Por isso o recorde é filtrado contra o melhor global.
+
+          O fantasma não passa por esse filtro: ele é justamente o que está
+          sendo tentado, quase sempre pior que o melhor, e é disso que vem a
+          sensação de máquina procurando.
+        */
+        if (msg.tipo === "desenho") {
+          if (!config.aoDesenhar) return;
+          if (msg.especie === "recorde") {
+            if (!msg.inteiro) return;
+            if (melhorDesenhado != null && msg.consumo >= melhorDesenhado) return;
+            melhorDesenhado = msg.consumo;
+          }
+          config.aoDesenhar(msg);
+          return;
+        }
         if (msg.tipo === "andamento") {
           andamentos[k] = msg.estado;
           relatar();

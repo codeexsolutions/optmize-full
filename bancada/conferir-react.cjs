@@ -49,6 +49,15 @@ async function main() {
   const requests=[];
   global.fetch=async (url,options={}) => {
     requests.push([String(url),options.method || 'GET',options.body]);
+    /*
+     * A CONTA. Desde 2026-09-21 a casca so desenha o programa depois de saber
+     * quem esta usando (ver o portao em casca/Casca.tsx); sem esta resposta a
+     * bancada inteira cairia na tela de entrar, e toda conferencia abaixo
+     * procuraria telas que nao foram desenhadas.
+     */
+    if(String(url)==='/api/sessao/eu') return Response.json({
+      entrou:true, perfil:{nome:'Bancada de Teste',empresa:'CodeEx',papel:'dono',telas:null},
+    });
     if(String(url)==='/api/moldes') return Response.json([]);
     if(String(url)==='/api/projetos/clientes') return Response.json([{id:1,nome:'Cliente de teste',projetos:1}]);
     if(String(url)==='/api/projetos/clientes/1/projetos') return Response.json({cliente:{id:1,nome:'Cliente de teste'},projetos:[{id:2,nome:'Uniforme',pecas:1,pecasPorUnidade:2}]});
@@ -189,16 +198,28 @@ async function main() {
   assert.equal(document.getElementById('encaixe-largura').value,'179',
     'o ajuste do Encaixe sobrevive a ida e volta');
 
-  // ---------- Macros: trancada ----------
-  // Aparece no menu, com o cadeado no lugar do icone, e o endereco abre o
-  // aviso de tela trancada em vez das macros (ver `trancada`, em rotas.ts).
-  const itemMacros = document.querySelector('a[href="/macros"]');
-  assert.ok(itemMacros,'a Macros continua no menu');
-  assert.match(itemMacros.querySelector('use').getAttribute('href'),/icones\.svg#lock$/,
-    'o item trancado mostra o cadeado');
+  // ---------- O que saiu do menu ----------
+  // Desde 2026-09-21 o menu do dia a dia mostra so onde se trabalha: saiu o
+  // grupo Relatorios inteiro, mais Macros e WhatsApp (ver `foraDoMenu`, em
+  // rotas.ts). As telas continuam de pe — o que sai e a linha do menu, e e
+  // exatamente essa diferenca que as duas asercoes abaixo guardam.
+  for (const nome of ['macros','whatsapp','historico','ponto','funcionarios','reposicao']) {
+    assert.equal(document.querySelector(`a[href="/${nome}"]`),null,
+      `a ${nome} saiu do menu`);
+  }
+  assert.ok(document.querySelector('a[href="/encaixe"]'),
+    'o menu nao ficou vazio: o Encaixe continua la');
+
+  // A Macros segue trancada por cima disso: fora do menu E com o endereco
+  // abrindo o aviso, em vez das macros (ver `trancada`, em rotas.ts).
   await irPara('macros');
   assert.match(document.body.textContent,/Esta tela está trancada/,
     'o endereco da Macros abre o aviso, e nao as macros');
+  // Uma das que saiu sem tranca: o endereco tem de abrir a tela inteira, e nao
+  // cair na inicial. Sumir do menu nao pode virar sumir do programa.
+  await irPara('historico');
+  assert.equal(dom.window.location.pathname,'/historico',
+    'o endereco de uma tela fora do menu continua abrindo ela');
   await irPara('cor');
   assert.equal(dom.window.location.pathname,'/moldes',
     'endereco de tela que saiu cai na tela inicial');

@@ -6,14 +6,26 @@ precisa compilar, reinstalar nem deixar máquina ligada.
 ```
 push na main  →  GitHub: conferências → compila e assina → publica → etiqueta v1.0.N
                                                               ↓
-                          cada Optimize instalado pergunta a cada 2 h → "Atualizar agora"
+                     quem REABRE o programa se atualiza sozinho, 90 s depois
+                     quem está com ele aberto é perguntado a cada 2 h
 ```
 
 Quem faz isso é `.github/workflows/lancar.yml`, nas máquinas do GitHub
 (repositório público: não custa nada). O lado das lojas já existia: o programa
-pergunta ao backend 90 s depois de abrir e a cada 2 horas, e oferece a
-atualização em vez de instalar sozinho — reiniciar no meio de um encaixe perderia
-o trabalho da tela (ver `procurar_atualizacao`, em `src-tauri/src/main.rs`).
+pergunta ao backend 90 s depois de abrir e a cada 2 horas.
+
+**A rodada da abertura instala sozinha; as seguintes perguntam.** São dois
+momentos com respostas diferentes para "posso reiniciar agora?": recém-aberto
+não há encaixe na tela para perder, e perguntar ali só faria a loja ficar mais
+um dia na versão velha por um "agora não" de reflexo; com o programa aberto há
+horas existe trabalho na tela, e uma atualização que interrompe o serviço do
+cliente é pior que uma que chega uma tarde mais tarde (ver
+`cuidar_das_atualizacoes`, em `src-tauri/src/main.rs`).
+
+Os 90 s de espera não são só para não disputar com o arranque: **eles são a
+trava** que prova que a versão instalada abre. Sem eles, uma versão que não
+sobe instalaria a seguinte por cima — e, se a seguinte também estivesse
+quebrada, a loja se reinstalaria em laço sem ninguém para dizer não.
 
 ## O que dispara, e o que não
 

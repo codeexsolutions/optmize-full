@@ -192,8 +192,26 @@
  * igual, mas ele é o que segura o `.hidden` contra todo o CSS à mão desta
  * folha — não é uma linha para mexer por causa de um recado.
  */
-:where(.producao) #encaixe-resultado.hidden + .mesa-dica {
+/*
+ * O `~` (irmão qualquer) e não o `+` (irmão imediato): entre o risco e o
+ * cartão entrou a mesa vazia — o rolo desenhado —, e com o `+` a regra deixou
+ * de alcançar o cartão no instante em que aquela camada nasceu. Foi uma linha
+ * de HTML para o recado sumir de novo, depois de tudo o que está escrito
+ * acima sobre ele nunca ter aparecido.
+ */
+:where(.producao) #encaixe-resultado.hidden ~ .mesa-dica,
+:where(.producao) #encaixe-resultado.hidden ~ .mesa-midia {
   display: grid !important;
+}
+
+/*
+ * A mesa vazia encosta o rolo na ESQUERDA e o centra na vertical: o rolo
+ * começa na margem e corre para a direita até sumir, que é o sentido em que
+ * ele é lido. Centrá-lo na horizontal deixaria um vão antes do começo do
+ * tecido, como se o rolo estivesse flutuando no meio da mesa.
+ */
+:where(.producao) .mesa-midia {
+  place-items: center start;
 }
 
 
@@ -333,6 +351,8 @@
   display: block;
   border-radius: 4px;
 }
+
+
 
 /* Ao imprimir, só o encaixe interessa: nada de menu, formulário ou botão. */@media print {
   .producao { background: #fff; }
@@ -1108,6 +1128,49 @@
 @keyframes encaixe-veu-entra {
   from { opacity: 0; }
 }
+
+/*
+ * A PRÉVIA DENTRO DA CAIXA DE CARREGAMENTO.
+ *
+ * A tela de carregamento continua sendo a tela de carregamento — mesmo véu,
+ * mesma caixa, mesma barra, mesmo botão de parar. O que muda é o que ocupa o
+ * espaço da animação: em vez do poço de tetris, que finge trabalho, o encaixe
+ * de verdade sendo testado um a um.
+ *
+ * Por isso o poço SOME enquanto a prévia está de pé: dois desenhos animados na
+ * mesma caixa disputariam a mesma atenção, e um deles é decoração.
+ */
+:where(.producao) .encaixe-carregamento.mostrando-previa .encaixe-tetris {
+  display: none;
+}
+
+:where(.producao) .encaixe-previa {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+:where(.producao) .encaixe-previa.hidden {
+  display: none;
+}
+
+/*
+ * O RISCO GRANDE: o melhor encaixe até agora.
+ *
+ * Altura fixa, e é de propósito. O rolo encolhe conforme a busca melhora, e um
+ * canvas que acompanhasse faria a caixa inteira mudar de tamanho a cada
+ * recorde — o texto do andamento e a barra pulariam de lugar embaixo dele.
+ */
+:where(.producao) .encaixe-previa > canvas {
+  display: block;
+  width: 100%;
+  height: 96px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
 
 :where(.producao) .encaixe-loading-caixa {
   width: min(440px, 100%);
@@ -2855,23 +2918,6 @@
 :where(.producao) .ajustes-rodape .btn svg {
   width: 15px;
   height: 15px;
-}
-
-/* O aviso do eixo: âmbar, porque não é erro — é um "isto aqui não faz o que
-   você talvez esteja esperando". */
-:where(.producao) .ajustes-nota {
-  margin: 0;
-  padding: 9px 11px;
-  border: 1px solid var(--accent-line);
-  border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-:where(.producao) .ajustes-nota.hidden {
-  display: none;
 }
 
 @media (max-width: 480px) {

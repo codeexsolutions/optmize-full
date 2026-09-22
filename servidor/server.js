@@ -108,6 +108,16 @@ app.get(/^\/app(\/.*)?$/, (req, res) => {
 
 app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
 // A tela de Macros: entrega o .bas da macro do Corel e ajuda a pô-lo lá.
+/*
+ * A CONTA DE QUEM ESTÁ USANDO.
+ *
+ * Fica FORA de qualquer trava: é por estas rotas que se entra, e barrá-las
+ * trancaria a instalação para sempre na primeira abertura. Ver o cabeçalho de
+ * `sessao.js` para por que o login passa pelo Node em vez de a página falar
+ * direto com o backend.
+ */
+app.use("/api/sessao", require("./sessao").rotas);
+
 app.use("/api/macros", macrosRouter);
 app.use("/api/moldes", moldesRouter);
 app.use("/api/projetos", projetosRouter);

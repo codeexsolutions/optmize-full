@@ -23,13 +23,17 @@
  *
  * A divisão é por **momento do trabalho**, e não por parentesco técnico:
  *
- *   - **Produção** — o molde e o trabalho: a biblioteca, o projeto do cliente,
- *     o encaixe no tecido e as macros do Corel.
- *   - **Design** — o que se faz com a ARTE antes de ela virar trabalho: hoje,
- *     tirar o molde de uma foto. Eram quatro telas (Vetor, Digitalizar, Imagem
- *     e Cor); três saíram do programa em 2026-09-21, e o Digitalizar ficou.
+ *   - **Produção** — o molde e o trabalho: a biblioteca, o molde tirado da
+ *     foto, o projeto do cliente, o encaixe no tecido e as macros do Corel.
  *   - **Impressão** — o que acontece ENQUANTO se imprime, e as máquinas em si.
  *   - **Relatórios** — o que se olha DEPOIS, para conferir e comparar.
+ *
+ * HOUVE UM QUINTO GRUPO, **Design**, para o que se fazia com a ARTE antes de
+ * ela virar trabalho: Vetor, Digitalizar, Imagem e Cor. Três dessas telas
+ * saíram do programa em 2026-09-21 e sobrou o Digitalizar sozinho — um grupo
+ * de um item, que cobrava uma linha de título no menu para separar nada. O
+ * Digitalizar passou para Produção, que é onde ele já estava na cabeça de
+ * quem usa: o que sai dele é um molde, e molde é Produção.
  *
  * O WhatsApp está em Impressão, e não num grupo de ajustes, porque a única
  * coisa que ele faz é avisar sobre impressão: quem o procura está pensando na
@@ -75,22 +79,25 @@ const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default:
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
 const Ponto = lazy(() => import("./telas/Ponto").then((m) => ({ default: m.Ponto })));
 const Funcionarios = lazy(() => import("./telas/Funcionarios").then((m) => ({ default: m.Funcionarios })));
+const Sobre = lazy(() => import("./telas/Sobre").then((m) => ({ default: m.Sobre })));
+const Conta = lazy(() => import("./telas/Conta").then((m) => ({ default: m.Conta })));
 
 export type NomeDeTela =
   | "moldes" | "projetos" | "encaixe" | "digitalizar" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
-  | "historico" | "reposicao" | "ponto" | "funcionarios";
+  | "historico" | "reposicao" | "ponto" | "funcionarios"
+  // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
+  // programa falando de si mesmo e da conta, não trabalho de produção.
+  | "sobre" | "conta";
 
-export type NomeDeGrupo = "producao" | "design" | "impressao" | "relatorios";
+export type NomeDeGrupo = "producao" | "impressao" | "relatorios";
 
 /**
  * Os grupos, na ordem em que aparecem no menu — que é a ordem do trabalho:
- * primeiro se prepara o molde, depois se trata a arte, depois se imprime, por
- * último se confere.
+ * primeiro se prepara o molde, depois se imprime, por último se confere.
  */
 export const GRUPOS: readonly { nome: NomeDeGrupo; rotulo: string }[] = [
   { nome: "producao", rotulo: "Produção" },
-  { nome: "design", rotulo: "Design" },
   { nome: "impressao", rotulo: "Impressão" },
   { nome: "relatorios", rotulo: "Relatórios" },
 ];
@@ -111,15 +118,27 @@ export interface Tela {
   /**
    * A tela existe, tem endereço e cabeçalho — mas não aparece no menu.
    *
-   * É o caso de **Máquinas**: ela é uma porta, não um lugar onde se trabalha.
-   * Quem precisa dela ou não tem impressora nenhuma (e aí é o painel de
-   * Impressoras que leva para lá sozinho), ou vai trocar o nome de uma
+   * O primeiro caso foi **Máquinas**: ela é uma porta, não um lugar onde se
+   * trabalha. Quem precisa dela ou não tem impressora nenhuma (e aí é o painel
+   * de Impressoras que leva para lá sozinho), ou vai trocar o nome de uma
    * máquina e apagar outra — uma vez por ano. Num menu de treze itens, ela
    * cobrava uma linha permanente ao lado de "Impressoras" para dizer quase a
    * mesma palavra, e a dupla obrigava a escolher entre as duas toda vez.
    *
-   * `/maquinas` continua funcionando inteiro: link guardado abre, o cabeçalho
-   * é o mesmo. O que sai é só a linha do menu.
+   * Desde 2026-09-21 são sete: saíram também **Macros**, **WhatsApp** e o
+   * grupo **Relatórios** inteiro (Histórico, Ponto, Funcionários, Reposição).
+   * Aí a razão é outra, e vale dizê-la em voz alta para ninguém "consertar"
+   * isso por engano: foi decisão de desenho, para o menu do dia a dia mostrar
+   * só onde se trabalha. O menu caiu de doze linhas para quatro.
+   *
+   * ATENÇÃO, e é o preço: diferente de Máquinas, essas seis **não têm outra
+   * porta**. Nada no programa leva a elas depois desta mudança — só o endereço
+   * digitado (`/historico`, `/ponto`, …) ou um link guardado. Se alguma voltar
+   * a ser usada no dia a dia, o certo não é devolvê-la ao menu por reflexo: é
+   * decidir de onde ela passa a ser alcançada.
+   *
+   * Em todas elas o endereço continua funcionando inteiro, com o mesmo
+   * cabeçalho. O que sai é só a linha do menu — o código da tela fica de pé.
    */
   foraDoMenu?: boolean;
   /**
@@ -142,6 +161,21 @@ export const TELAS: readonly Tela[] = [
     apoioTopo: "Centralize moldes, tamanhos e estampas da produção.",
     icone: "icones.svg#shapes",
     Componente: Moldes,
+  },
+  {
+    /*
+     * Logo depois de Moldes, e não no fim do grupo: é daqui que um molde
+     * NASCE quando não existe arquivo dele, só a peça em cima da mesa. Quem
+     * chega ao menu sem o molde pronto lê as duas primeiras linhas e já sabe
+     * por onde entrar.
+     */
+    nome: "digitalizar",
+    grupo: "producao",
+    rotulo: "Digitalizar",
+    apoioMenu: "Molde a partir da foto",
+    apoioTopo: "Mande a imagem do molde e tire o risco dele, na medida que você informar.",
+    icone: "icones.svg#scan-line",
+    Componente: Digitalizar,
   },
   {
     nome: "projetos",
@@ -170,26 +204,13 @@ export const TELAS: readonly Tela[] = [
      */
     nome: "macros",
     grupo: "producao",
+    foraDoMenu: true,
     rotulo: "Macros",
     apoioMenu: "Ferramentas no CorelDRAW",
     apoioTopo: "Baixe e instale as macros que rodam dentro do Corel e falam com este sistema.",
     icone: "icones.svg#puzzle",
     trancada: true,
     Componente: TelaTrancada,
-  },
-
-
-  // --------------------------------------------------------------- Design
-  // O que acontece com a ARTE antes de ela virar trabalho: o molde tirado de
-  // uma foto.
-  {
-    nome: "digitalizar",
-    grupo: "design",
-    rotulo: "Digitalizar",
-    apoioMenu: "Molde a partir da foto",
-    apoioTopo: "Mande a imagem do molde e tire o risco dele, na medida que você informar.",
-    icone: "icones.svg#scan-line",
-    Componente: Digitalizar,
   },
 
   // ------------------------------------------------------------ Impressão
@@ -224,6 +245,7 @@ export const TELAS: readonly Tela[] = [
   {
     nome: "whatsapp",
     grupo: "impressao",
+    foraDoMenu: true,
     rotulo: "WhatsApp",
     apoioMenu: "Avisos automáticos",
     apoioTopo: "Avise num grupo quando uma impressão começa e quando termina.",
@@ -235,6 +257,7 @@ export const TELAS: readonly Tela[] = [
   {
     nome: "historico",
     grupo: "relatorios",
+    foraDoMenu: true,
     rotulo: "Histórico",
     apoioMenu: "Tudo que já foi impresso",
     apoioTopo: "Consulte, filtre e mande para a folha de produção o que já saiu.",
@@ -250,6 +273,7 @@ export const TELAS: readonly Tela[] = [
      */
     nome: "ponto",
     grupo: "relatorios",
+    foraDoMenu: true,
     rotulo: "Ponto",
     apoioMenu: "Quem bateu, e quando",
     apoioTopo: "As batidas que vieram do terminal, em grade — o que está faltando aparece como traço.",
@@ -259,6 +283,7 @@ export const TELAS: readonly Tela[] = [
   {
     nome: "funcionarios",
     grupo: "relatorios",
+    foraDoMenu: true,
     rotulo: "Funcionários",
     apoioMenu: "Quem é quem, e quais rostos",
     apoioTopo: "Cadastre as pessoas e os rostos que o terminal precisa reconhecer.",
@@ -268,11 +293,45 @@ export const TELAS: readonly Tela[] = [
   {
     nome: "reposicao",
     grupo: "relatorios",
+    foraDoMenu: true,
     rotulo: "Reposição",
     apoioMenu: "Quanto foi refeito",
     apoioTopo: "Acompanhe semana a semana quanto tecido foi gasto refazendo trabalho.",
     icone: "icones.svg#rotate-ccw",
     Componente: Reposicao,
+  },
+
+  /*
+    AS DUAS DO PÉ DA BARRA.
+
+    `foraDoMenu` porque elas não entram na lista de telas: quem as abre é o pé
+    (ver o rodapé de `casca/Menu.tsx`), e repeti-las na lista cobraria duas
+    linhas permanentes de quem trabalha para mostrar o que se procura uma vez
+    por mês.
+
+    O `grupo` é obrigatório no tipo e não tem efeito nelas — `telasDoGrupo`
+    descarta `foraDoMenu` antes de olhar o grupo. Ficam em "relatorios" por ser
+    o grupo que já não aparece no menu, e não por parentesco de assunto.
+  */
+  {
+    nome: "sobre",
+    grupo: "relatorios",
+    foraDoMenu: true,
+    rotulo: "Sobre",
+    apoioMenu: "Que programa é este",
+    apoioTopo: "A versão instalada, quem faz o Optmize e como falar com a gente.",
+    icone: "icones.svg#info",
+    Componente: Sobre,
+  },
+  {
+    nome: "conta",
+    grupo: "relatorios",
+    foraDoMenu: true,
+    rotulo: "Configurações da conta",
+    apoioMenu: "Quem está usando",
+    apoioTopo: "A conta que está aberta nesta máquina e a empresa dela.",
+    icone: "icones.svg#user-cog",
+    Componente: Conta,
   },
 ];
 

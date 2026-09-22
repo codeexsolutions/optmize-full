@@ -202,6 +202,23 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 
+{/*
+    A MESA VAZIA — o rolo desenhado antes de existir trabalho.
+
+    Fica ENTRE o risco e o cartão de convite, de propósito: o risco de verdade
+    o cobre quando existe (os dois são `absolute inset-0`, e quem vem depois no
+    HTML fica por cima — mas o risco só aparece quando deixa de ser `hidden`,
+    e aí esta camada já está escondida pela mesma regra), e o cartão flutua por
+    cima dele, que é como o Optmize Lite faz: o convite não esconde a mídia.
+
+    Quem a acende é a mesma regra de `producao.css` que acende o cartão — ver
+    lá o porquê do `!important`. Quem a DESENHA é o `controlador.js`.
+*/}
+<div className="mesa-midia pointer-events-none absolute inset-0 hidden place-items-center p-3">
+<canvas id="encaixe-canvas-vazio">
+</canvas>
+</div>
+
 <div className="mesa-dica pointer-events-none absolute inset-0 hidden place-items-center p-6">
 
 <div className="max-w-sm rounded-2xl border border-linha bg-painel-suave/90 p-6 text-center backdrop-blur-sm">
@@ -237,6 +254,25 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 <section id="encaixe-carregamento" className="encaixe-carregamento hidden" aria-live="polite" aria-busy="false">
 
 <div className="encaixe-loading-caixa">
+
+{/*
+    A ANIMAÇÃO DA BUSCA — peças entrando e se encaixando.
+
+    Fica no lugar do poço de tetris logo abaixo, e o esconde enquanto a busca
+    corre (ver `.mostrando-previa`, em producao.css): peças chegam de fora e
+    vão se assentando no rolo até fechá-lo, e então recomeça com outro arranjo.
+
+    `aria-hidden` pelo mesmo motivo do poço: quem não enxerga a tela recebe o
+    andamento pelo texto e pela barra, logo abaixo, que dizem tentativa, tempo
+    e melhor consumo em palavras.
+
+    É ILUSTRAÇÃO, e não as tentativas de verdade do motor — está dito em voz
+    alta no `controlador.js`, junto do porquê.
+*/}
+<div id="encaixe-previa" className="encaixe-previa hidden" aria-hidden="true">
+<canvas id="encaixe-previa-canvas">
+</canvas>
+</div>
 
 {/* O poço: as peças caem e vão fechando o risco. É decoração, e por isso
     `aria-hidden` — quem não vê a tela recebe o andamento pelo texto e pela
@@ -552,9 +588,6 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 
-<p id="ajustes-aviso-eixo" className="ajustes-nota hidden">
-
-</p>
 
 
 

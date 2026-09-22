@@ -93,6 +93,92 @@ function resultadoParaEnviar(r) {
   };
 }
 
+/*
+ * ===========================================================================
+ * O DESENHO AO VIVO — mostrar a procura sem atrapalhá-la
+ * ===========================================================================
+ *
+ * A tela deixou de mostrar uma barra de carregamento durante a busca e passou
+ * a mostrar o rolo encolhendo. Para isso este worker manda dois tipos de
+ * quadro:
+ *
+ *   recorde    quando o melhor encaixe cai. Seis a vinte por corrida. Vai
+ *              sempre, sem estrangulamento: é o quadro que a pessoa espera.
+ *
+ *   fantasma   uma AMOSTRA do que está sendo tentado agora. O motor chama
+ *              isto em TODA tentativa — dezenas de milhares numa corrida —, e
+ *              é aqui que a maioria é jogada fora.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE O FILTRO MORA AQUI, E NÃO NA TELA
+ * ---------------------------------------------------------------------------
+ *
+ * Porque o que custa não é desenhar: a busca roda neste worker e a thread da
+ * tela está ociosa o tempo todo. O que custa é ATRAVESSAR — o `postMessage`
+ * serializa o que vai. Filtrar do outro lado seria pagar a serialização
+ * inteira e jogar o resultado fora, que é exatamente o custo que roubaria
+ * tempo da procura.
+ *
+ * Duas escolhas fazem a travessia quase de graça:
+ *
+ *   1. O quadro é um `Float32Array` cru, seis números por peça, e não o
+ *      resultado de verdade. Nada de máscara, endereço de peça ou bancada — o
+ *      preview desenha silhueta, não o encaixe final. 175 peças dão 4,2 KB.
+ *
+ *   2. Ele é TRANSFERIDO, não clonado (`postMessage(msg, [buffer])`). O buffer
+ *      muda de dono em vez de ser copiado, então o tamanho quase não importa.
+ *      Depois da transferência o array fica vazio deste lado — e não há
+ *      problema, porque ele nasceu para esta viagem e morre nela.
+ */
+
+/** De quanto em quanto tempo ESTE worker deixa passar um fantasma. */
+const INTERVALO_DO_FANTASMA_MS = 500;
+
+let ultimoFantasmaEm = 0;
+
+/**
+ * Empacota as posições no mínimo que o desenho precisa: x, y, largura, altura,
+ * rotação e se a peça está girada. Seis números por peça, num array só.
+ */
+function quadroDoEncaixe(r) {
+  const posicoes = r.posicoes || [];
+  const dados = new Float32Array(posicoes.length * 6);
+  for (let i = 0; i < posicoes.length; i++) {
+    const p = posicoes[i];
+    const b = i * 6;
+    dados[b] = p.x;
+    dados[b + 1] = p.y;
+    dados[b + 2] = p.largura;
+    dados[b + 3] = p.altura;
+    dados[b + 4] = p.rot || 0;
+    dados[b + 5] = p.girado ? 1 : 0;
+  }
+  return dados;
+}
+
+function desenhar(especie, r, larguraTecido) {
+  if (especie === "fantasma") {
+    const agora = Date.now();
+    // A conta vem ANTES de tocar no resultado: é o caminho de dezenas de
+    // milhares de tentativas por corrida, e a quase totalidade delas sai por
+    // aqui sem custar mais que uma subtração.
+    if (agora - ultimoFantasmaEm < INTERVALO_DO_FANTASMA_MS) return;
+    ultimoFantasmaEm = agora;
+  }
+  const dados = quadroDoEncaixe(r);
+  self.postMessage({
+    tipo: "desenho",
+    k: fatia ? fatia.k : -1,
+    especie,
+    consumo: r.consumo,
+    larguraTecido,
+    // Tentativa que deixou peça de fora gasta menos tecido por não ter
+    // encaixado tudo. A tela precisa saber para não anunciar um recorde falso.
+    inteiro: !r.naoEncaixadas || r.naoEncaixadas.length === 0,
+    pecas: dados,
+  }, [dados.buffer]);
+}
+
 self.onmessage = async (evento) => {
   const msg = evento.data;
 
@@ -172,6 +258,7 @@ self.onmessage = async (evento) => {
       motores: msg.motores || msg.config.motores,
       deveParar: () => pararAgora,
       aoProgredir: (estado) => self.postMessage({ tipo: "andamento", k: fatia.k, estado }),
+      aoDesenhar: (especie, r) => desenhar(especie, r, msg.config.larguraTecido),
     });
     self.postMessage({ tipo: "resultado", k: fatia.k, resultado: resultadoParaEnviar(resultado) });
   } catch (erro) {
