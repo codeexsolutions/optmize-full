@@ -79,11 +79,16 @@ const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default:
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
 const Ponto = lazy(() => import("./telas/Ponto").then((m) => ({ default: m.Ponto })));
 const Funcionarios = lazy(() => import("./telas/Funcionarios").then((m) => ({ default: m.Funcionarios })));
+const Sobre = lazy(() => import("./telas/Sobre").then((m) => ({ default: m.Sobre })));
+const Conta = lazy(() => import("./telas/Conta").then((m) => ({ default: m.Conta })));
 
 export type NomeDeTela =
   | "moldes" | "projetos" | "encaixe" | "digitalizar" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
-  | "historico" | "reposicao" | "ponto" | "funcionarios";
+  | "historico" | "reposicao" | "ponto" | "funcionarios"
+  // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
+  // programa falando de si mesmo e da conta, não trabalho de produção.
+  | "sobre" | "conta";
 
 export type NomeDeGrupo = "producao" | "impressao" | "relatorios";
 
@@ -294,6 +299,39 @@ export const TELAS: readonly Tela[] = [
     apoioTopo: "Acompanhe semana a semana quanto tecido foi gasto refazendo trabalho.",
     icone: "icones.svg#rotate-ccw",
     Componente: Reposicao,
+  },
+
+  /*
+    AS DUAS DO PÉ DA BARRA.
+
+    `foraDoMenu` porque elas não entram na lista de telas: quem as abre é o pé
+    (ver o rodapé de `casca/Menu.tsx`), e repeti-las na lista cobraria duas
+    linhas permanentes de quem trabalha para mostrar o que se procura uma vez
+    por mês.
+
+    O `grupo` é obrigatório no tipo e não tem efeito nelas — `telasDoGrupo`
+    descarta `foraDoMenu` antes de olhar o grupo. Ficam em "relatorios" por ser
+    o grupo que já não aparece no menu, e não por parentesco de assunto.
+  */
+  {
+    nome: "sobre",
+    grupo: "relatorios",
+    foraDoMenu: true,
+    rotulo: "Sobre",
+    apoioMenu: "Que programa é este",
+    apoioTopo: "A versão instalada, quem faz o Optmize e como falar com a gente.",
+    icone: "icones.svg#info",
+    Componente: Sobre,
+  },
+  {
+    nome: "conta",
+    grupo: "relatorios",
+    foraDoMenu: true,
+    rotulo: "Configurações da conta",
+    apoioMenu: "Quem está usando",
+    apoioTopo: "A conta que está aberta nesta máquina e a empresa dela.",
+    icone: "icones.svg#user-cog",
+    Componente: Conta,
   },
 ];
 

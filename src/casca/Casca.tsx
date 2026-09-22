@@ -30,6 +30,8 @@
 import { Suspense, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
+import { Entrar } from "../telas/Entrar";
+import { useSessao } from "./usuario";
 import { ProvedorDeDialogo } from "./Dialogo";
 import { Cabecalho } from "./Cabecalho";
 import { Icone } from "./Icone";
@@ -68,12 +70,56 @@ export function Casca() {
    * Era assim na casca antiga, para o Encaixe
    * (`.producao[data-tela="encaixe"] .pageheader`, em producao.css).
    */
+  // Quem está usando. Lido UMA vez aqui e passado adiante — ver a prop
+  // `usuario` do Menu para por que a barra não lê sozinha.
+  const sessao = useSessao();
+
+  /**
+   * Sair da conta, já confirmado.
+   *
+   * QUEM PERGUNTA É O MENU, e não esta função — e a divisão tem um motivo
+   * mecânico: o diálogo da casca é lido por `useDialogo()`, que só funciona
+   * DENTRO do `<ProvedorDeDialogo>`. Esta função mora no componente que
+   * RENDERIZA o provedor, então daqui o contexto ainda não existe. O menu está
+   * dentro dele e pergunta sem dificuldade nenhuma.
+   */
+  async function sair() {
+    try {
+      await fetch("/api/sessao/sair", { method: "POST" });
+    } finally {
+      // Mesmo se o pedido falhar, relê: o estado da tela tem de acompanhar o
+      // do servidor, e é ele quem manda.
+      sessao.recarregar();
+    }
+  }
+
   const bancada = tela.nome === "encaixe" || tela.nome === "projetos"
     || tela.nome === "moldes";
 
   /* Bancada ou tela que pediu (ver `useSemCabecalho`): as duas trocam o
      cabeçalho pelo botão flutuante da gaveta. */
   const semTopo = bancada || semCabecalho;
+
+  /*
+   * ===========================================================================
+   * O PORTÃO DA CONTA
+   * ===========================================================================
+   *
+   * Desde 2026-09-21 o Optmize pede conta para abrir.
+   *
+   * "carregando" não desenha nada, e é de propósito: a resposta de
+   * `/api/sessao/eu` vem do servidor local e chega em milissegundos, mas
+   * piscar a tela de entrar na cara de quem já entrou é pior do que meio
+   * segundo de tela vazia.
+   *
+   * ISTO NÃO É SEGURANÇA, e vale dizer aqui para ninguém se enganar: é a TELA
+   * que se esconde. A API local continua respondendo em `/api/*`, e
+   * `server.js` escuta em `0.0.0.0` — qualquer máquina da rede da gráfica a
+   * alcança. A trava de verdade é no servidor, e é o próximo passo (o pedaço
+   * B, em `docs/superpowers/plans/2026-09-21-identidade-no-full.md`).
+   */
+  if (sessao.estado === "carregando") return null;
+  if (sessao.estado === "fora") return <Entrar aoEntrar={sessao.recarregar} />;
 
   /*
    * O provedor do diálogo envolve a casca inteira: a caixa de confirmar e a de
@@ -84,7 +130,12 @@ export function Casca() {
     <ProvedorDeDialogo>
     <ProvedorSemCabecalho value={setSemCabecalho}>
     <div data-tela={tela.nome} className="app-react h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
-      <Menu aberto={menuAberto} aoFechar={() => setMenuAberto(false)} />
+      <Menu
+        aberto={menuAberto}
+        aoFechar={() => setMenuAberto(false)}
+        usuario={sessao.usuario}
+        aoSair={sair}
+      />
 
       {/*
         A casca ocupa a janela e não rola. O cabeçalho fica parado no alto e o

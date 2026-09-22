@@ -49,6 +49,15 @@ async function main() {
   const requests=[];
   global.fetch=async (url,options={}) => {
     requests.push([String(url),options.method || 'GET',options.body]);
+    /*
+     * A CONTA. Desde 2026-09-21 a casca so desenha o programa depois de saber
+     * quem esta usando (ver o portao em casca/Casca.tsx); sem esta resposta a
+     * bancada inteira cairia na tela de entrar, e toda conferencia abaixo
+     * procuraria telas que nao foram desenhadas.
+     */
+    if(String(url)==='/api/sessao/eu') return Response.json({
+      entrou:true, perfil:{nome:'Bancada de Teste',empresa:'CodeEx',papel:'dono',telas:null},
+    });
     if(String(url)==='/api/moldes') return Response.json([]);
     if(String(url)==='/api/projetos/clientes') return Response.json([{id:1,nome:'Cliente de teste',projetos:1}]);
     if(String(url)==='/api/projetos/clientes/1/projetos') return Response.json({cliente:{id:1,nome:'Cliente de teste'},projetos:[{id:2,nome:'Uniforme',pecas:1,pecasPorUnidade:2}]});

@@ -361,3 +361,199 @@
 @media (prefers-reduced-motion: reduce) {
   .vetor-varredura { animation: none; opacity: 0; }
 }
+
+/*
+ * ===========================================================================
+ * A TELA DE ENTRAR
+ * ===========================================================================
+ *
+ * As animações que o Optmize Lite faz com `framer-motion`, aqui em CSS. São
+ * três, e nenhuma delas justifica 40 KB de biblioteca dentro de um programa
+ * instalado: o cartão subindo ao aparecer, os campos entrando em degrau, e o
+ * tremor do aviso de erro.
+ *
+ * O degrau é o único que dá trabalho sem uma biblioteca: o `staggerChildren`
+ * do framer-motion atrasa cada filho sozinho, e em CSS o atraso é escrito à
+ * mão, um por posição. São quatro filhos — escrever quatro linhas é mais
+ * barato que a dependência que as geraria.
+ */
+
+@keyframes entrada-sobe {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.entrada-sobe {
+  animation: entrada-sobe .4s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes entrada-degrau {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.entrada-degrau {
+  animation: entrada-degrau .35s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.entrada-degrau:nth-child(1) { animation-delay: .12s; }
+.entrada-degrau:nth-child(2) { animation-delay: .19s; }
+.entrada-degrau:nth-child(3) { animation-delay: .26s; }
+.entrada-degrau:nth-child(4) { animation-delay: .33s; }
+.entrada-degrau:nth-child(5) { animation-delay: .40s; }
+
+/*
+ * O TREMOR DO ERRO.
+ *
+ * Curto e pequeno de propósito: é para o olho perceber que ALGO NOVO apareceu
+ * — a pessoa estava olhando para o botão, não para o espaço onde o aviso
+ * nasce. Um tremor grande viraria repreensão por errar a senha.
+ */
+@keyframes entrada-treme {
+  0%   { opacity: 0; transform: translateY(-4px); }
+  40%  { opacity: 1; transform: translateX(-8px); }
+  55%  { transform: translateX(8px); }
+  70%  { transform: translateX(-5px); }
+  85%  { transform: translateX(5px); }
+  100% { opacity: 1; transform: none; }
+}
+
+.entrada-treme {
+  animation: entrada-treme .35s ease both;
+}
+
+/* Quem pediu menos movimento recebe as telas prontas, sem animação nenhuma. */
+@media (prefers-reduced-motion: reduce) {
+  .entrada-sobe,
+  .entrada-degrau,
+  .entrada-treme {
+    animation: none;
+  }
+}
+
+/*
+ * A CORTINA entre o login e a área de trabalho (`telas/Cortina.tsx`).
+ * As três animações que o Lite faz com framer-motion.
+ */
+
+@keyframes cortina-entra {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.cortina-entra {
+  animation: cortina-entra .25s ease both;
+}
+
+@keyframes cortina-sobe {
+  from { opacity: 0; transform: translateY(12px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+.cortina-sobe {
+  animation: cortina-sobe .45s cubic-bezier(.2, .8, .3, 1) .1s both;
+}
+
+@keyframes cortina-pulsa {
+  0%, 100% { opacity: .40; transform: scale(1); }
+  50%      { opacity: .80; transform: scale(1.18); }
+}
+
+.cortina-pulsa {
+  animation: cortina-pulsa 2.4s ease-in-out infinite;
+}
+
+@keyframes cortina-gira {
+  to { transform: rotate(360deg); }
+}
+
+.cortina-gira {
+  animation: cortina-gira 1s linear infinite;
+}
+
+/*
+ * Quem pediu menos movimento recebe a cortina PARADA, e não sem cortina: ela
+ * não é enfeite — é o que diz em nome de quem o programa abriu.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .cortina-entra,
+  .cortina-sobe,
+  .cortina-pulsa,
+  .cortina-gira {
+    animation: none;
+  }
+}
+
+/*
+ * ===========================================================================
+ * OS EFEITOS DA TELA DE ENTRAR
+ * ===========================================================================
+ *
+ * Tudo aqui é CSS puro — sem framer-motion, sem canvas, sem imagem. Numa tela
+ * que aparece antes de o programa montar, cada coisa a carregar é tempo de
+ * porta fechada; e num programa instalado, cada dependência é peso permanente
+ * no instalador por um efeito de dez segundos por dia.
+ *
+ * Nenhuma cor é escrita à mão: todas saem de `--accent*`, em tokens.css.
+ * Trocar o laranja da marca leva esta tela junto.
+ */
+
+/*
+ * O BOTÃO DE ENTRAR.
+ *
+ * ESCRITO AQUI, E NÃO REAPROVEITADO DE `.btn.primary`: aquela regra vive
+ * dentro de `:where(.producao)`, e a tela de entrar não está dentro da
+ * produção — usar a classe lá deixaria o botão SEM ESTILO NENHUM, que foi
+ * exatamente o que aconteceu na primeira versão desta tela.
+ *
+ * O FUNDO É CHAPADO, na cor da marca. Ele já foi um degradê de três paradas
+ * (claro em cima, escuro embaixo) e ficou pesado: num botão de 46px o degradê
+ * não lê como volume, lê como borrão, e ainda brigava com a superfície lisa de
+ * todo o resto da tela. Uma cor só, do mesmo token que acende o item do menu,
+ * é o que faz o botão pertencer ao programa.
+ *
+ * A ALTURA É FIXA em 50px, e não deixada por conta do `padding`: é o único
+ * botão da tela, e ele tem de ter a mesma presença dos dois campos acima dele
+ * — que somam 48px cada. Deixar a altura ao texto faria "Entrando…" e "Entrar"
+ * darem botões de tamanhos diferentes no meio do clique.
+ */
+.botao-entrar {
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  letter-spacing: -.01em;
+  /* Uma sombra curta e escura, não um halo colorido: o botão apoia na
+     superfície em vez de flutuar acesa sobre ela. */
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, .8);
+  transition: background-color .15s ease, transform .1s ease;
+}
+
+.botao-entrar:hover:not(:disabled) {
+  background: var(--accent-bright);
+}
+
+/* Afunda ao apertar: a resposta física que diz que o clique pegou. */
+.botao-entrar:active:not(:disabled) {
+  background: var(--accent-dark);
+  transform: translateY(1px);
+}
+
+.botao-entrar:disabled {
+  cursor: default;
+  background: var(--accent-dark);
+  opacity: .7;
+}
+
+/* O anel de foco, para quem anda pelo teclado. */
+.botao-entrar:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+
