@@ -3834,6 +3834,24 @@ export async function buscarMelhorEncaixe(itens, config) {
   const considerar = (resultado, chave) => {
     tentativas++;
     guardarOrdem(resultado);
+    /*
+      O DESENHO AO VIVO.
+
+      `config.aoDesenhar` deixa a tela mostrar a procura acontecendo em vez de
+      uma barra de carregamento. São dois avisos com pesos MUITO diferentes:
+      "fantasma" é toda tentativa (dezenas de milhares numa corrida) e
+      "recorde" é só quando o melhor cai (de seis a vinte vezes).
+
+      AQUI NÃO HÁ ESTRANGULAMENTO NENHUM, DE PROPÓSITO, e isso é o contrário do
+      que o instinto manda. Quem decide o que vira mensagem é o WORKER, em
+      `encaixeWorker.js` — porque o custo que atrapalharia a busca não é o desta
+      chamada, é o de serializar o encaixe para atravessar o `postMessage`.
+      Filtrar depois de serializar seria pagar o preço inteiro e jogar fora.
+
+      Por isso o que passa daqui é o objeto VIVO, por referência: enquanto
+      ninguém quiser desenhar, o custo por tentativa é uma chamada de função.
+    */
+    if (config.aoDesenhar) config.aoDesenhar("fantasma", resultado);
     const linha = placar.get(chave);
     if (linha) {
       linha.tentativas++;
@@ -3857,6 +3875,9 @@ export async function buscarMelhorEncaixe(itens, config) {
     }
     if (melhorQue(resultado, melhor)) {
       const anterior = melhor ? melhor.consumo : null;
+      // O recorde NUNCA é estrangulado do outro lado: são poucos, e é o quadro
+      // que a pessoa está esperando ver.
+      if (config.aoDesenhar) config.aoDesenhar("recorde", resultado);
       melhor = resultado;
       melhorChave = chave;
       receitaVencedora = linha ? linha.receita : null;
