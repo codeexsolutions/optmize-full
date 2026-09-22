@@ -139,6 +139,146 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, re
   res.json({ ok: true, bytes: req.body.length });
 });
 
+/*
+ * ===========================================================================
+ * O PNG NÃO PASSA PELO LEITOR DO PDFKIT
+ * ===========================================================================
+ *
+ * O pdfkit abre PNG com o `png-js`, que é JavaScript puro: ele copia o arquivo
+ * byte a byte para um Array e, quando a arte tem canal alfa — e toda arte que
+ * sai de um canvas tem —, descomprime, separa cor e alfa num laço e comprime
+ * de novo, tudo na linha principal. Medido: 3,9 s para uma arte de 20
+ * megapixels. E numa arte de 70x100 cm a 300 dpi (100 megapixels) ele não
+ * chega ao fim — estoura com "Invalid array length", a peça cai no `catch` de
+ * arte ilegível e o PDF sai SEM ELA, calado.
+ *
+ * Aqui o PNG é resolvido sem ele, e sem mexer em um pixel:
+ *
+ *   - PNG opaco de 8 ou 16 bits (cinza ou RGB, sem entrelaçar): os blocos IDAT já
+ *     são exatamente o que o PDF aceita com `/Predictor 15`. Vão direto, sem
+ *     descomprimir nada — que é o que o próprio pdfkit fazia, só que sem o
+ *     Array.
+ *   - O resto (alfa, paleta, entrelaçado): o `sharp`, que é nativo e
+ *     roda fora da linha principal, separa a cor e o alfa em dois PNGs sem
+ *     perda, e os IDAT deles vão para o PDF do mesmo jeito. O alfa vira a
+ *     `/SMask`, como o pdfkit já fazia.
+ *
+ * O JPEG continua com o pdfkit: ele já passa direto e custa milissegundos.
+ */
+const sharp = require("sharp");
+
+const ASSINATURA_PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+/** Lê o cabeçalho e junta os IDAT de um PNG. */
+function blocosDoPng(bytes) {
+  let cabecalho = null;
+  const idat = [];
+  let pos = 8;
+  while (pos + 8 <= bytes.length) {
+    const tamanho = bytes.readUInt32BE(pos);
+    const tipo = bytes.toString("latin1", pos + 4, pos + 8);
+    const dados = bytes.subarray(pos + 8, pos + 8 + tamanho);
+    if (tipo === "IHDR") {
+      cabecalho = {
+        largura: dados.readUInt32BE(0),
+        altura: dados.readUInt32BE(4),
+        bits: dados[8],
+        tipoDeCor: dados[9],
+        entrelacado: dados[12] === 1,
+      };
+    } else if (tipo === "IDAT") {
+      idat.push(dados);
+    } else if (tipo === "IEND") {
+      break;
+    }
+    pos += 12 + tamanho;
+  }
+  return { cabecalho, idat: Buffer.concat(idat) };
+}
+
+/** PNG que dá para pôr no PDF como está: opaco, cinza ou RGB, sem entrelaçar. */
+function passaDireto(cabecalho) {
+  return cabecalho && !cabecalho.entrelacado && (cabecalho.bits === 8 || cabecalho.bits === 16)
+    && (cabecalho.tipoDeCor === 0 || cabecalho.tipoDeCor === 2);
+}
+
+/** Um canal do PDF (cor ou alfa) a partir de um PNG que passa direto. */
+function canalDoPng(png) {
+  const { cabecalho, idat } = blocosDoPng(png);
+  const cores = cabecalho.tipoDeCor === 2 ? 3 : 1;
+  return {
+    largura: cabecalho.largura,
+    altura: cabecalho.altura,
+    dados: {
+      Type: "XObject",
+      Subtype: "Image",
+      Width: cabecalho.largura,
+      Height: cabecalho.altura,
+      BitsPerComponent: cabecalho.bits,
+      ColorSpace: cores === 3 ? "DeviceRGB" : "DeviceGray",
+      Filter: "FlateDecode",
+      DecodeParms: { Predictor: 15, Colors: cores, BitsPerComponent: cabecalho.bits, Columns: cabecalho.largura },
+    },
+    idat,
+  };
+}
+
+/**
+ * Abre uma arte PNG como imagem do pdfkit: o objeto que `doc.image` aceita no
+ * lugar do que `doc.openImage` devolveria (largura, altura, `embed`).
+ */
+async function abrirPng(doc, bytes) {
+  let cor;
+  let alfa = null;
+  const { cabecalho } = blocosDoPng(bytes);
+  if (passaDireto(cabecalho)) {
+    cor = canalDoPng(bytes);
+  } else {
+    // `keepIccProfile` deixa os valores de cor como estão no arquivo, que é o
+    // que o pdfkit punha no PDF; sem ele o sharp converteria para sRGB.
+    const abrir = () => sharp(bytes, { limitInputPixels: false }).keepIccProfile();
+    const { hasAlpha, channels } = await abrir().metadata();
+    // Nível 1: a compressão aqui só vive até o PDF, e cada nível acima dobra o
+    // tempo para ganhar pouco. Sem perda em qualquer nível.
+    const png = { compressionLevel: 1, palette: false, progressive: false };
+    const [pngCor, pngAlfa] = await Promise.all([
+      abrir().removeAlpha().png(png).toBuffer(),
+      // O alfa é o último canal; "alpha" no sharp é sempre o 3, e cinza com
+      // alfa só tem dois. O `b-w` é obrigatório: com o perfil de cor mantido,
+      // o sharp gravaria o canal repetido em RGB, e a /SMask tem de ser cinza.
+      hasAlpha ? abrir().extractChannel(channels - 1).toColourspace("b-w").png(png).toBuffer() : null,
+    ]);
+    cor = canalDoPng(pngCor);
+    if (pngAlfa) alfa = canalDoPng(pngAlfa);
+  }
+
+  return {
+    label: `I${++doc._imageCount}`,
+    width: cor.largura,
+    height: cor.altura,
+    obj: null,
+    embed(documento) {
+      if (this.obj) return;
+      this.obj = documento.ref(cor.dados);
+      if (alfa) {
+        const mascara = documento.ref(alfa.dados);
+        mascara.end(alfa.idat);
+        this.obj.data.SMask = mascara;
+      }
+      this.obj.end(cor.idat);
+      // O buffer já foi para o documento: solta, para o pico ser UMA arte.
+      cor.idat = null;
+      if (alfa) alfa.idat = null;
+    },
+  };
+}
+
+/** Abre a arte do jeito mais rápido que o formato dela permite. */
+async function abrirArte(doc, bytes) {
+  if (bytes.length > 8 && bytes.subarray(0, 8).equals(ASSINATURA_PNG)) return abrirPng(doc, bytes);
+  return doc.openImage(bytes);
+}
+
 const PT_POR_CM = 72 / 2.54; // 1 ponto = 1/72 de polegada
 const LIMITE_PT = 14400; // 200 polegadas: o maior lado que o PDF aceita numa página
 
@@ -278,12 +418,13 @@ async function montarPdf({ larguraTecido, consumo, posicoes, buffers, lerArte },
    */
   const buscar = lerArte || ((chave) => (buffers ? buffers.get(chave) : null));
   const desenhos = new Map();
-  const desenhoDe = (chave) => {
+  const desenhoDe = async (chave) => {
     if (desenhos.has(chave)) return desenhos.get(chave);
     let desenho = null;
     try {
       const bytes = buscar(chave);
-      if (bytes) desenho = doc.openImage(bytes);
+      // Ver "O PNG NÃO PASSA PELO LEITOR DO PDFKIT", lá em cima.
+      if (bytes) desenho = await abrirArte(doc, bytes);
     } catch (err) {
       // arte ilegível: as outras continuam
       console.warn(`[encaixe-pdf] arte ilegível (${chave}):`, err && err.message);
@@ -299,7 +440,7 @@ async function montarPdf({ larguraTecido, consumo, posicoes, buffers, lerArte },
     if (unidade !== 1) doc.page.dictionary.data.UserUnit = unidade;
 
     for (const pos of pagina.posicoes) {
-      const desenho = desenhoDe(pos.chave);
+      const desenho = await desenhoDe(pos.chave);
       if (!desenho) continue;
       try {
         // O `y` da peça é medido no rolo inteiro; na página ele conta a partir
