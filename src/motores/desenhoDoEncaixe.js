@@ -143,8 +143,11 @@ export function contornar(ctx, p, REGUA, px, cor) {
   if (lado < 0.4) return; // no zoom de tela viraria borrão
 
   const faixas = m.faixas || (m.faixas = faixasDoContorno(m));
-  const x0 = REGUA + (p.x + m.offX) * px;
-  const y0 = (p.y + m.offY) * px;
+  // `offX`/`offY` já trazem o recuo da borda (ver `mascarasDeSilhueta`); o
+  // desenho da máscara é na moldura dela, então o recuo sai de volta.
+  const recuo = m.recuo || 0;
+  const x0 = REGUA + (p.x + m.offX - recuo) * px;
+  const y0 = (p.y + m.offY - recuo) * px;
   // Célula menor que um pixel ainda precisa deixar traço: o mínimo é 1 px.
   const grossura = Math.max(1, lado);
 

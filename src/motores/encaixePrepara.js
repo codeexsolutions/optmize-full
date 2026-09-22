@@ -168,7 +168,7 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
     const tarefas = [];
     pendentes.forEach((peca) => {
       const { cols, rows } = gradeDaPeca(peca, passo);
-      const dados = peca.contorno === "caixa" ? null : pixelsDaArteNaGrade(peca, cols, rows);
+      const dados = peca.contorno === "caixa" ? null : pixelsDaArteNaGrade(peca, cols, rows, passo);
       if (peca.contorno !== "caixa" && !dados) {
         // Canvas bloqueado: esta peça é resolvida na tela mesmo, mais adiante.
         semPixels.push(peca);
@@ -178,7 +178,7 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
       tarefas.push({
         peca,
         mensagem: { tipo: "mascaras", id: peca.id, pixels, cols, rows, passo, raio,
-          contorno: peca.contorno },
+          contorno: peca.contorno, medida: { largura: peca.largura, altura: peca.altura } },
         transferir: pixels ? [pixels] : [],
       });
     });

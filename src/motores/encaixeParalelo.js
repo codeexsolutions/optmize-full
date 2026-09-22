@@ -210,7 +210,7 @@ export function mascarasParaBusca(mascaras) {
   Object.entries(mascaras.rotacoes).forEach(([rot, m]) => {
     rotacoes[rot] = m ? {
       cols: m.cols, rows: m.rows, topo: m.topo, base: m.base,
-      alturaUtil: m.alturaUtil, offX: m.offX, offY: m.offY,
+      alturaUtil: m.alturaUtil, offX: m.offX, offY: m.offY, recuo: m.recuo,
     } : m;
   });
   const enxuta = { ...mascaras, rotacoes };
@@ -468,6 +468,9 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
     const configDoSparrow = {
       larguraTecido: config.larguraTecido,
       passo: config.passo,
+      // O raio do engorde: é ele que alarga o rolo na grade do sparrow (ver
+      // `colunasDoTecido`, em encaixeMotor.js).
+      raio: config.raio,
       comprimentoBancada: config.comprimentoBancada || 0,
       tempoMs: tempoDoSparrow,
       trabalhadores: config.encolherTrabalhadores,

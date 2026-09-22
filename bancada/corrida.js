@@ -73,7 +73,7 @@ function prepararTrabalho(motor, nome, ajustes = {}) {
  */
 async function buscarComoAProducao(motor, trabalho,
   { tempoMs, semente, meta, fatias, extra, espalharSemente }) {
-  const { receita, itens, passo, alturaMax } = trabalho;
+  const { receita, itens, passo, raio, alturaMax } = trabalho;
   const vetorTrabalho = motor.vetorDoTrabalho(trabalho.pecas, receita.larguraTecido);
 
   /*
@@ -113,7 +113,8 @@ async function buscarComoAProducao(motor, trabalho,
       larguraTecido: receita.larguraTecido,
       espaco: receita.espaco,
       comprimentoBancada: receita.comprimentoBancada || 0,
-      passo, alturaMax,
+      // O raio do engorde, como a tela manda (ver `colunasDoTecido`).
+      passo, raio, alturaMax,
       motores: motoresDaK,
       // Sem memória e sem rede: a bancada mede o motor, não o histórico da
       // loja. Com recorde antigo em jogo, duas corridas da mesma configuração
@@ -160,7 +161,7 @@ async function buscarComoAProducao(motor, trabalho,
   if (encolher) {
     const antes = campeao.consumo;
     const config = {
-      larguraTecido: receita.larguraTecido, passo,
+      larguraTecido: receita.larguraTecido, passo, raio,
       comprimentoBancada: receita.comprimentoBancada || 0,
     };
     let melhorEncolhido = null;

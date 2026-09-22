@@ -99,11 +99,28 @@ const ctxMascara = canvasMascara.getContext("2d", { willReadFrequently: true });
  * um <img>, e deixar o worker reduzir mudava a silhueta (está explicado em
  * prepara-worker.js).
  */
-export function pixelsDaArteNaGrade(peca, cols, rows) {
+export function pixelsDaArteNaGrade(peca, cols, rows, passo) {
   canvasMascara.width = cols;
   canvasMascara.height = rows;
   ctxMascara.clearRect(0, 0, cols, rows);
-  ctxMascara.drawImage(peca.img, 0, 0, cols, rows);
+  /*
+   * A arte entra NO TAMANHO DELA, e não esticada até a grade. A grade
+   * arredonda para cima (ver `gradeDaPeca`), então sobra menos de uma célula
+   * à direita e embaixo. Essa sobra é preenchida repetindo a última coluna e a
+   * última linha da arte: deixada transparente, ela faria uma arte opaca de
+   * fundo branco parecer arte recortada, e a leitura do fundo erraria.
+   */
+  const img = peca.img;
+  const larguraImg = img.naturalWidth || img.width;
+  const alturaImg = img.naturalHeight || img.height;
+  const w = passo > 0 ? Math.min(cols, peca.largura / passo) : cols;
+  const h = passo > 0 ? Math.min(rows, peca.altura / passo) : rows;
+  ctxMascara.drawImage(img, 0, 0, w, h);
+  if (w < cols) ctxMascara.drawImage(img, larguraImg - 1, 0, 1, alturaImg, w, 0, cols - w, h);
+  if (h < rows) ctxMascara.drawImage(img, 0, alturaImg - 1, larguraImg, 1, 0, h, w, rows - h);
+  if (w < cols && h < rows) {
+    ctxMascara.drawImage(img, larguraImg - 1, alturaImg - 1, 1, 1, w, h, cols - w, rows - h);
+  }
   try {
     return ctxMascara.getImageData(0, 0, cols, rows);
   } catch (e) {
@@ -123,12 +140,12 @@ export function pixelsDaArteNaGrade(peca, cols, rows) {
  * empilhava as peças como se ele não existisse.
  */
 
-export function silhuetaDaImagem(peca, cols, rows) {
+export function silhuetaDaImagem(peca, cols, rows, passo) {
   const total = cols * rows;
   const cheio = () => ({ bits: new Uint8Array(total).fill(1), modo: "caixa" });
   if (peca.contorno === "caixa") return cheio();
 
-  const dados = pixelsDaArteNaGrade(peca, cols, rows);
+  const dados = pixelsDaArteNaGrade(peca, cols, rows, passo);
   if (!dados) return cheio();
 
   // Daqui para frente é só conta em cima dos pixels, e mora no
@@ -150,9 +167,10 @@ export function mascarasDaPeca(peca, passo, raio) {
   if (peca._cacheMascaras && peca._cacheMascaras.chave === chave) return peca._cacheMascaras;
 
   const { cols, rows } = gradeDaPeca(peca, passo);
-  const silhueta = silhuetaDaImagem(peca, cols, rows);
+  const silhueta = silhuetaDaImagem(peca, cols, rows, passo);
   peca._cacheMascaras = {
-    chave, ...mascarasDeSilhueta(silhueta, cols, rows, passo, raio),
+    chave, ...mascarasDeSilhueta(silhueta, cols, rows, passo, raio,
+      { largura: peca.largura, altura: peca.altura }),
   };
   return peca._cacheMascaras;
 }

@@ -62,7 +62,7 @@
  * que hoje.
  */
 
-import { agruparPorSilhueta } from "./encaixeMotor";
+import { agruparPorSilhueta, colunasDoTecido, consumoDoFundo } from "./encaixeMotor";
 import { rotacoesDe } from "./encaixeGiro";
 import { acharSobreposicao } from "./encaixeSobreposicao";
 import iniciarCola, { initSync, encolher as encolherNoWasm } from "./encolher/encolher.js";
@@ -408,7 +408,7 @@ export function partidaDoSparrow(resultado, tipos, passo, colsTecido) {
  * Não vale, e volta `null`: peça faltando ou sobrando, peça fora do rolo, e
  * qualquer par que a trava da produção acuse.
  */
-export function resultadoDoSparrow(solucao, tipos, passo, colsTecido) {
+export function resultadoDoSparrow(solucao, tipos, passo, colsTecido, config = {}) {
   if (!solucao || !solucao.layout || !Array.isArray(solucao.layout.placed_items)) return null;
   const usadas = tipos.map(() => 0);
   const posicoes = [];
@@ -443,7 +443,8 @@ export function resultadoDoSparrow(solucao, tipos, passo, colsTecido) {
   return {
     posicoes,
     naoEncaixadas: [],
-    consumo: fundo * passo,
+    // Sem o engorde de cima e de baixo, como no motor (ver `consumoDoFundo`).
+    consumo: consumoDoFundo(fundo, passo, config, posicoes),
     areaReal: posicoes.reduce((soma, p) => soma + (p.item.mascaras.areaReal || 0), 0),
   };
 }
@@ -498,7 +499,7 @@ export function encolherEncaixe(itens, resultado, config, opcoes = {}) {
   }
 
   const passo = config.passo;
-  const colsTecido = Math.max(1, Math.floor(config.larguraTecido / passo));
+  const colsTecido = colunasDoTecido(config);
   const tipos = tiposDoEncaixe(itens);
   const instancia = JSON.stringify(instanciaDoSparrow(tipos, colsTecido));
   const partir = opcoes.partir !== false;
@@ -511,7 +512,7 @@ export function encolherEncaixe(itens, resultado, config, opcoes = {}) {
     relatos++;
     let solucao;
     try { solucao = JSON.parse(json); } catch { rejeitados++; return; }
-    const novo = resultadoDoSparrow(solucao, tipos, passo, colsTecido);
+    const novo = resultadoDoSparrow(solucao, tipos, passo, colsTecido, config);
     if (!novo) { rejeitados++; return; }
     const alvo = melhor ? melhor.consumo : resultado.consumo;
     if (novo.consumo < alvo - 1e-9) {

@@ -213,8 +213,11 @@ function acharSobreposicao(posicoes, qual) {
  * por nada.
  */
 function medirFolga(posicoes, larguraTecido, consumo, passo, folgaPedida) {
-  const cols = Math.ceil(larguraTecido / passo) + 2;
-  const rows = Math.ceil(consumo / passo) + 2;
+  // A grade do motor tem a borda do engorde dos dois lados (ver
+  // `colunasDoTecido`, em encaixeMotor.js), e `x + offX` cai nela.
+  const borda = Math.max(0, ...posicoes.map((p) => Math.round(((p.mascara && p.mascara.recuo) || 0) / passo)));
+  const cols = Math.ceil(larguraTecido / passo) + 2 + 2 * borda;
+  const rows = Math.ceil(consumo / passo) + 2 + 2 * borda;
   const dono = new Int32Array(cols * rows).fill(-1);
 
   posicoes.forEach((pos, i) => {
@@ -265,6 +268,42 @@ function medirFolga(posicoes, larguraTecido, consumo, passo, folgaPedida) {
   return { menor, abaixoDoPedido, exemplo };
 }
 
+/**
+ * A peça de verdade não sai do tecido, e encosta na borda.
+ *
+ * O engorde da folga pode passar da beira do rolo — a folga é entre peças, e
+ * na borda não há vizinha (ver "A BORDA DO TECIDO NÃO LEVA FOLGA", em
+ * encaixeMotor.js). A SILHUETA, não: ela tem que caber entre 0 e a largura do
+ * tecido. Devolve também o quanto a peça mais à esquerda e a mais de cima
+ * ficaram da borda, que é o que mostra se a folga continuou indo para lá.
+ */
+function conferirBordas(posicoes, larguraTecido) {
+  let fora = 0;
+  let exemplo = null;
+  let esquerda = Infinity;
+  let topo = Infinity;
+  posicoes.forEach((pos) => {
+    const m = pos.mascara;
+    if (!m) return;
+    const x0 = pos.x + m.offX - (m.recuo || 0);
+    const y0 = pos.y + m.offY - (m.recuo || 0);
+    for (let r = 0; r < m.rows; r++) {
+      for (let c = 0; c < m.cols; c++) {
+        if (!m.desenho[r * m.cols + c]) continue;
+        const x = x0 + c * pos.passo;
+        const y = y0 + r * pos.passo;
+        if (x < esquerda) esquerda = x;
+        if (y < topo) topo = y;
+        if (x < -1e-6 || y < -1e-6 || x + pos.passo > larguraTecido + 1e-6) {
+          fora++;
+          if (!exemplo) exemplo = pos;
+        }
+      }
+    }
+  });
+  return { fora, exemplo, esquerda, topo };
+}
+
 const descrever = (pos) =>
   `${pos.item.nome}#${pos.item.copia} (${pos.rot}°, x=${pos.x.toFixed(2)} y=${pos.y.toFixed(2)})`;
 
@@ -273,6 +312,8 @@ function encaixarCom(motor, motorNome, itens, receita, passo, agrupamento) {
   const config = {
     larguraTecido: receita.larguraTecido, espaco: receita.espaco,
     comprimentoBancada: receita.comprimentoBancada || 0,
+    // O raio do engorde, como a tela manda: é ele que tira a folga da borda.
+    raio: receita.raio,
     passo, heuristica: "fundo",
     alturaMax: itens.reduce((s, i) => s + Math.max(i.largura, i.altura) + receita.espaco, 0),
   };
@@ -341,7 +382,7 @@ async function principal() {
     for (const motorNome of opcoes.motores) {
       const bloco = agrupamento > 1 ? `bloco ${agrupamento}` : "solta  ";
       const r = encaixarCom(motor, motorNome, itens,
-        { ...receita, comprimentoBancada: bancada }, passo, agrupamento);
+        { ...receita, comprimentoBancada: bancada, raio }, passo, agrupamento);
       // O encaixe por caixa não devolve máscara (ele trabalha só com o
       // retângulo), então não há silhueta para conferir.
       if (!r.posicoes.some((p) => p.mascara)) {
@@ -353,7 +394,10 @@ async function principal() {
       const real = acharSobreposicao(r.posicoes, "desenho");
       const comFolga = acharSobreposicao(r.posicoes, "folga");
       const distancia = medirFolga(r.posicoes, receita.larguraTecido, r.consumo, passo, receita.espaco);
-      const situacao = real.repetidas > 0
+      const bordas = conferirBordas(r.posicoes, receita.larguraTecido);
+      const situacao = bordas.fora > 0
+        ? `FORA DO TECIDO em ${bordas.fora} células`
+        : real.repetidas > 0
         ? `SOBREPÕE ${real.repetidas} células`
         : comFolga.repetidas > 0
           ? `folga comida em ${comFolga.repetidas} células`
@@ -365,7 +409,13 @@ async function principal() {
         + ` bancada ${bancada ? `${bancada} cm` : "sem   "} ·`
         + ` ${r.posicoes.length} peças · ${(r.consumo / 100).toFixed(2)} m`
         + ` · folga ${(distancia.menor * 10).toFixed(1)}/${(receita.espaco * 10).toFixed(0)} mm`
+        + ` · borda ${(bordas.esquerda * 10).toFixed(1)}/${(bordas.topo * 10).toFixed(1)} mm`
         + ` · ${situacao}\n`);
+
+      if (bordas.fora > 0) {
+        falhas.push(`${nome} · ${motorNome} · ${bloco.trim()}: ${bordas.fora} células de peça fora do tecido`
+          + `\n      ${descrever(bordas.exemplo)}`);
+      }
 
       if (distancia.abaixoDoPedido > 0) {
         falhas.push(`${nome} · ${motorNome} · ${bloco.trim()}: a folga entre peças ficou em`

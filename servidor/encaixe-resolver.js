@@ -204,15 +204,18 @@ function prepararPeca(motor, peca, { passo, raio }) {
   // somam — a célula ou está ocupada ou não está.
   const bits = new Uint8Array(cols * rows);
   contornos.forEach((contorno) => {
+    // Na fração da GRADE, e não da peça: a grade arredonda para cima (ver
+    // `gradeDaPeca`), e esticar o contorno até ela mudaria a medida da peça.
     const normalizado = contorno.map(([x, y]) => [
-      (x - minX) / largura,
-      (y - minY) / altura,
+      (x - minX) / (cols * passo),
+      (y - minY) / (rows * passo),
     ]);
     const parte = rasterizar(normalizado, cols, rows);
     for (let i = 0; i < bits.length; i++) if (parte[i]) bits[i] = 1;
   });
 
-  const mascaras = motor.mascarasDeSilhueta({ bits, modo: "alfa" }, cols, rows, passo, raio);
+  const mascaras = motor.mascarasDeSilhueta({ bits, modo: "alfa" }, cols, rows, passo, raio,
+    { largura, altura });
 
   return {
     nome: peca.nome || null,
@@ -268,7 +271,7 @@ const TEMPO_PADRAO_MS = 2500;
 
 /** As fatias uma a uma, ficando com a melhor. O `buscarMelhorEncaixeEmParalelo` desenrolado. */
 async function buscar(motor, itens, pecas, config) {
-  const { larguraTecido, espaco, comprimentoBancada, passo, fatias, tempoMs, meta, motores } = config;
+  const { larguraTecido, espaco, comprimentoBancada, passo, raio, fatias, tempoMs, meta, motores } = config;
 
   const alturaMax = itens.reduce(
     (soma, it) => soma + Math.max(it.largura, it.altura) + espaco, 0);
@@ -280,7 +283,7 @@ async function buscar(motor, itens, pecas, config) {
   for (let k = 0; k < fatias; k++) {
     const resultado = await motor.buscarMelhorEncaixe(itens, {
       larguraTecido, espaco, comprimentoBancada,
-      passo, alturaMax,
+      passo, raio, alturaMax,
       motores: motor.motoresDaFatia(k, fatias, motores),
       // Sem histórico: ver "O QUE ISTO NÃO FAZ", no topo.
       memoria: null, alvo: null, rede: null, redeMadura: false,
@@ -348,7 +351,7 @@ router.post("/resolver", async (req, res) => {
     const itens = expandir(pecas);
 
     const { campeao, tentativas } = await buscar(motor, itens, pecas, {
-      larguraTecido, espaco, comprimentoBancada, passo, fatias, tempoMs, meta, motores,
+      larguraTecido, espaco, comprimentoBancada, passo, raio, fatias, tempoMs, meta, motores,
     });
 
     /*

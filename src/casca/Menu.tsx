@@ -273,7 +273,6 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
     if (ok) aoSair();
   }
 
-
   useEffect(() => {
     if (!aberto) return;
     const noEsc = (evento: KeyboardEvent) => { if (evento.key === "Escape") aoFechar(); };
