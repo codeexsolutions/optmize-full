@@ -14,9 +14,15 @@ uploads/
 #
 # `whatsapp-sessao/` E UMA CREDENCIAL: quem copiar a pasta entra no WhatsApp
 # do bot. Nao versione nem compartilhe.
+#
+# `sessao/` E CREDENCIAL PELO MESMO MOTIVO, desde que o login existe: o
+# `sessao.json` guarda o accessToken e o refreshToken de quem entrou. Este
+# repositorio e PUBLICO — um commit desse arquivo entrega a conta a quem
+# passar por ele. Ver o cabecalho de `servidor/sessao.js`.
 config/
 exportado/
 whatsapp-sessao/
+sessao/
 impressoras-cancelamento-csv.json
 .backup-*/
 .front-backup-*/

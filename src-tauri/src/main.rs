@@ -245,14 +245,18 @@ fn icone_da_barra(janela: &tauri::WebviewWindow) {
     }
 }
 
-/// Quanto esperar antes da PRIMEIRA pergunta ao servidor.
+/// Quanto esperar antes da PRIMEIRA ida ao servidor.
 ///
 /// O arranque já está ocupado: o Node está subindo, o SQLite abrindo o banco e
 /// o WebView pintando a tela de abertura. Uma consulta de rede no meio disso
-/// disputa com tudo o que a pessoa está esperando ver. E há um ganho de
-/// prudência junto: se uma versão vier quebrada a ponto de não abrir, ainda há
-/// um minuto e meio de programa vivo antes de ele se oferecer para instalar a
-/// próxima por cima.
+/// disputa com tudo o que a pessoa está esperando ver.
+///
+/// E ESTA ESPERA É A TRAVA DE SEGURANÇA DA INSTALAÇÃO SOZINHA, abaixo: ela é o
+/// que prova que a versão instalada ABRE. Sem ela, uma versão quebrada a ponto
+/// de não subir instalaria a seguinte por cima de um programa que nunca
+/// funcionou — e, se a seguinte também estivesse quebrada, a loja entraria num
+/// laço de se reinstalar sem ninguém para dizer não. Noventa segundos de
+/// programa vivo é a prova mais barata que existe disso.
 const PRIMEIRA_CHECAGEM: Duration = Duration::from_secs(90);
 
 /// De quanto em quanto tempo perguntar de novo.
@@ -263,7 +267,11 @@ const PRIMEIRA_CHECAGEM: Duration = Duration::from_secs(90);
 /// publicada de manhã chegar antes do fim do expediente.
 const INTERVALO_CHECAGEM: Duration = Duration::from_secs(2 * 60 * 60);
 
-/// Procura versão nova e, se a pessoa deixar, instala.
+/// Procura versão nova e instala.
+///
+/// `perguntar` decide se a pessoa é consultada antes. É `false` na primeira
+/// rodada, logo depois de abrir, e `true` de duas em duas horas dali em diante
+/// — o porquê está em `cuidar_das_atualizacoes`.
 ///
 /// Devolve `Ok(true)` quando a atualização foi instalada e o programa vai
 /// reiniciar — aí não há por que continuar perguntando.
@@ -273,13 +281,33 @@ const INTERVALO_CHECAGEM: Duration = Duration::from_secs(2 * 60 * 60);
 /// esta função pode confiar no que o servidor respondeu: o servidor diz ONDE
 /// está o instalador, mas quem diz se ele é legítimo é a chave compilada dentro
 /// deste binário.
-fn procurar_atualizacao(app: &tauri::AppHandle) -> Result<bool, Box<dyn std::error::Error>> {
+fn procurar_atualizacao(
+    app: &tauri::AppHandle,
+    perguntar: bool,
+) -> Result<bool, Box<dyn std::error::Error>> {
     use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
     use tauri_plugin_updater::UpdaterExt;
 
     let Some(atualizacao) = tauri::async_runtime::block_on(app.updater()?.check())? else {
         return Ok(false); // nada novo — o caso de quase sempre
     };
+
+    /*
+     * NA ABERTURA, INSTALA SEM PERGUNTAR.
+     *
+     * A pergunta existe porque reiniciar perde o que está na tela. Recém-aberto,
+     * não há nada na tela para perder — e uma pergunta feita nesse instante só
+     * adia a atualização para a próxima vez em que alguém disser "agora não".
+     *
+     * O instalador do Windows é `passive` (ver `tauri.conf.json`): mostra a
+     * própria barra de progresso e não pede nada a ninguém. Quem abriu o
+     * programa vê o arranque virar uma instalação curta e o programa voltar já
+     * atualizado.
+     */
+    if !perguntar {
+        tauri::async_runtime::block_on(atualizacao.download_and_install(|_, _| {}, || {}))?;
+        app.restart();
+    }
 
     let notas = if atualizacao.body.as_deref().unwrap_or("").trim().is_empty() {
         String::new()
@@ -334,11 +362,39 @@ fn procurar_atualizacao(app: &tauri::AppHandle) -> Result<bool, Box<dyn std::err
 /// modal e bloqueia quem a mostra até alguém responder. Bloquear uma thread do
 /// runtime assíncrono do Tauri por cinco minutos, enquanto a pessoa está no
 /// banheiro, seguraria tudo o mais que passa por ele.
+///
+/// ---------------------------------------------------------------------------
+/// A PRIMEIRA RODADA NÃO PERGUNTA; AS SEGUINTES, SIM
+/// ---------------------------------------------------------------------------
+///
+/// São dois momentos com respostas diferentes para a mesma pergunta — "posso
+/// reiniciar agora?".
+///
+///   ABRINDO: pode. Não há encaixe na tela, nem pedido pela metade. Perguntar
+///   aqui só serve para alguém responder "agora não" por reflexo e a loja ficar
+///   na versão velha mais um dia. Então instala e volta sozinho — que é o que
+///   faz uma correção alcançar TODA loja que reabre o programa, sem depender
+///   de ninguém clicar em nada.
+///
+///   COM O PROGRAMA ABERTO HÁ HORAS: não pode. Ali existe trabalho na tela, e
+///   uma atualização que interrompe o serviço do cliente é pior que uma que
+///   chega uma tarde mais tarde. Continua perguntando, como sempre fez.
 fn cuidar_das_atualizacoes(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(PRIMEIRA_CHECAGEM);
+
+        // A rodada da abertura: instala calada. Se falhar — sem internet, o
+        // servidor fora do ar —, cai no laço de baixo e tenta de novo daqui a
+        // duas horas, aí perguntando.
+        match procurar_atualizacao(&app, false) {
+            Ok(true) => return,
+            Ok(false) => {}
+            Err(erro) => eprintln!("[atualizacao] {erro}"),
+        }
+
         loop {
-            match procurar_atualizacao(&app) {
+            std::thread::sleep(INTERVALO_CHECAGEM);
+            match procurar_atualizacao(&app, true) {
                 // Instalou: o `restart()` acima não devolve, então isto não
                 // chega a acontecer — fica pelo compilador e por quem lê.
                 Ok(true) => return,
@@ -353,7 +409,6 @@ fn cuidar_das_atualizacoes(app: tauri::AppHandle) {
                  */
                 Err(erro) => eprintln!("[atualizacao] {erro}"),
             }
-            std::thread::sleep(INTERVALO_CHECAGEM);
         }
     });
 }
