@@ -70,22 +70,9 @@ const path = require("path");
 const RAIZ = path.join(__dirname, "..");
 const SAIDA = path.join(RAIZ, "servidor", "motor-encaixe.js");
 
-/*
- * As portas de entrada. Não é ordem de carregamento — quem descobre a ordem é
- * o esbuild, pelos `import` de verdade.
- *
- * A lista é a da bancada mais o `encaixeMascara`, que ela também carrega: é de
- * lá que vêm `grade`, `gradeDaPeca` e `mascarasDeSilhueta`, e sem eles o
- * servidor recebe polígono e não tem como transformar em máscara.
- */
-const MODULOS = [
-  "motores/encaixeMotor.js",
-  "motores/encaixeMascara.js",
-  "motores/encaixeGiro.js",
-  "motores/encaixeRede.mjs",
-  "motores/encaixeWasm.js",
-  "utils/geometria.ts",
-];
+// As portas de entrada. A lista mora ao lado, em `modulos-do-motor.js`, com a
+// da bancada — lá está escrito por que a daqui é menor.
+const { PARA_O_SERVIDOR: MODULOS } = require("./modulos-do-motor");
 
 async function empacotar() {
   const esbuild = require("esbuild");

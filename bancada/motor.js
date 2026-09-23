@@ -29,22 +29,10 @@ const path = require("path");
 const { carregarDosMotores, RAIZ } = require("./motores");
 
 /*
- * Os módulos do motor. Não é uma ordem de carregamento — é só o conjunto de
- * portas de entrada; quem descobre a ordem é o esbuild, pelos `import`.
+ * Os módulos do motor: a lista mora em `empacotar/modulos-do-motor.js`, junto
+ * com a do servidor, para as duas não divergirem em silêncio — já divergiram.
  */
-const MODULOS = [
-  "motores/encaixeMotor.js",
-  "motores/encaixeMascara.js",
-  "motores/encaixeGiro.js",
-  "motores/encaixeRede.mjs",
-  "motores/encaixeWasm.js",
-  // O guarda da sobreposicao: a bancada mede a MESMA conta que a tela usa
-  // para travar a producao, e nao uma copia dela.
-  "motores/encaixeSobreposicao.js",
-  // A ponte do encolhedor (o sparrow): a segunda fase da busca da produção.
-  "motores/encaixeEncolher.js",
-  "utils/geometria.ts",
-];
+const { PARA_A_BANCADA: MODULOS } = require("../empacotar/modulos-do-motor");
 
 /**
  * Sobe uma instância do motor.
