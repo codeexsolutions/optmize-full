@@ -46,6 +46,43 @@ async function decodificar(blob) {
   } finally { URL.revokeObjectURL(endereco); }
 }
 
+/*
+ * ===========================================================================
+ * A ARTE QUE MUDOU NO DISCO DEPOIS DE ENTRAR NA LISTA
+ * ===========================================================================
+ *
+ * O programa guarda a REFERÊNCIA do arquivo, e não os bytes: é isso que
+ * permite ao PDF levar os pixels do original sem o navegador segurar centenas
+ * de MB durante o trabalho inteiro. O preço é que a leitura acontece lá na
+ * frente, na hora de exportar — e até lá o arquivo pode ter mudado.
+ *
+ * Basta salvar a arte de novo por cima, no Photoshop ou no Corel, com a peça
+ * já na lista: a referência morre e a leitura falha. É comum, porque ajustar a
+ * arte e reexportar é exatamente o que se faz enquanto o encaixe está aberto.
+ *
+ * O navegador responde a isso com "The requested file could not be read,
+ * typically due to permission problems that have occurred after a reference to
+ * a file was acquired" — que subia inteiro para a tela, sem dizer QUAL arte
+ * entre as vinte da lista nem o que fazer a respeito. Quem lê isso no meio do
+ * expediente não tem por onde começar.
+ */
+function arteIlegivel(erro, peca) {
+  const nome = (peca && peca.nome) || "a arte";
+  const sumiu = erro && (erro.name === "NotFoundError" || /not be found/i.test(erro.message || ""));
+  return new Error(`a arte "${nome}" não pôde ser lida do disco — `
+    + (sumiu
+      ? "o arquivo foi movido ou apagado depois de a peça entrar na lista."
+      : "o arquivo mudou depois de a peça entrar na lista (foi salvo de novo por cima?).")
+    + " Arraste a arte para a tela outra vez e exporte de novo.");
+}
+
+/** O erro é de leitura do arquivo, e não de conta nossa? */
+function ehFalhaDeLeitura(erro) {
+  if (!erro) return false;
+  return erro.name === "NotReadableError" || erro.name === "NotFoundError"
+    || /could not be read|could not be found/i.test(erro.message || "");
+}
+
 /** A rotação troca largura e altura em pixels, sem redimensionar a arte. */
 export async function desenharPecaGirada(peca, rot) {
   const fonte = await fonteDaPeca(peca);
@@ -53,12 +90,16 @@ export async function desenharPecaGirada(peca, rot) {
   let canvasFonte;
   let canvas;
   try {
-    const bytes = new Uint8Array(await fonte.blob.arrayBuffer());
+    const bytes = new Uint8Array(await fonte.blob.arrayBuffer()
+      .catch((erro) => { throw arteIlegivel(erro, peca); }));
     if (rot === 0 && !peca.fundoNaExportacao && (ehPng(bytes) || jpegSeguroParaPdf(bytes))) {
       // Passa os bytes originais mesmo quando são maiores que uma prévia.
       return fonte.blob;
     }
-    img ||= await decodificar(fonte.blob);
+    // A decodificação lê o arquivo de novo, e falha pelo mesmo motivo quando
+    // ele mudou: o recado tem de ser o mesmo dos bytes, acima.
+    img ||= await decodificar(fonte.blob)
+      .catch((erro) => { throw ehFalhaDeLeitura(erro) ? arteIlegivel(erro, peca) : erro; });
     const larguraOriginal = img.naturalWidth || img.width;
     const alturaOriginal = img.naturalHeight || img.height;
     if (!(larguraOriginal > 0 && alturaOriginal > 0)) throw new Error("A arte original está vazia.");

@@ -64,14 +64,39 @@ async function main() {
       }
       const recortada = await arteQualidade.desenharPecaGirada({ ...peca,
         arquivoOriginal: blob(fundo, 'image/png'), fundoNaExportacao: 'auto' }, 0);
+      /*
+       * O ARQUIVO QUE MUDOU NO DISCO DEPOIS DE ENTRAR NA LISTA.
+       *
+       * O programa guarda a REFERÊNCIA da arte, não os bytes, e só lê o
+       * original na hora de montar o PDF. Se alguém salvou a arte de novo por
+       * cima nesse meio-tempo, essa leitura falha — e o navegador responde com
+       * "The requested file could not be read, typically due to permission
+       * problems...", que não diz qual arte nem o que fazer.
+       *
+       * Aqui a leitura é sabotada do mesmo jeito, para conferir que o recado
+       * que chega à pessoa diz as duas coisas.
+       */
+      const sumida = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' });
+      sumida.arrayBuffer = () => Promise.reject(
+        new DOMException('The requested file could not be read, typically due to permission '
+          + 'problems that have occurred after a reference to a file was acquired.', 'NotReadableError'));
+      let recado = '';
+      try {
+        await arteQualidade.desenharPecaGirada({ ...peca, nome: 'capa frente.jpg', arquivoOriginal: sumida }, 0);
+      } catch (erro) { recado = erro.message; }
+
       const previaValida = previa.width;
       previa.close();
       return { direta: await base64(direta), jpegDireto: await base64(jpegDireto), giradas, comBase,
-        recortada: await base64(recortada), previaValida };
+        recortada: await base64(recortada), previaValida, recado };
     }, { png: png.toString('base64'), jpg: jpg.toString('base64'), fundo: fundo.toString('base64') });
     assert.deepEqual(Buffer.from(resultado.direta, 'base64'), png, 'PNG sem giro mantém todos os bytes');
     assert.deepEqual(Buffer.from(resultado.jpegDireto, 'base64'), jpg, 'JPEG seguro não é recomprimido');
     assert.equal(resultado.previaValida, 90, 'exportação não fecha a imagem usada pelo cálculo');
+    assert.match(resultado.recado, /capa frente\.jpg/,
+      `o recado tem que dizer QUAL arte não pôde ser lida (veio "${resultado.recado}")`);
+    assert.match(resultado.recado, /arrast/i,
+      `o recado tem que dizer o que fazer (veio "${resultado.recado}")`);
     for (const girada of resultado.giradas) {
       assert.equal(girada.tipo, 'image/png');
       const bytes = Buffer.from(girada.bytes, 'base64');
