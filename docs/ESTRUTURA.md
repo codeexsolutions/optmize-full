@@ -19,6 +19,7 @@ instalador.
 - `servidor/uploads-arquivos.js`: o que moldes e projetos têm em comum ao guardar imagem em disco.
 - `servidor/projetos-api.js`: projetos de cliente — a pasta, o projeto e as peças já prontas.
 - `servidor/encaixe-memoria.js` e `servidor/encaixe-pdf.js`: cálculo, memória e documento do encaixe.
+- `servidor/arte-entrada.js`: a arte que o navegador não lê. O TIFF, que ele não abre, e o CMYK sem perfil, que ele abre e pinta errado (medido: erro de 85 num verde), entram pelo `/api/arte/preparar` e voltam em sRGB, com o dpi e a transparência de pé. O CMYK **com** perfil não passa por aqui de propósito — o navegador acerta sozinho, e mandá-lo ao servidor recomprimiria uma arte que hoje vai inteira para o PDF.
 - `servidor/impressoras-api.js`: monta a central das impressoras em `/api/impressoras` e levanta os leitores das máquinas.
 
 **O servidor importa um arquivo do front, e só um:**
@@ -181,6 +182,12 @@ a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
   sRGB → CMYK → sRGB pelo perfil SWOP do Windows. O `cor-icc.js` caminha na LUT
   do perfil à mão, e um erro ali não parece erro: o arquivo abre, as cores só
   ficam diferentes.
+- `bancada/conferir-arte-cmyk.cjs`: `npm run bancada:arte-cmyk`. Guarda os dois
+  buracos que `servidor/arte-entrada.js` tapa, e guarda o jeito de medi-los: a
+  cor certa não é um número escrito à mão, é a mesma arte convertida pelo
+  perfil embutido. Confere também o que já custou uma volta — o dpi tem que
+  voltar no cabeçalho JFIF, que é onde `medidaDoArquivo.js` o procura, e não só
+  no EXIF, onde o libvips o escreve.
 - `bancada/conferir-sobreposicao.js`: `npm run bancada:sobreposicao`. Repinta
   cada peça posicionada na grade do rolo e acusa célula ocupada duas vezes.
   Nasceu para achar a causa de "peça saindo sobreposta" no encaixe por NFP —

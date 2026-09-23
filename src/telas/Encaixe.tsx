@@ -30,7 +30,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <label className="btn secondary btn-sm file-label mt-0!">
 {"\n                    Adicionar\n                    "}
-<input type="file" id="encaixe-files" accept="image/*,.dxf,.plt,.hpgl,.svg,.pdf" multiple={true} className="hidden" />
+<input type="file" id="encaixe-files" accept="image/*,.tif,.tiff,.dxf,.plt,.hpgl,.svg,.pdf" multiple={true} className="hidden" />
 
 </label>
 

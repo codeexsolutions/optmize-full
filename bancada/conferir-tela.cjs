@@ -99,6 +99,20 @@ async function artesDeTeste(pasta) {
   return caminhos;
 }
 
+/**
+ * Uma arte em TIFF CMYK — o arquivo que o navegador recusa.
+ *
+ * Mesmo tamanho e mesmo dpi da `peca-a`, para a medida esperada ser a mesma e
+ * a conferência não depender de outra conta.
+ */
+async function arteTiff(pasta) {
+  const sharp = require('sharp');
+  const arquivo = path.join(pasta, 'peca-d.tif');
+  await sharp({ create: { width: 300, height: 400, channels: 3, background: { r: 200, g: 60, b: 40 } } })
+    .withMetadata({ density: 150 }).toColourspace('cmyk').tiff().toFile(arquivo);
+  return arquivo;
+}
+
 async function principal() {
   let puppeteer;
   try {
@@ -289,10 +303,31 @@ async function principal() {
     const recado = await p.$eval('#encaixe-andamento', (n) => n.textContent);
     assert.match(recado, /^Salvo: encaixe-/, `a tela tinha que confirmar o arquivo (veio "${recado}")`);
 
+    /*
+     * ---- 5. o TIFF, que o navegador não abre ----
+     *
+     * Fica por ÚLTIMO de propósito: uma quarta peça mexeria na metragem e no
+     * aproveitamento conferidos acima. O que se prova aqui é o caminho — um
+     * arquivo que o `<img>` recusa entra assim mesmo, com a medida que o dpi
+     * dele manda, porque o servidor o converte antes (ver `arte-entrada.js`).
+     */
+    await (await p.$('#encaixe-files')).uploadFile(await arteTiff(pasta));
+    await esperar(8000);
+
+    const comTiff = await p.$eval('#encaixe-contagem', (n) => n.textContent);
+    assert.match(comTiff, /^4 · 4 cóp/, `o TIFF tinha que entrar como a quarta arte (veio "${comTiff}")`);
+
+    // 300 px a 150 dpi = 5,1 cm; 400 px = 6,8 cm. A medida sai do dpi do TIFF,
+    // que tem que sobreviver à conversão no servidor.
+    const linhaDoTiff = (await p.$eval('#encaixe-pecas-body', (n) => n.innerText))
+      .split('\n').map((l) => l.trim()).join(' | ');
+    assert.match(linhaDoTiff, /peca-d[^|]*\|[^|]*5,1 × 6,8 cm/,
+      `o TIFF tinha que entrar com a medida que o dpi dele manda (veio "${linhaDoTiff}")`);
+
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
-      + ` (${risco}) e o PDF foi gravado onde a tela mandou.`);
+      + ` (${risco}), o PDF foi gravado onde a tela mandou e o TIFF entrou pela conversão.`);
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();

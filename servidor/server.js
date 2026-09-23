@@ -71,6 +71,11 @@ app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixeResolverRouter);
 // frequência. Como o PDF acima, precisa vir antes do express.json geral.
 app.use("/api/cor", corRouter);
 
+// A arte que o navegador não lê — o TIFF e o CMYK sem perfil — entra por aqui
+// antes de chegar ao Encaixe. Recebe o arquivo cru, pelo mesmo motivo das
+// rotas acima. Ver o cabeçalho de `arte-entrada.js`.
+app.use("/api/arte", require("./arte-entrada"));
+
 // O PDF do risco que a tela Digitalizar achou. Linha, e só linha — não sobe
 // arte nenhuma —, então o limite dele mora dentro da própria rota, e não aqui.
 app.use("/api/risco", riscoPdfRouter);

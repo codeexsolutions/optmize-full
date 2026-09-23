@@ -7,6 +7,7 @@ import { arredondar } from "../utils/geometria";
 import { moldeParaImagem, ehArquivoDeMolde, lerMoldeVetorial } from "../motores/moldes";
 import { ehArquivoPDF, lerArteDoPDF } from "../motores/pdfParaArte";
 import { diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
+import { prepararArteParaONavegador } from "../api/arte";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
 import { assinaturaDoTrabalho,
   midiaConsumida, aproveitamentoDaMidia, bancadasOcupadas } from "../motores/encaixeMotor";
@@ -920,15 +921,27 @@ async function adicionarArquivos(files) {
           prontas[indice] = lido.pecas;
           lido.avisos.forEach((a) => recados.push(`"${file.name}": ${a}`));
         } else {
-          const cru = await lerImagemCrua(file);
+          /*
+           * O TIFF e o CMYK sem perfil passam pelo servidor ANTES da leitura:
+           * um o navegador não abre, o outro ele abre e pinta errado. O que
+           * volta é a mesma arte em sRGB, com o dpi de pé — e daqui para baixo
+           * nada sabe a diferença. Ver `api/arte.ts`.
+           */
+          const preparada = await prepararArteParaONavegador(file);
+          if (preparada.erro) recados.push(`"${file.name}": ${preparada.erro}`);
+
+          const cru = await lerImagemCrua(preparada.file);
           crus[indice] = cru;
           // `cru.img` é o bitmap que a leitura acabou de decodificar e ainda
           // está vivo: a miniatura sai dele, sem decodificar nada de novo.
           const peca = await montarPecaDaImagem(cru, null, cru.img);
           // O que o navegador vai fazer com a cor desta arte. Só lê o cabeçalho
           // do arquivo (ver src/motores/corDoArquivo.js) — não decodifica nada, e
-          // por isso não pesa na leitura.
-          peca.cor = await diagnosticoDeCorDoArquivo(file);
+          // por isso não pesa na leitura. O diagnóstico é o do arquivo que a
+          // tela VAI usar: convertida, a arte não carrega mais o risco de antes.
+          peca.cor = preparada.convertida
+            ? corDaArteConvertida(preparada)
+            : await diagnosticoDeCorDoArquivo(file);
           prontas[indice] = [peca];
           pecasComFundo.set(indice, peca);
         }
@@ -1177,10 +1190,52 @@ const CAMPO_MINI =
  * arquivos não ajuda ninguém a achar qual é. Com a imagem, quem conhece o
  * trabalho reconhece a peça de relance.
  */
+/*
+ * `avisa` separa o SELO da TIRA DE AVISOS.
+ *
+ * Os dois nasceram juntos — todo selo ia para a tira —, e a arte convertida
+ * quebrou isso: ela merece um selo (a pessoa tem o direito de saber que a arte
+ * que ela vê não é byte a byte a que ela largou), e NÃO merece entrar na tira
+ * de "podem sair com a cor diferente", porque a conversão é justamente o que
+ * consertou a cor dela.
+ *
+ * A exceção é a conversão com perfil assumido: ali a cor é um palpite
+ * educado — bom, medido, e ainda assim um palpite. Essa avisa.
+ */
 const COR_SELO = {
-  cmyk: { rotulo: "CMYK", classe: "selo-cor-cmyk" },
-  "sem-perfil": { rotulo: "sem perfil", classe: "selo-cor-perfil" },
+  cmyk: { rotulo: "CMYK", classe: "selo-cor-cmyk", avisa: true },
+  "sem-perfil": { rotulo: "sem perfil", classe: "selo-cor-perfil", avisa: true },
+  convertida: { rotulo: "convertida", classe: "selo-cor-convertida", avisa: false },
+  "perfil-assumido": { rotulo: "perfil assumido", classe: "selo-cor-perfil", avisa: true },
 };
+
+/**
+ * O que dizer de uma arte que o servidor converteu.
+ *
+ * O risco de antes (CMYK, ou arquivo que nem abria) deixou de existir: o que a
+ * tela tem na mão agora é sRGB de verdade. O que sobra é contar o que foi
+ * feito — e, quando o perfil foi assumido, dizer isso com todas as letras.
+ */
+function corDaArteConvertida(preparada) {
+  if (preparada.perfilAssumido) {
+    return {
+      risco: "perfil-assumido",
+      perfil: "perfil de impressão assumido",
+      titulo: "Convertida com um perfil assumido",
+      detalhe: "Esta arte estava em CMYK e não dizia em que perfil. O Optmize a converteu "
+        + "assumindo o perfil de impressão padrão — a cor fica muito perto da certa, mas "
+        + "quem garante é o arquivo trazer o próprio perfil.",
+    };
+  }
+  return {
+    risco: "convertida",
+    perfil: preparada.espaco === "cmyk" ? "convertida de CMYK" : "convertida para sRGB",
+    titulo: "Convertida para a cor da tela",
+    detalhe: "O navegador não lê este arquivo do jeito que ele veio. O Optmize o converteu "
+      + "no servidor, pelo perfil do próprio arquivo, e é essa arte que vai para o risco e "
+      + "para o PDF.",
+  };
+}
 
 /*
  * O SELO DE COR: UMA FAIXA NO ALTO DA LINHA, ACIMA DA MINIATURA.
