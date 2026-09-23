@@ -206,6 +206,63 @@ const ARTES = [
   ["JPEG de outra proporção", () => jpegDe(160, 120)],
 ];
 
+/**
+ * ===========================================================================
+ * A TRANSPARÊNCIA, E O QUE O ARQUIVO DIZ DE SI
+ * ===========================================================================
+ *
+ * Toda peça GIRADA vira um PNG de canvas, e canvas sempre tem canal alfa —
+ * mesmo quando a arte é opaca do primeiro ao último pixel. Isso põe no PDF uma
+ * `/SMask`: uma segunda imagem, do tamanho da arte, dizendo "nada aqui é
+ * transparente". Custa bytes e, pior, faz um arquivo declarado 1.3 usar um
+ * recurso do 1.4.
+ *
+ * As duas conferências abaixo fecham isso pelos dois lados: arte opaca não
+ * leva máscara nenhuma, e arte de verdade transparente leva a máscara E a
+ * versão que a permite.
+ */
+async function conferirATransparencia(erro) {
+  const sharp = require("sharp");
+  const L = 240;
+  const A = 320;
+  const pixels = (opaca) => {
+    const cru = Buffer.alloc(L * A * 4);
+    for (let i = 0; i < L * A; i++) {
+      cru[i * 4] = i % 255;
+      cru[i * 4 + 1] = 120;
+      cru[i * 4 + 2] = 200;
+      cru[i * 4 + 3] = opaca || i % 5 ? 255 : 0;
+    }
+    return sharp(cru, { raw: { width: L, height: A, channels: 4 } }).png().toBuffer();
+  };
+
+  const encaixe = (arte) => ({
+    larguraTecido: 160,
+    consumo: 200,
+    posicoes: [{ chave: "peca", x: 5, y: 5, largura: 40, altura: 50, bancada: 0 }],
+    buffers: new Map([["peca", arte]]),
+  });
+
+  const opaca = await gerar(encaixe(await pixels(true)));
+  const textoOpaca = opaca.bytes.toString("latin1");
+  if (textoOpaca.includes("/SMask")) {
+    erro("arte opaca: o PDF levou uma máscara suave que não serve para nada");
+  }
+
+  const transparente = await gerar(encaixe(await pixels(false)));
+  const textoTransparente = transparente.bytes.toString("latin1");
+  const versao = (textoTransparente.match(/^%PDF-(\d\.\d)/) || [])[1];
+  if (!textoTransparente.includes("/SMask")) {
+    erro("arte transparente: a máscara sumiu, e com ela a transparência da arte");
+  } else if (Number(versao) < 1.4) {
+    erro(`arte transparente: máscara num PDF ${versao}, e /SMask é do 1.4`);
+  }
+
+  process.stdout.write(`  ${"transparência".padEnd(24)} opaca: sem máscara ·`
+    + ` transparente: máscara num PDF ${versao}
+`);
+}
+
 async function conferirQueOTamanhoNaoMexe(erro) {
   let referencia = null;
   let referenciaNome = "";
@@ -291,6 +348,19 @@ async function principal() {
       erro(`usa /UserUnit mas se declara PDF ${versao} — leitor pode ignorar e imprimir fora de escala`);
     }
 
+    /*
+     * A MESMA REGRA VALE PARA A TRANSPARÊNCIA.
+     *
+     * A `/SMask` numa imagem é recurso do PDF **1.4**. Um arquivo que a usa e
+     * se declara 1.3 está mentindo sobre si, e quem paga é o RIP: uns ignoram
+     * a máscara, outros recusam o arquivo inteiro — e recusar é o melhor dos
+     * dois, porque o outro imprime errado sem avisar.
+     */
+    const temMascara = texto.includes("/SMask");
+    if (temMascara && Number(versao) < 1.4) {
+      erro(`usa /SMask mas se declara PDF ${versao} — máscara suave é recurso do 1.4`);
+    }
+
     const como = temUserUnit ? `UserUnit ${relatorio.unidade}` : "UserUnit 1";
     process.stdout.write(`  ${caso.nome.padEnd(24)} PDF ${versao} · ${como}`
       + ` · ${relatorio.paginas.length} página(s) de`
@@ -298,6 +368,7 @@ async function principal() {
   }
 
   await conferirQueOTamanhoNaoMexe((queixa) => falhas.push(queixa));
+  await conferirATransparencia((queixa) => falhas.push(queixa));
 
   console.log("");
   if (falhas.length === 0) {

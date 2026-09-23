@@ -43,6 +43,21 @@
  * nenhum, que é o pior jeito de descobrir. Por isso o documento nasce 1.6
  * quando o `/UserUnit` entra em ação, e continua 1.3 (o de maior
  * compatibilidade) quando não precisa dele.
+ *
+ * A versão e o que o arquivo usa
+ * ------------------------------
+ * A regra acima vale para tudo, e não só para a escala: **o documento declara
+ * a menor versão que dá conta do que ele usa**. São duas as coisas que obrigam
+ * a subir, e as duas mentem em silêncio se ficarem para trás:
+ *
+ *   `/UserUnit`   PDF 1.6   a escala do rolo longo
+ *   `/SMask`      PDF 1.4   a máscara de uma arte transparente
+ *
+ * A `/SMask` chegou tarde a esta lista, e o preço foi um RIP recusando o
+ * arquivo: toda peça girada vira PNG de canvas, canvas sempre tem canal alfa,
+ * e o PDF saía 1.3 carregando máscara. Hoje são duas travas — a máscara só
+ * entra quando esconde alguma coisa (ver `mascaraServe`) e, quando entra, o
+ * documento nasce 1.4 (ver `pngComAlfa`).
  */
 
 const express = require("express");
@@ -119,6 +134,10 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, re
         criadaEm: Date.now(),
         pasta: fs.mkdtempSync(path.join(os.tmpdir(), "optmize-encaixe-")),
         artes: new Map(),
+        // Quais artes CARREGAM canal alfa. Anotado aqui, com os bytes em mão,
+        // porque na hora do PDF elas já estão em disco e a pergunta custaria
+        // abrir cada arquivo de novo. Ver `pngComAlfa`.
+        comAlfa: new Set(),
       };
     } catch (erro) {
       return res.status(500).json({ error: `Não deu para guardar a arte: ${erro.message}` });
@@ -136,6 +155,9 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, re
     return res.status(500).json({ error: `Não deu para guardar a arte: ${erro.message}` });
   }
   guardadas.artes.set(chave, arquivo);
+  // Reenviar a mesma chave substitui a arte: o que valia da anterior não vale.
+  if (pngComAlfa(req.body)) guardadas.comAlfa.add(chave);
+  else guardadas.comAlfa.delete(chave);
   res.json({ ok: true, bytes: req.body.length });
 });
 
@@ -196,6 +218,25 @@ function blocosDoPng(bytes) {
   return { cabecalho, idat: Buffer.concat(idat) };
 }
 
+/**
+ * O arquivo é um PNG que carrega canal alfa?
+ *
+ * Lê só o IHDR: tipo de cor 4 (cinza com alfa) ou 6 (RGBA). É a pergunta mais
+ * barata que existe sobre transparência — 26 bytes —, e é o bastante para
+ * decidir a VERSÃO do PDF, que precisa ser escolhida antes de o documento
+ * abrir (o pdfkit escreve o `%PDF-x.y` no construtor).
+ *
+ * Note que isto é um "pode ter", não um "tem": arte girada vem sempre com
+ * canal alfa, e quase sempre opaca. Quem decide se a máscara entra de verdade
+ * é o `mascaraServe`, olhando os pixels. Declarar 1.4 e não usar máscara
+ * nenhuma é honesto — o arquivo diz do que é capaz, não do que fez.
+ */
+function pngComAlfa(bytes) {
+  if (!bytes || bytes.length < 26 || !bytes.subarray(0, 8).equals(ASSINATURA_PNG)) return false;
+  const tipoDeCor = bytes[25];
+  return tipoDeCor === 4 || tipoDeCor === 6;
+}
+
 /** PNG que dá para pôr no PDF como está: opaco, cinza ou RGB, sem entrelaçar. */
 function passaDireto(cabecalho) {
   return cabecalho && !cabecalho.entrelacado && (cabecalho.bits === 8 || cabecalho.bits === 16)
@@ -223,6 +264,34 @@ function canalDoPng(png) {
   };
 }
 
+/*
+ * ===========================================================================
+ * MÁSCARA QUE NÃO ESCONDE NADA NÃO ENTRA NO PDF
+ * ===========================================================================
+ *
+ * Toda peça GIRADA vira um PNG de canvas, e canvas SEMPRE tem canal alfa —
+ * mesmo quando a arte é opaca do primeiro ao último pixel. Levando esse alfa
+ * adiante, o PDF ganhava uma `/SMask`: uma segunda imagem, do tamanho da arte,
+ * dizendo "nada aqui é transparente".
+ *
+ * Duas coisas erradas de uma vez. A primeira é peso: uma máscara inútil por
+ * peça girada, e num trabalho de 155 artes isso é a metade das imagens do
+ * arquivo. A segunda é pior — `/SMask` é recurso do **PDF 1.4**, e este
+ * documento se declara 1.3 quando não precisa de `/UserUnit`. Um arquivo que
+ * usa o que diz não usar é um arquivo que o RIP tem o direito de recusar.
+ *
+ * Olhar os bytes é barato perto do que se economiza: o canal já vem decodificado
+ * para montar a máscara, e a varredura é um laço sobre bytes que para no
+ * primeiro pixel transparente. Quando não há nenhum, a máscara nem chega a ser
+ * comprimida — que era o passo caro.
+ */
+function mascaraServe(alfa) {
+  for (let i = 0; i < alfa.length; i++) {
+    if (alfa[i] !== 255) return true;
+  }
+  return false;
+}
+
 /**
  * Abre uma arte PNG como imagem do pdfkit: o objeto que `doc.image` aceita no
  * lugar do que `doc.openImage` devolveria (largura, altura, `embed`).
@@ -235,21 +304,28 @@ async function abrirPng(doc, bytes) {
     cor = canalDoPng(bytes);
   } else {
     // `keepIccProfile` deixa os valores de cor como estão no arquivo, que é o
-    // que o pdfkit punha no PDF; sem ele o sharp converteria para sRGB.
+    // que o pdfkit punha no PDF; sem ele o sharp converteria para sRGB — e o
+    // `extractChannel` abaixo passaria a pegar o canal errado.
     const abrir = () => sharp(bytes, { limitInputPixels: false }).keepIccProfile();
-    const { hasAlpha, channels } = await abrir().metadata();
+    const { hasAlpha, channels, width, height } = await abrir().metadata();
     // Nível 1: a compressão aqui só vive até o PDF, e cada nível acima dobra o
     // tempo para ganhar pouco. Sem perda em qualquer nível.
     const png = { compressionLevel: 1, palette: false, progressive: false };
-    const [pngCor, pngAlfa] = await Promise.all([
+    const [pngCor, alfaCru] = await Promise.all([
       abrir().removeAlpha().png(png).toBuffer(),
       // O alfa é o último canal; "alpha" no sharp é sempre o 3, e cinza com
       // alfa só tem dois. O `b-w` é obrigatório: com o perfil de cor mantido,
       // o sharp gravaria o canal repetido em RGB, e a /SMask tem de ser cinza.
-      hasAlpha ? abrir().extractChannel(channels - 1).toColourspace("b-w").png(png).toBuffer() : null,
+      //
+      // Vem CRU, e não em PNG, por causa do `mascaraServe` logo abaixo: é
+      // preciso olhar os bytes antes de decidir se vale gravar a máscara.
+      hasAlpha ? abrir().extractChannel(channels - 1).toColourspace("b-w").raw().toBuffer() : null,
     ]);
     cor = canalDoPng(pngCor);
-    if (pngAlfa) alfa = canalDoPng(pngAlfa);
+    if (alfaCru && mascaraServe(alfaCru)) {
+      alfa = canalDoPng(await sharp(alfaCru, { raw: { width, height, channels: 1 } })
+        .png(png).toBuffer());
+    }
   }
 
   return {
@@ -350,19 +426,37 @@ function paginasDoEncaixe(posicoes, consumo) {
  * rolo saírem em tamanhos diferentes por causa de um arredondamento, e esse
  * erro só aparece com o tecido já impresso.
  */
-async function montarPdf({ larguraTecido, consumo, posicoes, buffers, lerArte }, destino) {
+async function montarPdf({
+  larguraTecido, consumo, posicoes, buffers, lerArte, podeTerTransparencia,
+}, destino) {
   const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
   const maiorAlturaPt = Math.max(...paginas.map((p) => (p.fundo - p.topo) * PT_POR_CM));
   const unidade = unidadeDaPagina(larguraPt, maiorAlturaPt);
   const tamanhoDa = (pagina) => [larguraPt / unidade, ((pagina.fundo - pagina.topo) * PT_POR_CM) / unidade];
 
+  /*
+   * A VERSÃO DO FORMATO É A MENOR QUE DÁ CONTA DO QUE O ARQUIVO USA.
+   *
+   * 1.3 é a de maior compatibilidade e é onde a maioria dos encaixes cai. Duas
+   * coisas obrigam a subir, e as duas mentem em silêncio se não subirem:
+   *
+   *   /UserUnit   1.6   sem ela, o leitor pode ignorar a escala e imprimir o
+   *                     rolo no tamanho errado (ver o cabeçalho do arquivo)
+   *   /SMask      1.4   a máscara suave de uma arte transparente; sem ela, o
+   *                     RIP ignora a máscara ou recusa o arquivo
+   *
+   * Quem chama pela bancada passa `buffers`, e daí dá para olhar as artes
+   * direto; a rota passa o aviso pronto, porque lá as artes estão em disco.
+   */
+  const comAlfa = podeTerTransparencia !== undefined
+    ? podeTerTransparencia
+    : !!(buffers && [...buffers.values()].some(pngComAlfa));
+
   const doc = new PDFDocument({
     size: tamanhoDa(paginas[0]),
     margin: 0,
-    // Ver o cabeçalho do arquivo: o `/UserUnit` é do PDF 1.6, e declarar 1.3
-    // dá ao leitor o direito de ignorá-lo e imprimir fora de escala.
-    pdfVersion: unidade === 1 ? "1.3" : "1.6",
+    pdfVersion: unidade !== 1 ? "1.6" : (comAlfa ? "1.4" : "1.3"),
   });
   doc.pipe(destino);
 
@@ -525,7 +619,15 @@ router.post("/pdf", (req, res) => {
   // `montarPdf` é assíncrona (ela cede a vez para o PDF escoar). O cabeçalho já
   // foi mandado a esta altura, então não dá para responder um JSON de erro: o
   // que resta é encerrar a resposta e deixar o registro.
-  montarPdf({ larguraTecido, consumo, posicoes, lerArte }, res).catch((erro) => {
+  /*
+   * A VERSÃO DO FORMATO PRECISA SER DECIDIDA ANTES DE O DOCUMENTO ABRIR, e
+   * quem pode exigir 1.4 é a transparência. Aqui a pergunta é barata: as artes
+   * de disco já vieram carimbadas na chegada, e as de memória estão na mão.
+   */
+  const podeTerTransparencia = [...daMemoria.values()].some(pngComAlfa)
+    || (guardadas ? [...doDisco.keys()].some((chave) => guardadas.comAlfa.has(chave)) : false);
+
+  montarPdf({ larguraTecido, consumo, posicoes, lerArte, podeTerTransparencia }, res).catch((erro) => {
     console.error("[encaixe-pdf] falhou ao montar o PDF:", erro);
     res.destroy(erro);
   });
