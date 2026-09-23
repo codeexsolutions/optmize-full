@@ -2,20 +2,12 @@ const fs = require("fs");
 const path = require("path");
 const { buildXlsx } = require("./xlsxExport");
 const { queryByMachine } = require("../db/records");
-const { brDate } = require("../utils/date");
+const { brDate, durationLabel } = require("../utils/date");
 const { pastaDeDados } = require("../../caminhos");
 
 // Onde ficam as cópias de segurança geradas antes de desativar uma máquina.
 // Fora do banco de propósito: se alguém apagar o banco, a planilha continua lá.
 const EXPORT_DIR = pastaDeDados("exportado");
-
-function durationLabel(sec) {
-  sec = Math.max(0, Math.round(Number(sec || 0)));
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-  if (h) return `${h}h ${String(m).padStart(2, "0")}min`;
-  if (m) return `${m}min ${String(s).padStart(2, "0")}s`;
-  return `${s}s`;
-}
 
 // Planilha com o histórico inteiro da máquina, sem recorte de data.
 function buildMachineHistoryXlsx(machine) {

@@ -107,7 +107,7 @@ app.get(/^\/app(\/.*)?$/, (req, res) => {
 });
 
 app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
-// A tela de Macros: entrega o .bas da macro do Corel e ajuda a pô-lo lá.
+
 /*
  * A CONTA DE QUEM ESTÁ USANDO.
  *
@@ -118,6 +118,7 @@ app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
  */
 app.use("/api/sessao", require("./sessao").rotas);
 
+// A tela de Macros: entrega o .bas da macro do Corel e ajuda a pô-lo lá.
 app.use("/api/macros", macrosRouter);
 app.use("/api/moldes", moldesRouter);
 app.use("/api/projetos", projetosRouter);

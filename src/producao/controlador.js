@@ -32,6 +32,7 @@ import {
 } from "../api/encaixe";
 import { coresDePeca } from "../utils/coresDePeca";
 import { carregarImagem } from "../utils/arquivoDeImagem";
+import { respirarNaTela } from "../utils/respirar";
 import { criarEscopo } from "./escopo";
 export function montarProducao(raiz, irPara) {
 const escopo = criarEscopo(raiz);
@@ -2093,19 +2094,6 @@ function finalizarCarregamento(tipo = "concluido", mensagem = {}) {
     if (!carregamentoAtivo) encaixeCarregamento.classList.add("hidden");
   }, tipoDoCarregamento === "arquivos" ? 2200 : tipo === "concluido" ? 1100 : 1800);
 }
-
-// A preparação das silhuetas também pode ser pesada. Ceder a vez entre uma
-// peça e outra mantém o botão de parar, o andamento e o restante da tela vivos.
-const canalDaTela = new MessageChannel();
-const pausasDaTela = [];
-canalDaTela.port1.onmessage = () => {
-  const continuar = pausasDaTela.shift();
-  if (continuar) continuar();
-};
-const respirarNaTela = () => new Promise((continuar) => {
-  pausasDaTela.push(continuar);
-  canalDaTela.port2.postMessage(0);
-});
 
 escopo.ouvir(btnPararBusca, "click", () => {
   pararBusca = true;

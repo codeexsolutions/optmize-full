@@ -46,4 +46,20 @@ function weekBounds(iso) {
   return { start, end };
 }
 
-module.exports = { localIsoDate, normalizeRange, addDays, enumerateDays, brDate, weekBounds };
+// Duração em palavras: "2h 05min", "7min 30s", "12s".
+//
+// Havia duas cópias idênticas desta função, uma na planilha da máquina
+// (`services/machineExport.js`) e outra no aviso do WhatsApp
+// (`whatsapp/notifier.js`) — e é o mesmo tempo, lido pela mesma pessoa nos
+// dois lugares: se o formato mudar num, tem de mudar no outro.
+function durationLabel(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds || 0)));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h}h ${String(m).padStart(2, "0")}min`;
+  if (m) return `${m}min ${String(s).padStart(2, "0")}s`;
+  return `${s}s`;
+}
+
+module.exports = { localIsoDate, normalizeRange, addDays, enumerateDays, brDate, weekBounds, durationLabel };

@@ -1,6 +1,7 @@
 const { printEvents } = require("../services/printEvents");
 const { getSettings, isReady } = require("./settings");
 const { sendText, getStatus } = require("./client");
+const { durationLabel } = require("../utils/date");
 
 // As máquinas falam em ritmos diferentes: a 02 avisa o início pelo log ao
 // vivo e o fim pelo CSV; a 04 manda percentual a cada segundo; a 06/07
@@ -47,16 +48,6 @@ function machineAllowed(settings, machineId) {
 
 function fmt(n, digits = 2) {
   return Number(n || 0).toFixed(digits).replace(".", ",");
-}
-
-function durationLabel(seconds) {
-  const total = Math.max(0, Math.round(Number(seconds || 0)));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  if (h) return `${h}h ${String(m).padStart(2, "0")}min`;
-  if (m) return `${m}min ${String(s).padStart(2, "0")}s`;
-  return `${s}s`;
 }
 
 function nowLabel() {

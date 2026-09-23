@@ -45,6 +45,7 @@
 
 import { PDF_PT_POR_CM } from "./moldes";
 import { DPI_PREVIA } from "./resolucaoDaArte";
+import { paraBlob } from "../utils/arquivoDeImagem";
 
 /*
  * O pdf.js faz a leitura num worker. Ele é montado uma vez só, na primeira vez
@@ -82,13 +83,6 @@ function carregarPdfjs() {
  */
 const FOLGA_DE_RESOLUCAO = 1.3;
 const tetoPadrao = (cm) => Math.max(600, Math.round((cm / 2.54) * DPI_PREVIA * FOLGA_DE_RESOLUCAO));
-
-/** Canvas para blob, que é `toBlob` com cara de promessa. */
-function paraBlob(canvas, tipo) {
-  return new Promise((pronto, falhou) => {
-    canvas.toBlob((b) => (b ? pronto(b) : falhou(new Error("não consegui gravar a arte desenhada"))), tipo);
-  });
-}
 
 /** O arquivo começa como PDF? Olha a assinatura, não o nome. */
 async function pareceDePdf(file) {

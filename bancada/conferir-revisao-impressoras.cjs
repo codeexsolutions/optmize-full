@@ -70,7 +70,10 @@ async function conferirAvisoDeCancelamento() {
     "../services/printEvents": { printEvents: eventos },
     "./settings": { getSettings: () => configuracao, isReady: () => true },
     "./client": { getStatus: () => ({ connected: true }),
-      sendText: async (_grupo, texto) => { mensagens.push(texto); } }
+      sendText: async (_grupo, texto) => { mensagens.push(texto); } },
+    // O de VERDADE, e não um de mentira: o que esta conferência lê é o texto
+    // que chega ao WhatsApp, e a duração faz parte dele.
+    "../utils/date": require("../servidor/impressoras/utils/date")
   }, { setTimeout(fn) { temporizadores.push(fn); return { unref() {} }; } });
   notifier.startWhatsappNotifier();
   eventos.emit("print-progress", { machineId: "printexp", task: "Cancelado",

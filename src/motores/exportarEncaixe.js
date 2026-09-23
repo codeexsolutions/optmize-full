@@ -8,10 +8,7 @@ import { jpegSeguroParaPdf } from "./jpegParaPdf";
 import { tirarFundoDosPixels } from "./encaixeMascara";
 import { lerArteDoPDF } from "./pdfParaArte";
 import { DPI_PDF } from "./resolucaoDaArte";
-
-export const paraBlob = (canvas, tipo = "image/png") =>
-  new Promise((pronto, falhou) => canvas.toBlob(
-    blob => blob ? pronto(blob) : falhou(new Error("A arte excedeu a capacidade de imagem do navegador.")), tipo));
+import { paraBlob } from "../utils/arquivoDeImagem";
 
 async function fonteDaPeca(peca) {
   if (peca.pdfOriginal) {
