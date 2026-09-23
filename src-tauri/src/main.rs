@@ -282,31 +282,39 @@ const PRIMEIRA_CHECAGEM: Duration = Duration::from_secs(15);
 /// nenhum corpo, nenhuma consulta ao Storage, nenhum byte de instalador. É uma
 /// pergunta a cada cinco minutos, não um download.
 ///
-/// E a caixa de perguntar NÃO volta a cada rodada: quem responde "agora não"
-/// não é interrompido de novo pela mesma versão — ver `ULTIMA_RECUSADA`.
+/// Nenhuma dessas rodadas interrompe ninguém: não há caixa de perguntar. A
+/// versão nova entra na próxima abertura — ver `procurar_atualizacao`.
 const INTERVALO_CHECAGEM: Duration = Duration::from_secs(5 * 60);
 
-/// A versão que a pessoa dispensou.
+/// Procura versão nova e instala, sem perguntar nada a ninguém.
 ///
-/// Sem isto, perguntar de cinco em cinco minutos seria perseguição: quem
-/// clicou "agora não" no meio de um encaixe levaria a mesma caixa na cara doze
-/// vezes por hora, e a terceira já seria motivo para desligar a atualização
-/// automática no grito.
+/// ---------------------------------------------------------------------------
+/// NÃO HÁ MAIS CAIXA DE "ATUALIZAR AGORA"
+/// ---------------------------------------------------------------------------
 ///
-/// Guardada a VERSÃO, e não um horário: dispensar a 1.1.160 cala o programa
-/// sobre a 1.1.160 — e só sobre ela. A 1.1.161 pergunta de novo, porque é
-/// outra decisão. E, de qualquer forma, a próxima abertura do programa instala
-/// sozinha o que estiver pendente, sem caixa nenhuma.
-static ULTIMA_RECUSADA: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
-
-/// Procura versão nova e instala.
+/// Havia, e ela perguntava a cada versão nova enquanto o programa estivesse
+/// aberto. Saiu porque uma caixa modal no meio do expediente é a pior forma de
+/// dar uma boa notícia: ela para o que a pessoa estava fazendo para falar de
+/// uma coisa que não é problema dela.
 ///
-/// `perguntar` decide se a pessoa é consultada antes. É `false` na primeira
-/// rodada, logo depois de abrir, e `true` de duas em duas horas dali em diante
-/// — o porquê está em `cuidar_das_atualizacoes`.
+/// O programa se vira sozinho, e a regra cabe em uma linha: **a versão nova
+/// entra na próxima vez que o Optmize abrir.**
 ///
-/// Devolve `Ok(true)` quando a atualização foi instalada e o programa vai
-/// reiniciar — aí não há por que continuar perguntando.
+/// ---------------------------------------------------------------------------
+/// POR QUE NÃO INSTALAR NA HORA, COM O PROGRAMA ABERTO
+/// ---------------------------------------------------------------------------
+///
+/// Porque instalar REINICIA o programa, e reiniciar no meio de um encaixe perde
+/// o que está na tela. Sem caixa para perguntar, instalar na hora seria decidir
+/// por quem está trabalhando — e decidir errado justamente na gráfica
+/// movimentada, que é a que tem mais a perder e a que mais paga.
+///
+/// Quem fecha o Optmize no fim do expediente (a maioria) abre atualizado no dia
+/// seguinte, sem ver nada. Quem nunca fecha continua na versão instalada até
+/// fechar — e é por isso que a próxima peça deste desenho é um aviso DISCRETO
+/// na barra, sem modal, dizendo que basta fechar e abrir.
+///
+/// Devolve `Ok(true)` quando instalou e o programa vai reiniciar.
 ///
 /// A CONFERÊNCIA DA ASSINATURA É DO PLUGIN, não daqui. Ele compara o que baixou
 /// com a `pubkey` do `tauri.conf.json` e recusa o que não bate. É por isso que
@@ -315,88 +323,37 @@ static ULTIMA_RECUSADA: std::sync::Mutex<Option<String>> = std::sync::Mutex::new
 /// deste binário.
 fn procurar_atualizacao(
     app: &tauri::AppHandle,
-    perguntar: bool,
+    instalar: bool,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
     use tauri_plugin_updater::UpdaterExt;
 
     let Some(atualizacao) = tauri::async_runtime::block_on(app.updater()?.check())? else {
         return Ok(false); // nada novo — o caso de quase sempre
     };
 
-    /*
-     * JÁ DISPENSARAM ESTA VERSÃO? Então não se pergunta de novo.
-     *
-     * A checagem é de cinco em cinco minutos; a pergunta, uma por versão.
-     * Sem esta porta, quem responde "agora não" seria interrompido doze vezes
-     * por hora pela mesma caixa.
-     */
-    if perguntar {
-        let recusada = ULTIMA_RECUSADA.lock().unwrap();
-        if recusada.as_deref() == Some(atualizacao.version.as_str()) {
-            return Ok(false);
-        }
-    }
-
-    /*
-     * NA ABERTURA, INSTALA SEM PERGUNTAR.
-     *
-     * A pergunta existe porque reiniciar perde o que está na tela. Recém-aberto,
-     * não há nada na tela para perder — e uma pergunta feita nesse instante só
-     * adia a atualização para a próxima vez em que alguém disser "agora não".
-     *
-     * O instalador do Windows é `passive` (ver `tauri.conf.json`): mostra a
-     * própria barra de progresso e não pede nada a ninguém. Quem abriu o
-     * programa vê o arranque virar uma instalação curta e o programa voltar já
-     * atualizado.
-     */
-    if !perguntar {
-        tauri::async_runtime::block_on(atualizacao.download_and_install(|_, _| {}, || {}))?;
-        app.restart();
-    }
-
-    /*
-     * PERGUNTA, não instala por conta própria.
-     *
-     * Atualizar reinicia o programa, e reiniciar no meio de um encaixe perde o
-     * que estava na tela. Quem está no meio de um trabalho precisa poder dizer
-     * "depois" — e vai poder dizer de novo daqui a duas horas, que é o laço
-     * chamando outra vez. Uma atualização que interrompe o serviço do cliente
-     * é pior que uma que chega uma tarde mais tarde.
-     *
-     * E ESTA CAIXA NÃO MOSTRA MAIS AS NOTAS DA VERSÃO.
-     *
-     * Elas eram os títulos dos commits desde o lançamento anterior — texto
-     * escrito por quem programa, para quem programa. Na tela de uma gráfica
-     * viravam frases como "o lançamento hospeda o instalador na release do
-     * GitHub": ninguém do outro lado sabe o que é uma release, e a frase só
-     * fazia a atualização parecer coisa de outro mundo. O que a pessoa precisa
-     * saber cabe em duas linhas: há versão nova, e atualizar reabre o
-     * programa. O detalhe continua no histórico, onde ele serve para alguma
-     * coisa.
-     */
-    let aceitou = app
-        .dialog()
-        .message(format!(
-            "A versão {} do Optimize está pronta.\n\nAtualizar agora leva alguns segundos e reabre o programa.",
+    if !instalar {
+        /*
+         * COM O PROGRAMA ABERTO, SÓ ANOTA.
+         *
+         * A linha vai para o console (visível no build de desenvolvimento) e
+         * serve de gancho para o aviso discreto na barra. Instalar aqui
+         * derrubaria o trabalho de quem está na tela.
+         */
+        println!(
+            "[atualizacao] versão {} disponível — entra na próxima abertura",
             atualizacao.version
-        ))
-        .title("Atualização disponível")
-        .buttons(MessageDialogButtons::OkCancelCustom(
-            "Atualizar agora".to_string(),
-            "Agora não".to_string(),
-        ))
-        .blocking_show();
-
-    if !aceitou {
-        // Cala a caixa para ESTA versão. A próxima pergunta é de outra versão,
-        // ou da próxima vez que o programa abrir — que instala sem perguntar.
-        *ULTIMA_RECUSADA.lock().unwrap() = Some(atualizacao.version.clone());
+        );
         return Ok(false);
     }
 
-    // Baixa e roda o instalador. Os dois fechamentos são o progresso e o fim do
-    // download; não há barra para alimentar, então ficam vazios de propósito.
+    /*
+     * NA ABERTURA, INSTALA CALADA.
+     *
+     * Não há nada na tela para perder, e o instalador do Windows é `passive`
+     * (ver `tauri.conf.json`): mostra a própria barra de progresso e não pede
+     * nada a ninguém. Quem abriu o programa vê o arranque virar uma instalação
+     * curta e o programa voltar já atualizado.
+     */
     tauri::async_runtime::block_on(atualizacao.download_and_install(|_, _| {}, || {}))?;
 
     /*
@@ -412,10 +369,9 @@ fn procurar_atualizacao(
 
 /// Põe a checagem para rodar em segundo plano, para sempre.
 ///
-/// Numa thread própria e não numa tarefa assíncrona: a caixa de pergunta é
-/// modal e bloqueia quem a mostra até alguém responder. Bloquear uma thread do
-/// runtime assíncrono do Tauri por cinco minutos, enquanto a pessoa está no
-/// banheiro, seguraria tudo o mais que passa por ele.
+/// Numa thread própria e não numa tarefa assíncrona: a checagem e a instalação
+/// bloqueiam quem as chama, e segurar uma thread do runtime assíncrono do Tauri
+/// enquanto 96 MB de instalador descem seguraria tudo o mais que passa por ele.
 ///
 /// ---------------------------------------------------------------------------
 /// A PRIMEIRA RODADA NÃO PERGUNTA; AS SEGUINTES, SIM
@@ -432,24 +388,32 @@ fn procurar_atualizacao(
 ///
 ///   COM O PROGRAMA ABERTO HÁ HORAS: não pode. Ali existe trabalho na tela, e
 ///   uma atualização que interrompe o serviço do cliente é pior que uma que
-///   chega meia hora mais tarde. Continua perguntando — uma vez por versão,
-///   não uma vez por checagem.
+///   chega no dia seguinte. Não instala e não pergunta: espera o programa
+///   fechar.
 fn cuidar_das_atualizacoes(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(PRIMEIRA_CHECAGEM);
 
         // A rodada da abertura: instala calada. Se falhar — sem internet, o
-        // servidor fora do ar —, cai no laço de baixo e tenta de novo daqui a
-        // cinco minutos, aí perguntando.
-        match procurar_atualizacao(&app, false) {
+        // servidor fora do ar —, cai no laço de baixo, que volta a olhar de
+        // cinco em cinco minutos.
+        match procurar_atualizacao(&app, true) {
             Ok(true) => return,
             Ok(false) => {}
             Err(erro) => eprintln!("[atualizacao] {erro}"),
         }
 
+        /*
+         * O LAÇO OLHA, E NÃO INSTALA.
+         *
+         * Com o programa aberto há horas existe trabalho na tela, e instalar
+         * significa reiniciar. O que ele faz é saber que há versão nova —
+         * para o aviso discreto da barra, e para o log de quem está
+         * diagnosticando por telefone.
+         */
         loop {
             std::thread::sleep(INTERVALO_CHECAGEM);
-            match procurar_atualizacao(&app, true) {
+            match procurar_atualizacao(&app, false) {
                 // Instalou: o `restart()` acima não devolve, então isto não
                 // chega a acontecer — fica pelo compilador e por quem lê.
                 Ok(true) => return,
@@ -473,6 +437,15 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        /*
+         * O PLUGIN DE DIÁLOGO CONTINUA REGISTRADO, e de propósito.
+         *
+         * A única caixa nativa que existia era a de atualizar, e ela saiu. O
+         * plugin fica porque é ele que serve `open`/`save` — o seletor de
+         * arquivo que uma tela vai pedir no dia em que precisar —, e tirá-lo
+         * para economizar alguns KB significaria devolvê-lo (e mexer nas
+         * capabilities) na primeira vez que alguém quiser escolher uma pasta.
+         */
         .plugin(tauri_plugin_dialog::init())
         .manage(Servidor(processo.clone()))
         .setup(move |app| {

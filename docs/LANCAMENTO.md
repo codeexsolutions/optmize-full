@@ -8,7 +8,7 @@ push na main  →  GitHub: compila e assina → hospeda no GitHub → publica �
                  GitHub: confere (ao lado, sem atrasar o lançamento)
                                                               ↓
                      quem REABRE o programa se atualiza sozinho, 15 s depois
-                     quem está com ele aberto é perguntado a cada 5 min
+                     quem está com ele aberto continua na versão instalada
 ```
 
 Quem faz isso é `.github/workflows/lancar.yml`, nas máquinas do GitHub
@@ -31,16 +31,18 @@ Onde o tempo de um lançamento fica, medido na versão 1.1.160:
 | Dependências | 1 min 32 s |
 | Resto (checkout, Node, Rust, cache, publicar, etiqueta) | ~1 min |
 
-**A rodada da abertura instala sozinha; as seguintes perguntam.** São dois
+**A rodada da abertura instala sozinha; as seguintes não perguntam nada.** São dois
 momentos com respostas diferentes para "posso reiniciar agora?": recém-aberto
-não há encaixe na tela para perder, e perguntar ali só faria a loja ficar mais
-um dia na versão velha por um "agora não" de reflexo; com o programa aberto há
-horas existe trabalho na tela, e uma atualização que interrompe o serviço do
-cliente é pior que uma que chega meia hora mais tarde (ver
-`cuidar_das_atualizacoes`, em `src-tauri/src/main.rs`).
+não há encaixe na tela para perder; com o programa aberto há horas existe
+trabalho na tela, e uma atualização que interrompe o serviço do cliente é pior
+que uma que chega no dia seguinte (ver `cuidar_das_atualizacoes`, em
+`src-tauri/src/main.rs`).
 
-E a caixa não volta a cada cinco minutos: quem diz "agora não" não é
-interrompido de novo pela mesma versão.
+**Não existe mais caixa de "Atualizar agora".** Ela parava o expediente para
+dar uma boa notícia. A regra agora cabe numa linha: a versão nova entra na
+próxima vez que o Optmize abrir. Quem fecha no fim do dia abre atualizado sem
+ver nada; quem nunca fecha continua na versão instalada até fechar — e é por
+isso que a próxima peça é um aviso DISCRETO na barra, sem modal.
 
 Os 15 s de espera antes da primeira checagem não são só para não disputar com
 o arranque: **eles são a trava** que prova que a versão instalada abre. Sem
