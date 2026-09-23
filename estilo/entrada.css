@@ -485,6 +485,27 @@
 }
 
 /*
+ * OS PONTINHOS DO CARROSSEL DOS PLANOS (react-alice-carousel).
+ *
+ * A folha da biblioteca deixa 30px de margem em cima e 20px entre pontos —
+ * números de um carrossel de banner de loja, que aqui empurravam o botão de
+ * continuar para fora da vista e espalhavam quatro pontos por meia tela.
+ *
+ * O desenho de cada ponto é nosso (`renderDotsItem`, em `CriarConta.tsx`), e
+ * por isso a regra do `:not(.__custom)` da biblioteca não alcança nada aqui:
+ * o que sobra para ajustar é a caixa em volta.
+ */
+.alice-carousel .alice-carousel__dots {
+  margin: 12px 0 0;
+  display: flex;
+  justify-content: center;
+}
+
+.alice-carousel .alice-carousel__dots > li {
+  display: flex;
+}
+
+/*
  * O BRILHO ATRÁS DA MARCA, na porta.
  *
  * O painel web tem um halo que respira atrás do logotipo, feito com
