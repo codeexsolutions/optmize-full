@@ -6,7 +6,7 @@
 import { arredondar } from "../utils/geometria";
 import { moldeParaImagem, ehArquivoDeMolde, lerMoldeVetorial } from "../motores/moldes";
 import { ehArquivoPDF, lerArteDoPDF } from "../motores/pdfParaArte";
-import { diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
+import { COR_CMYK, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
 import { prepararArteParaONavegador } from "../api/arte";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
 import { assinaturaDoTrabalho,
@@ -942,6 +942,20 @@ async function adicionarArquivos(files) {
           peca.cor = preparada.convertida
             ? corDaArteConvertida(preparada)
             : await diagnosticoDeCorDoArquivo(file);
+          /*
+           * O ARQUIVO COMO ELE CHEGOU FICA GUARDADO.
+           *
+           * A peça passa a carregar a arte convertida, e é ela que vai para a
+           * tela e para o PDF. Mas o botão da cor direta precisa dos QUATRO
+           * CANAIS, que só existem no arquivo original — converter de novo a
+           * partir do convertido seria converter o que já perdeu o CMYK.
+           *
+           * Guardar a referência não custa memória: o `File` é um ponteiro
+           * para o arquivo em disco, e não os bytes dele.
+           */
+          peca.arquivoDeOrigem = file;
+          peca.espacoDeOrigem = preparada.espaco || "";
+          peca.corDireta = false;
           prontas[indice] = [peca];
           pecasComFundo.set(indice, peca);
         }
@@ -1383,6 +1397,17 @@ function renderPecasEncaixe() {
           <svg class="size-3.5" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#rotate-cw" /></svg>
           Girar a arte 90°${rotacaoBaseDe(peca) ? ` <span class="font-mono text-tinta-apagada">· girada ${rotacaoBaseDe(peca)}°</span>` : ""}
         </button>
+        ${ehDeCmyk(peca) ? `
+        <!-- A cor direta, do jeito do Corel. Só aparece em arte que veio de
+             CMYK: é o K dela que a conta usa, e em arte já RGB não há o que
+             converter. Ver "A CONVERSÃO DIRETA", em servidor/arte-entrada.js. -->
+        <button type="button" data-cor-direta="${peca.id}" aria-pressed="${peca.corDireta ? "true" : "false"}"
+                aria-label="Cor direta na arte de ${escapeHtml(peca.nome)}, como o CorelDRAW converte"
+                title="O preto do CMYK volta preto de verdade. Em troca, tom escuro de foto escurece mais."
+                class="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded border px-2 py-1 text-[0.72rem] transition-colors ${peca.corDireta ? "border-ambar text-ambar" : "border-linha text-tinta hover:border-ambar hover:text-ambar"}">
+          <svg class="size-3.5" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#droplet" /></svg>
+          Cor direta${peca.corDireta ? ` <span class="font-mono text-tinta-apagada">· ligada</span>` : ""}
+        </button>` : ""}
         <span class="mt-1.5 block font-mono text-[9px] text-tinta-apagada">${peca.origem || `${peca.pxW} × ${peca.pxH} px`}${peca.ocupacao != null ? ` · ${Math.round(peca.ocupacao * 100)}% da caixa` : ""}</span>
       </div>
     `;
@@ -1470,6 +1495,69 @@ escopo.ouvir(encaixePecasBody, "input", (e) => {
     atualizarPainelDoTrabalho();
   }
 });
+
+/**
+ * A arte desta peça veio de CMYK?
+ *
+ * Só essas ganham o botão da cor direta: a conta do Corel usa o canal do preto,
+ * e arte que já nasceu em RGB não tem canal nenhum para usar. O diagnóstico de
+ * cor já respondeu isso na entrada — seja porque a arte foi convertida
+ * (`espaco` "cmyk"), seja porque ela é CMYK que o navegador abriu sozinho.
+ */
+function ehDeCmyk(peca) {
+  if (peca.corDireta) return true;
+  if (peca.espacoDeOrigem === "cmyk") return true;
+  return !!(peca.cor && (peca.cor.risco === COR_CMYK
+    || /cmyk/i.test(peca.cor.perfil || "")));
+}
+
+/**
+ * Liga e desliga a cor direta da peça — a conversão que o CorelDRAW faz.
+ *
+ * A arte é REFEITA a partir do arquivo como ele chegou (`arquivoDeOrigem`),
+ * porque é lá que os quatro canais ainda existem: reconverter a partir da arte
+ * que já está na tela seria converter o que perdeu o CMYK no caminho.
+ *
+ * Tudo o que veio da arte é trocado junto — o bitmap, o endereço, a miniatura e
+ * o arquivo que vai para o PDF —, e o que é da PEÇA fica: medida, quantidade,
+ * giro, grupo. Quem mexe em cor não está mexendo em produção.
+ */
+async function alternarCorDireta(id) {
+  const peca = pecasEncaixe.find((p) => p.id === id);
+  if (!peca || !peca.arquivoDeOrigem) return;
+
+  const ligando = !peca.corDireta;
+  const botao = encaixePecasBody.querySelector(`[data-cor-direta="${id}"]`);
+  if (botao) { botao.disabled = true; botao.textContent = "Convertendo…"; }
+
+  try {
+    const preparada = await prepararArteParaONavegador(peca.arquivoDeOrigem, { direta: ligando });
+    if (preparada.erro) {
+      mostrarErroEncaixe(`"${peca.nome}": ${preparada.erro}`);
+      return;
+    }
+
+    const cru = await lerImagemCrua(preparada.file);
+    peca.img?.close?.();
+    if (peca.src && peca.src.startsWith("blob:")) URL.revokeObjectURL(peca.src);
+    peca.img = cru.img;
+    peca.src = cru.endereco;
+    peca.arquivoOriginal = preparada.file;
+    peca.miniatura = miniaturaDaArte(cru.img);
+    peca.corDireta = ligando && preparada.direta;
+    peca.cor = preparada.convertida ? corDaArteConvertida(preparada) : peca.cor;
+    // A silhueta sai dos pixels, e os pixels mudaram: o contorno é refeito no
+    // próximo encaixe.
+    peca._cacheMascaras = null;
+    peca.semFundo = null;
+  } catch (erro) {
+    mostrarErroEncaixe(`"${peca.nome}": ${erro.message}`);
+  } finally {
+    renderPecasEncaixe();
+    const gaveta = encaixePecasBody.querySelector(`[data-detalhes="${id}"]`);
+    if (gaveta) gaveta.classList.remove("hidden");
+  }
+}
 
 /**
  * Gira a peça 90° no sentido do relógio, ANTES do encaixe.
@@ -1665,6 +1753,12 @@ escopo.ouvir(encaixePecasBody, "click", (e) => {
    * `closest` em vez de `e.target.dataset`: o × é texto hoje, mas no dia em que
    * virar um ícone o clique vai cair no `<svg>` de dentro e o `dataset` some.
    */
+  const corDireta = e.target.closest("[data-cor-direta]");
+  if (corDireta) {
+    void alternarCorDireta(Number(corDireta.dataset.corDireta));
+    return;
+  }
+
   const tirar = e.target.closest("[data-del-peca]");
   if (tirar) {
     tirarPecaDaLista(tirar.dataset.delPeca);

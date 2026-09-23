@@ -136,18 +136,87 @@ function ehFormatoDoNavegador(formato) {
     || formato === "gif" || formato === "webp" || formato === "bmp";
 }
 
+/*
+ * ===========================================================================
+ * A CONVERSÃO DIRETA — a que o CorelDRAW faz
+ * ===========================================================================
+ *
+ * O caminho do perfil acerta a COR e erra o PRETO. Um `K` cheio volta como
+ * `40,40,38`: colorimetricamente honesto (é a cor que aquela tinta tem no
+ * papel) e, na prensa, um cinza sujo onde o cliente aprovou preto.
+ *
+ * Quem imprime pediu o contrário, e descreveu bem: "a mesma cor, só trocando
+ * para RGB, igual o Corel faz". Isso é a conta aritmética, sem perfil nenhum —
+ * cada canal multiplicado pelo que o preto deixa passar:
+ *
+ *   R = 255 × (1 − C) × (1 − K)
+ *   G = 255 × (1 − M) × (1 − K)
+ *   B = 255 × (1 − Y) × (1 − K)
+ *
+ * Com `K` cheio, o resultado é zero. Sempre. Medido num arquivo de teste,
+ * contra a travessia do perfil:
+ *
+ *   preto       CMYK 38,0,133,246   direta 8,9,4      perfil 40,40,38
+ *   vermelho    CMYK 0,236,239,17   direta 238,18,15  perfil lavado
+ *   branco      CMYK 0,0,0,0        direta 255,255,255
+ *
+ * A CONTRAPARTIDA, e é ela que faz disto uma escolha por peça e não o padrão:
+ * como o K multiplica tudo, tom escuro DESABA para perto do preto. No mesmo
+ * teste, um azul-marinho (`104,120,89,231`) virou `14,13,16` — quase preto. Em
+ * logotipo e texto isso é exatamente o que se quer; em foto com sombra, é
+ * perder a sombra.
+ */
+function cmykDireto(cmyk, largura, altura) {
+  const rgb = Buffer.alloc(largura * altura * 3);
+  for (let i = 0, j = 0; i < cmyk.length; i += 4, j += 3) {
+    const semPreto = 255 - cmyk[i + 3];
+    rgb[j] = ((255 - cmyk[i]) * semPreto) / 255;
+    rgb[j + 1] = ((255 - cmyk[i + 1]) * semPreto) / 255;
+    rgb[j + 2] = ((255 - cmyk[i + 2]) * semPreto) / 255;
+  }
+  return rgb;
+}
+
 /**
  * Converte, se precisar.
  *
- * Devolve `{ bytes, tipo, convertida, espaco, perfil, perfilAssumido, dpi }`.
- * `convertida: false` devolve os MESMOS bytes que chegaram — quem já está bom
- * não é recomprimido, porque recomprimir arte de produção custa qualidade e
- * não melhora nada.
+ * Devolve `{ bytes, tipo, convertida, direta, espaco, perfil, perfilAssumido,
+ * dpi }`. `convertida: false` devolve os MESMOS bytes que chegaram — quem já
+ * está bom não é recomprimido, porque recomprimir arte de produção custa
+ * qualidade e não melhora nada.
+ *
+ * `direta` liga a conversão do Corel, explicada logo acima. Ela é pedida pela
+ * tela, peça por peça, e nunca é o padrão.
  */
-async function prepararArte(entrada) {
+async function prepararArte(entrada, { direta = false } = {}) {
   const meta = await sharp(entrada).metadata();
   const espaco = meta.space || "";
   const precisa = !ehFormatoDoNavegador(meta.format) || espaco === "cmyk";
+
+  /*
+   * A conversão direta acontece ANTES de tudo, e só faz sentido em CMYK: é o
+   * `K` que ela usa. Arte que já está em RGB não tem o que converter, e volta
+   * intacta — quem pediu a direta numa arte dessas não recebe estrago nenhum.
+   */
+  if (direta && espaco === "cmyk") {
+    const { data, info } = await sharp(entrada, { limitInputPixels: false })
+      .toColourspace("cmyk").raw().toBuffer({ resolveWithObject: true });
+    const rgb = cmykDireto(data, info.width, info.height);
+    const bytes = comDpiNoJfif(await sharp(rgb, {
+      raw: { width: info.width, height: info.height, channels: 3 },
+    }).withMetadata(meta.density ? { density: meta.density } : {})
+      .jpeg({ quality: QUALIDADE }).toBuffer(), meta.density);
+    return {
+      bytes,
+      tipo: "image/jpeg",
+      convertida: true,
+      direta: true,
+      espaco,
+      perfil: null,
+      perfilAssumido: false,
+      dpi: meta.density || null,
+    };
+  }
 
   if (!precisa) {
     return {
@@ -241,7 +310,7 @@ router.post("/preparar", express.raw({ limit: TETO, type: () => true }), async (
 
   let pronta;
   try {
-    pronta = await prepararArte(req.body);
+    pronta = await prepararArte(req.body, { direta: req.query.direta === "1" });
   } catch (erro) {
     /*
      * Aqui caem PSD, EPS, AI e o que mais o libvips não abrir — e também o
@@ -260,11 +329,12 @@ router.post("/preparar", express.raw({ limit: TETO, type: () => true }), async (
   res.setHeader("X-Arte-Convertida", pronta.convertida ? "1" : "0");
   res.setHeader("X-Arte-Espaco", pronta.espaco || "");
   res.setHeader("X-Arte-Perfil-Assumido", pronta.perfilAssumido ? "1" : "0");
+  res.setHeader("X-Arte-Direta", pronta.direta ? "1" : "0");
   if (pronta.dpi) res.setHeader("X-Arte-Dpi", String(pronta.dpi));
   // A tela lê estes cabeçalhos; sem isto o `fetch` não os enxerga quando a
   // resposta vem de outra origem.
   res.setHeader("Access-Control-Expose-Headers",
-    "X-Arte-Convertida, X-Arte-Espaco, X-Arte-Perfil-Assumido, X-Arte-Dpi");
+    "X-Arte-Convertida, X-Arte-Espaco, X-Arte-Perfil-Assumido, X-Arte-Direta, X-Arte-Dpi");
   res.send(pronta.bytes);
 });
 

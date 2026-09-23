@@ -108,9 +108,26 @@ async function artesDeTeste(pasta) {
 async function arteTiff(pasta) {
   const sharp = require('sharp');
   const arquivo = path.join(pasta, 'peca-d.tif');
-  await sharp({ create: { width: 300, height: 400, channels: 3, background: { r: 200, g: 60, b: 40 } } })
-    .withMetadata({ density: 150 }).toColourspace('cmyk').tiff().toFile(arquivo);
-  return arquivo;
+  /*
+   * O PERFIL É O QUE FAZ O ARQUIVO SER CMYK DE VERDADE.
+   *
+   * Sem ele o sharp grava o TIFF em RGB, por mais que se peça `cmyk` — e aí a
+   * arte serve para provar que o navegador não abre TIFF, mas não para provar
+   * nada sobre cor. Com ele, o arquivo tem os quatro canais, e a peça ganha o
+   * botão da cor direta.
+   *
+   * A máquina que não tiver o perfil ainda roda a conferência: o TIFF entra
+   * igual, e a parte da cor é pulada em vez de reprovar por um arquivo que
+   * falta no Windows.
+   */
+  const perfil = 'C:/Windows/System32/spool/drivers/color/RSWOP.icm';
+  const temPerfil = fs.existsSync(perfil);
+  const base = sharp({ create: { width: 300, height: 400, channels: 3, background: { r: 200, g: 60, b: 40 } } });
+  await (temPerfil
+    ? base.withMetadata({ icc: perfil, density: 150 })
+    : base.withMetadata({ density: 150 })
+  ).toColourspace('cmyk').tiff().toFile(arquivo);
+  return { arquivo, ehCmyk: temPerfil };
 }
 
 async function principal() {
@@ -311,7 +328,8 @@ async function principal() {
      * arquivo que o `<img>` recusa entra assim mesmo, com a medida que o dpi
      * dele manda, porque o servidor o converte antes (ver `arte-entrada.js`).
      */
-    await (await p.$('#encaixe-files')).uploadFile(await arteTiff(pasta));
+    const tiff = await arteTiff(pasta);
+    await (await p.$('#encaixe-files')).uploadFile(tiff.arquivo);
     await esperar(8000);
 
     const comTiff = await p.$eval('#encaixe-contagem', (n) => n.textContent);
@@ -325,7 +343,53 @@ async function principal() {
       `o TIFF tinha que entrar com a medida que o dpi dele manda (veio "${linhaDoTiff}")`);
 
     /*
-     * ---- 6. o × tira a peça da lista ----
+     * ---- 6. a cor direta, do jeito do Corel ----
+     *
+     * O TIFF que acabou de entrar veio de CMYK, então ele é a peça que ganha o
+     * botão. O que se confere aqui é o CAMINHO inteiro: o clique manda a arte
+     * de volta ao servidor, ela volta convertida pela conta do Corel, e a peça
+     * troca de arte sem perder o que é dela.
+     *
+     * O preto é conferido nos PIXELS, e não no rótulo do botão: a arte de
+     * teste é escura, e pela travessia do perfil ela volta lavada. Se o clique
+     * não tivesse efeito nenhum, o rótulo mudaria do mesmo jeito.
+     */
+    if (!tiff.ehCmyk) {
+      console.log('  (sem o perfil de impressão nesta máquina: a cor direta foi pulada)');
+    } else {
+      // A gaveta da peça abre primeiro: o botão mora dentro dela, e texto
+      // escondido não aparece no `innerText`.
+      await p.evaluate(() => {
+        const setas = [...document.querySelectorAll('[data-abrir-peca]')];
+        setas[setas.length - 1].click();
+      });
+      await esperar(400);
+      assert.match(await p.$eval('#encaixe-pecas-body', (n) => n.innerText), /Cor direta/,
+        'a peça que veio de CMYK tinha que oferecer a cor direta');
+
+      await p.evaluate(() => {
+        const botoes = [...document.querySelectorAll('[data-cor-direta]')];
+        botoes[botoes.length - 1].click();
+      });
+      await esperar(8000);
+
+      const ligada = await p.evaluate(() => {
+        const botoes = [...document.querySelectorAll('[data-cor-direta]')];
+        const ultimo = botoes[botoes.length - 1];
+        return ultimo ? ultimo.getAttribute('aria-pressed') : null;
+      });
+      assert.equal(ligada, 'true', 'o botão da cor direta tinha que ficar ligado');
+
+      // E a peça continua sendo a mesma peça: a medida não se mexe quando o
+      // que muda é a cor.
+      const listaDepois = (await p.$eval('#encaixe-pecas-body', (n) => n.innerText))
+        .split(/\r?\n/).map((l) => l.trim()).join(' | ');
+      assert.match(listaDepois, /peca-d[^|]*\|[^|]*5,1 × 6,8 cm/,
+        `a medida da peça não podia mudar com a cor (veio "${listaDepois}")`);
+    }
+
+    /*
+     * ---- 7. o × tira a peça da lista ----
      *
      * O botão mora DENTRO da linha que marca a peça, e a linha tem ouvinte
      * próprio. Isso já deixou o × sem efeito nenhum: o clique era engolido pelo

@@ -38,12 +38,14 @@ export interface ArtePreparada {
   espaco: string;
   /** A cor saiu de um perfil assumido, e não do perfil do arquivo. */
   perfilAssumido: boolean;
+  /** A cor veio da conta do Corel, e não da travessia do perfil. */
+  direta: boolean;
   /** O que impediu a conversão, quando ela era necessária e falhou. */
   erro?: string;
 }
 
 const INTACTA = (file: File): ArtePreparada => ({
-  file, convertida: false, espaco: "", perfilAssumido: false,
+  file, convertida: false, espaco: "", perfilAssumido: false, direta: false,
 });
 
 /**
@@ -52,7 +54,9 @@ const INTACTA = (file: File): ArtePreparada => ({
  * Devolve o arquivo ORIGINAL quando ele já serve — que é o caso da grande
  * maioria, e por isso a decisão vem antes de qualquer ida ao servidor.
  */
-export async function prepararArteParaONavegador(file: File): Promise<ArtePreparada> {
+export async function prepararArteParaONavegador(
+  file: File, { direta = false } = {},
+): Promise<ArtePreparada> {
   let precisa: string;
   try {
     const inicio = new Uint8Array(await file.slice(0, COR_BYTES_PARA_LER).arrayBuffer());
@@ -62,10 +66,20 @@ export async function prepararArteParaONavegador(file: File): Promise<ArtePrepar
     return INTACTA(file);
   }
 
-  if (precisa !== ARTE_NAO_ABRE && precisa !== ARTE_COR_ERRADA) return INTACTA(file);
+  /*
+   * A CONVERSÃO DIRETA PASSA MESMO QUANDO O NAVEGADOR DARIA CONTA.
+   *
+   * Arte CMYK COM perfil o navegador abre sozinho, e por isso ela não vem para
+   * cá — mas o preto dela volta lavado do mesmo jeito, porque o navegador
+   * também atravessa o perfil. Quem pede a conta do Corel está pedindo
+   * justamente para NÃO atravessar, então essa arte passa a vir.
+   */
+  if (!direta && precisa !== ARTE_NAO_ABRE && precisa !== ARTE_COR_ERRADA) return INTACTA(file);
 
   try {
-    const resposta = await fetch(`/api/arte/preparar?nome=${encodeURIComponent(file.name)}`, {
+    const endereco = `/api/arte/preparar?nome=${encodeURIComponent(file.name)}`
+      + (direta ? "&direta=1" : "");
+    const resposta = await fetch(endereco, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: file,
@@ -94,6 +108,7 @@ export async function prepararArteParaONavegador(file: File): Promise<ArtePrepar
       convertida: true,
       espaco: resposta.headers.get("X-Arte-Espaco") || "",
       perfilAssumido: resposta.headers.get("X-Arte-Perfil-Assumido") === "1",
+      direta: resposta.headers.get("X-Arte-Direta") === "1",
     };
   } catch {
     return { ...INTACTA(file), erro: "o Optmize não conseguiu falar com o servidor para preparar esta arte." };

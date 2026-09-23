@@ -334,6 +334,83 @@ async function conferirTudo(base) {
     assert.deepEqual(Buffer.from(await resposta.arrayBuffer()), srgb);
   });
 
+  /*
+   * ===========================================================================
+   * A CONVERSÃO DIRETA — a que o CorelDRAW faz
+   * ===========================================================================
+   *
+   * O caminho do perfil acerta a COR, e erra o PRETO: `K` cheio volta como
+   * `40,40,38`, um cinza sujo que a prensa imprime sujo. Quem imprime pediu o
+   * contrário — "a mesma cor, só trocando para RGB", que é a conta aritmética
+   * do Corel: cada canal multiplicado pelo que o preto deixa passar.
+   *
+   *   R = 255 × (1 − C) × (1 − K)
+   *
+   * Com `K` cheio o resultado é zero, sempre. É isso que se confere aqui: o
+   * preto sai PRETO, o branco não se mexe e uma cor saturada continua a mesma
+   * cor. A contrapartida está medida no cabeçalho de `servidor/arte-entrada.js`
+   * — tom escuro desaba para perto do preto, e é por isso que a conversão
+   * direta é escolha por peça, e não o padrão.
+   */
+  await conferir("a conversão direta tira o preto preto, como o Corel", async () => {
+    const faixas = [[0, 0, 0], [230, 30, 40], [255, 255, 255]];
+    const largura = 90;
+    const altura = 40;
+    const cru = Buffer.alloc(largura * altura * 3);
+    for (let y = 0; y < altura; y++) {
+      for (let x = 0; x < largura; x++) {
+        const cor = faixas[Math.floor(x / 30)];
+        const i = (y * largura + x) * 3;
+        cru[i] = cor[0]; cru[i + 1] = cor[1]; cru[i + 2] = cor[2];
+      }
+    }
+    const emCmyk = await sharp(cru, { raw: { width: largura, height: altura, channels: 3 } })
+      .withMetadata({ icc: PERFIL_DE_IMPRESSAO }).toColourspace("cmyk").jpeg({ quality: 100 }).toBuffer();
+
+    const resposta = await fetch(`${base}/api/arte/preparar?direta=1&nome=arte.jpg`, {
+      method: "POST", headers: { "content-type": "application/octet-stream" }, body: emCmyk,
+    });
+    assert.equal(resposta.status, 200);
+    assert.equal(resposta.headers.get("x-arte-direta"), "1");
+
+    const bytes = Buffer.from(await resposta.arrayBuffer());
+    const px = await sharp(bytes).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const em = (x) => {
+      const i = ((Math.floor(px.info.height / 2) * px.info.width) + x) * px.info.channels;
+      return [px.data[i], px.data[i + 1], px.data[i + 2]];
+    };
+    const preto = em(15);
+    const vermelho = em(45);
+    const branco = em(75);
+
+    assert.ok(preto.every((c) => c <= 12),
+      `o preto tinha que sair preto e veio ${JSON.stringify(preto)}`);
+    assert.ok(branco.every((c) => c >= 250),
+      `o branco não pode se mexer, e veio ${JSON.stringify(branco)}`);
+    // A cor saturada continua a mesma cor: vermelho forte, verde e azul baixos.
+    assert.ok(vermelho[0] > 200 && vermelho[1] < 70 && vermelho[2] < 70,
+      `o vermelho tinha que continuar vermelho e veio ${JSON.stringify(vermelho)}`);
+  });
+
+  await conferir("sem a conversão direta, o preto continua vindo do perfil", async () => {
+    const preta = await sharp({ create: { width: 40, height: 40, channels: 3, background: { r: 0, g: 0, b: 0 } } })
+      .withMetadata({ icc: PERFIL_DE_IMPRESSAO }).toColourspace("cmyk").jpeg({ quality: 100 }).toBuffer();
+    const resposta = await preparar(preta, "arte.jpg");
+    assert.equal(resposta.headers.get("x-arte-direta"), "0");
+    const px = await sharp(Buffer.from(await resposta.arrayBuffer())).removeAlpha().raw().toBuffer();
+    assert.ok(px[0] > 20,
+      `este caminho é o do perfil: o preto vem lavado (veio ${px[0]}), e é a conversão direta que o conserta`);
+  });
+
+  await conferir("a conversão direta não mexe em arte que não é CMYK", async () => {
+    const resposta = await fetch(`${base}/api/arte/preparar?direta=1&nome=arte.jpg`, {
+      method: "POST", headers: { "content-type": "application/octet-stream" }, body: srgb,
+    });
+    assert.equal(resposta.status, 200);
+    assert.deepEqual(Buffer.from(await resposta.arrayBuffer()), srgb,
+      "arte que já está em RGB não tem conversão nenhuma a fazer");
+  });
+
   await conferir("arquivo que não é imagem é recusado com motivo", async () => {
     const resposta = await preparar(Buffer.from("isto aqui é um texto, não uma arte"), "nota.txt");
     assert.equal(resposta.status, 415);
