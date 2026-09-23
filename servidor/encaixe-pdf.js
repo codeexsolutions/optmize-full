@@ -173,60 +173,57 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, re
 
 /*
  * ===========================================================================
- * O PNG NÃO PASSA PELO LEITOR DO PDFKIT
+ * O PNG NÃO PASSA PELO LEITOR DO PDFKIT, E NÃO LEVA PREDITOR
  * ===========================================================================
  *
- * O pdfkit abre PNG com o `png-js`, que é JavaScript puro: ele copia o arquivo
- * byte a byte para um Array e, quando a arte tem canal alfa — e toda arte que
- * sai de um canvas tem —, descomprime, separa cor e alfa num laço e comprime
- * de novo, tudo na linha principal. Medido: 3,9 s para uma arte de 20
- * megapixels. E numa arte de 70x100 cm a 300 dpi (100 megapixels) ele não
- * chega ao fim — estoura com "Invalid array length", a peça cai no `catch` de
- * arte ilegível e o PDF sai SEM ELA, calado.
+ * Duas decisões moram aqui, e a segunda custou caro para ser aprendida.
  *
- * Aqui o PNG é resolvido sem ele, e sem mexer em um pixel:
+ * ---------------------------------------------------------------------------
+ * POR QUE NÃO O PDFKIT
+ * ---------------------------------------------------------------------------
  *
- *   - PNG opaco de 8 ou 16 bits (cinza ou RGB, sem entrelaçar): os blocos IDAT já
- *     são exatamente o que o PDF aceita com `/Predictor 15`. Vão direto, sem
- *     descomprimir nada — que é o que o próprio pdfkit fazia, só que sem o
- *     Array.
- *   - O resto (alfa, paleta, entrelaçado): o `sharp`, que é nativo e
- *     roda fora da linha principal, separa a cor e o alfa em dois PNGs sem
- *     perda, e os IDAT deles vão para o PDF do mesmo jeito. O alfa vira a
- *     `/SMask`, como o pdfkit já fazia.
+ * Ele abre PNG com o `png-js`, que é JavaScript puro: copia o arquivo byte a
+ * byte para um Array e, quando a arte tem canal alfa — e toda arte que sai de
+ * um canvas tem —, descomprime, separa cor e alfa num laço e comprime de novo,
+ * tudo na linha principal. Medido: 3,9 s numa arte de 20 megapixels. Numa de
+ * 70x100 cm a 300 dpi (100 megapixels) ele não chega ao fim: estoura com
+ * "Invalid array length", a peça cai no `catch` de arte ilegível e o PDF sai
+ * SEM ELA, calado. Aqui quem decodifica é o `sharp`, que é nativo e roda fora
+ * da linha principal.
  *
- * O JPEG continua com o pdfkit: ele já passa direto e custa milissegundos.
+ * ---------------------------------------------------------------------------
+ * POR QUE OS PIXELS VÃO CRUS, E NÃO PELOS BLOCOS DO PNG
+ * ---------------------------------------------------------------------------
+ *
+ * O PDF aceita que uma imagem venha com os filtros de linha do PNG e manda o
+ * leitor desfazê-los: é o `/Predictor 15`. Isso permite embutir os blocos IDAT
+ * sem descomprimir nada, e foi o que este arquivo fez por um tempo — rápido,
+ * conforme o padrão, e **quebrado na prática**.
+ *
+ * O RIP da produção (o SAi Flexi) não aplica o preditor. As linhas escorregam
+ * e a arte sai torta; os dados acabam antes do fim e a arte sai cortada. Em
+ * qualquer tamanho de rolo, inclusive num de um metro — foi esse detalhe que
+ * derrubou as explicações anteriores, todas ligadas ao tamanho da página.
+ *
+ * A pista veio da versão de 2026-09-05, que funcionava: lá o PDF era montado
+ * pelo pdfkit puro, e o pdfkit, para arte com alfa, separava os canais e
+ * recomprimia SEM preditor. O preditor entrou de carona com o caminho rápido.
+ *
+ * Agora o fluxo é o mais simples que o formato tem: pixels crus, comprimidos
+ * com Flate, sem `/DecodeParms` nenhum. Medido numa arte fotográfica de
+ * 9,4 MP, contra o que havia antes:
+ *
+ *   com /Predictor 15   28,2 MB   323 ms
+ *   cru + Flate         25,1 MB   846 ms
+ *
+ * Menor E mais compatível, por meio segundo a mais por arte. O JPEG continua
+ * com o pdfkit: ele passa direto, sem recomprimir, e nunca teve preditor.
  */
 const sharp = require("sharp");
+const zlib = require("zlib");
 
 const ASSINATURA_PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
-/** Lê o cabeçalho e junta os IDAT de um PNG. */
-function blocosDoPng(bytes) {
-  let cabecalho = null;
-  const idat = [];
-  let pos = 8;
-  while (pos + 8 <= bytes.length) {
-    const tamanho = bytes.readUInt32BE(pos);
-    const tipo = bytes.toString("latin1", pos + 4, pos + 8);
-    const dados = bytes.subarray(pos + 8, pos + 8 + tamanho);
-    if (tipo === "IHDR") {
-      cabecalho = {
-        largura: dados.readUInt32BE(0),
-        altura: dados.readUInt32BE(4),
-        bits: dados[8],
-        tipoDeCor: dados[9],
-        entrelacado: dados[12] === 1,
-      };
-    } else if (tipo === "IDAT") {
-      idat.push(dados);
-    } else if (tipo === "IEND") {
-      break;
-    }
-    pos += 12 + tamanho;
-  }
-  return { cabecalho, idat: Buffer.concat(idat) };
-}
 
 /**
  * O arquivo é um PNG que carrega canal alfa?
@@ -247,32 +244,7 @@ function pngComAlfa(bytes) {
   return tipoDeCor === 4 || tipoDeCor === 6;
 }
 
-/** PNG que dá para pôr no PDF como está: opaco, cinza ou RGB, sem entrelaçar. */
-function passaDireto(cabecalho) {
-  return cabecalho && !cabecalho.entrelacado && (cabecalho.bits === 8 || cabecalho.bits === 16)
-    && (cabecalho.tipoDeCor === 0 || cabecalho.tipoDeCor === 2);
-}
 
-/** Um canal do PDF (cor ou alfa) a partir de um PNG que passa direto. */
-function canalDoPng(png) {
-  const { cabecalho, idat } = blocosDoPng(png);
-  const cores = cabecalho.tipoDeCor === 2 ? 3 : 1;
-  return {
-    largura: cabecalho.largura,
-    altura: cabecalho.altura,
-    dados: {
-      Type: "XObject",
-      Subtype: "Image",
-      Width: cabecalho.largura,
-      Height: cabecalho.altura,
-      BitsPerComponent: cabecalho.bits,
-      ColorSpace: cores === 3 ? "DeviceRGB" : "DeviceGray",
-      Filter: "FlateDecode",
-      DecodeParms: { Predictor: 15, Colors: cores, BitsPerComponent: cabecalho.bits, Columns: cabecalho.largura },
-    },
-    idat,
-  };
-}
 
 /*
  * ===========================================================================
@@ -303,40 +275,52 @@ function mascaraServe(alfa) {
 }
 
 /**
+ * Um canal de imagem para o PDF: pixels crus, comprimidos com Flate.
+ *
+ * Sem `/DecodeParms`, e é esse o ponto — ver "POR QUE OS PIXELS VÃO CRUS", lá
+ * em cima. Nível 1 na compressão porque este fluxo só vive até o PDF, e cada
+ * nível acima custa tempo para ganhar pouco; não há perda em nível nenhum.
+ */
+function canalCru(pixels, largura, altura, cores) {
+  return {
+    largura,
+    altura,
+    dados: {
+      Type: "XObject",
+      Subtype: "Image",
+      Width: largura,
+      Height: altura,
+      BitsPerComponent: 8,
+      ColorSpace: cores === 3 ? "DeviceRGB" : "DeviceGray",
+      Filter: "FlateDecode",
+    },
+    fluxo: zlib.deflateSync(pixels, { level: 1 }),
+  };
+}
+
+/**
  * Abre uma arte PNG como imagem do pdfkit: o objeto que `doc.image` aceita no
  * lugar do que `doc.openImage` devolveria (largura, altura, `embed`).
  */
 async function abrirPng(doc, bytes) {
-  let cor;
-  let alfa = null;
-  const { cabecalho } = blocosDoPng(bytes);
-  if (passaDireto(cabecalho)) {
-    cor = canalDoPng(bytes);
-  } else {
-    // `keepIccProfile` deixa os valores de cor como estão no arquivo, que é o
-    // que o pdfkit punha no PDF; sem ele o sharp converteria para sRGB — e o
-    // `extractChannel` abaixo passaria a pegar o canal errado.
-    const abrir = () => sharp(bytes, { limitInputPixels: false }).keepIccProfile();
-    const { hasAlpha, channels, width, height } = await abrir().metadata();
-    // Nível 1: a compressão aqui só vive até o PDF, e cada nível acima dobra o
-    // tempo para ganhar pouco. Sem perda em qualquer nível.
-    const png = { compressionLevel: 1, palette: false, progressive: false };
-    const [pngCor, alfaCru] = await Promise.all([
-      abrir().removeAlpha().png(png).toBuffer(),
-      // O alfa é o último canal; "alpha" no sharp é sempre o 3, e cinza com
-      // alfa só tem dois. O `b-w` é obrigatório: com o perfil de cor mantido,
-      // o sharp gravaria o canal repetido em RGB, e a /SMask tem de ser cinza.
-      //
-      // Vem CRU, e não em PNG, por causa do `mascaraServe` logo abaixo: é
-      // preciso olhar os bytes antes de decidir se vale gravar a máscara.
-      hasAlpha ? abrir().extractChannel(channels - 1).toColourspace("b-w").raw().toBuffer() : null,
-    ]);
-    cor = canalDoPng(pngCor);
-    if (alfaCru && mascaraServe(alfaCru)) {
-      alfa = canalDoPng(await sharp(alfaCru, { raw: { width, height, channels: 1 } })
-        .png(png).toBuffer());
-    }
-  }
+  // `keepIccProfile` deixa os valores de cor como estão no arquivo, que é o
+  // que o pdfkit punha no PDF; sem ele o sharp converteria para sRGB — e o
+  // `extractChannel` abaixo passaria a pegar o canal errado.
+  const abrir = () => sharp(bytes, { limitInputPixels: false }).keepIccProfile();
+  const { hasAlpha, channels, width, height } = await abrir().metadata();
+
+  const [corCrua, alfaCru] = await Promise.all([
+    abrir().removeAlpha().raw().toBuffer({ resolveWithObject: true }),
+    // O alfa é o último canal; "alpha" no sharp é sempre o 3, e cinza com
+    // alfa só tem dois. O `b-w` é obrigatório: com o perfil de cor mantido,
+    // o sharp devolveria o canal repetido em três, e a /SMask tem de ser cinza.
+    hasAlpha ? abrir().extractChannel(channels - 1).toColourspace("b-w").raw().toBuffer() : null,
+  ]);
+
+  const cor = canalCru(corCrua.data, corCrua.info.width, corCrua.info.height, corCrua.info.channels);
+  const alfa = alfaCru && mascaraServe(alfaCru)
+    ? canalCru(alfaCru, width, height, 1)
+    : null;
 
   return {
     label: `I${++doc._imageCount}`,
@@ -348,13 +332,13 @@ async function abrirPng(doc, bytes) {
       this.obj = documento.ref(cor.dados);
       if (alfa) {
         const mascara = documento.ref(alfa.dados);
-        mascara.end(alfa.idat);
+        mascara.end(alfa.fluxo);
         this.obj.data.SMask = mascara;
       }
-      this.obj.end(cor.idat);
+      this.obj.end(cor.fluxo);
       // O buffer já foi para o documento: solta, para o pico ser UMA arte.
-      cor.idat = null;
-      if (alfa) alfa.idat = null;
+      cor.fluxo = null;
+      if (alfa) alfa.fluxo = null;
     },
   };
 }

@@ -221,6 +221,86 @@ const ARTES = [
 
 /**
  * ===========================================================================
+ * COMO A IMAGEM ENTRA NO ARQUIVO
+ * ===========================================================================
+ *
+ * Nenhum fluxo de imagem pode declarar `/Predictor`.
+ *
+ * O PDF permite que uma imagem comprimida venha com os filtros de linha do
+ * PNG, e o leitor os desfaça — é o `/Predictor 15`. Está no padrão, decodifica
+ * certo, e o RIP da produção NÃO o aplica: as linhas escorregam (arte torta) e
+ * os dados acabam antes do fim (arte cortada). Em qualquer tamanho de rolo,
+ * inclusive um de um metro.
+ *
+ * Foi assim até 2026-09-05, quando o PDF ainda era montado pelo pdfkit puro —
+ * e o pdfkit, para arte com transparência, separava os canais e recomprimia
+ * SEM preditor. O caminho próprio que veio depois (para o pdfkit não engasgar
+ * com arte de 100 megapixels) passou a reaproveitar os blocos do PNG, e o
+ * preditor veio junto de carona.
+ *
+ * Medido com uma arte fotográfica de 9,4 MP: sem preditor o fluxo fica MENOR
+ * (25,1 MB contra 28,2 MB) e custa meio segundo a mais. Não há troca.
+ *
+ * A segunda asserção é a que dá sentido à primeira: os pixels que saem do
+ * arquivo têm de ser exatamente os que entraram. Trocar a codificação sem
+ * conferir isso seria trocar um defeito visível por um silencioso.
+ */
+async function conferirAsImagens(erro) {
+  const sharp = require("sharp");
+  const zlib = require("zlib");
+  const L = 160;
+  const A = 120;
+  const cru = Buffer.alloc(L * A * 3);
+  for (let i = 0; i < L * A; i++) {
+    cru[i * 3] = i % 251;
+    cru[i * 3 + 1] = (i * 7) % 253;
+    cru[i * 3 + 2] = (i * 13) % 249;
+  }
+  const arte = await sharp(cru, { raw: { width: L, height: A, channels: 3 } }).png().toBuffer();
+
+  const { bytes } = await gerar({
+    larguraTecido: 160,
+    consumo: 200,
+    posicoes: [{ chave: "peca", x: 5, y: 5, largura: 40, altura: 50, bancada: 0 }],
+    buffers: new Map([["peca", arte]]),
+  });
+  const texto = bytes.toString("latin1");
+
+  if (/\/Predictor/.test(texto)) {
+    erro("alguma imagem veio com /Predictor — é o filtro que o RIP da produção não aplica");
+  }
+
+  // Os pixels, de volta: inflar o fluxo tem que devolver a arte inteira.
+  const re = /(\d+) 0 obj\s*([\s\S]*?)stream\r?\n/g;
+  let m;
+  let achou = false;
+  while ((m = re.exec(texto))) {
+    const dic = m[2].replace(/\s+/g, " ");
+    if (!/\/Subtype \/Image/.test(dic)) continue;
+    const tam = Number((/\/Length\s+(\d+)/.exec(dic) || [])[1]);
+    const fluxo = bytes.subarray(m.index + m[0].length, m.index + m[0].length + tam);
+    let pixels;
+    try {
+      pixels = zlib.inflateSync(fluxo);
+    } catch (e) {
+      erro(`o fluxo da imagem não descomprime: ${e.message}`);
+      continue;
+    }
+    achou = true;
+    if (pixels.length !== cru.length) {
+      erro(`a imagem tem ${pixels.length} bytes e a arte tinha ${cru.length}`);
+    } else if (!pixels.equals(cru)) {
+      erro("os pixels que saíram do PDF não são os que entraram");
+    }
+  }
+  if (!achou) erro("não achei imagem nenhuma no PDF");
+
+  process.stdout.write(`  ${"imagem".padEnd(24)} sem /Predictor · pixels idênticos aos da arte
+`);
+}
+
+/**
+ * ===========================================================================
  * A TRANSPARÊNCIA, E O QUE O ARQUIVO DIZ DE SI
  * ===========================================================================
  *
@@ -398,6 +478,7 @@ async function principal() {
 
   await conferirQueOTamanhoNaoMexe((queixa) => falhas.push(queixa));
   await conferirATransparencia((queixa) => falhas.push(queixa));
+  await conferirAsImagens((queixa) => falhas.push(queixa));
 
   console.log("");
   if (falhas.length === 0) {
