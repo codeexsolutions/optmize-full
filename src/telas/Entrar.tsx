@@ -79,6 +79,20 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
       if (!resposta.ok) {
         const corpo = await resposta.json().catch(() => ({}));
         setErro(corpo.message || "Não foi possível entrar agora.");
+        /*
+          SOLTA O BOTÃO AQUI, e não num `finally`.
+
+          Quem erra a senha tenta de novo na mesma tela, e sem isto o botão
+          ficava "Entrando…" desabilitado para sempre — com o `if (enviando)`
+          lá em cima barrando até o Enter. Só fechar e abrir o programa
+          destravava.
+
+          Um `finally` resolveria esta linha e quebraria a de cima: no
+          sucesso o botão TEM de continuar travado, porque a cortina fica
+          meio segundo na tela antes de a casca trocar, e um botão que volta
+          a "Entrar" nesse intervalo convida a um segundo login.
+        */
+        setEnviando(false);
         return;
       }
       /*
