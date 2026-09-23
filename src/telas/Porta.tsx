@@ -125,8 +125,14 @@ export function Porta({
           </ul>
         </div>
 
+        {/*
+          A versão acompanha o rodapé da porta pela mesma razão que aparece na
+          barra: quem liga para o suporte quase nunca está DENTRO do programa —
+          está parado na tela de entrar, que é onde o problema apareceu.
+        */}
         <p className="relative m-0 text-[11.5px] text-tinta-apagada">
           © {new Date().getFullYear()} Optmize · CodeEx Solutions
+          <span className="font-mono text-tinta-apagada/60"> · v{__VERSAO__}</span>
         </p>
       </aside>
 

@@ -30,7 +30,15 @@ async function main() {
   const bundle = path.join(os.tmpdir(), 'optimize-react-' + process.pid + '.cjs');
   buildSync({ entryPoints: [path.join(root, 'src/App.tsx')], bundle: true,
     outfile: bundle, platform: 'node', format: 'cjs', loader: { '.css': 'empty' },
-    external: ['react','react-dom'], define: { 'import.meta.env.BASE_URL': '"/"' },
+    external: ['react','react-dom'],
+    // Os mesmos `define` do vite.config.mts. `__VERSAO__` vira texto fixo na
+    // compilacao de verdade; aqui, sem ele, a barra e a porta quebram com
+    // "__VERSAO__ is not defined" -- e o erro seria do banco de prova, nao do
+    // programa.
+    define: {
+      'import.meta.env.BASE_URL': '"/"',
+      __VERSAO__: JSON.stringify(require(path.join(root, 'package.json')).version),
+    },
     // O esbuild cru nao procura `.mjs` sozinho; o Vite procura. O `encaixeRede`
     // e `.mjs` para o servidor conseguir `require()` nele, entao a extensao
     // entra na lista a mao -- senao `./encaixeRede` nao resolve aqui.

@@ -567,6 +567,29 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
               <span className={PE_TEXTO}>Sair</span>
             </button>
           )}
+
+          {/*
+            A VERSÃO, NO CANTO DE BAIXO.
+
+            É o primeiro dado que o suporte pede, e até agora ele morava só na
+            tela Sobre — o que transformava "qual versão você está usando?" em
+            duas instruções ao telefone. Aqui ela está sempre à vista, e uma
+            foto de tela de qualquer canto do programa já a traz junto.
+
+            BEM APAGADA, de propósito: quem trabalha não precisa dela, e um
+            número legível no pé da barra competiria com os itens que se
+            clicam. Quem procura, acha; quem não procura, não vê.
+
+            Na barra estreita (78px) ela some junto com os rótulos: `1.1.158`
+            não cabe em 58px úteis, e o `title` de cada item continua dizendo o
+            que é o quê.
+          */}
+          <p
+            title={`CodeEx Optmize ${__VERSAO__}`}
+            className="m-0 mt-1.5 px-2 font-mono text-[10.5px] leading-none text-tinta-apagada/60 tela:max-[1100px]:hidden"
+          >
+            v{__VERSAO__}
+          </p>
         </div>
       </aside>
     </>

@@ -38,17 +38,19 @@
  * o mesmo estado, e não duas telas.
  *
  * ---------------------------------------------------------------------------
- * SEM TEXTO DE APOIO, E SEM EXEMPLO DENTRO DO CAMPO
+ * SEM TEXTO DE APOIO, MAS COM EXEMPLO DENTRO DO CAMPO
  * ---------------------------------------------------------------------------
  *
- * Os campos não têm `placeholder`. Um exemplo cinza dentro da caixa some no
- * primeiro caractere — some justamente quando ajudaria — e, pior, é lido como
- * campo já preenchido por quem passa o olho. O rótulo em cima fica.
+ * Cada campo diz o que espera, na primeira pessoa de quem preenche: "seu
+ * e-mail aqui", "crie uma senha aqui". O rótulo em cima nomeia, o exemplo
+ * dentro CONVIDA — e num cadastro que a gráfica faz uma vez na vida, o convite
+ * vale o custo conhecido do `placeholder`, que é sumir no primeiro caractere.
  *
- * E as explicações debaixo dos campos saíram. "É por ele que a nota é
- * emitida", "esta é a conta do dono": cada uma era verdade e nenhuma era
- * pergunta. Quem preenche um cadastro de seis campos não está lendo — está
- * procurando o próximo campo, e três parágrafos no caminho são três paradas.
+ * Já as explicações DEBAIXO dos campos saíram, e essas não voltam. "É por ele
+ * que a nota é emitida", "esta é a conta do dono": cada uma era verdade e
+ * nenhuma era pergunta. Quem preenche um cadastro de cinco campos não está
+ * lendo — está procurando o próximo campo, e três parágrafos no caminho são
+ * três paradas.
  *
  * ---------------------------------------------------------------------------
  * O QUE ESTA TELA NÃO DECIDE
@@ -601,6 +603,7 @@ export function CriarConta({
                 autoComplete="name"
                 value={nomeDono}
                 onChange={(e) => setNomeDono(e.target.value)}
+                placeholder="seu nome completo aqui"
                 className={CAMPO}
               />
             </span>
@@ -618,7 +621,8 @@ export function CriarConta({
                 inputMode="numeric"
                 value={documento}
                 onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
-                className={`${CAMPO} font-mono`}
+                placeholder="seu CNPJ ou CPF aqui"
+                className={`${CAMPO} font-mono placeholder:font-texto`}
               />
             </span>
           </label>
@@ -636,6 +640,7 @@ export function CriarConta({
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu e-mail aqui"
                 className={CAMPO}
               />
             </span>
@@ -655,7 +660,8 @@ export function CriarConta({
                 autoComplete="tel"
                 value={telefone}
                 onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
-                className={`${CAMPO} font-mono`}
+                placeholder="seu WhatsApp aqui"
+                className={`${CAMPO} font-mono placeholder:font-texto`}
               />
             </span>
           </label>
@@ -674,6 +680,7 @@ export function CriarConta({
                 autoComplete="new-password"
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
+                placeholder="crie uma senha aqui"
                 className={`${CAMPO} pr-11`}
               />
               <button

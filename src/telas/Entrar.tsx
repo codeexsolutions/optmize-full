@@ -212,7 +212,8 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
               autoFocus
               value={documento}
               onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
-              className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 font-mono text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+              placeholder="o CNPJ ou CPF da empresa aqui"
+              className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 font-mono text-[14px] text-tinta outline-none transition-[border-color,box-shadow] placeholder:font-texto focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
             />
           </span>
         </label>
@@ -230,6 +231,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="seu e-mail aqui"
               className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
             />
           </span>
@@ -248,6 +250,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
               required
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
+              placeholder="sua senha aqui"
               className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-11 pl-10 text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
             />
             {/*
