@@ -269,5 +269,5 @@ vai para `src/api/`, e o que sobra — o estado e o desenho — fica na tela. Co
 não se escreve à mão em lugar nenhum: sai dos tokens de `estilo/tokens.css`,
 que é o único arquivo com hex no projeto.
 
-`src/telas/Cor.tsx` é o exemplo a seguir; `src/producao/` é o que ainda não
-seguiu.
+`src/telas/Projetos.tsx` é o exemplo a seguir; `src/producao/` é o que ainda
+não seguiu. (O exemplo era a tela Cor, que saiu do programa em 2026-09-21.)

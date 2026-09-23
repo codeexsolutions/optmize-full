@@ -10,7 +10,6 @@ Moldes. Resta o Encaixe.
 
 | Tela | Quem a desenha | O que falta |
 |---|---|---|
-| **Cor** | React (`telas/Cor.tsx`) | nada — mora dentro do `Producao` só para conservar a lista ao navegar |
 | **Projetos** | React (`telas/Projetos.tsx`), desenhada pela ROTA | nada — a única amarra é levar um trabalho ao Encaixe, pela `ligacao` |
 | **Moldes** | React (`telas/Moldes.tsx` + `telas/moldes/`), desenhada pela ROTA | nada — a amarra é levar o molde vestido ao Encaixe, pela `ligacao` |
 | **Encaixe** | `producao/controlador.js` | a lista de peças, o canvas do risco e o painel de andamento — **o domínio já saiu** (ver abaixo) |
@@ -97,7 +96,7 @@ migradas — e a `producao.css` pode virar utilitários.
 
 ## Próximos passos para concluir a arquitetura
 
-1. Substituir progressivamente as listas, formulários e diálogos do controlador por componentes com estado React, conservando as funções de domínio e as medidas existentes. **Cor e Projetos já foram** — é o molde para as outras três, e o que ela ensinou está no cabeçalho de `src/telas/Cor.tsx`: o `data-page` tem de sair do elemento raiz (senão o controlador mexe numa classe que o próximo render desfaz), a tela sai de dentro da `Estrutura` memoizada, e a amarra com o Encaixe passa a ser o contexto de `src/producao/ligacao.ts` — cuja lista de funções, encolhendo, é a medida do quanto a migração andou.
+1. Substituir progressivamente as listas, formulários e diálogos do controlador por componentes com estado React, conservando as funções de domínio e as medidas existentes. **Projetos já foi** — é o molde para as outras, e o que a tela Cor ensinou antes de sair do programa (2026-09-21) está registrado em `src/producao/controlador.js`, onde o encaixe do aviso de cor ficou: o `data-page` tem de sair do elemento raiz (senão o controlador mexe numa classe que o próximo render desfaz), a tela sai de dentro da `Estrutura` memoizada, e a amarra com o Encaixe passa a ser o contexto de `src/producao/ligacao.ts` — cuja lista de funções, encolhendo, é a medida do quanto a migração andou.
    A de Projetos acrescentou três coisas ao que a Cor ensinou:
 
    - **A caixa de diálogo virou React** (`casca/Dialogo.tsx`): `avisar`,

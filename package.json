@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "icones": "node empacotar/icones.js",
-    "front": "npm run icones && npm run ia && npm run motor && vite build",
+    "front": "npm run icones && npm run motor && vite build",
     "dev:app": "vite",
     "prestart": "npm run front",
     "start": "node servidor/server.js",
@@ -41,7 +41,6 @@
     "tauri": "tauri",
     "build:wasm": "cd wasm && cargo build --release --target wasm32-unknown-unknown && cd .. && node -e \"require('fs').copyFileSync('wasm/target/wasm32-unknown-unknown/release/encaixe.wasm','estatico/encaixe.wasm')\"",
     "build:encolher": "node empacotar/encolher.js",
-    "ia": "node empacotar/ia.js",
     "motor": "node empacotar/motor.js",
     "modelos": "node empacotar/modelos.js",
     "logo-esp": "node empacotar/gera-logo.js"
@@ -72,7 +71,6 @@
     "esbuild": "^0.28.2",
     "jsdom": "^30.0.1",
     "lucide-static": "^1.37.0",
-    "onnxruntime-web": "^1.29.0",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

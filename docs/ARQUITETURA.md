@@ -49,6 +49,14 @@ Então o domínio grande entra como `.js`, por transformação **mecânica**: s�
 empacota igual, e o porte é conferível — a prova de cada arquivo portado é
 quantas linhas diferem do original:
 
+> **Três destes arquivos já não existem.** As telas Vetor, Imagem e Cor
+> saíram do programa em 2026-09-21 (a pedido da produção), e em 2026-09-22 saiu
+> o domínio delas: `vetor.js`, `vetorWorker.js`, `imagemWorker.js`,
+> `diagnosticoDaImagem.js` e `miniaturaDaArte.js`, mais o runtime da rede
+> neural que o instalador levava. A tabela fica como está porque é o registro
+> do porte, e o porte aconteceu; quem procurar os arquivos, no entanto,
+> encontra-os só no histórico do git.
+
 | Arquivo | Linhas | Diferem |
 |---|---|---|
 | `motores/vetor.js` | 1.209 | **1** |
@@ -70,8 +78,9 @@ quantas linhas diferem do original:
 | `utils/respirar.js` | 25 | recortado do `encaixe.js` — ver abaixo |
 
 Os tipos entram depois, arquivo por arquivo, quando alguém tiver motivo para
-mexer lá dentro. Quem chama declara o contrato do seu lado enquanto isso — ver
-`OpcoesDoVetor`, em `src/telas/Vetor.tsx`.
+mexer lá dentro. Quem chama declara o contrato do seu lado enquanto isso — era
+assim o `OpcoesDoVetor` da tela Vetor, que saiu do programa; o mesmo desenho
+está de pé em `src/api/encaixe.ts`.
 
 ### O motor tem uma prova própria, e ela pegou um erro na primeira corrida
 
@@ -409,8 +418,10 @@ continua funcionando, a tela só deixa de se atualizar sozinha.
 - A central das impressoras inteira, em React: painel, histórico, pedidos,
   varredura da rede e o bot do WhatsApp.
 - **Vetor**, **Imagem** e **Macros** migradas (Etapa A), com o domínio delas em
-  `src/motores/`: `vetor.js`, `vetorWorker.js`, `imagemWorker.js`,
-  `diagnosticoDaImagem.js`, `encaixeMascara.js` e `medidaDoArquivo.js`.
+  `src/motores/`. Das seis peças daquela etapa sobraram duas, `encaixeMascara.js`
+  e `medidaDoArquivo.js`, que o Encaixe usa: Vetor e Imagem saíram do programa
+  em 2026-09-21 e o domínio delas foi removido no dia seguinte. A Macros
+  continua, trancada.
 - `src/casca/numero.ts` e `src/casca/arquivoDeImagem.ts` — os auxiliares que
   moravam pendurados no `window` do `ui.js`.
 
