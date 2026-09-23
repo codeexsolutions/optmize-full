@@ -80,13 +80,24 @@ export function Porta({
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_50%_at_0%_0%,var(--accent-soft)_0%,transparent_60%),linear-gradient(178deg,var(--card-bg)_0%,var(--sidebar-bg)_45%,var(--bg)_100%)]"
         />
         <div className="relative flex items-center gap-3">
+          {/*
+            O HALO QUE RESPIRA atrás da marca — o mesmo do painel web, em
+            laranja. Fica `absolute` e atrás do logotipo: é brilho, não moldura,
+            e nada nele deve empurrar o nome para o lado.
+          */}
           {/* A MARCA DE VERDADE, e não um ícone genérico: é o mesmo desenho
               que o instalador, a aba do navegador e o pé da barra usavam. */}
-          <img
-            src={`${import.meta.env.BASE_URL}icone.png`}
-            alt=""
-            className="size-10 shrink-0 rounded-[10px]"
-          />
+          <span className="relative grid shrink-0 place-items-center">
+            <span
+              aria-hidden="true"
+              className="porta-pulsa pointer-events-none absolute -inset-3 rounded-full bg-ambar blur-xl"
+            />
+            <img
+              src={`${import.meta.env.BASE_URL}icone.png`}
+              alt=""
+              className="relative size-10 rounded-[10px]"
+            />
+          </span>
           {/*
             O NOME é "CodeEx Optmize", e nada mais.
 
@@ -159,11 +170,17 @@ export function Porta({
         <div className="entrada-sobe relative z-10 my-auto w-full max-w-[480px]">
           {/* No computador a marca já está na coluna ao lado; aqui repetiria. */}
           <div className="mb-6 flex flex-col items-center gap-3 tela:hidden">
-            <img
-              src={`${import.meta.env.BASE_URL}icone.png`}
-              alt=""
-              className="size-14 rounded-xl"
-            />
+            <span className="relative grid place-items-center">
+              <span
+                aria-hidden="true"
+                className="porta-pulsa pointer-events-none absolute -inset-4 rounded-full bg-ambar blur-2xl"
+              />
+              <img
+                src={`${import.meta.env.BASE_URL}icone.png`}
+                alt=""
+                className="relative size-14 rounded-xl"
+              />
+            </span>
             <h1 className="m-0 font-titulo text-2xl tracking-tight">
               <span className="font-medium text-tinta-fraca">CodeEx </span>
               <span className="font-bold text-ambar">Optmize</span>

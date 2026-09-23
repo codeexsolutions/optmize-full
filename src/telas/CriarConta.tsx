@@ -63,7 +63,7 @@
  * fica desatualizada. Nem o preço é escrito neste arquivo.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Icone } from "../casca/Icone";
 import { CAMPO, mascararDocumento, Porta, ROTULO } from "./Porta";
@@ -312,6 +312,36 @@ export function CriarConta({
   */
   const sugerido = (planos ?? [])[1]?.id ?? null;
 
+  /*
+    O TRILHO DO CARROSSEL.
+
+    `scrollBy` numa referência, e não uma biblioteca: o navegador já rola com
+    encaixe, com inércia no toque e com suavidade — o que falta é só o empurrão
+    das setas, que é uma linha.
+  */
+  const trilho = useRef<HTMLDivElement | null>(null);
+
+  function deslizar(direcao: 1 | -1) {
+    const alvo = trilho.current;
+    if (!alvo) return;
+    // Dois cartões por empurrão: um só faria a seta parecer emperrada.
+    alvo.scrollBy({ left: direcao * 400, behavior: "smooth" });
+  }
+
+  /*
+    O CARTÃO ESCOLHIDO ENTRA NA VISTA sozinho.
+
+    Quem chega com o Essencial marcado e clica no Completo lá na ponta não
+    precisa rolar de volta para ver o que escolheu — e quem volta do passo dos
+    dados encontra o carrossel onde deixou.
+  */
+  useEffect(() => {
+    if (!escolhido) return;
+    trilho.current
+      ?.querySelector(`[data-plano="${escolhido}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [escolhido]);
+
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
     if (enviando || !escolhido) return;
@@ -427,175 +457,184 @@ export function CriarConta({
           )}
 
           {/*
-            UMA LISTA, E NÃO TRÊS CARTÕES SOLTOS.
+            UM CARROSSEL DE CARTÕES, E NÃO UMA LISTA EMPILHADA.
 
-            Os planos moram dentro de uma moldura só, separados por um fio.
-            Três caixas com sombra própria competiam entre si pela atenção e
-            faziam a coluna parecer três decisões; uma lista é o que a escolha
-            é — uma decisão, três linhas.
+            Quatro degraus não cabem empilhados num cartão de 480px sem
+            empurrar o botão para fora da vista — e uma escada de preço se lê
+            de lado, como uma tabela, não de cima para baixo como um menu.
 
-            O QUE NÃO ESTÁ ESCOLHIDO FICA EM UMA LINHA: nome à esquerda, preço
-            à direita. Só o escolhido abre. Antes os três mostravam preço
-            grande e descrição, e o cartão aberto não se distinguia dos outros
-            dois — a tela inteira gritava no mesmo volume.
+            ROLAGEM COM ENCAIXE (`snap`), e não setas de carrossel: o dedo
+            arrasta no toque, o trackpad arrasta no notebook, e o teclado
+            continua funcionando pelo rádio escondido — que é o que faz isto
+            ser um formulário e não um brinquedo. As setas ficam para quem tem
+            mouse sem roda, e por isso aparecem só no computador.
+
+            O DETALHE DO ESCOLHIDO MORA ABAIXO, fora dos cartões: dentro de
+            um cartão de 190px a lista de vantagens sairia em coluna de duas
+            palavras por linha.
           */}
-          <fieldset className="entrada-degrau m-0 overflow-hidden rounded-2xl border border-linha p-0">
+          <fieldset className="entrada-degrau m-0 border-0 p-0">
             <legend className="sr-only">Como você quer pagar</legend>
 
-            {(planos ?? []).map((plano, indice) => {
-              const marcado = escolhido === plano.id;
-              const preco = precoDoPlano(plano);
-              const porMes = porMesDoAnual(plano);
-              /*
-                O SELO, no máximo um por plano.
+            <div
+              ref={trilho}
+              className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {(planos ?? []).map((plano) => {
+                const marcado = escolhido === plano.id;
+                const preco = precoDoPlano(plano);
+                const selo =
+                  plano.cobranca === "anual" && economia !== null
+                    ? `${economia}% a menos`
+                    : plano.id === sugerido
+                      ? "Mais escolhido"
+                      : null;
 
-                O Padrão leva "Comece sem cartão", que é a objeção que ele
-                derruba; o anual leva a economia calculada. O mensal não leva
-                selo nenhum — um selo em todas as linhas não destaca nada.
-              */
-              const selo =
-                plano.cobranca === "anual" && economia !== null
-                  ? `${economia}% a menos`
-                  : plano.id === sugerido
-                    ? "Mais escolhido"
-                    : null;
+                return (
+                  <label
+                    key={plano.id}
+                    data-plano={plano.id}
+                    className={[
+                      "group relative flex w-[190px] shrink-0 snap-start cursor-pointer flex-col",
+                      "rounded-2xl border p-3.5 transition-[border-color,background-color,box-shadow,transform] duration-200",
+                      "peer-focus-visible:border-[var(--accent)]",
+                      marcado
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_0_0_1px_var(--accent-line),0_18px_40px_-28px_rgba(0,0,0,0.9)]"
+                        : "border-linha bg-fundo hover:-translate-y-px hover:border-[var(--accent-line)]",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="radio"
+                      name="plano"
+                      value={plano.id}
+                      checked={marcado}
+                      onChange={() => setEscolhido(plano.id)}
+                      className="peer sr-only"
+                    />
 
-              return (
-                <label
-                  key={plano.id}
-                  className={[
-                    "group relative block cursor-pointer px-4 py-3.5 transition-colors",
-                    indice > 0 ? "border-t border-linha" : "",
-                    /*
-                      O FOCO VEM DO RÁDIO ESCONDIDO, pelo `peer`. O input é
-                      `sr-only` — o desenho do ponto é nosso —, e sem esta
-                      linha quem navega de Tab veria o foco sumir dos três
-                      planos, que são o primeiro controle da tela.
-                    */
-                    "peer-focus-visible:bg-[var(--accent-soft)]",
-                    "peer-focus-visible:ring-1 peer-focus-visible:ring-[var(--accent)] peer-focus-visible:ring-inset",
-                    marcado ? "bg-[var(--accent-soft)]" : "bg-fundo hover:bg-painel",
-                  ].join(" ")}
-                >
-                  <input
-                    type="radio"
-                    name="plano"
-                    value={plano.id}
-                    checked={marcado}
-                    onChange={() => setEscolhido(plano.id)}
-                    className="peer sr-only"
-                  />
-
-                  {/*
-                    O FIO ÂMBAR NA BORDA ESQUERDA marca o escolhido de ponta a
-                    ponta, e some junto com a escolha. Uma borda inteira em
-                    volta brigaria com a moldura da lista; o fio só acende o
-                    lado que o olho usa para achar onde uma linha começa.
-                  */}
-                  <span
-                    aria-hidden="true"
-                    className={`absolute inset-y-0 left-0 w-[3px] transition-opacity ${marcado ? "bg-[var(--accent)] opacity-100" : "opacity-0"}`}
-                  />
-
-                  <span className="flex items-start gap-3">
                     {/*
-                      O PONTO DESENHADO À MÃO, no lugar do rádio do sistema.
-                      O do navegador não aceita a cor da marca em todas as
-                      plataformas, e ficava cinza-Windows no meio de uma linha
-                      âmbar — a única peça da tela que não era do programa.
+                      O SELO NO ALTO DO CARTÃO, e não ao lado do nome: num
+                      retângulo estreito ele roubaria a linha do nome, que é
+                      a primeira coisa que se lê.
                     */}
-                    <span
-                      aria-hidden="true"
-                      className={[
-                        "mt-0.5 grid size-[18px] shrink-0 place-items-center rounded-full border transition-colors",
-                        marcado
-                          ? "border-[var(--accent)] bg-[var(--accent)]"
-                          : "border-linha bg-painel group-hover:border-[var(--accent-line)]",
-                      ].join(" ")}
-                    >
-                      <Icone
-                        referencia="icones.svg#check"
-                        className={`size-3 text-fundo transition-opacity ${marcado ? "opacity-100" : "opacity-0"}`}
-                      />
-                    </span>
-
-                    <span className="min-w-0 flex-1">
-                      {/*
-                        NOME À ESQUERDA, PREÇO À DIREITA, na mesma linha de
-                        base. É a forma de uma tabela de preços, e é o que
-                        deixa os três valores alinhados numa coluna só — a
-                        comparação acontece sem ler nada.
-                      */}
-                      <span className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0 font-titulo text-[14px] font-semibold text-tinta">
-                          {plano.nome.replace(/^CodeEx Optmize — /, "")}
-                        </span>
-                        <span
-                          className={`shrink-0 font-titulo font-semibold tracking-tight ${marcado ? "text-ambar" : "text-tinta"} ${marcado ? "text-[19px]" : "text-[14px]"}`}
-                        >
-                          {preco.valor}
-                        </span>
-                      </span>
-
-                      <span className="mt-0.5 flex items-baseline justify-between gap-3">
-                        <span className="flex min-w-0 items-center gap-2">
-                          {selo && (
-                            <span className="rounded-full border border-[var(--accent-line)] bg-[var(--accent-soft)] px-1.5 py-px text-[10px] font-medium text-ambar">
-                              {selo}
-                            </span>
-                          )}
-                          {marcado && porMes && (
-                            <span className="truncate text-[11px] text-tinta-apagada">
-                              equivale a {porMes} por mês
-                            </span>
-                          )}
-                        </span>
-                        <span className="shrink-0 text-[11px] text-tinta-apagada">
-                          {preco.periodo}
-                        </span>
-                      </span>
-
-                      {/* A RÉGUA: os dois números que se compara de verdade. */}
-                      <span
-                        className={`mt-1 block text-[11.5px] ${marcado ? "text-tinta-fraca" : "text-tinta-apagada"}`}
-                      >
-                        {reguaDoPlano(plano)}
-                      </span>
-
-                      {/*
-                        AS VANTAGENS SÓ APARECEM NO PLANO MARCADO. Abertas nos
-                        três, a lista tomaria a tela inteira e a escolha — que
-                        é a pergunta desta parte da tela — sairia da vista.
-                      */}
-                      {marcado && (
-                        <span className="mt-3 block border-t border-[var(--accent-line)] pt-3">
-                          {/*
-                            O número de acessos saiu daqui: ele já está na régua
-                            de cima, em toda linha. Repetido, roubava a primeira
-                            posição do bloco que deveria ser das vantagens.
-                          */}
-                          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-                            {plano.vantagens.map((v) => (
-                              <li
-                                key={v}
-                                className="flex items-start gap-2 text-[12px] leading-relaxed text-tinta-fraca"
-                              >
-                                <Icone
-                                  referencia="icones.svg#check"
-                                  className="mt-0.5 size-3.5 shrink-0 text-ambar"
-                                />
-                                {v}
-                              </li>
-                            ))}
-                          </ul>
+                    <span className="flex h-5 items-start">
+                      {selo && (
+                        <span className="rounded-full border border-[var(--accent-line)] bg-[var(--accent-soft)] px-1.5 py-px text-[9.5px] font-medium text-ambar">
+                          {selo}
                         </span>
                       )}
                     </span>
-                  </span>
-                </label>
-              );
-            })}
+
+                    <span className="mt-1 flex items-start gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={[
+                          "mt-0.5 grid size-[16px] shrink-0 place-items-center rounded-full border transition-colors",
+                          marcado
+                            ? "border-[var(--accent)] bg-[var(--accent)]"
+                            : "border-linha bg-painel group-hover:border-[var(--accent-line)]",
+                        ].join(" ")}
+                      >
+                        <Icone
+                          referencia="icones.svg#check"
+                          className={`size-2.5 text-fundo transition-opacity ${marcado ? "opacity-100" : "opacity-0"}`}
+                        />
+                      </span>
+                      <span className="font-titulo text-[13.5px] leading-tight font-semibold text-tinta">
+                        {plano.nome.replace(/^CodeEx Optmize — /, "")}
+                      </span>
+                    </span>
+
+                    <span className="mt-2.5 block">
+                      <span
+                        className={`block font-titulo text-[17px] leading-none font-semibold tracking-tight ${marcado ? "text-ambar" : "text-tinta"}`}
+                      >
+                        {preco.valor}
+                      </span>
+                      <span className="mt-1 block text-[10.5px] text-tinta-apagada">
+                        {preco.periodo}
+                      </span>
+                    </span>
+
+                    {/* A RÉGUA, quebrada em duas linhas dentro do retângulo. */}
+                    <span className="mt-2.5 block border-t border-linha pt-2.5 text-[11px] leading-relaxed text-tinta-fraca">
+                      {plano.exportacoesPorDia === null
+                        ? "Exportação sem limite"
+                        : `${plano.exportacoesPorDia} exportações por dia`}
+                      <br />
+                      {plano.acessos === 1 ? "1 acesso" : `${plano.acessos} acessos`}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {/*
+              AS SETAS SÓ NO COMPUTADOR (`tela:`), e só quando há para onde
+              ir. No toque elas seriam dois alvos a mais competindo com o
+              gesto que já funciona.
+            */}
+            <div className="mt-1 hidden items-center justify-end gap-1.5 tela:flex">
+              <button
+                type="button"
+                onClick={() => deslizar(-1)}
+                aria-label="Ver os planos anteriores"
+                className="grid size-7 place-items-center rounded-lg border border-linha bg-fundo text-tinta-apagada transition-colors hover:border-[var(--accent-line)] hover:text-tinta"
+              >
+                <Icone referencia="icones.svg#arrow-left" className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => deslizar(1)}
+                aria-label="Ver os próximos planos"
+                className="grid size-7 place-items-center rounded-lg border border-linha bg-fundo text-tinta-apagada transition-colors hover:border-[var(--accent-line)] hover:text-tinta"
+              >
+                <Icone referencia="icones.svg#arrow-right" className="size-3.5" />
+              </button>
+            </div>
           </fieldset>
+
+          {/*
+            O QUE O PLANO ESCOLHIDO DÁ, embaixo do carrossel.
+
+            Aqui a lista tem largura inteira para respirar, e ela muda sozinha
+            quando o cartão selecionado muda — é a recompensa de ter escolhido,
+            e o lugar onde a pessoa confere se entendeu certo.
+          */}
+          {planoEscolhido && (
+            <div className="entrada-degrau rounded-2xl border border-linha bg-fundo p-4">
+              <span className="mb-1 flex items-center gap-1.5 text-[10.5px] font-medium tracking-[1.2px] text-tinta-apagada uppercase">
+                <Icone referencia="icones.svg#badge-check" className="size-3 text-ambar" />
+                {planoEscolhido.nome.replace(/^CodeEx Optmize — /, "")}
+              </span>
+
+              {/*
+                A RÉGUA REPETIDA AQUI, em uma linha — e não é repetição à toa: o
+                cartão escolhido pode estar fora da vista depois de a pessoa
+                arrastar o carrossel, e este bloco é onde ela confere o que
+                escolheu antes de preencher os dados.
+              */}
+              <p className="mt-0 mb-2.5 text-[11.5px] text-tinta-apagada">
+                {reguaDoPlano(planoEscolhido)}
+                {porMesDoAnual(planoEscolhido) &&
+                  ` · equivale a ${porMesDoAnual(planoEscolhido)} por mês`}
+              </p>
+              <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                {planoEscolhido.vantagens.map((v) => (
+                  <li
+                    key={v}
+                    className="flex items-start gap-2 text-[12px] leading-relaxed text-tinta-fraca"
+                  >
+                    <Icone
+                      referencia="icones.svg#check"
+                      className="mt-0.5 size-3.5 shrink-0 text-ambar"
+                    />
+                    {v}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <button
             type="button"

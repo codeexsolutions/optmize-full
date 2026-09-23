@@ -485,6 +485,35 @@
 }
 
 /*
+ * O BRILHO ATRÁS DA MARCA, na porta.
+ *
+ * O painel web tem um halo que respira atrás do logotipo, feito com
+ * framer-motion (`opacity: [0.35, 0.75, 0.35]`, `scale: [1, 1.15, 1]`). Aqui
+ * ele é o mesmo movimento em CSS, e em LARANJA: a cor sai de `--accent`, que
+ * é lido do arquivo do logotipo (ver tokens.css), e não do azul-marca de lá.
+ *
+ * Por que um halo que pulsa e não um brilho parado: a porta é a única tela do
+ * programa em que não há nada acontecendo — sem isso ela parece congelada
+ * enquanto a pessoa digita a senha, e o movimento diz "está vivo, e é aqui".
+ */
+@keyframes porta-pulsa {
+  0%, 100% { opacity: .30; transform: scale(1); }
+  50%      { opacity: .70; transform: scale(1.15); }
+}
+
+.porta-pulsa {
+  animation: porta-pulsa 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Parado, e não ausente: o brilho também é o que assenta a marca no fundo. */
+  .porta-pulsa {
+    animation: none;
+    opacity: .45;
+  }
+}
+
+/*
  * ===========================================================================
  * OS EFEITOS DA TELA DE ENTRAR
  * ===========================================================================
