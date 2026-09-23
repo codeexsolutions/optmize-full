@@ -21,7 +21,7 @@
  *
  * A árvore na lateral, o cabeçalho em versalete com a contagem ao lado, o item
  * que se abre em cascata, a tipografia miúda com os números em mono, o estado
- * vazio com o ícone grande no meio: tudo isso é a tela de Projetos da Lite
+ * vazio com o ícone grande no meio: tudo isso é a tela de Projetos do painel web
  * (`optmize-lite/src/features/projects/ProjectsPage.tsx`), reproduzida aqui.
  *
  * O que NÃO veio é a estrutura de dados dela. Lá um projeto tem subprojetos,
@@ -31,7 +31,7 @@
  * "levar pro Encaixe" é o mesmo de sempre.
  *
  * A correspondência entre as duas telas é direta, e é o que faz o desenho
- * encaixar sem forçar: o CLIENTE ocupa o lugar do "projeto" da Lite (é o que
+ * encaixar sem forçar: o CLIENTE ocupa o lugar do "projeto" de lá (é o que
  * expande) e o PROJETO ocupa o do "subprojeto" (é o que abre no miolo).
  *
  * Duas diferenças assumidas:
@@ -39,12 +39,12 @@
  * - os ícones saem do sprite (`icones.svg`), e não do `lucide-react`. São os
  *   mesmos desenhos do Lucide — o sprite existe para o app instalado não
  *   depender de internet, e trazer o pacote seria uma segunda fonte deles;
- * - as animações são de CSS, e não do `framer-motion`. O que a Lite anima aqui
+ * - as animações são de CSS, e não do `framer-motion`. O que a painel web anima aqui
  *   é a entrada de cada item da lista: é uma transição, não vale uma
  *   dependência a mais dentro do instalador.
  *
  * E uma mudança que veio junto e é melhoria de verdade: o editor deixou de ser
- * um modal por cima da estante e virou a ÁREA PRINCIPAL, como na Lite. O modal
+ * um modal por cima da estante e virou a ÁREA PRINCIPAL, como no painel web. O modal
  * cobria a lista, então trocar de projeto era fechar, procurar e abrir de novo.
  *
  * A ida para o Encaixe continua passando pelo controlador, pela `ligacao`: o
@@ -373,7 +373,7 @@ function PastaDoCliente({
 
         {/*
           As duas ações da pasta só aparecem com o ponteiro em cima, como na
-          Lite: a lista fica limpa, e o que se faz o tempo todo (abrir) não
+          painel web: a lista fica limpa, e o que se faz o tempo todo (abrir) não
           disputa espaço com o que se faz uma vez. `focus-within` mantém as
           duas alcançáveis pelo teclado.
         */}
@@ -658,7 +658,7 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
           </span>
           {/*
             O nome do projeto é editado ali mesmo, sem campo com moldura — é o
-            `EditableText` da Lite. A moldura aparece ao passar o ponteiro.
+            `EditableText` do painel web. A moldura aparece ao passar o ponteiro.
           */}
           <input
             value={nome}
@@ -934,7 +934,7 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
   );
 }
 
-/** O campo dos ajustes, na medida da Lite: rótulo em versalete sobre a caixa. */
+/** O campo dos ajustes, na medida do painel web: rótulo em versalete sobre a caixa. */
 const CAMPO =
   "h-10 w-full rounded-xl border border-linha bg-painel-suave px-3 text-sm text-tinta" +
   " placeholder:text-tinta-apagada focus:border-[var(--accent-line)] focus:outline-none";

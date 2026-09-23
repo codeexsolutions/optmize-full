@@ -1046,7 +1046,7 @@ const giroPadrao = () => encaixeGiroTodasSelect.value;
 /**
  * A linha de cada arquivo, e o que se abre embaixo dela.
  *
- * A linha é a do Optmize Lite: miniatura, nome, medida, quantidade e o X de
+ * A linha é a do painel web: miniatura, nome, medida, quantidade e o X de
  * tirar — uma linha por arquivo, para caber lote grande na coluna sem rolar
  * até o fim do mundo.
  *
@@ -2838,7 +2838,7 @@ function renderResultado() {
 
   /*
    * A faixa de status leva os cinco números que a produção olha de relance —
-   * os mesmos do Lite, na mesma ordem. Os outros cinco não sumiram: foram para
+   * os mesmos do painel web, na mesma ordem. Os outros cinco não sumiram: foram para
    * "Como este encaixe foi feito", onde se lê quando há dúvida, e não a cada
    * encaixe.
    */
@@ -3466,7 +3466,7 @@ let vistaDoRisco = null; // { px, regua, deitado, larguraTecido } do desenho na 
 
 /*
  * O zoom do risco. 1 é "o que cabe na altura da bancada" — o mesmo ponto de
- * partida do Lite, onde 100% é a vista inteira e não uma escala absoluta.
+ * partida do painel web, onde 100% é a vista inteira e não uma escala absoluta.
  *
  * Num rolo de 25 m a vista inteira deixa cada peça com poucos milímetros na
  * tela; é onde se confere o desenho como um todo. Aproximar é o que permite
@@ -3688,7 +3688,7 @@ document.addEventListener("optimize:trocou-de-tela", () => limparSelecaoDoRisco(
  * único instante em que isso importa. A busca gasta minutos e toma os
  * núcleos da máquina; um confere de dois segundos é barato perto disso.
  *
- * O desenho é o do Optmize Lite (`OptimizeModal.tsx`): selo, contagem do
+ * O desenho é o do painel web (`OptimizeModal.tsx`): selo, contagem do
  * trabalho e as medidas grandes em fonte de números. Quem usa os dois não
  * deveria ter que aprender a mesma tela duas vezes.
  */

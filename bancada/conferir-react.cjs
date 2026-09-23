@@ -30,7 +30,15 @@ async function main() {
   const bundle = path.join(os.tmpdir(), 'optimize-react-' + process.pid + '.cjs');
   buildSync({ entryPoints: [path.join(root, 'src/App.tsx')], bundle: true,
     outfile: bundle, platform: 'node', format: 'cjs', loader: { '.css': 'empty' },
-    external: ['react','react-dom'], define: { 'import.meta.env.BASE_URL': '"/"' },
+    external: ['react','react-dom'],
+    // Os mesmos `define` do vite.config.mts. `__VERSAO__` vira texto fixo na
+    // compilacao de verdade; aqui, sem ele, a barra e a porta quebram com
+    // "__VERSAO__ is not defined" -- e o erro seria do banco de prova, nao do
+    // programa.
+    define: {
+      'import.meta.env.BASE_URL': '"/"',
+      __VERSAO__: JSON.stringify(require(path.join(root, 'package.json')).version),
+    },
     // O esbuild cru nao procura `.mjs` sozinho; o Vite procura. O `encaixeRede`
     // e `.mjs` para o servidor conseguir `require()` nele, entao a extensao
     // entra na lista a mao -- senao `./encaixeRede` nao resolve aqui.
@@ -119,7 +127,7 @@ async function main() {
   // tras, a tela seguinte simplesmente nao rolava -- ja aconteceu.
   assert.equal(document.body.classList.contains('modal-aberto'),false,
     'e devolve a rolagem da pagina');
-  // A tela de Projetos ganhou o desenho do Optmize Lite: a arvore de clientes
+  // A tela de Projetos ganhou o desenho do painel web: a arvore de clientes
   // fica numa <aside>, e o projeto aberto ocupa a area principal.
   const arvore = () => [...document.querySelectorAll('aside')].find(a=>/CLIENTES|Clientes/.test(a.textContent));
   // A arvore chega depois do pedido ao servidor: sem esta volta ao laco, ela

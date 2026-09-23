@@ -1,0 +1,87 @@
+# ===========================================================================
+# CONFERIR — as mesmas provas de antes, fora do caminho do lançamento
+# ===========================================================================
+#
+# Elas rodavam DENTRO do `lancar.yml`, e cada lançamento esperava 68 segundos
+# por elas antes de começar a compilar. Aqui rodam AO LADO: o mesmo push
+# dispara os dois trabalhos, o instalador começa a ser compilado no primeiro
+# segundo, e a conferência conta o que achou quando terminar.
+#
+# O QUE SE PERDE, ESCRITO EM VOZ ALTA: enquanto elas eram um passo do
+# lançamento, uma prova vermelha PARAVA a publicação. Agora não param mais — um
+# tipo quebrado ou uma bancada falhando sai para as gráficas do mesmo jeito, e
+# o X vermelho aparece do lado, no histórico de Actions.
+#
+# É a troca que foi pedida, e ela tem um ganho real: o lançamento deixa de
+# esperar por elas. Mas o número honesto é este — os 68 segundos são de ~9
+# minutos e meio de lançamento, e os outros 6 minutos são a compilação do Rust,
+# que nenhuma dessas provas atrasa.
+#
+# Para voltar atrás, o caminho é um só: devolver o passo "Conferências" ao
+# `lancar.yml`, antes de "Compilar e assinar".
+
+name: Conferir
+
+on:
+  push:
+    branches: [main]
+    # As mesmas pastas que fazem versão nova: conferir documentação não tem o
+    # que conferir.
+    paths:
+      - "src/**"
+      - "servidor/**"
+      - "estatico/**"
+      - "empacotar/**"
+      - "src-tauri/**"
+      - "corel/**"
+      - "estilo/**"
+      - "bancada/**"
+      - "index.html"
+      - "vite.config.mts"
+      - "tsconfig.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".node-version"
+  pull_request:
+  workflow_dispatch:
+
+# Uma rodada por branch: um push novo cancela a conferência do anterior, que
+# já não interessa a ninguém. O contrário do lançamento, que nunca se cancela.
+concurrency:
+  group: conferencia-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conferir:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        # bash para todos os passos: com ele, o primeiro comando que falha
+        # derruba o passo. No PowerShell, só o código de saída do ÚLTIMO comando
+        # conta — uma conferência quebrada no meio passaria calada.
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Node (o mesmo que vai dentro do instalador)
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Dependências
+        run: npm ci
+
+      - name: Tipos
+        run: npm run tipos
+
+      - name: Revisão
+        run: npm run bancada:revisao
+
+      - name: Bancada
+        run: npm run bancada:conferir
+
+      - name: Encolher
+        run: npm run bancada:encolher

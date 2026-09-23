@@ -4,28 +4,51 @@ Desde 2026-09-21, **o que entra na `main` vira versão nova sozinho**. Ninguém
 precisa compilar, reinstalar nem deixar máquina ligada.
 
 ```
-push na main  →  GitHub: conferências → compila e assina → publica → etiqueta v1.0.N
+push na main  →  GitHub: compila e assina → hospeda no GitHub → publica → etiqueta v1.0.N
+                 GitHub: confere (ao lado, sem atrasar o lançamento)
                                                               ↓
-                     quem REABRE o programa se atualiza sozinho, 90 s depois
-                     quem está com ele aberto é perguntado a cada 2 h
+                     quem REABRE o programa se atualiza sozinho, 15 s depois
+                     quem está com ele aberto continua na versão instalada
 ```
 
 Quem faz isso é `.github/workflows/lancar.yml`, nas máquinas do GitHub
 (repositório público: não custa nada). O lado das lojas já existia: o programa
-pergunta ao backend 90 s depois de abrir e a cada 2 horas.
+pergunta ao backend logo depois de abrir e de cinco em cinco minutos.
 
-**A rodada da abertura instala sozinha; as seguintes perguntam.** São dois
+**AS CONFERÊNCIAS CORREM AO LADO, e não no caminho.** Elas eram um passo do
+lançamento e custavam 68 segundos a cada versão. Hoje moram em
+`.github/workflows/conferir.yml`, disparadas pelo mesmo push: o instalador
+começa a compilar no primeiro segundo e as provas contam o que acharam quando
+terminam. **O preço é real: prova vermelha não para mais a publicação.** O que
+continua parando é o que quebra a compilação, e a falta de assinatura, que o
+`publicar` recusa.
+
+Onde o tempo de um lançamento fica, medido na versão 1.1.160:
+
+| Passo | Tempo |
+|---|---|
+| Compilar e assinar | 5 min 51 s |
+| Dependências | 1 min 32 s |
+| Resto (checkout, Node, Rust, cache, publicar, etiqueta) | ~1 min |
+
+**A rodada da abertura instala sozinha; as seguintes não perguntam nada.** São dois
 momentos com respostas diferentes para "posso reiniciar agora?": recém-aberto
-não há encaixe na tela para perder, e perguntar ali só faria a loja ficar mais
-um dia na versão velha por um "agora não" de reflexo; com o programa aberto há
-horas existe trabalho na tela, e uma atualização que interrompe o serviço do
-cliente é pior que uma que chega uma tarde mais tarde (ver
-`cuidar_das_atualizacoes`, em `src-tauri/src/main.rs`).
+não há encaixe na tela para perder; com o programa aberto há horas existe
+trabalho na tela, e uma atualização que interrompe o serviço do cliente é pior
+que uma que chega no dia seguinte (ver `cuidar_das_atualizacoes`, em
+`src-tauri/src/main.rs`).
 
-Os 90 s de espera não são só para não disputar com o arranque: **eles são a
-trava** que prova que a versão instalada abre. Sem eles, uma versão que não
-sobe instalaria a seguinte por cima — e, se a seguinte também estivesse
-quebrada, a loja se reinstalaria em laço sem ninguém para dizer não.
+**Não existe mais caixa de "Atualizar agora".** Ela parava o expediente para
+dar uma boa notícia. A regra agora cabe numa linha: a versão nova entra na
+próxima vez que o Optmize abrir. Quem fecha no fim do dia abre atualizado sem
+ver nada; quem nunca fecha continua na versão instalada até fechar — e é por
+isso que a próxima peça é um aviso DISCRETO na barra, sem modal.
+
+Os 15 s de espera antes da primeira checagem não são só para não disputar com
+o arranque: **eles são a trava** que prova que a versão instalada abre. Sem
+eles, uma versão que não sobe instalaria a seguinte por cima — e, se a seguinte
+também estivesse quebrada, a loja se reinstalaria em laço sem ninguém para
+dizer não.
 
 ## O que dispara, e o que não
 

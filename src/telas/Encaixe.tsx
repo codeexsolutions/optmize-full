@@ -209,7 +209,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
     o cobre quando existe (os dois são `absolute inset-0`, e quem vem depois no
     HTML fica por cima — mas o risco só aparece quando deixa de ser `hidden`,
     e aí esta camada já está escondida pela mesma regra), e o cartão flutua por
-    cima dele, que é como o Optmize Lite faz: o convite não esconde a mídia.
+    cima dele, que é como o painel web faz: o convite não esconde a mídia.
 
     Quem a acende é a mesma regra de `producao.css` que acende o cartão — ver
     lá o porquê do `!important`. Quem a DESENHA é o `controlador.js`.

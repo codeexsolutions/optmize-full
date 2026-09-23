@@ -1,11 +1,11 @@
 /**
  * ===========================================================================
- * MODAL — a caixa do Optmize Lite
+ * MODAL — a caixa do painel web
  * ===========================================================================
  *
  * Véu escuro com desfoque, caixa de cantos bem redondos, um selo de ícone no
  * canto, título, o miolo e os botões à direita. É o `Modal` de
- * `components/ui/index.tsx` da Lite, reproduzido com os tokens daqui.
+ * `components/ui/index.tsx` do painel web, reproduzido com os tokens daqui.
  *
  * ---------------------------------------------------------------------------
  * ELE NÃO É A CAIXA DE DIÁLOGO

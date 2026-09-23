@@ -4,7 +4,7 @@
  * ===========================================================================
  *
  * Duas colunas no computador: a marca e o que o programa faz à esquerda, um
- * cartão à direita. É o desenho do Optmize Lite (`layouts/AuthLayout.tsx`, no
+ * cartão à direita. É o desenho do painel web (`layouts/AuthLayout.tsx`, no
  * outro repositório), e é por isso que ele é um arquivo à parte aqui também:
  * há DUAS telas antes de entrar — o login e o cadastro da empresa —, e elas
  * têm de ser a mesma casa.
@@ -65,7 +65,7 @@ export function Porta({
   return (
     <div className="grid h-screen w-full overflow-hidden bg-fundo font-texto text-tinta antialiased tela:grid-cols-[1.05fr_1fr]">
       {/*
-        A COLUNA DA ESQUERDA some abaixo de 801px (`tela:`), como no Lite: numa
+        A COLUNA DA ESQUERDA some abaixo de 801px (`tela:`), como no painel web: numa
         janela estreita ela empurraria o cartão para fora da vista, e o cartão
         é a única coisa aqui que alguém precisa alcançar.
       */}
@@ -80,20 +80,31 @@ export function Porta({
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_50%_at_0%_0%,var(--accent-soft)_0%,transparent_60%),linear-gradient(178deg,var(--card-bg)_0%,var(--sidebar-bg)_45%,var(--bg)_100%)]"
         />
         <div className="relative flex items-center gap-3">
+          {/*
+            O HALO QUE RESPIRA atrás da marca — o mesmo do painel web, em
+            laranja. Fica `absolute` e atrás do logotipo: é brilho, não moldura,
+            e nada nele deve empurrar o nome para o lado.
+          */}
           {/* A MARCA DE VERDADE, e não um ícone genérico: é o mesmo desenho
               que o instalador, a aba do navegador e o pé da barra usavam. */}
-          <img
-            src={`${import.meta.env.BASE_URL}icone.png`}
-            alt=""
-            className="size-10 shrink-0 rounded-[10px]"
-          />
+          <span className="relative grid shrink-0 place-items-center">
+            <span
+              aria-hidden="true"
+              className="porta-pulsa pointer-events-none absolute -inset-3 rounded-full bg-ambar blur-xl"
+            />
+            <img
+              src={`${import.meta.env.BASE_URL}icone.png`}
+              alt=""
+              className="relative size-10 rounded-[10px]"
+            />
+          </span>
           {/*
-            O NOME É "CodeEx Optmize", e não "Optmize Full".
+            O NOME é "CodeEx Optmize", e nada mais.
 
-            "Full" é como se distingue este programa do Lite numa conversa
-            interna — não é o nome dele. Na porta de entrada, o que a pessoa
-            tem de ler é o nome do produto, o mesmo que está no instalador, na
-            aba do navegador e na tela Sobre.
+            Não há edição, versão nem sufixo a distinguir: é um programa só, e o
+            que muda entre os planos é como se paga por ele. Na porta de
+            entrada, o que a pessoa lê é o mesmo nome que está no instalador,
+            na aba do navegador e na tela Sobre.
           */}
           <span className="font-titulo text-[20px] tracking-tight">
             <span className="text-tinta-fraca">CodeEx </span>
@@ -125,13 +136,19 @@ export function Porta({
           </ul>
         </div>
 
+        {/*
+          A versão acompanha o rodapé da porta pela mesma razão que aparece na
+          barra: quem liga para o suporte quase nunca está DENTRO do programa —
+          está parado na tela de entrar, que é onde o problema apareceu.
+        */}
         <p className="relative m-0 text-[11.5px] text-tinta-apagada">
           © {new Date().getFullYear()} Optmize · CodeEx Solutions
+          <span className="font-mono text-tinta-apagada/60"> · v{__VERSAO__}</span>
         </p>
       </aside>
 
       <div className="relative flex h-full w-full justify-center overflow-y-auto px-4 py-6">
-        {/* Os brilhos presos à coluna do cartão, como no Lite. */}
+        {/* Os brilhos presos à coluna do cartão, como no painel web. */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-24 -left-24 size-[420px] rounded-full bg-ambar opacity-[0.10] blur-[130px]" />
           <div className="absolute -right-24 -bottom-24 size-[420px] rounded-full bg-ambar opacity-[0.07] blur-[130px]" />
@@ -153,11 +170,17 @@ export function Porta({
         <div className="entrada-sobe relative z-10 my-auto w-full max-w-[480px]">
           {/* No computador a marca já está na coluna ao lado; aqui repetiria. */}
           <div className="mb-6 flex flex-col items-center gap-3 tela:hidden">
-            <img
-              src={`${import.meta.env.BASE_URL}icone.png`}
-              alt=""
-              className="size-14 rounded-xl"
-            />
+            <span className="relative grid place-items-center">
+              <span
+                aria-hidden="true"
+                className="porta-pulsa pointer-events-none absolute -inset-4 rounded-full bg-ambar blur-2xl"
+              />
+              <img
+                src={`${import.meta.env.BASE_URL}icone.png`}
+                alt=""
+                className="relative size-14 rounded-xl"
+              />
+            </span>
             <h1 className="m-0 font-titulo text-2xl tracking-tight">
               <span className="font-medium text-tinta-fraca">CodeEx </span>
               <span className="font-bold text-ambar">Optmize</span>
@@ -165,7 +188,7 @@ export function Porta({
           </div>
 
           <div className="relative rounded-2xl border border-linha bg-painel/90 p-8 backdrop-blur transition-[border-color,box-shadow] duration-300 shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85)] focus-within:border-[var(--accent-line)] focus-within:shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85),0_0_0_1px_var(--accent-line)]">
-            {/* O fio de luz no topo do cartão — o detalhe que o Lite tem. */}
+            {/* O fio de luz no topo do cartão — o detalhe que o painel web tem. */}
             <span
               aria-hidden="true"
               className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-60"
@@ -179,6 +202,39 @@ export function Porta({
       </div>
     </div>
   );
+}
+
+/**
+ * O CNPJ **ou** o CPF com máscara enquanto se digita.
+ *
+ * UM CAMPO SÓ, sem escolher o tipo antes. Onze dígitos viram
+ * `529.982.247-25`; catorze viram `11.222.333/0001-81`. Como nenhum CPF tem
+ * catorze dígitos e nenhum CNPJ tem onze, o tamanho decide sozinho — e um
+ * seletor "CPF/CNPJ" seria um clique a mais para dizer o que o próprio número
+ * já diz.
+ *
+ * NO CAMINHO ATÉ ONZE DÍGITOS a máscara é a do CPF, porque é o formato que os
+ * dois compartilham no começo (`000.000.000`). Ao chegar no décimo segundo,
+ * ela vira CNPJ inteira. O pulo é visível e é o certo: quem está digitando um
+ * CNPJ vê a barra aparecer na hora em que ele deixa de caber num CPF.
+ *
+ * A máscara é só da TELA: o que viaja é o que a pessoa escreveu, e quem
+ * normaliza e confere os dígitos verificadores é o servidor
+ * (`domain/documento.ts`). Conferir aqui também daria duas respostas para a
+ * mesma pergunta no dia em que uma das duas mudasse.
+ */
+export function mascararDocumento(texto: string): string {
+  const d = texto.replace(/\D/g, "").slice(0, 14);
+
+  if (d.length <= 11) {
+    if (d.length <= 3) return d;
+    if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+    if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  }
+
+  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 }
 
 /**

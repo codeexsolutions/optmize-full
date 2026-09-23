@@ -50,7 +50,8 @@ concurrency:
   group: lancamento
   cancel-in-progress: false
 
-# Escrever no repositório só para a etiqueta v<versão> do fim.
+# Escrever no repositório para a etiqueta v<versão> e para a release que
+# hospeda o instalador.
 permissions:
   contents: write
 
@@ -117,13 +118,16 @@ jobs:
         id: versao
         run: node empacotar/versao-do-lancamento.js
 
-      - name: Conferências
-        # Se qualquer uma falhar, nada é publicado.
-        run: |
-          npm run tipos
-          npm run bancada:revisao
-          npm run bancada:conferir
-          npm run bancada:encolher
+      # AS CONFERÊNCIAS SAÍRAM DAQUI, e agora correm ao lado, no `conferir.yml`.
+      #
+      # Elas custavam 68 segundos em cada lançamento, e o pedido foi tirar o
+      # que atrasa a atualização de chegar. Correndo em paralelo, o instalador
+      # começa a compilar no primeiro segundo e as provas contam o que acharam
+      # quando terminarem.
+      #
+      # O QUE MUDA DE VERDADE: prova vermelha não para mais a publicação. O que
+      # continua parando é o que quebra a COMPILAÇÃO, e a falta de assinatura,
+      # que o `publicar` recusa.
 
       - name: Compilar e assinar
         env:
@@ -140,32 +144,61 @@ jobs:
           printf '%s' "$CONTEUDO_DA_CHAVE" > "$CHAVE"
           TAURI_SIGNING_PRIVATE_KEY="$CHAVE" npm run build:app
 
+      # ---------------------------------------------------------------------
+      # ONDE O INSTALADOR FICA HOSPEDADO
+      # ---------------------------------------------------------------------
+      # Na release do GitHub, e não no Storage do backend. Não é preferência:
+      # o Supabase deste projeto recusa arquivo acima de 50 MB e o instalador
+      # tem 96 — o envio morria com 500 depois de dez minutos de compilação.
+      #
+      # O repositório é público, então o endereço do anexo é público e
+      # permanente. O backend guarda a ficha (versão, notas, tamanho,
+      # assinatura) e o `/download` redireciona para cá.
+      - name: Hospedar o instalador
+        id: hospedar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSAO: ${{ steps.versao.outputs.versao }}
+        run: |
+          EXE=$(ls src-tauri/target/release/bundle/nsis/*_"$VERSAO"_x64-setup.exe | head -1)
+          [ -n "$EXE" ] || { echo "::error::não achei o instalador da $VERSAO"; exit 1; }
+          NOME=$(basename "$EXE")
+
+          # `--clobber` porque relançar o mesmo commit pelo botão reenvia o
+          # mesmo arquivo: sem ele, o segundo envio falharia com "já existe".
+          if gh release view "v$VERSAO" >/dev/null 2>&1; then
+            gh release upload "v$VERSAO" "$EXE" "$EXE.sig" --clobber
+          else
+            gh release create "v$VERSAO" "$EXE" "$EXE.sig" \
+              --title "Optmize $VERSAO" \
+              --notes "Instalador do CodeEx Optmize para Windows 64 bits."
+          fi
+
+          REPO="${{ github.repository }}"
+          echo "url=https://github.com/$REPO/releases/download/v$VERSAO/$NOME" >> "$GITHUB_OUTPUT"
+
+      # NADA DE NOTAS.
+      #
+      # Aqui se montava a lista de commits desde o lançamento anterior, e ela
+      # ia parar na caixa de "Atualizar agora" da gráfica — texto escrito por
+      # quem programa, para quem programa. O que muda em cada versão continua
+      # no histórico do repositório e na release do GitHub; a caixa do cliente
+      # diz o que interessa a ele, que é ter versão nova.
       - name: Publicar
         env:
           OPTMIZE_ADMIN_KEY: ${{ secrets.OPTMIZE_ADMIN_KEY }}
-          ANTES: ${{ github.event.before }}
-        run: |
-          # As notas são o que aparece no "Atualizar agora" das lojas: a
-          # primeira linha de cada commit desde o lançamento anterior. Vão por
-          # variável, e não escritas no comando, porque texto de commit não é
-          # código para rodar.
-          if [ -z "$ANTES" ] || ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
-            ANTES=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
-          fi
-          if [ -n "$ANTES" ]; then
-            NOTAS=$(git log --no-merges --format='- %s' "$ANTES..HEAD" | head -n 8)
-          else
-            NOTAS=$(git log --no-merges --format='- %s' -n 5)
-          fi
-          npm run publicar -- "$NOTAS"
+          OPTMIZE_RELEASE_URL: ${{ steps.hospedar.outputs.url }}
+        run: npm run publicar
 
+      # A etiqueta v<versão> agora nasce junto da release do GitHub, no passo
+      # de hospedar — `gh release create` cria a tag no commit atual. Este
+      # passo ficou só para o caso de a release já existir de um relançamento:
+      # aí a tag também já existe, e não há o que fazer.
       - name: Etiqueta
-        # Qual commit virou qual versão, para achar depois.
         env:
           VERSAO: ${{ steps.versao.outputs.versao }}
         run: |
-          # Relançar o mesmo commit pelo botão dá a mesma versão, e a etiqueta
-          # já existe: aí não há o que marcar.
+          git fetch --tags --quiet || true
           if git rev-parse -q --verify "refs/tags/v$VERSAO" >/dev/null; then
             echo "a etiqueta v$VERSAO já existe"
           else

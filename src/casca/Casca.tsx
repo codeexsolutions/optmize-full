@@ -31,6 +31,8 @@ import { Suspense, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
 import { Entrar } from "../telas/Entrar";
+import { Espera } from "../telas/Espera";
+import { ProvedorDeEscopos } from "./Escopos";
 import { useSessao } from "./usuario";
 import { ProvedorDeDialogo } from "./Dialogo";
 import { Cabecalho } from "./Cabecalho";
@@ -122,11 +124,37 @@ export function Casca() {
   if (sessao.estado === "fora") return <Entrar aoEntrar={sessao.recarregar} />;
 
   /*
+    O TERCEIRO ESTADO: entrou, e ainda não pode trabalhar.
+
+    Antes eram dois — fora e dentro —, e quem cadastrava num plano pago
+    entrava e via o programa inteiro com a assinatura pendente, enquanto a
+    tela de cadastro prometia o contrário. Quem decide é o backend; esta linha
+    só obedece.
+  */
+  if (sessao.estado === "bloqueado" && sessao.acesso) {
+    return (
+      <Espera
+        acesso={sessao.acesso}
+        nome={sessao.usuario?.nome ?? ""}
+        aoConferir={sessao.conferir}
+        aoSair={sair}
+      />
+    );
+  }
+
+  /*
    * O provedor do diálogo envolve a casca inteira: a caixa de confirmar e a de
    * perguntar são de quem estiver na frente, e uma tela não deveria precisar
    * montar a sua para poder perguntar alguma coisa.
    */
   return (
+    /*
+      OS ESCOPOS ENVOLVEM TUDO porque duas peças precisam deles e elas estão
+      em lugares distantes: o MENU, para pôr o cadeado, e a ROTA, para trocar
+      a tela pelo aviso. Passar por propriedade atravessaria meia dúzia de
+      componentes que não têm nada com plano nenhum.
+    */
+    <ProvedorDeEscopos escopos={sessao.acesso?.escopos ?? null}>
     <ProvedorDeDialogo>
     <ProvedorSemCabecalho value={setSemCabecalho}>
     <div data-tela={tela.nome} className="app-react h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
@@ -227,5 +255,6 @@ export function Casca() {
     </div>
     </ProvedorSemCabecalho>
     </ProvedorDeDialogo>
+    </ProvedorDeEscopos>
   );
 }
