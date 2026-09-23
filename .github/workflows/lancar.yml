@@ -28,6 +28,12 @@ on:
     # bancada ou do firmware do ESP não é versão nova para as lojas.
     paths:
       - "src/**"
+      # O painel COMPILADO, que é o que o instalador leva de verdade. Ele quase
+      # sempre muda junto com o `src/` e por isso parecia dispensável aqui — até
+      # aparecer o caso em que não muda junto: um commit que SÓ recompila o
+      # painel, para consertar um build quebrado. Sem esta linha, esse conserto
+      # não vira instalador novo, e as gráficas continuam baixando o quebrado.
+      - "dist/**"
       - "servidor/**"
       - "estatico/**"
       - "empacotar/**"
