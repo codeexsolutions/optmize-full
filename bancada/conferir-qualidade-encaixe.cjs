@@ -49,11 +49,24 @@ async function main() {
         const girada = await arteQualidade.desenharPecaGirada(peca, rot);
         giradas.push({ rot, tipo: girada.type, bytes: await base64(girada) });
       }
+      // A peça girada ANTES do encaixe (`rotacaoBase`) sai no PDF girada pela
+      // soma dos dois giros, e a chave continua sendo a do giro do encaixe —
+      // é por ela que o PDF procura a arte (ver `prepararArtes`).
+      const comBase = [];
+      const combinacoes = [[90, 0], [90, 90], [270, 180], [180, 180]];
+      const artesComBase = await arteQualidade.prepararArtes(combinacoes.map(([base, rot], indice) => ({
+        item: { ...peca, indice, rotacaoBase: base }, rot,
+      })));
+      for (let indice = 0; indice < combinacoes.length; indice++) {
+        const [base, rot] = combinacoes[indice];
+        const arte = artesComBase.get(`${indice}-${rot}`);
+        comBase.push({ base, rot, bytes: arte ? await base64(arte) : null });
+      }
       const recortada = await arteQualidade.desenharPecaGirada({ ...peca,
         arquivoOriginal: blob(fundo, 'image/png'), fundoNaExportacao: 'auto' }, 0);
       const previaValida = previa.width;
       previa.close();
-      return { direta: await base64(direta), jpegDireto: await base64(jpegDireto), giradas,
+      return { direta: await base64(direta), jpegDireto: await base64(jpegDireto), giradas, comBase,
         recortada: await base64(recortada), previaValida };
     }, { png: png.toString('base64'), jpg: jpg.toString('base64'), fundo: fundo.toString('base64') });
     assert.deepEqual(Buffer.from(resultado.direta, 'base64'), png, 'PNG sem giro mantém todos os bytes');
@@ -68,13 +81,22 @@ async function main() {
       assert.equal(real.info.height, esperado.info.height);
       assert.deepEqual(real.data, esperado.data, `giro ${girada.rot} preserva cada pixel`);
     }
+    for (const { base, rot, bytes } of resultado.comBase) {
+      assert.ok(bytes, `a arte da peça girada ${base}° (encaixe ${rot}°) está na chave do giro do encaixe`);
+      const total = (base + rot) % 360;
+      const esperado = await sharp(png).rotate(total).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const real = await sharp(Buffer.from(bytes, 'base64')).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      assert.equal(real.info.width, esperado.info.width, `giro base ${base}° + encaixe ${rot}°: largura`);
+      assert.equal(real.info.height, esperado.info.height, `giro base ${base}° + encaixe ${rot}°: altura`);
+      assert.deepEqual(real.data, esperado.data, `giro base ${base}° + encaixe ${rot}° sai girado ${total}° sem perder pixel`);
+    }
     const recorte = await sharp(Buffer.from(resultado.recortada, 'base64')).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     assert.equal(recorte.info.width, largura);
     assert.equal(recorte.info.height, altura);
     assert.equal(recorte.data[3], 0, 'fundo retirado na resolução original');
     const centro = (300 * largura + 450) * 4;
     assert.deepEqual([...recorte.data.subarray(centro, centro + 4)], [18, 52, 86, 255]);
-    console.log('OK — PNG/JPEG originais intactos; giros 90/180/270 sem perda de pixels; fundo removido em resolução nativa.');
+    console.log('OK — PNG/JPEG originais intactos; giros 90/180/270 sem perda de pixels; peça girada antes do encaixe sai girada pela soma; fundo removido em resolução nativa.');
   } finally { await browser.close(); }
 }
 main().catch(erro => { console.error(erro); process.exitCode = 1; });

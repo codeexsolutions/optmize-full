@@ -22,7 +22,7 @@
  * uma. A tela não fica sabendo da diferença.
  */
 
-import { gradeDaPeca } from "./encaixeMascara";
+import { comGiroBase, gradeDaPeca, pecaSemGiro, rotacaoBaseDe } from "./encaixeMascara";
 import {
   chaveDasMascaras, mascarasDaPeca, pixelsDaArteNaGrade, pixelsDaImagem,
   removerFundoDaImagem,
@@ -143,7 +143,7 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
   // que é o que manda no custo — não no número de peças.
   const CELULAS_PARA_VALER = 150000;
   const celulas = pendentes.reduce((soma, peca) => {
-    const { cols, rows } = gradeDaPeca(peca, passo);
+    const { cols, rows } = gradeDaPeca(pecaSemGiro(peca), passo);
     return soma + cols * rows;
   }, 0);
   if (celulas < CELULAS_PARA_VALER) return emSerie();
@@ -167,8 +167,10 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
     const semPixels = [];
     const tarefas = [];
     pendentes.forEach((peca) => {
-      const { cols, rows } = gradeDaPeca(peca, passo);
-      const dados = peca.contorno === "caixa" ? null : pixelsDaArteNaGrade(peca, cols, rows, passo);
+      // A arte como chegou; o giro base entra na volta (ver `comGiroBase`).
+      const crua = pecaSemGiro(peca);
+      const { cols, rows } = gradeDaPeca(crua, passo);
+      const dados = peca.contorno === "caixa" ? null : pixelsDaArteNaGrade(crua, cols, rows, passo);
       if (peca.contorno !== "caixa" && !dados) {
         // Canvas bloqueado: esta peça é resolvida na tela mesmo, mais adiante.
         semPixels.push(peca);
@@ -178,7 +180,7 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
       tarefas.push({
         peca,
         mensagem: { tipo: "mascaras", id: peca.id, pixels, cols, rows, passo, raio,
-          contorno: peca.contorno, medida: { largura: peca.largura, altura: peca.altura } },
+          contorno: peca.contorno, medida: { largura: crua.largura, altura: crua.altura } },
         transferir: pixels ? [pixels] : [],
       });
     });
@@ -195,7 +197,10 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
           resposta && resposta.erro);
         mascarasDaPeca(peca, passo, raio);
       } else {
-        peca._cacheMascaras = { chave: chaveDasMascaras(peca, passo, raio), ...resposta.mascaras };
+        peca._cacheMascaras = {
+          chave: chaveDasMascaras(peca, passo, raio),
+          ...comGiroBase(resposta.mascaras, rotacaoBaseDe(peca)),
+        };
       }
       prontas++;
       if (aoAndar) aoAndar(prontas + semPixels.length, pendentes.length);

@@ -142,6 +142,8 @@ interface PecaNaChave {
   pxW: number;
   pxH: number;
   grupo?: string | null;
+  /** O giro dado à peça antes do encaixe (0, 90, 180, 270). */
+  rotacaoBase?: number;
 }
 
 /**
@@ -160,7 +162,12 @@ interface PecaNaChave {
  * a resposta a ele.
  */
 function impressaoDaPeca(p: PecaNaChave): string {
-  return [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH, p.grupo || ""].join("~");
+  const campos = [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH, p.grupo || ""];
+  // O giro dado antes do encaixe muda a peça: girada 180°, ela tem a mesma
+  // medida e outra silhueta no rolo. Só entra quando existe, para a peça sem
+  // giro continuar com a mesma impressão de antes.
+  if (p.rotacaoBase) campos.push(`g${p.rotacaoBase}`);
+  return campos.join("~");
 }
 
 /** As peças do jeito que o encaixe guardado precisa delas: uma impressão por linha, NA ORDEM. */

@@ -30,7 +30,8 @@
  */
 
 import {
-  gradeDaPeca, mascarasDeSilhueta, silhuetaDeDados, tirarFundoDosPixels,
+  comGiroBase, gradeDaPeca, mascarasDeSilhueta, pecaSemGiro, rotacaoBaseDe, silhuetaDeDados,
+  tirarFundoDosPixels,
 } from "./encaixeMascara";
 
 // Quando o arquivo não diz a resolução, 300 dpi é o padrão de arte para
@@ -159,18 +160,21 @@ export function silhuetaDaImagem(peca, cols, rows, passo) {
  */
 /** A chave do cache de máscaras: muda quando qualquer entrada muda. */
 export function chaveDasMascaras(peca, passo, raio) {
-  return `${passo}|${raio}|${peca.largura}|${peca.altura}|${peca.contorno}`;
+  return `${passo}|${raio}|${peca.largura}|${peca.altura}|${peca.contorno}|g${rotacaoBaseDe(peca)}`;
 }
 
 export function mascarasDaPeca(peca, passo, raio) {
   const chave = chaveDasMascaras(peca, passo, raio);
   if (peca._cacheMascaras && peca._cacheMascaras.chave === chave) return peca._cacheMascaras;
 
-  const { cols, rows } = gradeDaPeca(peca, passo);
-  const silhueta = silhuetaDaImagem(peca, cols, rows, passo);
+  // A silhueta sai da arte como ela chegou, e o giro base entra depois (ver
+  // "O GIRO DA PEÇA ANTES DO ENCAIXE", em encaixeMascara.js).
+  const crua = pecaSemGiro(peca);
+  const { cols, rows } = gradeDaPeca(crua, passo);
+  const silhueta = silhuetaDaImagem(crua, cols, rows, passo);
   peca._cacheMascaras = {
-    chave, ...mascarasDeSilhueta(silhueta, cols, rows, passo, raio,
-      { largura: peca.largura, altura: peca.altura }),
+    chave, ...comGiroBase(mascarasDeSilhueta(silhueta, cols, rows, passo, raio,
+      { largura: crua.largura, altura: crua.altura }), rotacaoBaseDe(peca)),
   };
   return peca._cacheMascaras;
 }

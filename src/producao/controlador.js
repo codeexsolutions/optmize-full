@@ -12,7 +12,7 @@ import { assinaturaDoTrabalho,
   midiaConsumida, aproveitamentoDaMidia, bancadasOcupadas } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
 import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
-import { grade } from "../motores/encaixeMascara";
+import { grade, rotacaoBaseDe } from "../motores/encaixeMascara";
 import { mascarasDaPeca } from "../motores/pecaNaGrade";
 import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../motores/encaixePrepara";
 import { formatarNumero, formatarMetros, formatarCm, formatarSegundos, formatarPorcento, formatarM2 } from "../utils/numero";
@@ -1263,7 +1263,7 @@ function renderPecasEncaixe() {
         ${seloDeCor(peca)}
 
         <div class="flex items-start gap-2">
-        <span class="peca-thumb size-8! shrink-0" style="border-color: ${cor};"><img src="${peca.miniatura || peca.src}" alt="" /></span>
+        <span class="peca-thumb size-8! shrink-0" style="border-color: ${cor};"><img src="${peca.miniatura || peca.src}" alt=""${rotacaoBaseDe(peca) ? ` style="transform: rotate(${rotacaoBaseDe(peca)}deg);"` : ""} /></span>
 
         <span class="min-w-0 flex-1">
           <span class="flex items-start gap-1">
@@ -1318,6 +1318,15 @@ function renderPecasEncaixe() {
             </select>
           </label>
         </div>
+        <!-- Gira a PEÇA, antes do encaixe: é para arte que chegou deitada ou de
+             cabeça para baixo. O "Girar" de cima é outra coisa — são os giros
+             que o encaixe pode usar a partir daqui. -->
+        <button type="button" data-girar-peca="${peca.id}"
+                aria-label="Girar a arte de ${escapeHtml(peca.nome)} 90° no sentido do relógio"
+                class="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded border border-linha px-2 py-1 text-[0.72rem] text-tinta transition-colors hover:border-ambar hover:text-ambar">
+          <svg class="size-3.5" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#rotate-cw" /></svg>
+          Girar a arte 90°${rotacaoBaseDe(peca) ? ` <span class="font-mono text-tinta-apagada">· girada ${rotacaoBaseDe(peca)}°</span>` : ""}
+        </button>
         <span class="mt-1.5 block font-mono text-[9px] text-tinta-apagada">${peca.origem || `${peca.pxW} × ${peca.pxH} px`}${peca.ocupacao != null ? ` · ${Math.round(peca.ocupacao * 100)}% da caixa` : ""}</span>
       </div>
     `;
@@ -1386,7 +1395,9 @@ escopo.ouvir(encaixePecasBody, "input", (e) => {
   if (!peca) return;
 
   const valor = Number(e.target.value);
-  const proporcao = peca.pxH / peca.pxW;
+  // Os pixels são os da arte como chegou; girada 90° ou 270°, a proporção da
+  // peça é a inversa.
+  const proporcao = rotacaoBaseDe(peca) % 180 ? peca.pxW / peca.pxH : peca.pxH / peca.pxW;
 
   if (campo === "largura" && valor > 0) {
     peca.largura = valor;
@@ -1403,6 +1414,28 @@ escopo.ouvir(encaixePecasBody, "input", (e) => {
     atualizarPainelDoTrabalho();
   }
 });
+
+/**
+ * Gira a peça 90° no sentido do relógio, ANTES do encaixe.
+ *
+ * A arte não é redesenhada: só o `rotacaoBase` muda, e cada lugar que usa a
+ * arte soma esse giro (ver "O GIRO DA PEÇA ANTES DO ENCAIXE", em
+ * motores/encaixeMascara.js). A largura e a altura trocam, porque passam a ser
+ * as do lado certo. O contorno é refeito no próximo encaixe — a chave do cache
+ * das máscaras já leva o giro.
+ */
+function girarPecaAntesDoEncaixe(id) {
+  const peca = pecasEncaixe.find((p) => p.id === id);
+  if (!peca) return;
+  peca.rotacaoBase = (rotacaoBaseDe(peca) + 90) % 360;
+  [peca.largura, peca.altura] = [peca.altura, peca.largura];
+  peca.ocupacao = null;
+  renderPecasEncaixe();
+  // A lista é redesenhada inteira; a gaveta desta peça volta aberta, que é
+  // onde a pessoa estava clicando.
+  const gaveta = encaixePecasBody.querySelector(`[data-detalhes="${id}"]`);
+  if (gaveta) gaveta.classList.remove("hidden");
+}
 
 /** Marca ou desmarca uma peça, e acende a linha. */
 function alternarMarca(linha, id) {
@@ -1558,6 +1591,12 @@ async function tirarFundoAForca(peca) {
  * não deixa rastro) e troca a ação por soltar o corte do nome.
  */
 escopo.ouvir(encaixePecasBody, "click", (e) => {
+  const girar = e.target.closest("[data-girar-peca]");
+  if (girar) {
+    girarPecaAntesDoEncaixe(Number(girar.dataset.girarPeca));
+    return;
+  }
+
   // A setinha vem primeiro: ela mora dentro da linha, e o que ela faz não é
   // marcar.
   const abrir = e.target.closest("[data-abrir-peca]");

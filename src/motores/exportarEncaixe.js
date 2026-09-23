@@ -102,8 +102,12 @@ export async function prepararArtes(posicoes) {
   const artes = new Map();
   for (const p of posicoes) {
     const rot = p.rot || (p.girado ? 90 : 0);
+    // A chave é a do giro do ENCAIXE, que é como o PDF procura a arte; a arte
+    // sai girada pelo total, contando o giro que a peça recebeu antes (ver "O
+    // GIRO DA PEÇA ANTES DO ENCAIXE", em encaixeMascara.js).
     const chave = `${p.item.indice}-${rot}`;
-    if (!artes.has(chave)) artes.set(chave, await desenharPecaGirada(p.item, rot));
+    const total = (rot + (Number(p.item.rotacaoBase) || 0)) % 360;
+    if (!artes.has(chave)) artes.set(chave, await desenharPecaGirada(p.item, total));
   }
   return artes;
 }

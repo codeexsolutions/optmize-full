@@ -155,6 +155,52 @@ export function grade(larguraTecido, espaco) {
   return { passo, raio, folgaReal: raio * passo * 2 };
 }
 
+/*
+ * ===========================================================================
+ * O GIRO DA PEÇA ANTES DO ENCAIXE
+ * ===========================================================================
+ *
+ * Arte que chega deitada (ou de cabeça para baixo) tem o "lado certo" errado:
+ * "Fixa" a encaixaria deitada, e "Vira 180°" só a viraria de ponta-cabeça. O
+ * `rotacaoBase` da peça (0, 90, 180 ou 270, no mesmo sentido do desenho) diz
+ * quanto girar a arte ANTES de tudo, e a partir daí ela é a peça.
+ *
+ * A imagem não é girada de verdade: `img`, `src` e o arquivo original ficam
+ * como chegaram, porque é deles que a remoção de fundo e o PDF partem, e girar
+ * a imagem guardada faria cada um desses caminhos precisar saber disso. O giro
+ * é aplicado onde a arte é usada, somado ao giro que o encaixe escolhe:
+ *
+ *   contorno   `comGiroBase` reindexa as quatro máscaras, que já existem
+ *   desenho    `desenharArte` soma o giro base (desenhoDoEncaixe.js)
+ *   PDF        `prepararArtes` gira a arte original pelo total (exportarEncaixe.js)
+ *
+ * A largura e a altura da peça são as do lado certo, já trocadas quando o giro
+ * é de 90 ou 270. A silhueta é lida da arte como ela chegou, então é lida com
+ * a medida de antes do giro (`pecaSemGiro`).
+ */
+export function rotacaoBaseDe(peca) {
+  const giro = Number(peca && peca.rotacaoBase) || 0;
+  return ((giro % 360) + 360) % 360;
+}
+
+/** A peça como a arte chegou: largura e altura de antes do giro base. */
+export function pecaSemGiro(peca) {
+  return rotacaoBaseDe(peca) % 180 === 0 ? peca
+    : { ...peca, largura: peca.altura, altura: peca.largura };
+}
+
+/**
+ * As máscaras da peça já no lado certo. Girar a peça `base` e depois o encaixe
+ * girar `rot` é o mesmo que girar a arte original `base + rot` — e essa
+ * máscara já foi feita.
+ */
+export function comGiroBase(mascaras, base) {
+  if (!base || !mascaras || !mascaras.rotacoes) return mascaras;
+  const rotacoes = {};
+  [0, 90, 180, 270].forEach((rot) => { rotacoes[rot] = mascaras.rotacoes[(rot + base) % 360]; });
+  return { ...mascaras, rotacoes };
+}
+
 /**
  * A grade de uma peça: quantas células de lado ela tem.
  *

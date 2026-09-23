@@ -54,7 +54,10 @@ const SEM_SELECAO = new Set();
  */
 export function desenharArte(ctx, p, x, y, w, h) {
   const img = p.item.img;
-  const rot = p.rot || (p.girado ? 90 : 0);
+  // O giro do encaixe mais o giro que a peça recebeu antes dele (ver "O GIRO
+  // DA PEÇA ANTES DO ENCAIXE", em encaixeMascara.js). `w` e `h` já são a caixa
+  // da peça no rolo, então só o giro da arte dentro dela muda.
+  const rot = ((p.rot || (p.girado ? 90 : 0)) + (Number(p.item.rotacaoBase) || 0)) % 360;
 
   ctx.save();
   ctx.translate(x, y);
