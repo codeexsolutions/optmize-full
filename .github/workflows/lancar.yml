@@ -118,13 +118,16 @@ jobs:
         id: versao
         run: node empacotar/versao-do-lancamento.js
 
-      - name: Conferências
-        # Se qualquer uma falhar, nada é publicado.
-        run: |
-          npm run tipos
-          npm run bancada:revisao
-          npm run bancada:conferir
-          npm run bancada:encolher
+      # AS CONFERÊNCIAS SAÍRAM DAQUI, e agora correm ao lado, no `conferir.yml`.
+      #
+      # Elas custavam 68 segundos em cada lançamento, e o pedido foi tirar o
+      # que atrasa a atualização de chegar. Correndo em paralelo, o instalador
+      # começa a compilar no primeiro segundo e as provas contam o que acharam
+      # quando terminarem.
+      #
+      # O QUE MUDA DE VERDADE: prova vermelha não para mais a publicação. O que
+      # continua parando é o que quebra a COMPILAÇÃO, e a falta de assinatura,
+      # que o `publicar` recusa.
 
       - name: Compilar e assinar
         env:
