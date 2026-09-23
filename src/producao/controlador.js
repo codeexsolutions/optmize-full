@@ -1265,7 +1265,7 @@ function seloDeCor(peca) {
  */
 function renderAvisosDeCor() {
   if (!encaixeAvisoCor) return;
-  const comRisco = pecasEncaixe.filter((p) => p.cor && COR_SELO[p.cor.risco]);
+  const comRisco = pecasEncaixe.filter((p) => p.cor && COR_SELO[p.cor.risco] && COR_SELO[p.cor.risco].avisa);
   if (comRisco.length === 0) {
     encaixeAvisoCor.classList.add("hidden");
     encaixeAvisoCor.innerHTML = "";
@@ -1653,6 +1653,24 @@ escopo.ouvir(encaixePecasBody, "click", (e) => {
     return;
   }
 
+  /*
+   * O × VEM ANTES DA LINHA, e não depois — foi isso que já o deixou sem efeito.
+   *
+   * Ele mora DENTRO do retângulo que marca a peça, então todo clique nele
+   * também é um clique na linha. O código que tira a peça ficava embaixo do
+   * `if (linha)`, que devolve a vez em todos os caminhos: o guarda "o × tem
+   * dono próprio" mandava sair sem fazer nada, e o dono nunca era alcançado.
+   * O botão ficou anos na tela sem tirar peça nenhuma.
+   *
+   * `closest` em vez de `e.target.dataset`: o × é texto hoje, mas no dia em que
+   * virar um ícone o clique vai cair no `<svg>` de dentro e o `dataset` some.
+   */
+  const tirar = e.target.closest("[data-del-peca]");
+  if (tirar) {
+    tirarPecaDaLista(tirar.dataset.delPeca);
+    return;
+  }
+
   // A setinha vem primeiro: ela mora dentro da linha, e o que ela faz não é
   // marcar.
   const abrir = e.target.closest("[data-abrir-peca]");
@@ -1664,8 +1682,9 @@ escopo.ouvir(encaixePecasBody, "click", (e) => {
 
   const linha = e.target.closest("[data-sel-peca]");
   if (linha) {
-    // O campo de cópias e o × estão dentro da linha e têm dono próprio.
-    if (e.target.closest("input[data-campo], [data-del-peca]")) return;
+    // O campo de cópias está dentro da linha e tem dono próprio. (O × também
+    // está, e já foi resolvido lá em cima — ver o porquê da ordem.)
+    if (e.target.closest("input[data-campo]")) return;
 
     const id = Number(linha.dataset.selPeca);
 
@@ -1681,11 +1700,17 @@ escopo.ouvir(encaixePecasBody, "click", (e) => {
     return;
   }
 
-  const id = e.target.dataset.delPeca;
-  if (!id) return;
+});
 
-  /*
-   * TIRAR UMA PEÇA DERRUBA O RISCO QUE ESTAVA NA TELA.
+/**
+ * Tira uma peça da lista.
+ *
+ * Mora fora do ouvinte de clique porque é ELA o "dono próprio" do × — enquanto
+ * era um pedaço solto no fim do ouvinte, bastou o botão passar a ficar dentro
+ * da linha para o caminho até aqui deixar de existir, sem erro nenhum.
+ *
+ * ---------------------------------------------------------------------------
+ * TIRAR UMA PEÇA DERRUBA O RISCO QUE ESTAVA NA TELA.
    *
    * Uma posição do risco não guarda a arte: guarda o `indice`, que é a LINHA
    * desta tabela. Tirando uma linha do meio, todas as de baixo sobem um lugar —
@@ -1704,6 +1729,9 @@ escopo.ouvir(encaixePecasBody, "click", (e) => {
    * jeito que cai em "Limpar a lista", e a procura é refeita com a lista nova —
    * que é o que a pessoa quer mesmo, já que a produção mudou.
    */
+function tirarPecaDaLista(id) {
+  if (!id) return;
+
   const tinhaRisco = !!ultimoResultado;
   pecasEncaixe = pecasEncaixe.filter((p) => p.id !== Number(id));
   if (tinhaRisco) {
@@ -1715,7 +1743,7 @@ escopo.ouvir(encaixePecasBody, "click", (e) => {
     encaixeAndamento.classList.toggle("hidden", !pecasEncaixe.length);
   }
   renderPecasEncaixe();
-});
+}
 
 escopo.ouvir(encaixeGiroTodasSelect, "change", () => {
   // Aplica no lote inteiro, inclusive no que já estava em "livre": quem mexe

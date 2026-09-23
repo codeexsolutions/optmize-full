@@ -324,10 +324,27 @@ async function principal() {
     assert.match(linhaDoTiff, /peca-d[^|]*\|[^|]*5,1 × 6,8 cm/,
       `o TIFF tinha que entrar com a medida que o dpi dele manda (veio "${linhaDoTiff}")`);
 
+    /*
+     * ---- 6. o × tira a peça da lista ----
+     *
+     * O botão mora DENTRO da linha que marca a peça, e a linha tem ouvinte
+     * próprio. Isso já deixou o × sem efeito nenhum: o clique era engolido pelo
+     * guarda da linha e o código que tira a peça ficava inalcançável. Um clique
+     * de verdade é a única coisa que pega isso — o `tsc` passa, o build passa,
+     * e a peça continua na tela.
+     */
+    const antesDoX = Number((await p.$eval('#encaixe-contagem', (n) => n.textContent)).match(/^\d+/)[0]);
+    await p.evaluate(() => document.querySelector('[data-del-peca]').click());
+    await esperar(600);
+    const depoisDoX = Number((await p.$eval('#encaixe-contagem', (n) => n.textContent)).match(/^\d+/)[0]);
+    assert.equal(depoisDoX, antesDoX - 1,
+      `o × tinha que tirar a peça da lista (eram ${antesDoX}, ficaram ${depoisDoX})`);
+
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
-      + ` (${risco}), o PDF foi gravado onde a tela mandou e o TIFF entrou pela conversão.`);
+      + ` (${risco}), o PDF foi gravado onde a tela mandou, o TIFF entrou pela conversão`
+      + ` e o × tirou a peça (${antesDoX} → ${depoisDoX}).`);
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();
