@@ -63,10 +63,25 @@
  * fica desatualizada. Nem o preço é escrito neste arquivo.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import AliceCarousel from "react-alice-carousel";
+import { Check, FileUp, Printer, Users } from "lucide-react";
+
+import "react-alice-carousel/lib/alice-carousel.css";
 
 import { Icone } from "../casca/Icone";
 import { CAMPO, mascararDocumento, Porta, ROTULO } from "./Porta";
+
+/** Em qual dos dois passos a pessoa está. */
+type Passo = "plano" | "dados";
+
+/** Centavos como se lê em português: R$ 3.500,00. */
+function emReais(centavos: number, moeda: string): string {
+  return (centavos / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: moeda || "BRL",
+  });
+}
 
 interface Plano {
   id: string;
@@ -81,36 +96,6 @@ interface Plano {
   exportacoesPorDia: number | null;
   /** Dias de teste. Hoje é 7 em todos — a tela não decide isso. */
   diasDeTeste: number;
-}
-
-/**
- * O QUE SEPARA UM DEGRAU DO OUTRO, em uma linha.
- *
- * São os dois números que a pessoa está realmente comparando: quanto dá para
- * exportar por dia e quantas pessoas entram. O nome do plano não diz isso, e o
- * preço sozinho não explica por que um custa cinco vezes o outro.
- *
- * Fica em TODA linha, inclusive nas não escolhidas — diferente das vantagens,
- * que só abrem na escolhida. Vantagem é argumento; isto é a régua.
- */
-function reguaDoPlano(plano: Plano): string {
-  const exportacoes =
-    plano.exportacoesPorDia === null
-      ? "exportação sem limite"
-      : `${plano.exportacoesPorDia} exportações por dia`;
-  const acessos = plano.acessos === 1 ? "1 acesso" : `${plano.acessos} acessos`;
-  return `${exportacoes} · ${acessos}`;
-}
-
-/** Em qual dos dois passos a pessoa está. */
-type Passo = "plano" | "dados";
-
-/** Centavos como se lê em português: R$ 3.500,00. */
-function emReais(centavos: number, moeda: string): string {
-  return (centavos / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: moeda || "BRL",
-  });
 }
 
 /**
@@ -129,19 +114,6 @@ function precoDoPlano(plano: Plano): { valor: string; periodo: string } {
     valor: emReais(plano.precoCentavos, plano.moeda),
     periodo: plano.cobranca === "anual" ? "por ano" : "por mês",
   };
-}
-
-/**
- * O anual dividido por doze — "equivale a R$ 291,67 por mês".
- *
- * R$ 3.500,00 ao lado de R$ 499,90 parece sete vezes mais caro, e é 42% mais
- * barato. O selo de porcentagem diz que há desconto; este número diz QUANTO
- * custa, na única unidade em que a gráfica pensa em despesa — o mês. Sem ele,
- * comparar os dois planos exige uma divisão de cabeça na hora de decidir.
- */
-function porMesDoAnual(plano: Plano): string | null {
-  if (plano.cobranca !== "anual" || plano.precoCentavos <= 0) return null;
-  return emReais(Math.round(plano.precoCentavos / 12), plano.moeda);
 }
 
 /**
@@ -313,34 +285,13 @@ export function CriarConta({
   const sugerido = (planos ?? [])[1]?.id ?? null;
 
   /*
-    O TRILHO DO CARROSSEL.
+    A CENTRAL DAS IMPRESSORAS ENTRA NA RÉGUA, riscada em quem não a tem.
 
-    `scrollBy` numa referência, e não uma biblioteca: o navegador já rola com
-    encaixe, com inércia no toque e com suavidade — o que falta é só o empurrão
-    das setas, que é uma linha.
+    É a única diferença de CAPACIDADE entre os planos (o resto é volume), e
+    riscada ela responde de relance a pergunta que fazia a pessoa abrir a
+    lista de vantagens: "o que eu perco escolhendo o barato?".
   */
-  const trilho = useRef<HTMLDivElement | null>(null);
-
-  function deslizar(direcao: 1 | -1) {
-    const alvo = trilho.current;
-    if (!alvo) return;
-    // Dois cartões por empurrão: um só faria a seta parecer emperrada.
-    alvo.scrollBy({ left: direcao * 400, behavior: "smooth" });
-  }
-
-  /*
-    O CARTÃO ESCOLHIDO ENTRA NA VISTA sozinho.
-
-    Quem chega com o Essencial marcado e clica no Completo lá na ponta não
-    precisa rolar de volta para ver o que escolheu — e quem volta do passo dos
-    dados encontra o carrossel onde deixou.
-  */
-  useEffect(() => {
-    if (!escolhido) return;
-    trilho.current
-      ?.querySelector(`[data-plano="${escolhido}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-  }, [escolhido]);
+  const temCentral = (plano: Plano) => plano.exportacoesPorDia === null || plano.acessos > 1;
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
@@ -457,30 +408,58 @@ export function CriarConta({
           )}
 
           {/*
-            UM CARROSSEL DE CARTÕES, E NÃO UMA LISTA EMPILHADA.
+            O CARROSSEL É O `react-alice-carousel`.
 
-            Quatro degraus não cabem empilhados num cartão de 480px sem
-            empurrar o botão para fora da vista — e uma escada de preço se lê
-            de lado, como uma tabela, não de cima para baixo como um menu.
+            Ele traz o arraste com inércia, o encaixe por item e os pontinhos
+            de posição prontos — três coisas que a rolagem com `snap` fazia
+            pela metade: no notebook sem tela de toque, arrastar não existia,
+            e nada dizia quantos planos havia à direita.
 
-            ROLAGEM COM ENCAIXE (`snap`), e não setas de carrossel: o dedo
-            arrasta no toque, o trackpad arrasta no notebook, e o teclado
-            continua funcionando pelo rádio escondido — que é o que faz isto
-            ser um formulário e não um brinquedo. As setas ficam para quem tem
-            mouse sem roda, e por isso aparecem só no computador.
+            O PREÇO É PESO NO INSTALADOR, e vale dizer: são ~30 KB que entram
+            no pacote por uma tela que a gráfica vê uma vez na vida. Foi
+            decisão de quem manda no produto, não descuido.
 
-            O DETALHE DO ESCOLHIDO MORA ABAIXO, fora dos cartões: dentro de
-            um cartão de 190px a lista de vantagens sairia em coluna de duas
-            palavras por linha.
+            `mouseTracking` liga o arraste com o mouse; `disableButtonsControls`
+            tira as setas embutidas (a escolha é o cartão, e uma seta ao lado
+            de um rádio vira dois alvos para a mesma intenção).
           */}
-          <fieldset className="entrada-degrau m-0 border-0 p-0">
+          {/*
+            `min-w-0` NO FIELDSET, e não é zelo: `fieldset` nasce com
+            `min-inline-size: min-content`, então ele se ESTICA para caber o
+            conteúdo em vez de encolher para caber no pai. O carrossel media
+            876px de largura dentro de um cartão de 416px, e os pontinhos
+            apareciam fora da vista, do lado direito.
+          */}
+          <fieldset className="entrada-degrau m-0 w-full min-w-0 border-0 p-0">
             <legend className="sr-only">Como você quer pagar</legend>
 
-            <div
-              ref={trilho}
-              className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {(planos ?? []).map((plano) => {
+            <AliceCarousel
+              mouseTracking
+              touchTracking
+              disableButtonsControls
+              /* O ponto marcado diz onde se está — é o que a rolagem crua não
+                 dizia. Clicar nele anda, e isso basta de navegação. */
+              renderDotsItem={({ isActive }) => (
+                <span
+                  className={`mx-[3px] block size-1.5 rounded-full transition-colors ${
+                    isActive ? "bg-[var(--accent)]" : "bg-linha"
+                  }`}
+                />
+              )}
+              responsive={{
+                /*
+                  DOIS CARTÕES E UMA LASCA DO TERCEIRO.
+
+                  A lasca é o que diz "tem mais para o lado" sem precisar de
+                  seta nenhuma. Tentei 2,4 primeiro e o cartão caiu para 163px:
+                  "15 exportações por dia" quebrava em duas linhas e a régua
+                  virava um parágrafo. Cabe mais informação em dois cartões
+                  legíveis do que em três espremidos.
+                */
+                0: { items: 1.35 },
+                420: { items: 2.1 },
+              }}
+              items={(planos ?? []).map((plano) => {
                 const marcado = escolhido === plano.id;
                 const preco = precoDoPlano(plano);
                 const selo =
@@ -495,12 +474,11 @@ export function CriarConta({
                     key={plano.id}
                     data-plano={plano.id}
                     className={[
-                      "group relative flex w-[190px] shrink-0 snap-start cursor-pointer flex-col",
-                      "rounded-2xl border p-3.5 transition-[border-color,background-color,box-shadow,transform] duration-200",
-                      "peer-focus-visible:border-[var(--accent)]",
+                      "group relative mr-2.5 flex cursor-pointer flex-col rounded-2xl border p-3.5",
+                      "transition-[border-color,background-color,box-shadow] duration-200",
                       marcado
                         ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_0_0_1px_var(--accent-line),0_18px_40px_-28px_rgba(0,0,0,0.9)]"
-                        : "border-linha bg-fundo hover:-translate-y-px hover:border-[var(--accent-line)]",
+                        : "border-linha bg-fundo hover:border-[var(--accent-line)]",
                     ].join(" ")}
                   >
                     <input
@@ -512,11 +490,6 @@ export function CriarConta({
                       className="peer sr-only"
                     />
 
-                    {/*
-                      O SELO NO ALTO DO CARTÃO, e não ao lado do nome: num
-                      retângulo estreito ele roubaria a linha do nome, que é
-                      a primeira coisa que se lê.
-                    */}
                     <span className="flex h-5 items-start">
                       {selo && (
                         <span className="rounded-full border border-[var(--accent-line)] bg-[var(--accent-soft)] px-1.5 py-px text-[9.5px] font-medium text-ambar">
@@ -535,9 +508,10 @@ export function CriarConta({
                             : "border-linha bg-painel group-hover:border-[var(--accent-line)]",
                         ].join(" ")}
                       >
-                        <Icone
-                          referencia="icones.svg#check"
-                          className={`size-2.5 text-fundo transition-opacity ${marcado ? "opacity-100" : "opacity-0"}`}
+                        <Check
+                          size={10}
+                          strokeWidth={3}
+                          className={`text-fundo transition-opacity ${marcado ? "opacity-100" : "opacity-0"}`}
                         />
                       </span>
                       <span className="font-titulo text-[13.5px] leading-tight font-semibold text-tinta">
@@ -556,85 +530,40 @@ export function CriarConta({
                       </span>
                     </span>
 
-                    {/* A RÉGUA, quebrada em duas linhas dentro do retângulo. */}
-                    <span className="mt-2.5 block border-t border-linha pt-2.5 text-[11px] leading-relaxed text-tinta-fraca">
-                      {plano.exportacoesPorDia === null
-                        ? "Exportação sem limite"
-                        : `${plano.exportacoesPorDia} exportações por dia`}
-                      <br />
-                      {plano.acessos === 1 ? "1 acesso" : `${plano.acessos} acessos`}
+                    {/*
+                      A RÉGUA, AGORA COM AS DUAS LINHAS QUE SOBRARAM.
+
+                      O bloco de vantagens que ficava embaixo do carrossel
+                      saiu: ele repetia, em quatro linhas de texto, a mesma
+                      diferença que estes dois números já dizem — e empurrava
+                      o botão para fora da vista.
+                    */}
+                    <span className="mt-2.5 flex flex-col gap-1 border-t border-linha pt-2.5 text-[11px] leading-snug text-tinta-fraca">
+                      <span className="flex items-center gap-1.5">
+                        <FileUp size={12} className="shrink-0 text-ambar" />
+                        {plano.exportacoesPorDia === null
+                          ? "Exportação sem limite"
+                          : `${plano.exportacoesPorDia} exportações por dia`}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Users size={12} className="shrink-0 text-ambar" />
+                        {plano.acessos === 1 ? "1 acesso" : `${plano.acessos} acessos`}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Printer
+                          size={12}
+                          className={`shrink-0 ${temCentral(plano) ? "text-ambar" : "text-tinta-apagada/50"}`}
+                        />
+                        <span className={temCentral(plano) ? "" : "text-tinta-apagada/70 line-through"}>
+                          Central das impressoras
+                        </span>
+                      </span>
                     </span>
                   </label>
                 );
               })}
-            </div>
-
-            {/*
-              AS SETAS SÓ NO COMPUTADOR (`tela:`), e só quando há para onde
-              ir. No toque elas seriam dois alvos a mais competindo com o
-              gesto que já funciona.
-            */}
-            <div className="mt-1 hidden items-center justify-end gap-1.5 tela:flex">
-              <button
-                type="button"
-                onClick={() => deslizar(-1)}
-                aria-label="Ver os planos anteriores"
-                className="grid size-7 place-items-center rounded-lg border border-linha bg-fundo text-tinta-apagada transition-colors hover:border-[var(--accent-line)] hover:text-tinta"
-              >
-                <Icone referencia="icones.svg#arrow-left" className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => deslizar(1)}
-                aria-label="Ver os próximos planos"
-                className="grid size-7 place-items-center rounded-lg border border-linha bg-fundo text-tinta-apagada transition-colors hover:border-[var(--accent-line)] hover:text-tinta"
-              >
-                <Icone referencia="icones.svg#arrow-right" className="size-3.5" />
-              </button>
-            </div>
+            />
           </fieldset>
-
-          {/*
-            O QUE O PLANO ESCOLHIDO DÁ, embaixo do carrossel.
-
-            Aqui a lista tem largura inteira para respirar, e ela muda sozinha
-            quando o cartão selecionado muda — é a recompensa de ter escolhido,
-            e o lugar onde a pessoa confere se entendeu certo.
-          */}
-          {planoEscolhido && (
-            <div className="entrada-degrau rounded-2xl border border-linha bg-fundo p-4">
-              <span className="mb-1 flex items-center gap-1.5 text-[10.5px] font-medium tracking-[1.2px] text-tinta-apagada uppercase">
-                <Icone referencia="icones.svg#badge-check" className="size-3 text-ambar" />
-                {planoEscolhido.nome.replace(/^CodeEx Optmize — /, "")}
-              </span>
-
-              {/*
-                A RÉGUA REPETIDA AQUI, em uma linha — e não é repetição à toa: o
-                cartão escolhido pode estar fora da vista depois de a pessoa
-                arrastar o carrossel, e este bloco é onde ela confere o que
-                escolheu antes de preencher os dados.
-              */}
-              <p className="mt-0 mb-2.5 text-[11.5px] text-tinta-apagada">
-                {reguaDoPlano(planoEscolhido)}
-                {porMesDoAnual(planoEscolhido) &&
-                  ` · equivale a ${porMesDoAnual(planoEscolhido)} por mês`}
-              </p>
-              <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-                {planoEscolhido.vantagens.map((v) => (
-                  <li
-                    key={v}
-                    className="flex items-start gap-2 text-[12px] leading-relaxed text-tinta-fraca"
-                  >
-                    <Icone
-                      referencia="icones.svg#check"
-                      className="mt-0.5 size-3.5 shrink-0 text-ambar"
-                    />
-                    {v}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           <button
             type="button"

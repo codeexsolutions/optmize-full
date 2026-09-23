@@ -81,3 +81,19 @@ esp/sdkconfig.old
 # o hash guardado junto so serviria para alguem concluir, mais tarde, que o
 # arquivo foi corrompido.
 esp/components/**/.component_hash
+
+# ===========================================================================
+# O RUNTIME DE IA, que o build baixa e copia
+# ===========================================================================
+#
+# 25 MB de `.wasm` e `.mjs` do onnxruntime, gerados por `npm run ia`
+# (empacotar/ia.js) em duas pastas: `estatico/ia` entra no pacote do Vite e
+# `dist/ia` sai dele. Nenhuma das duas e codigo escrito aqui -- sao artefatos
+# de uma dependencia, reproduzidos por um comando.
+#
+# Sem estas linhas eles aparecem como "untracked" toda vez que alguem compila,
+# e mais cedo ou mais tarde entram num `git add -A` distraido: 50 MB de binario
+# no historico, para sempre, por engano. (Foi o que quase aconteceu no commit
+# do carrossel.)
+estatico/ia/
+dist/ia/
