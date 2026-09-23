@@ -203,8 +203,9 @@ a ferramenta que responde "essa mexida no encaixe gastou menos tecido ou não?".
   **preso** — vazio com peça por baixo, que o relevo por coluna não alcança mais
   — e o que caberia no maior deles. É a medida que justificou a repescagem.
 - `bancada/conferir-pdf.js`: `npm run bancada:pdf`. O PDF do encaixe tem que
-  sair num arquivo só, com uma página por bancada, no tamanho real certo — e,
-  quando usa o `/UserUnit`, declarando PDF 1.6. **Peça partida é peça perdida**:
+  sair num arquivo só, com uma página por bancada e no tamanho real — sem
+  `/UserUnit` nenhum, que é o campo que o RIP da produção ignora e que fazia a
+  arte sair esticada e cortada. **Peça partida é peça perdida**:
   se alguém reintroduzir a repartição em ARQUIVOS, é este arquivo que grita.
 - `bancada/conferir-bancada.js`: `npm run bancada:corte`. A trava da bancada:
   nenhuma peça cruza a linha entre duas, cada bancada cabe no comprimento

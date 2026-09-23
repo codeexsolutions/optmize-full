@@ -705,26 +705,26 @@ quantos metros vão ser gastos.
    última pergunta é quase uma tautologia, porque a peça engordada é o que o
    motor usa para decidir.
 
-   O PDF não aceita página com mais de 5,08 m de lado, e encaixe de vários
-   metros passa longe disso. Em vez de cortar em trechos, o arquivo usa o
-   campo **`/UserUnit`**, que diz quanto vale uma unidade da página: com
-   `/UserUnit 2,23`, uma página de 5,07 m "de arquivo" é lida como 11,31 m de
-   verdade. Os números ficam dentro do limite, o tamanho real continua o mesmo
-   e o arquivo segue conforme o formato — nenhum leitor reclama. Encaixe que
-   já cabe no limite sai sem `/UserUnit` nenhum, que é o caso de maior
-   compatibilidade.
+   O formato convencionou 5,08 m como o maior lado de uma página, e encaixe de
+   vários metros passa longe disso. Por um bom tempo a saída foi o campo
+   **`/UserUnit`**, que diz quanto vale uma unidade da página: com
+   `/UserUnit 2,36`, uma página de 5 m "de arquivo" é lida como 12 m de
+   verdade.
 
-   **O `/UserUnit` é recurso do PDF 1.6, e o arquivo tem que dizer isso.** A
-   biblioteca que monta o PDF escreve `%PDF-1.3` por padrão; declarando 1.3, um
-   leitor tem todo o direito de ignorar o `/UserUnit` e imprimir o rolo na
-   escala errada — sem erro nenhum, que é o pior jeito de descobrir. Por isso o
-   documento nasce 1.6 quando o `/UserUnit` entra em ação, e 1.3 quando não
-   precisa dele. Quem confere isso, junto com "uma página por bancada" e "o
+   **Isso acabou em 2026-09-23, porque o RIP da produção ignora o campo.** O
+   SAi Flexi lê a página pelo número cru, encontra 5 m onde havia 12, e o que
+   sai é arte esticada e arte cortada. O estrago era proporcional ao fator, e
+   foi assim que se fechou o diagnóstico: rolo de 7 m (fator 1,38) saía 38%
+   errado, o de 12 m (fator 2,36) saía 136%, e o de 5 m, que não precisa de
+   fator nenhum, saía perfeito. O arquivo abria CERTO no Acrobat, o que por um
+   tempo apontou o dedo para o lugar errado.
+
+   Hoje a página sai no **tamanho real**, passando ou não do teto. É uma troca
+   de risco consciente: o teto é convenção de implementação, não regra do
+   formato, e entre um arquivo que um leitor talvez recorte na tela e um
+   arquivo que a MÁQUINA imprime torto, quem manda é a máquina. Quem confere
+   que nenhum `/UserUnit` voltou, junto com "uma página por bancada" e "o
    tamanho real bate", é `npm run bancada:pdf`.
-
-   Repartindo por bancada, o `/UserUnit` costuma nem entrar em ação: um rolo de
-   40 m em bancadas de 2 m vira 20 páginas que cabem folgadas no limite do
-   formato, e o arquivo sai como PDF 1.3 — o caso de maior compatibilidade.
 
    > **Já foi repartido em ARQUIVOS, e não é mais.** Por um tempo o rolo saía em
    > arquivos de até 10 m, para o RIP processar um trecho enquanto imprimia o

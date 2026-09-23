@@ -28,35 +28,44 @@
  * problema, e ainda dão ao RIP o que ele queria — rasterizar um pedaço de cada
  * vez em vez de segurar 11 metros antes da primeira gota cair.
  *
- * O teto de página
- * ----------------
- * O PDF não aceita página com mais de 14400 pontos de lado (508 cm), e um
- * encaixe de 11 metros passa longe disso. A saída é o `/UserUnit`: ele diz
- * quanto vale uma unidade da página. Com `/UserUnit 2,58`, uma página de 5 m
- * "de arquivo" é lida como 12,9 m de verdade. Os números dentro do PDF ficam
- * dentro do limite, o tamanho real continua o mesmo, e o arquivo segue conforme
- * o formato — que é o que faz o RIP aceitar sem reclamar.
+ * O teto de página, e por que este arquivo o ignora
+ * -------------------------------------------------
+ * O formato convencionou 14400 pontos (508 cm) como o maior lado de uma
+ * página, e um encaixe de 11 metros passa longe disso. A saída canônica é o
+ * `/UserUnit`: um campo que diz quanto vale uma unidade da página. Com
+ * `/UserUnit 2,36`, uma página de 5 m "de arquivo" é lida como 12 m de
+ * verdade — os números ficam dentro do limite e o tamanho real se mantém.
  *
- * **`/UserUnit` é recurso do PDF 1.6**, e o pdfkit escreve `%PDF-1.3` por
- * padrão. Um leitor que respeite a versão declarada tem todo o direito de
- * ignorar o `/UserUnit` — e aí o rolo sai impresso na escala errada, sem erro
- * nenhum, que é o pior jeito de descobrir. Por isso o documento nasce 1.6
- * quando o `/UserUnit` entra em ação, e continua 1.3 (o de maior
- * compatibilidade) quando não precisa dele.
+ * **O RIP DA PRODUÇÃO IGNORA ESSE CAMPO.** O SAi Flexi lê a página pelo número
+ * cru, encontra 5 m onde havia 12, e o que sai é arte esticada e arte cortada.
+ * O estrago é proporcional ao fator, e foi assim que se fechou o diagnóstico:
+ *
+ *   rolo de 7 m    fator 1,38    saía 38% errado ("deu problema, mas menos")
+ *   rolo de 12 m   fator 2,36    saía 136% errado
+ *   rolo de 5 m    sem fator     saía perfeito
+ *
+ * O arquivo abria certo no Acrobat, o que por um tempo apontou o dedo para o
+ * lugar errado: o PDF estava conforme, e quem o desfigurava era o leitor do
+ * outro lado.
+ *
+ * Então o `/UserUnit` saiu (2026-09-23) e **a página passa a sair no tamanho
+ * real**, mesmo acima das 200 polegadas. É uma troca de risco consciente: o
+ * teto é convenção de implementação, não regra do formato, e entre um arquivo
+ * que o Acrobat talvez recorte na tela e um arquivo que a MÁQUINA imprime
+ * torto, quem manda é a máquina. Um leitor que estranhe o tamanho mostra o
+ * problema na cara; o `/UserUnit` ignorado saía impresso no tecido.
  *
  * A versão e o que o arquivo usa
  * ------------------------------
- * A regra acima vale para tudo, e não só para a escala: **o documento declara
- * a menor versão que dá conta do que ele usa**. São duas as coisas que obrigam
- * a subir, e as duas mentem em silêncio se ficarem para trás:
+ * O documento declara **a menor versão que dá conta do que ele usa**. Hoje só
+ * uma coisa obriga a subir, e ela mente em silêncio se ficar para trás:
  *
- *   `/UserUnit`   PDF 1.6   a escala do rolo longo
- *   `/SMask`      PDF 1.4   a máscara de uma arte transparente
+ *   `/SMask`   PDF 1.4   a máscara de uma arte transparente
  *
- * A `/SMask` chegou tarde a esta lista, e o preço foi um RIP recusando o
- * arquivo: toda peça girada vira PNG de canvas, canvas sempre tem canal alfa,
- * e o PDF saía 1.3 carregando máscara. Hoje são duas travas — a máscara só
- * entra quando esconde alguma coisa (ver `mascaraServe`) e, quando entra, o
+ * Ela chegou tarde a esta lista, e o preço foi um RIP recusando o arquivo:
+ * toda peça girada vira PNG de canvas, canvas sempre tem canal alfa, e o PDF
+ * saía 1.3 carregando máscara. Hoje são duas travas — a máscara só entra
+ * quando esconde alguma coisa (ver `mascaraServe`) e, quando entra, o
  * documento nasce 1.4 (ver `pngComAlfa`).
  */
 
@@ -366,17 +375,15 @@ function bufferDaImagem(dataUrl) {
 }
 
 /**
- * Quanto vale uma unidade da página.
+ * Quanto vale uma unidade da página: UM, sempre.
  *
- * 1 enquanto o rolo couber no teto do formato — é o caso de maior
- * compatibilidade, e a maioria dos encaixes cai nele. Passando do teto, o
- * `/UserUnit` cresce só o necessário, arredondado para cima em duas casas para
- * a página sobrar um tiquinho em vez de faltar.
+ * A função continua existindo — exportada, e conferida pela bancada — para o
+ * dia em que alguém procurar o `/UserUnit` neste arquivo e precisar achar,
+ * junto, o motivo de ele não estar mais aqui (ver "O TETO DE PÁGINA", no
+ * cabeçalho).
  */
-function unidadeDaPagina(larguraPt, alturaPt) {
-  const maiorLado = Math.max(larguraPt, alturaPt);
-  if (maiorLado <= LIMITE_PT) return 1;
-  return Math.ceil((maiorLado / LIMITE_PT) * 100) / 100;
+function unidadeDaPagina() {
+  return 1;
 }
 
 /**
@@ -433,8 +440,8 @@ async function montarPdf({
   const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
   const maiorAlturaPt = Math.max(...paginas.map((p) => (p.fundo - p.topo) * PT_POR_CM));
-  const unidade = unidadeDaPagina(larguraPt, maiorAlturaPt);
-  const tamanhoDa = (pagina) => [larguraPt / unidade, ((pagina.fundo - pagina.topo) * PT_POR_CM) / unidade];
+  const unidade = unidadeDaPagina();
+  const tamanhoDa = (pagina) => [larguraPt, (pagina.fundo - pagina.topo) * PT_POR_CM];
 
   /*
    * A VERSÃO DO FORMATO É A MENOR QUE DÁ CONTA DO QUE O ARQUIVO USA.
@@ -457,7 +464,7 @@ async function montarPdf({
   const doc = new PDFDocument({
     size: tamanhoDa(paginas[0]),
     margin: 0,
-    pdfVersion: unidade !== 1 ? "1.6" : (comAlfa ? "1.4" : "1.3"),
+    pdfVersion: comAlfa ? "1.4" : "1.3",
   });
   doc.pipe(destino);
 
@@ -532,7 +539,6 @@ async function montarPdf({
   for (let i = 0; i < paginas.length; i++) {
     const pagina = paginas[i];
     if (i > 0) doc.addPage({ size: tamanhoDa(pagina), margin: 0 });
-    if (unidade !== 1) doc.page.dictionary.data.UserUnit = unidade;
 
     for (const pos of pagina.posicoes) {
       const desenho = await desenhoDe(pos.chave);
@@ -540,10 +546,9 @@ async function montarPdf({
       try {
         // O `y` da peça é medido no rolo inteiro; na página ele conta a partir
         // do começo da bancada.
-        doc.image(desenho, (pos.x * PT_POR_CM) / unidade,
-          ((pos.y - pagina.topo) * PT_POR_CM) / unidade, {
-            width: (pos.largura * PT_POR_CM) / unidade,
-            height: (pos.altura * PT_POR_CM) / unidade,
+        doc.image(desenho, pos.x * PT_POR_CM, (pos.y - pagina.topo) * PT_POR_CM, {
+            width: pos.largura * PT_POR_CM,
+            height: pos.altura * PT_POR_CM,
           });
         desenhadas++;
       } catch (err) {

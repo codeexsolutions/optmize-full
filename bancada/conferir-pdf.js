@@ -94,12 +94,25 @@ function encaixeDe(larguraTecido, consumoCm, quantas, bancadas = 1) {
   };
 }
 
+/*
+ * NENHUM CASO ESPERA `/UserUnit`, E ISSO É O TESTE.
+ *
+ * O `/UserUnit` saiu do programa em 2026-09-23, depois de o RIP da produção (o
+ * SAi Flexi) desfigurar arquivo atrás de arquivo: ele ignora o campo, lê a
+ * página pelo número cru e estica e corta o resto. O estrago era proporcional
+ * ao fator, o que fechou o diagnóstico — 7 m (fator 1,38) saía 38% errado,
+ * 12 m (fator 2,36), 136%.
+ *
+ * Por isso a página agora sai no TAMANHO REAL, mesmo passando das 200
+ * polegadas que o formato convencionou como teto. Ver o cabeçalho de
+ * `servidor/encaixe-pdf.js`.
+ */
 const CASOS = [
   { nome: "rolo curto (3 m)", largura: 160, consumo: 300, pecas: 6, esperaUserUnit: false },
   { nome: "rolo no limite (5 m)", largura: 160, consumo: 500, pecas: 10, esperaUserUnit: false },
-  { nome: "rolo longo (12 m)", largura: 160, consumo: 1200, pecas: 24, esperaUserUnit: true },
-  { nome: "rolo enorme (40 m)", largura: 180, consumo: 4000, pecas: 80, esperaUserUnit: true },
-  { nome: "tecido largo (5,2 m)", largura: 520, consumo: 300, pecas: 6, esperaUserUnit: true },
+  { nome: "rolo longo (12 m)", largura: 160, consumo: 1200, pecas: 24, esperaUserUnit: false },
+  { nome: "rolo enorme (40 m)", largura: 180, consumo: 4000, pecas: 80, esperaUserUnit: false },
+  { nome: "tecido largo (5,2 m)", largura: 520, consumo: 300, pecas: 6, esperaUserUnit: false },
   // Com bancada. O rolo de 40 m é o que interessa: repartido em bancadas de
   // 2 m, cada página volta a caber no formato sem precisar de `/UserUnit` —
   // que é o ganho de verdade da paginação, além da mesa de corte.
@@ -332,10 +345,26 @@ async function principal() {
       erro(`as páginas somam ${somaCm.toFixed(2)} cm, mais que os ${caso.consumo} cm do rolo`);
     }
 
-    // 4) A página em si tem que caber no teto do formato.
+    /*
+     * 4) A página tem o TAMANHO REAL do trecho de rolo, passando ou não do
+     *    teto convencional de 200 polegadas.
+     *
+     *    Era o contrário até 2026-09-23: a página cabia no teto e o
+     *    `/UserUnit` dizia quanto ela valia de verdade. Como o RIP da
+     *    produção ignora esse campo, a conta agora é direta — e o que se
+     *    confere é que ela É direta, porque um `/UserUnit` que voltasse
+     *    sorrateiramente passaria batido numa conferência de centímetros
+     *    (ela bateria: página × fator dá o mesmo).
+     */
     const maiorLado = Math.max(relatorio.paginaPt[0], relatorio.paginaPt[1]);
-    if (maiorLado > LIMITE_PT + 1e-6) {
-      erro(`a página tem ${maiorLado.toFixed(0)} pt de lado — o PDF só aceita ${LIMITE_PT}`);
+    const maiorPaginaCm = Math.max(...relatorio.paginas.map((p) => p.comprimento));
+    const esperadoPt = Math.max(caso.largura * PT_POR_CM, maiorPaginaCm * PT_POR_CM);
+    if (Math.abs(maiorLado - esperadoPt) > 0.5) {
+      erro(`a página tem ${maiorLado.toFixed(0)} pt de lado, e o trecho de rolo pede `
+        + `${esperadoPt.toFixed(0)} pt — a página não está em tamanho real`);
+    }
+    if (maiorLado > LIMITE_PT && !relatorio.paginas.length) {
+      erro("página acima do teto sem páginas no relatório");
     }
 
     // 5) O UserUnit e a versão do formato andam juntos.
@@ -344,8 +373,8 @@ async function principal() {
     if (temUserUnit !== caso.esperaUserUnit) {
       erro(temUserUnit ? "veio com /UserUnit sem precisar" : "faltou o /UserUnit");
     }
-    if (temUserUnit && Number(versao) < 1.6) {
-      erro(`usa /UserUnit mas se declara PDF ${versao} — leitor pode ignorar e imprimir fora de escala`);
+    if (temUserUnit) {
+      erro("veio com /UserUnit, que o RIP da produção ignora — a página tem de sair em tamanho real");
     }
 
     /*
