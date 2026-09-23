@@ -117,6 +117,8 @@ const net = require('node:net');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
+const { semearSessao } = require('./sessao-de-teste.cjs');
+
 const RAIZ = path.join(__dirname, '..');
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -405,6 +407,9 @@ async function principal() {
   }
 
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'optimize-molde-'));
+  // O painel pede conta para abrir: esta bancada entra pelo arquivo de
+  // sessão, sem rede. Ver `sessao-de-teste.cjs`.
+  semearSessao(pasta);
   const porta = await portaLivre();
   const servidor = spawn(process.execPath, [path.join(RAIZ, 'servidor', 'server.js')], {
     env: { ...process.env, PORT: String(porta), OPTIMIZE_DADOS: pasta },
