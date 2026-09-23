@@ -247,25 +247,57 @@ fn icone_da_barra(janela: &tauri::WebviewWindow) {
 
 /// Quanto esperar antes da PRIMEIRA ida ao servidor.
 ///
-/// O arranque já está ocupado: o Node está subindo, o SQLite abrindo o banco e
-/// o WebView pintando a tela de abertura. Uma consulta de rede no meio disso
-/// disputa com tudo o que a pessoa está esperando ver.
+/// Eram noventa segundos, e agora são quinze. A espera longa nasceu de duas
+/// preocupações, e só uma delas se sustenta:
 ///
-/// E ESTA ESPERA É A TRAVA DE SEGURANÇA DA INSTALAÇÃO SOZINHA, abaixo: ela é o
-/// que prova que a versão instalada ABRE. Sem ela, uma versão quebrada a ponto
-/// de não subir instalaria a seguinte por cima de um programa que nunca
-/// funcionou — e, se a seguinte também estivesse quebrada, a loja entraria num
-/// laço de se reinstalar sem ninguém para dizer não. Noventa segundos de
-/// programa vivo é a prova mais barata que existe disso.
-const PRIMEIRA_CHECAGEM: Duration = Duration::from_secs(90);
+///   O ARRANQUE OCUPADO — o Node subindo, o SQLite abrindo o banco, o WebView
+///   pintando a primeira tela. Isso dura segundos, não um minuto e meio;
+///   quinze já deixam a consulta de rede fora do caminho de quem está
+///   esperando a tela aparecer.
+///
+///   A TRAVA DA INSTALAÇÃO SOZINHA — esta continua sendo a razão de haver
+///   QUALQUER espera aqui. A rodada da abertura instala sem perguntar, e o
+///   tempo de programa vivo é o que prova que a versão instalada ABRE: sem
+///   ele, uma versão quebrada a ponto de não subir instalaria a seguinte por
+///   cima de um programa que nunca funcionou, e a loja entraria num laço de se
+///   reinstalar sem ninguém para dizer não.
+///
+/// Quinze segundos ainda provam o que interessa: um programa que quebra no
+/// arranque quebra nos primeiros segundos, antes do WebView pintar. O que se
+/// perde é a prova contra uma quebra que aparece no minuto seguinte — e essa
+/// nenhuma espera razoável pega.
+const PRIMEIRA_CHECAGEM: Duration = Duration::from_secs(15);
 
 /// De quanto em quanto tempo perguntar de novo.
 ///
 /// O programa de uma produção fica aberto o dia inteiro — sem este laço, quem
-/// nunca fecha o Optimize nunca receberia correção nenhuma. Duas horas é raro
-/// o bastante para não pesar em nada e frequente o bastante para uma correção
-/// publicada de manhã chegar antes do fim do expediente.
-const INTERVALO_CHECAGEM: Duration = Duration::from_secs(2 * 60 * 60);
+/// nunca fecha o Optimize nunca receberia correção nenhuma.
+///
+/// Eram duas horas; agora são cinco minutos, para uma correção publicada
+/// alcançar a gráfica enquanto ela ainda é a correção do problema que a pessoa
+/// acabou de relatar ao telefone.
+///
+/// O QUE PAGA ESSA FREQUÊNCIA É A RESPOSTA VAZIA. Quando não há versão nova, o
+/// servidor devolve `204 No Content` (ver `/app/update/tauri/...`, no backend):
+/// nenhum corpo, nenhuma consulta ao Storage, nenhum byte de instalador. É uma
+/// pergunta a cada cinco minutos, não um download.
+///
+/// E a caixa de perguntar NÃO volta a cada rodada: quem responde "agora não"
+/// não é interrompido de novo pela mesma versão — ver `ULTIMA_RECUSADA`.
+const INTERVALO_CHECAGEM: Duration = Duration::from_secs(5 * 60);
+
+/// A versão que a pessoa dispensou.
+///
+/// Sem isto, perguntar de cinco em cinco minutos seria perseguição: quem
+/// clicou "agora não" no meio de um encaixe levaria a mesma caixa na cara doze
+/// vezes por hora, e a terceira já seria motivo para desligar a atualização
+/// automática no grito.
+///
+/// Guardada a VERSÃO, e não um horário: dispensar a 1.1.160 cala o programa
+/// sobre a 1.1.160 — e só sobre ela. A 1.1.161 pergunta de novo, porque é
+/// outra decisão. E, de qualquer forma, a próxima abertura do programa instala
+/// sozinha o que estiver pendente, sem caixa nenhuma.
+static ULTIMA_RECUSADA: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 /// Procura versão nova e instala.
 ///
@@ -293,6 +325,20 @@ fn procurar_atualizacao(
     };
 
     /*
+     * JÁ DISPENSARAM ESTA VERSÃO? Então não se pergunta de novo.
+     *
+     * A checagem é de cinco em cinco minutos; a pergunta, uma por versão.
+     * Sem esta porta, quem responde "agora não" seria interrompido doze vezes
+     * por hora pela mesma caixa.
+     */
+    if perguntar {
+        let recusada = ULTIMA_RECUSADA.lock().unwrap();
+        if recusada.as_deref() == Some(atualizacao.version.as_str()) {
+            return Ok(false);
+        }
+    }
+
+    /*
      * NA ABERTURA, INSTALA SEM PERGUNTAR.
      *
      * A pergunta existe porque reiniciar perde o que está na tela. Recém-aberto,
@@ -309,12 +355,6 @@ fn procurar_atualizacao(
         app.restart();
     }
 
-    let notas = if atualizacao.body.as_deref().unwrap_or("").trim().is_empty() {
-        String::new()
-    } else {
-        format!("\n\n{}", atualizacao.body.as_deref().unwrap_or("").trim())
-    };
-
     /*
      * PERGUNTA, não instala por conta própria.
      *
@@ -323,12 +363,23 @@ fn procurar_atualizacao(
      * "depois" — e vai poder dizer de novo daqui a duas horas, que é o laço
      * chamando outra vez. Uma atualização que interrompe o serviço do cliente
      * é pior que uma que chega uma tarde mais tarde.
+     *
+     * E ESTA CAIXA NÃO MOSTRA MAIS AS NOTAS DA VERSÃO.
+     *
+     * Elas eram os títulos dos commits desde o lançamento anterior — texto
+     * escrito por quem programa, para quem programa. Na tela de uma gráfica
+     * viravam frases como "o lançamento hospeda o instalador na release do
+     * GitHub": ninguém do outro lado sabe o que é uma release, e a frase só
+     * fazia a atualização parecer coisa de outro mundo. O que a pessoa precisa
+     * saber cabe em duas linhas: há versão nova, e atualizar reabre o
+     * programa. O detalhe continua no histórico, onde ele serve para alguma
+     * coisa.
      */
     let aceitou = app
         .dialog()
         .message(format!(
-            "A versão {} do Optimize está pronta.{}\n\nAtualizar agora leva alguns segundos e reabre o programa.",
-            atualizacao.version, notas
+            "A versão {} do Optimize está pronta.\n\nAtualizar agora leva alguns segundos e reabre o programa.",
+            atualizacao.version
         ))
         .title("Atualização disponível")
         .buttons(MessageDialogButtons::OkCancelCustom(
@@ -338,6 +389,9 @@ fn procurar_atualizacao(
         .blocking_show();
 
     if !aceitou {
+        // Cala a caixa para ESTA versão. A próxima pergunta é de outra versão,
+        // ou da próxima vez que o programa abrir — que instala sem perguntar.
+        *ULTIMA_RECUSADA.lock().unwrap() = Some(atualizacao.version.clone());
         return Ok(false);
     }
 
@@ -378,14 +432,15 @@ fn procurar_atualizacao(
 ///
 ///   COM O PROGRAMA ABERTO HÁ HORAS: não pode. Ali existe trabalho na tela, e
 ///   uma atualização que interrompe o serviço do cliente é pior que uma que
-///   chega uma tarde mais tarde. Continua perguntando, como sempre fez.
+///   chega meia hora mais tarde. Continua perguntando — uma vez por versão,
+///   não uma vez por checagem.
 fn cuidar_das_atualizacoes(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(PRIMEIRA_CHECAGEM);
 
         // A rodada da abertura: instala calada. Se falhar — sem internet, o
         // servidor fora do ar —, cai no laço de baixo e tenta de novo daqui a
-        // duas horas, aí perguntando.
+        // cinco minutos, aí perguntando.
         match procurar_atualizacao(&app, false) {
             Ok(true) => return,
             Ok(false) => {}

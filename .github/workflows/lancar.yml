@@ -174,25 +174,18 @@ jobs:
           REPO="${{ github.repository }}"
           echo "url=https://github.com/$REPO/releases/download/v$VERSAO/$NOME" >> "$GITHUB_OUTPUT"
 
+      # NADA DE NOTAS.
+      #
+      # Aqui se montava a lista de commits desde o lançamento anterior, e ela
+      # ia parar na caixa de "Atualizar agora" da gráfica — texto escrito por
+      # quem programa, para quem programa. O que muda em cada versão continua
+      # no histórico do repositório e na release do GitHub; a caixa do cliente
+      # diz o que interessa a ele, que é ter versão nova.
       - name: Publicar
         env:
           OPTMIZE_ADMIN_KEY: ${{ secrets.OPTMIZE_ADMIN_KEY }}
           OPTMIZE_RELEASE_URL: ${{ steps.hospedar.outputs.url }}
-          ANTES: ${{ github.event.before }}
-        run: |
-          # As notas são o que aparece no "Atualizar agora" das lojas: a
-          # primeira linha de cada commit desde o lançamento anterior. Vão por
-          # variável, e não escritas no comando, porque texto de commit não é
-          # código para rodar.
-          if [ -z "$ANTES" ] || ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
-            ANTES=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
-          fi
-          if [ -n "$ANTES" ]; then
-            NOTAS=$(git log --no-merges --format='- %s' "$ANTES..HEAD" | head -n 8)
-          else
-            NOTAS=$(git log --no-merges --format='- %s' -n 5)
-          fi
-          npm run publicar -- "$NOTAS"
+        run: npm run publicar
 
       # A etiqueta v<versão> agora nasce junto da release do GitHub, no passo
       # de hospedar — `gh release create` cria a tag no commit atual. Este
