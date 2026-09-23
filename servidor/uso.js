@@ -1,0 +1,92 @@
+/**
+ * ===========================================================================
+ * O USO DO DIA — pedir licença antes de exportar
+ * ===========================================================================
+ *
+ * A escada de planos limita EXPORTAÇÕES POR DIA: o Essencial dá cinco, o
+ * Profissional vinte e cinco, o Completo e o anual não têm teto. Encaixar
+ * continua à vontade em todos — quem experimenta não gasta nada, e é
+ * experimentando que a pessoa descobre que o encaixe é bom.
+ *
+ * Quem conta é o backend, e tem de ser ele: as três máquinas de uma conta do
+ * Profissional dividem as mesmas vinte e cinco exportações, e cada uma
+ * contando sozinha daria setenta e cinco.
+ *
+ * ---------------------------------------------------------------------------
+ * SEM INTERNET, EXPORTA
+ * ---------------------------------------------------------------------------
+ *
+ * É a decisão mais importante deste arquivo. O Optmize é instalado na gráfica
+ * e o link da rua cai; recusar a exportação porque o Railway não respondeu
+ * transformaria queda de internet em pedido parado, e o prejuízo seria de
+ * quem PAGA — não de quem deve.
+ *
+ * Então: erro de rede libera. O que isso permite está dito em voz alta —
+ * quem tirar a máquina da internet exporta à vontade. É o mesmo teto da
+ * licença offline do programa: quem quer burlar já tinha por onde, e castigar
+ * cem gráficas honestas para incomodar uma é troca ruim.
+ *
+ * ---------------------------------------------------------------------------
+ * SEM CONTA, TAMBÉM EXPORTA
+ * ---------------------------------------------------------------------------
+ *
+ * O programa pede login para abrir (ver `casca/Casca.tsx`), então "sem sessão"
+ * aqui significa quase sempre um Optmize aberto antes de a conta existir, ou
+ * um teste de bancada. Recusar seria inventar uma trava que a tela de entrada
+ * já faz melhor.
+ */
+
+const { pedirComToken } = require("./sessao");
+
+/**
+ * Pede uma exportação ao servidor.
+ *
+ * Devolve sempre um objeto, nunca lança: quem chama está no meio de gerar um
+ * PDF e não tem o que fazer com uma exceção de rede.
+ *
+ * `permitido: false` só acontece quando o SERVIDOR disse não — ou seja,
+ * quando a conta existe, a rede foi, e a cota do dia acabou.
+ */
+async function permitirExportacao() {
+  let resposta;
+  try {
+    resposta = await pedirComToken("/uso/exportacao", { method: "POST" });
+  } catch {
+    return { permitido: true, offline: true };
+  }
+
+  // `null` é "não há sessão gravada" — ver a nota no cabeçalho.
+  if (!resposta) return { permitido: true, semConta: true };
+
+  const dados = await resposta.json().catch(() => null);
+
+  /*
+    QUALQUER RESPOSTA QUE NÃO SEJA UM "NÃO" EXPLÍCITO LIBERA.
+
+    402 é o não da cota (ver `uso.routes.ts`, no backend). Um 500, um 404 de
+    rota que ainda não subiu, um corpo que não é JSON: nada disso é a conta
+    estourando o limite, e nenhum deles justifica segurar o pedido de um
+    cliente.
+  */
+  if (resposta.status === 402 && dados) {
+    return {
+      permitido: false,
+      motivo: dados.motivo || "A cota de exportações de hoje acabou.",
+      limite: dados.limite ?? null,
+      usadas: dados.usadas ?? null,
+      plano: dados.plano || "",
+      podeComprarAvulso: Boolean(dados.podeComprarAvulso),
+    };
+  }
+
+  if (!resposta.ok) return { permitido: true, falhou: true };
+
+  return {
+    permitido: true,
+    restantes: dados?.restantes ?? null,
+    limite: dados?.limite ?? null,
+    usadas: dados?.usadas ?? null,
+  };
+}
+
+module.exports = { permitirExportacao };

@@ -169,12 +169,15 @@ function acessoFresco(atual) {
  * responderia 401 e a tela diria "aguardando liberação" para quem está em dia.
  * Uma tentativa só: se o refresh também falhar, a sessão acabou de verdade.
  */
-async function pedirComToken(rota) {
+async function pedirComToken(rota, opcoes = {}) {
   const atual = ler();
   if (!atual) return null;
 
   const tentar = async (token) =>
-    fetch(BACKEND + rota, { headers: { Authorization: `Bearer ${token}` } });
+    fetch(BACKEND + rota, {
+      ...opcoes,
+      headers: { ...(opcoes.headers || {}), Authorization: `Bearer ${token}` },
+    });
 
   let resposta = await tentar(atual.accessToken);
   if (resposta.status !== 401) return resposta;
@@ -417,4 +420,12 @@ rotas.post("/sair", (_req, res) => {
   res.json(perfilDaTela());
 });
 
-module.exports = { rotas, perfilDaTela };
+/*
+  `pedirComToken` sai daqui para o `uso.js` usar antes de cada exportação.
+
+  É a única função deste arquivo que outro módulo enxerga, e de propósito: ela
+  guarda o token, renova quando vence e devolve a resposta crua. Duplicar esse
+  cuidado em outro arquivo daria dois lugares para consertar no dia em que o
+  refresh mudar — e o segundo ficaria para trás.
+*/
+module.exports = { rotas, perfilDaTela, pedirComToken };

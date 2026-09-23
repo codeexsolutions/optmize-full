@@ -46,6 +46,7 @@
  */
 
 const express = require("express");
+const { permitirExportacao } = require("./uso");
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const os = require("os");
@@ -474,12 +475,36 @@ async function montarPdf({ larguraTecido, consumo, posicoes, buffers, lerArte },
   };
 }
 
-router.post("/pdf", (req, res) => {
+router.post("/pdf", async (req, res) => {
   limparAntigas();
   const { larguraTecido, consumo, imagens, posicoes, nome } = req.body || {};
 
   if (!(larguraTecido > 0) || !(consumo > 0) || !Array.isArray(posicoes) || posicoes.length === 0) {
     return res.status(400).json({ error: "Encaixe inválido para gerar o PDF." });
+  }
+
+  /*
+    A COTA DO DIA, ANTES DE MONTAR QUALQUER COISA.
+
+    Aqui, e não no encaixe: encaixar é experimentar, e cota em cima de
+    tentativa ensina a tentar menos. Este é o ponto em que o arquivo vai para
+    a impressora — ver `servidor/uso.js` e `domain/uso-diario.ts`.
+
+    O `error` é o que a tela já mostra sozinha (`api/encaixe.ts` lê esse
+    campo), então a recusa chega à pessoa escrita em português sem tela nova
+    nenhuma. Os outros campos ficam para a tela de comprar avulso, quando ela
+    existir.
+  */
+  const cota = await permitirExportacao();
+  if (!cota.permitido) {
+    return res.status(402).json({
+      error: cota.motivo,
+      codigo: "cota_do_dia",
+      limite: cota.limite,
+      usadas: cota.usadas,
+      plano: cota.plano,
+      podeComprarAvulso: cota.podeComprarAvulso,
+    });
   }
 
   const sessao = String(req.body.sessao || "");

@@ -77,6 +77,29 @@ interface Plano {
   cobranca: "mensal" | "anual" | "creditos";
   vantagens: string[];
   acessos: number;
+  /** Quantas exportações por dia. `null` = sem teto. */
+  exportacoesPorDia: number | null;
+  /** Dias de teste. Hoje é 7 em todos — a tela não decide isso. */
+  diasDeTeste: number;
+}
+
+/**
+ * O QUE SEPARA UM DEGRAU DO OUTRO, em uma linha.
+ *
+ * São os dois números que a pessoa está realmente comparando: quanto dá para
+ * exportar por dia e quantas pessoas entram. O nome do plano não diz isso, e o
+ * preço sozinho não explica por que um custa cinco vezes o outro.
+ *
+ * Fica em TODA linha, inclusive nas não escolhidas — diferente das vantagens,
+ * que só abrem na escolhida. Vantagem é argumento; isto é a régua.
+ */
+function reguaDoPlano(plano: Plano): string {
+  const exportacoes =
+    plano.exportacoesPorDia === null
+      ? "exportação sem limite"
+      : `${plano.exportacoesPorDia} exportações por dia`;
+  const acessos = plano.acessos === 1 ? "1 acesso" : `${plano.acessos} acessos`;
+  return `${exportacoes} · ${acessos}`;
 }
 
 /** Em qual dos dois passos a pessoa está. */
@@ -133,7 +156,17 @@ function porMesDoAnual(plano: Plano): string | null {
  * nesse caso o selo simplesmente não aparece.
  */
 function economiaDoAnual(planos: Plano[]): number | null {
-  const mensal = planos.find((p) => p.cobranca === "mensal");
+  /*
+    COMPARA COM O MENSAL MAIS CARO, e não com o primeiro que aparecer.
+
+    A licença anual é a versão de doze meses do COMPLETO, e desde que a escada
+    ganhou degraus mais baratos o "primeiro mensal da lista" passou a ser o
+    Essencial — contra ele o anual sai mais CARO, e o selo simplesmente sumia
+    da tela sem ninguém entender por quê.
+  */
+  const mensal = planos
+    .filter((p) => p.cobranca === "mensal")
+    .sort((a, b) => b.precoCentavos - a.precoCentavos)[0];
   const anual = planos.find((p) => p.cobranca === "anual");
   if (!mensal || !anual || mensal.precoCentavos <= 0) return null;
   const dozeMeses = mensal.precoCentavos * 12;
@@ -237,13 +270,17 @@ export function CriarConta({
         const lista = dados.planos ?? [];
         setPlanos(lista);
         /*
-          O PADRÃO JÁ VEM MARCADO. É o caminho sem cartão e sem compromisso, e
-          é o que alguém que acabou de instalar o programa quer experimentar —
-          deixar tudo desmarcado obrigaria um clique a mais antes do primeiro
-          campo, para chegar na escolha que a maioria faria de qualquer jeito.
+          O MAIS BARATO JÁ VEM MARCADO.
+
+          Deixar tudo desmarcado obrigaria um clique a mais antes do primeiro
+          campo. E o degrau de entrada é o padrão honesto: ninguém se arrepende
+          de ter começado barato e subido, e quem precisa de mais sobe com a
+          régua de cada linha na frente. O contrário — vir marcado no caro —
+          seria a tela escolhendo pelo bolso de quem está lendo.
+
+          A lista chega ordenada do mais barato ao mais caro pelo servidor.
         */
-        const padrao = lista.find((p) => p.cobranca === "creditos");
-        setEscolhido(padrao?.id ?? lista[0]?.id ?? null);
+        setEscolhido(lista[0]?.id ?? null);
       })
       .catch(() => vivo && setPlanos([]));
     return () => { vivo = false; };
@@ -256,6 +293,24 @@ export function CriarConta({
   */
   const planoEscolhido = (planos ?? []).find((p) => p.id === escolhido) ?? null;
   const economia = economiaDoAnual(planos ?? []);
+  /*
+    O TESTE, e o `0` quando não há.
+
+    Sai do primeiro plano da lista porque hoje todos dão o mesmo número de
+    dias. No dia em que um deles não der, esta linha é a que precisa mudar —
+    e o `Math.min` seria o certo ali, para a frase não prometer o que o plano
+    escolhido não cumpre.
+  */
+  const diasDeTeste = planos?.[0]?.diasDeTeste ?? 0;
+  /*
+    O DO MEIO É O SUGERIDO.
+
+    Não é achismo de marketing: numa escada de quatro, o degrau de entrada
+    existe para caber no bolso e o de cima para a gráfica grande. Quem está
+    lendo pela primeira vez quase nunca é nenhum dos dois, e um selo no meio
+    responde "por onde eu começo?" sem precisar ler as quatro réguas.
+  */
+  const sugerido = (planos ?? [])[1]?.id ?? null;
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
@@ -342,6 +397,25 @@ export function CriarConta({
             <Trilha passo="plano" />
           </header>
 
+          {/*
+            O TESTE É DE TODOS, ENTÃO É DITO UMA VEZ SÓ.
+
+            Repetir "7 dias grátis" em cada linha gastaria quatro linhas para
+            dizer a mesma coisa, e faria o olho procurar a diferença onde não
+            há nenhuma. Aqui em cima ele vira o que é: a resposta para "e se eu
+            escolher errado?", antes de a escolha começar.
+          */}
+          {diasDeTeste > 0 && (
+            <p className="entrada-degrau m-0 flex items-start gap-2 text-[12px] leading-relaxed text-tinta-fraca">
+              <Icone
+                referencia="icones.svg#badge-check"
+                className="mt-0.5 size-3.5 shrink-0 text-ambar"
+              />
+              Você testa qualquer plano por {diasDeTeste} dias, sem cartão. Dá
+              para mudar de plano depois — fale com a CodeEx Solutions.
+            </p>
+          )}
+
           {planos === null && (
             <p className="m-0 text-[13px] text-tinta-apagada">Buscando os planos…</p>
           )}
@@ -380,10 +454,10 @@ export function CriarConta({
                 selo nenhum — um selo em todas as linhas não destaca nada.
               */
               const selo =
-                plano.cobranca === "creditos"
-                  ? "Comece sem cartão"
-                  : plano.cobranca === "anual" && economia !== null
-                    ? `${economia}% a menos`
+                plano.cobranca === "anual" && economia !== null
+                  ? `${economia}% a menos`
+                  : plano.id === sugerido
+                    ? "Mais escolhido"
                     : null;
 
               return (
@@ -481,6 +555,13 @@ export function CriarConta({
                         </span>
                       </span>
 
+                      {/* A RÉGUA: os dois números que se compara de verdade. */}
+                      <span
+                        className={`mt-1 block text-[11.5px] ${marcado ? "text-tinta-fraca" : "text-tinta-apagada"}`}
+                      >
+                        {reguaDoPlano(plano)}
+                      </span>
+
                       {/*
                         AS VANTAGENS SÓ APARECEM NO PLANO MARCADO. Abertas nos
                         três, a lista tomaria a tela inteira e a escolha — que
@@ -488,12 +569,11 @@ export function CriarConta({
                       */}
                       {marcado && (
                         <span className="mt-3 block border-t border-[var(--accent-line)] pt-3">
-                          <span className="mb-2 flex items-center gap-1.5 text-[10.5px] font-medium tracking-[1.2px] text-tinta-apagada uppercase">
-                            <Icone referencia="icones.svg#users" className="size-3" />
-                            {plano.acessos === 1
-                              ? "1 acesso"
-                              : `até ${plano.acessos} acessos`}
-                          </span>
+                          {/*
+                            O número de acessos saiu daqui: ele já está na régua
+                            de cima, em toda linha. Repetido, roubava a primeira
+                            posição do bloco que deveria ser das vantagens.
+                          */}
                           <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
                             {plano.vantagens.map((v) => (
                               <li
