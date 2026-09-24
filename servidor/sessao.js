@@ -430,6 +430,37 @@ rotas.post("/entrar", async (req, res) => {
  * segunda que fica desatualizada.
  */
 
+/*
+ * A RECUPERAÇÃO DE SENHA — mais dois repasses, pelo mesmo motivo do cadastro.
+ *
+ * O backend manda um código de seis números para o e-mail da conta, e a tela
+ * troca a senha com ele. Nada é guardado aqui, nem o código nem a senha.
+ */
+async function repassarSemConta(res, rota, corpo) {
+  try {
+    const resposta = await falarComOBackend(rota, corpo);
+    if (resposta.status === 204) return res.status(204).end();
+    res.status(resposta.status).json(resposta.dados);
+  } catch {
+    res.status(503).json({
+      code: "sem_rede",
+      message: "O Optmize não conseguiu falar com o servidor. Confira a internet.",
+    });
+  }
+}
+
+rotas.post("/esqueci", (req, res) =>
+  repassarSemConta(res, "/auth/password/forgot", {
+    email: String((req.body && req.body.email) || "").trim().toLowerCase(),
+  }));
+
+rotas.post("/redefinir", (req, res) =>
+  repassarSemConta(res, "/auth/password/reset", {
+    email: String((req.body && req.body.email) || "").trim().toLowerCase(),
+    code: String((req.body && req.body.codigo) || "").replace(/\D/g, ""),
+    password: String((req.body && req.body.senha) || ""),
+  }));
+
 /** Os planos que a tela de cadastro mostra. */
 rotas.get("/planos", async (_req, res) => {
   try {

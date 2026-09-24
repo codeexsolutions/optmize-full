@@ -50,6 +50,7 @@ import { alerta } from "../casca/Alerta";
 import { Icone } from "../casca/Icone";
 import { encerrarEntrada, tocarEntrada } from "./Entrada";
 import { CriarConta } from "./CriarConta";
+import { RecuperarSenha } from "./RecuperarSenha";
 import { mascararDocumento, Porta } from "./Porta";
 import { usePlanos } from "../estado/planos";
 
@@ -79,8 +80,8 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
   useEffect(() => { carregarPlanos(); }, [carregarPlanos]);
   /** O olho da senha: ver o que se digitou poupa um telefonema. */
   const [senhaAberta, setSenhaAberta] = useState(false);
-  /** O texto de "Esqueci a senha", que abre e fecha no mesmo botão. */
-  const [ajudaDaSenha, setAjudaDaSenha] = useState(false);
+  /** `true` enquanto a tela de redefinir a senha está na frente. */
+  const [recuperando, setRecuperando] = useState(false);
   /** `true` enquanto a tela de cadastro da empresa está na frente. */
   const [cadastrando, setCadastrando] = useState(false);
 
@@ -164,6 +165,24 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
     segundo caminho que grava sessão, e o dia em que um deles mudasse, o outro
     ficaria para trás.
   */
+  /*
+    ESQUECI A SENHA substitui o login do mesmo jeito que o cadastro: o código
+    chega no e-mail, a senha troca lá, e a pessoa volta com o e-mail preenchido.
+  */
+  if (recuperando) {
+    return (
+      <RecuperarSenha
+        emailInicial={email}
+        aoVoltar={() => setRecuperando(false)}
+        aoRedefinir={(emailDaConta) => {
+          setEmail(emailDaConta);
+          setSenha("");
+          setRecuperando(false);
+        }}
+      />
+    );
+  }
+
   if (cadastrando) {
     return (
       <CriarConta
@@ -319,14 +338,12 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
           centro, ele flutuava entre o formulário e o botão sem pertencer
           a nenhum dos dois.
 
-          ELE NÃO MANDA E-MAIL, e o texto que abre diz isso sem rodeio:
-          não existe rota de redefinição no backend. Quem troca a senha é
-          o dono, pelo painel. Prometer um e-mail que nunca chega faria a
-          pessoa esperar em vez de resolver.
+          ELE MANDA UM CÓDIGO PARA O E-MAIL e abre a tela de redefinir
+          (`RecuperarSenha.tsx`), já com o e-mail digitado aqui.
         */}
         <button
           type="button"
-          onClick={() => setAjudaDaSenha((v) => !v)}
+          onClick={() => setRecuperando(true)}
           className="entrada-degrau -mt-1 self-start border-0 bg-transparent p-0 text-[12px] text-tinta-apagada transition-colors hover:text-ambar"
         >
           Esqueci a senha
@@ -349,19 +366,6 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
           {enviando ? "Entrando…" : "Entrar"}
         </button>
 
-        {ajudaDaSenha && (
-          <div className="entrada-treme rounded-xl border border-linha bg-fundo/60 px-3.5 py-3">
-            <p className="m-0 text-[12.5px] leading-relaxed text-tinta-fraca">
-              Quem redefine a sua senha é <strong className="font-semibold text-tinta">o
-              dono da conta da sua empresa</strong>, pelo painel web —
-              não há envio de e-mail.
-            </p>
-            <p className="mt-1.5 mb-0 text-[12px] leading-relaxed text-tinta-apagada">
-              Se você é o dono e perdeu a senha, fale com a CodeEx
-              Solutions pelo <span className="font-mono">@codeexsolutions</span>.
-            </p>
-          </div>
-        )}
         </fieldset>
       </form>
     </Porta>
