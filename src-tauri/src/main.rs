@@ -312,8 +312,8 @@ fn recado(janela: &tauri::WebviewWindow, texto: &str) {
 /// instalador; quem diz se ele é legítimo é a chave compilada dentro deste
 /// binário.
 ///
-/// Devolve `Ok(true)` quando instalou — e aí o programa reinicia e esta função
-/// não chega a devolver nada.
+/// Devolve `Ok(true)` quando instalou — e aí o programa já se encerrou para o
+/// instalador trabalhar, e esta função não chega a devolver nada.
 fn atualizar_na_abertura(
     app: &tauri::AppHandle,
     janela: &tauri::WebviewWindow,
@@ -347,7 +347,20 @@ fn atualizar_na_abertura(
     let total_baixado = std::cell::Cell::new(0u64);
     let janela_do_progresso = janela.clone();
 
-    tauri::async_runtime::block_on(atualizacao.download_and_install(
+    /*
+     * BAIXAR E INSTALAR SÃO DOIS PASSOS, e não o `download_and_install`.
+     *
+     * No Windows o `install` do plugin abre o instalador e encerra o programa
+     * na hora, com `std::process::exit(0)`. Isso pula o `RunEvent::Exit` lá
+     * embaixo — o único lugar que matava o `node.exe` filho. Era aqui o
+     * "conflito" de toda atualização: o Node ficava órfão, segurando os
+     * arquivos de `servidor\`, e o instalador não conseguia sobrescrevê-los.
+     * O `app.restart()` que vinha depois nunca chegava a rodar.
+     *
+     * Separando os passos, o servidor morre entre um e outro, com o download
+     * já conferido pela assinatura.
+     */
+    let pacote = tauri::async_runtime::block_on(atualizacao.download(
         |pedaco: usize, total: Option<u64>| {
             total_baixado.set(total_baixado.get() + pedaco as u64);
             let Some(total) = total.filter(|t| *t > 0) else { return };
@@ -360,17 +373,23 @@ fn atualizar_na_abertura(
         || {},
     ))?;
 
-    recado(janela, "Instalando…");
+    recado(janela, "Instalando… o Optmize reabre sozinho em instantes");
+
+    if let Some(processo) = app.state::<Servidor>().0.lock().unwrap().as_mut() {
+        let _ = processo.kill();
+        let _ = processo.wait();
+    }
 
     /*
-     * O servidor Node PRECISA morrer antes do reinício.
-     *
-     * `restart()` derruba o processo do Tauri, e o `RunEvent::Exit` lá embaixo é
-     * quem mata o `node.exe` filho. Sem passar por ele, o instalador tentaria
-     * sobrescrever arquivos que um Node ainda vivo mantém abertos — e no
-     * Windows isso não é um aviso, é a instalação falhando pela metade.
+     * Um instante para o recado ser lido. Depois do `install` a janela some e
+     * o instalador trabalha em silêncio por alguns segundos antes de reabrir o
+     * programa; sem aviso, a pessoa clica no ícone de novo no meio disso.
      */
-    app.restart();
+    std::thread::sleep(Duration::from_millis(1500));
+
+    // Não volta: abre o instalador (`/S /UPDATE /R`) e encerra o processo.
+    atualizacao.install(pacote)?;
+    Ok(true)
 }
 
 fn main() {

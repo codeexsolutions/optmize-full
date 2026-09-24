@@ -114,8 +114,13 @@ interface Plano {
   metrosPorPeriodo: number | null;
   /** De quanto em quanto tempo ela volta a encher. */
   periodoDaCota: "diario" | "semanal" | "mensal";
-  /** Dias de teste. Hoje é 7 em todos — a tela não decide isso. */
+  /** Dias de teste; `0` = sem teste. Quem decide é o catálogo, não a tela. */
   diasDeTeste: number;
+}
+
+/** O nome sem o prefixo da marca: "Completo", "Licença anual". */
+function nomeCurto(plano: Plano): string {
+  return plano.nome.replace(/^CodeEx Optmize — /, "");
 }
 
 /**
@@ -286,14 +291,24 @@ export function CriarConta({
   const planoEscolhido = (planos ?? []).find((p) => p.id === escolhido) ?? null;
   const economia = economiaDoAnual(planos ?? []);
   /*
-    O TESTE, e o `0` quando não há.
+    O TESTE NÃO É DE TODOS: só o Completo e a Licença anual têm.
 
-    Sai do primeiro plano da lista porque hoje todos dão o mesmo número de
-    dias. No dia em que um deles não der, esta linha é a que precisa mudar —
-    e o `Math.min` seria o certo ali, para a frase não prometer o que o plano
-    escolhido não cumpre.
+    Quem decide é o catálogo (`diasDeTeste` de cada plano); a tela só junta
+    os que têm, para a frase de cima nomeá-los em vez de prometer teste a quem
+    escolher o Essencial. O `Math.min` garante que ela não diga mais dias do
+    que o plano mais curto dá.
   */
-  const diasDeTeste = planos?.[0]?.diasDeTeste ?? 0;
+  const planosComTeste = (planos ?? []).filter((p) => p.diasDeTeste > 0);
+  const diasDeTeste = planosComTeste.length
+    ? Math.min(...planosComTeste.map((p) => p.diasDeTeste))
+    : 0;
+  const nomesComTeste = planosComTeste.map((p) => nomeCurto(p));
+  const quemTesta =
+    planosComTeste.length === (planos ?? []).length
+      ? "qualquer plano"
+      : nomesComTeste.length > 1
+        ? `${nomesComTeste.slice(0, -1).join(", ")} ou ${nomesComTeste.at(-1)}`
+        : nomesComTeste[0];
   /*
     O DO MEIO É O SUGERIDO.
 
@@ -399,12 +414,11 @@ export function CriarConta({
           </header>
 
           {/*
-            O TESTE É DE TODOS, ENTÃO É DITO UMA VEZ SÓ.
+            O TESTE É DITO AQUI EM CIMA, com o nome de quem o tem.
 
-            Repetir "7 dias grátis" em cada linha gastaria quatro linhas para
-            dizer a mesma coisa, e faria o olho procurar a diferença onde não
-            há nenhuma. Aqui em cima ele vira o que é: a resposta para "e se eu
-            escolher errado?", antes de a escolha começar.
+            Não são todos os planos: dizer "qualquer plano" levaria quem
+            escolheu o Essencial a esperar uma semana grátis que não vem. O
+            cartão de cada um repete, embaixo do preço, se ele tem teste.
           */}
           {diasDeTeste > 0 && (
             <p className="entrada-degrau m-0 flex items-start gap-2 text-[12px] leading-relaxed text-tinta-fraca">
@@ -412,7 +426,7 @@ export function CriarConta({
                 referencia="icones.svg#badge-check"
                 className="mt-0.5 size-3.5 shrink-0 text-ambar"
               />
-              Você testa qualquer plano por {diasDeTeste} dias, sem cartão. Dá
+              Você testa {quemTesta} por {diasDeTeste} dias, sem cartão. Dá
               para mudar de plano depois — fale com a CodeEx Solutions.
             </p>
           )}
@@ -535,7 +549,7 @@ export function CriarConta({
                         />
                       </span>
                       <span className="font-titulo text-[13.5px] leading-tight font-semibold text-tinta">
-                        {plano.nome.replace(/^CodeEx Optmize — /, "")}
+                        {nomeCurto(plano)}
                       </span>
                     </span>
 
@@ -547,6 +561,9 @@ export function CriarConta({
                       </span>
                       <span className="mt-1 block text-[10.5px] text-tinta-apagada">
                         {preco.periodo}
+                        {plano.diasDeTeste > 0 && (
+                          <span className="text-ambar"> · {plano.diasDeTeste} dias grátis</span>
+                        )}
                       </span>
                     </span>
 
