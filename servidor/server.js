@@ -66,8 +66,23 @@ const io = new ServidorDeSocket(servidor);
  * depende de rede: a conferência de revogação roda em segundo plano e nunca
  * segura a subida nem o primeiro acesso.
  */
+/*
+ * DESLIGADA ATÉ HAVER A CHAVE DE VERDADE.
+ *
+ * A chave pública em `licenca.js` é de DEMONSTRAÇÃO: ninguém tem a privada
+ * que gera códigos para ela. Com a trava ligada, todo cliente cairia na tela
+ * de ativação ao atualizar e não teria como sair dela. Então ela só liga com
+ * `OPTMIZE_TRAVA_DE_LICENCA=1` no ambiente — e o dia de ligar por padrão é o
+ * dia em que a chave pública de produção entrar no `licenca.js`.
+ *
+ * A tela e a API de ativação continuam no ar: ativar um código funciona, só
+ * não é exigido.
+ */
+const TRAVA_DE_LICENCA_LIGADA = process.env.OPTMIZE_TRAVA_DE_LICENCA === "1";
+
 app.use("/api/licenca", express.json(), licencaRouter);
 app.use((req, res, next) => {
+  if (!TRAVA_DE_LICENCA_LIGADA) return next();
   if (req.path === "/licenca" || req.path.startsWith("/api/licenca")) return next();
 
   const estado = licenca.obterEstado();
@@ -79,7 +94,7 @@ app.use((req, res, next) => {
   return res.redirect("/licenca");
 });
 
-licenca.conferirRevogacaoOnline().catch(() => {});
+if (TRAVA_DE_LICENCA_LIGADA) licenca.conferirRevogacaoOnline().catch(() => {});
 
 // A tela de ativação sai de `estatico/`, que é irmã de `servidor/` — daí o
 // `PASTA_DO_APP` e não o `__dirname`. Ver o cabeçalho de `caminhos.js`.
