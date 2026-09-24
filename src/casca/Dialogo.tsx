@@ -3,26 +3,35 @@
  * DIÁLOGO — avisar, perguntar sim/não e pedir um texto
  * ===========================================================================
  *
- * Substitui `alert`, `confirm` e `prompt` do navegador. Três portas, todas
- * assíncronas, então quem chama escreve `await` e lê a resposta na linha
- * seguinte:
+ * Substitui `alert`, `confirm` e `prompt` do navegador por uma caixa que
+ * combina com o resto da tela. Três portas, todas assíncronas, então quem
+ * chama escreve `await` e lê a resposta na linha seguinte:
  *
  *   `avisar(texto)`      avisa e espera o "Entendi";
  *   `confirmar(texto)`   pergunta sim/não e devolve `true`/`false`;
  *   `perguntar({...})`   pede um texto e devolve o que foi escrito, ou `null`.
  *
- * QUEM DESENHA É O ALERTA (`Alerta.tsx`), no desenho do CodeEx Flow. Este
- * arquivo ficou como a porta de sempre para as telas que já perguntavam por
- * aqui — elas não mudaram uma linha, e passaram a abrir a caixa nova.
+ * Existe um motivo além do visual, e ele é o mesmo de sempre neste projeto: as
+ * caixas nativas TRAVAM A PÁGINA INTEIRA enquanto estão abertas, o que
+ * atrapalha qualquer coisa rodando em segundo plano — e o Encaixe passa
+ * minutos calculando.
  *
- * As caixas nativas do navegador ficam de fora por um motivo além do visual:
- * elas TRAVAM A PÁGINA INTEIRA enquanto estão abertas, e o Encaixe passa
- * minutos calculando em segundo plano.
+ * ---------------------------------------------------------------------------
+ * ELE JÁ EXISTIA, EM `controlador.js`
+ * ---------------------------------------------------------------------------
+ *
+ * Aquele é imperativo: escreve num `<div id="ui-dialog">` que mora na
+ * `Estrutura`. Este é a mesma caixa em React, com o mesmo desenho (as classes
+ * de `producao.css` são as mesmas, de propósito: as duas convivem enquanto a
+ * migração acontece, e a pessoa não pode ver duas caixas diferentes conforme a
+ * tela). Cada tela que sai do controlador passa a usar este; quando a última
+ * sair, o de lá some junto com o arquivo.
+ *
+ * A promessa fica guardada num `ref`, e não em estado: resolvê-la é um efeito
+ * colateral do clique, não algo que a tela desenha.
  */
 
-import { createContext, useContext, type ReactNode } from "react";
-
-import { alerta } from "./Alerta";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 interface Pergunta {
   titulo?: string;
@@ -52,47 +61,6 @@ export interface Dialogo {
   perguntar(opcoes?: Pergunta): Promise<string | null>;
 }
 
-const dialogo: Dialogo = {
-  async avisar(texto, opcoes = {}) {
-    await alerta.mostrar({
-      tipo: opcoes.perigoso ? "erro" : "aviso",
-      titulo: opcoes.titulo || "Atenção",
-      kicker: opcoes.kicker,
-      texto,
-      confirmar: "Entendi",
-    });
-  },
-
-  async confirmar(texto, opcoes = {}) {
-    // Perigoso por padrão: quem chama `confirmar` está prestes a fazer algo
-    // que não tem volta. Quem não estiver diz `perigoso: false`.
-    const perigoso = opcoes.perigoso !== false;
-    const resposta = await alerta.mostrar({
-      tipo: perigoso ? "aviso" : "pergunta",
-      titulo: opcoes.titulo || "Confirmar ação",
-      kicker: opcoes.kicker,
-      texto,
-      confirmar: opcoes.confirmar || "Confirmar",
-      cancelavel: true,
-      perigoso,
-    });
-    return resposta.confirmado;
-  },
-
-  async perguntar(opcoes = {}) {
-    const resposta = await alerta.mostrar({
-      tipo: "pergunta",
-      titulo: opcoes.titulo || "Digite",
-      kicker: opcoes.kicker,
-      texto: opcoes.texto,
-      confirmar: opcoes.confirmar || "Confirmar",
-      cancelavel: opcoes.cancelavel !== false,
-      campo: { valor: opcoes.valor, exemplo: opcoes.exemplo },
-    });
-    return resposta.confirmado && resposta.valor ? resposta.valor : null;
-  },
-};
-
 const Contexto = createContext<Dialogo | null>(null);
 
 /**
@@ -101,11 +69,210 @@ const Contexto = createContext<Dialogo | null>(null);
  * sem confirmar, ou deixaria de apagar sem dizer por quê.
  */
 export function useDialogo(): Dialogo {
-  const atual = useContext(Contexto);
-  if (!atual) throw new Error("Falta o <ProvedorDeDialogo> em volta desta tela.");
-  return atual;
+  const dialogo = useContext(Contexto);
+  if (!dialogo) throw new Error("Falta o <ProvedorDeDialogo> em volta desta tela.");
+  return dialogo;
+}
+
+/** O que está aberto agora. `null` = nada. */
+interface Aberto {
+  titulo: string;
+  kicker: string;
+  texto: string;
+  confirmar: string;
+  cancelavel: boolean;
+  perigoso: boolean;
+  /** Quando tem campo, a resposta é o texto escrito. */
+  campo: boolean;
+  exemplo: string;
 }
 
 export function ProvedorDeDialogo({ children }: { children: ReactNode }) {
-  return <Contexto.Provider value={dialogo}>{children}</Contexto.Provider>;
+  const [aberto, setAberto] = useState<Aberto | null>(null);
+  const [valor, setValor] = useState("");
+  const [fechando, setFechando] = useState(false);
+  const responder = useRef<((resposta: boolean) => void) | null>(null);
+  const fechamento = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const campo = useRef<HTMLInputElement>(null);
+  const confirmar = useRef<HTMLButtonElement>(null);
+  const valorAtual = useRef("");
+  valorAtual.current = valor;
+
+  /*
+   * A caixa sai com a animação de `producao.css` (a classe `closing`), e só
+   * depois dela a promessa é resolvida. Os 140 ms são os mesmos de lá — a
+   * caixa some antes de a tela por baixo mudar, senão a mudança acontece atrás
+   * de uma caixa ainda visível.
+   */
+  const fechar = useCallback((resposta: boolean) => {
+    if (fechamento.current !== null || !responder.current) return;
+    setFechando(true);
+    fechamento.current = setTimeout(() => {
+      fechamento.current = null;
+      setFechando(false);
+      setAberto(null);
+      document.body.classList.remove("dialog-open");
+      const concluir = responder.current;
+      responder.current = null;
+      concluir?.(resposta);
+    }, 140);
+  }, []);
+
+  const abrir = useCallback((pedido: Aberto) => {
+    // O fechamento de uma caixa anterior nunca pode responder à próxima.
+    if (fechamento.current !== null) clearTimeout(fechamento.current);
+    fechamento.current = null;
+    setFechando(false);
+    // Uma caixa por vez: se já houver alguém esperando, ele recebe "não".
+    responder.current?.(false);
+    responder.current = null;
+    setAberto(pedido);
+    document.body.classList.add("dialog-open");
+    return new Promise<boolean>((resolve) => { responder.current = resolve; });
+  }, []);
+
+  useEffect(() => () => {
+    if (fechamento.current !== null) clearTimeout(fechamento.current);
+    fechamento.current = null;
+    const concluir = responder.current;
+    responder.current = null;
+    concluir?.(false);
+    document.body.classList.remove("dialog-open");
+  }, []);
+
+  // O foco vai para o campo (quando tem) ou para o botão de confirmar: quem
+  // abriu a caixa pelo teclado não pode ter de procurar onde ela caiu.
+  useEffect(() => {
+    if (!aberto) return;
+    if (aberto.campo) campo.current?.select();
+    else confirmar.current?.focus();
+  }, [aberto]);
+
+  // Esc fecha, mas só quando há um "Cancelar" — um aviso sem saída lateral não
+  // pode ser dispensado sem alguém ter lido.
+  useEffect(() => {
+    if (!aberto || !aberto.cancelavel) return;
+    const noEsc = (evento: KeyboardEvent) => { if (evento.key === "Escape") fechar(false); };
+    window.addEventListener("keydown", noEsc);
+    return () => window.removeEventListener("keydown", noEsc);
+  }, [aberto, fechar]);
+
+  const dialogo = useRef<Dialogo>({
+    async avisar(texto, opcoes = {}) {
+      await abrir({
+        titulo: opcoes.titulo || "Atenção",
+        kicker: opcoes.kicker || "AVISO DO SISTEMA",
+        texto,
+        confirmar: "Entendi",
+        cancelavel: false,
+        perigoso: !!opcoes.perigoso,
+        campo: false,
+        exemplo: "",
+      });
+    },
+    confirmar(texto, opcoes = {}) {
+      return abrir({
+        titulo: opcoes.titulo || "Confirmar ação",
+        kicker: opcoes.kicker || "CONFIRMAÇÃO",
+        texto,
+        confirmar: opcoes.confirmar || "Confirmar",
+        cancelavel: true,
+        // Perigoso por padrão: quem chama `confirmar` está prestes a fazer
+        // algo que não tem volta. Quem não estiver diz `perigoso: false`.
+        perigoso: opcoes.perigoso !== false,
+        campo: false,
+        exemplo: "",
+      });
+    },
+    async perguntar(opcoes = {}) {
+      setValor(opcoes.valor || "");
+      const ok = await abrir({
+        titulo: opcoes.titulo || "Digite",
+        kicker: opcoes.kicker || "",
+        texto: opcoes.texto || "",
+        confirmar: opcoes.confirmar || "Confirmar",
+        cancelavel: opcoes.cancelavel !== false,
+        perigoso: false,
+        campo: true,
+        exemplo: opcoes.exemplo || "",
+      });
+      // O valor sai do `ref` e não do estado: a promessa é resolvida dentro do
+      // `setTimeout` do fechamento, e ali o `valor` desta closure já é velho.
+      const escrito = valorAtual.current.trim();
+      return ok && escrito ? escrito : null;
+    },
+  });
+
+  return (
+    <Contexto.Provider value={dialogo.current}>
+      {children}
+
+      {/*
+        A marca de escopo. A folha `producao.css` — que é quem desenha esta
+        caixa, e a caixa imperativa, com o mesmo traço — é escopada em
+        `:where(.producao)`, e esta aqui mora na casca, fora do editor de
+        produção. `so-o-escopo` é um `display: contents`: casa com o seletor
+        sem gerar caixa nenhuma no fluxo da casca. Ver o fim de `producao.css`.
+      */}
+      {aberto && (
+        <div className="producao so-o-escopo">
+        <div
+          className={`ui-dialog-backdrop${fechando ? " closing" : ""}`}
+          role="presentation"
+          onClick={(evento) => {
+            // Clicar fora fecha, pelo mesmo critério do Esc.
+            if (evento.target === evento.currentTarget && aberto.cancelavel) fechar(false);
+          }}
+        >
+          <section
+            className={`ui-dialog${aberto.perigoso ? " danger-dialog" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dialogo-titulo"
+            aria-describedby="dialogo-texto"
+          >
+            <div className="ui-dialog-icon">{aberto.perigoso ? "!" : "✓"}</div>
+
+            <div className="ui-dialog-content">
+              {aberto.kicker && <span className="eyebrow">{aberto.kicker}</span>}
+              <h2 id="dialogo-titulo">{aberto.titulo}</h2>
+              <p id="dialogo-texto">{aberto.texto}</p>
+
+              {aberto.campo && (
+                <input
+                  ref={campo}
+                  type="text"
+                  maxLength={120}
+                  value={valor}
+                  placeholder={aberto.exemplo}
+                  onChange={(evento) => setValor(evento.target.value)}
+                  // Enter no campo vale como clicar em confirmar.
+                  onKeyDown={(evento) => {
+                    if (evento.key === "Enter") { evento.preventDefault(); fechar(true); }
+                  }}
+                />
+              )}
+            </div>
+
+            <div className="ui-dialog-actions">
+              {aberto.cancelavel && (
+                <button type="button" className="btn secondary" onClick={() => fechar(false)}>
+                  Cancelar
+                </button>
+              )}
+              <button
+                ref={confirmar}
+                type="button"
+                className={`btn ${aberto.perigoso ? "danger" : "primary"}`}
+                onClick={() => fechar(true)}
+              >
+                {aberto.confirmar}
+              </button>
+            </div>
+          </section>
+        </div>
+        </div>
+      )}
+    </Contexto.Provider>
+  );
 }
