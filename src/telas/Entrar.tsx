@@ -44,11 +44,11 @@
  * perfil e pronto. Ver o cabeçalho de `servidor/sessao.js`.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { alerta } from "../casca/Alerta";
 import { Icone } from "../casca/Icone";
-import { tocarEntrada } from "./Entrada";
+import { encerrarEntrada, tocarEntrada } from "./Entrada";
 import { CriarConta } from "./CriarConta";
 import { mascararDocumento, Porta } from "./Porta";
 
@@ -74,6 +74,17 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
   const [ajudaDaSenha, setAjudaDaSenha] = useState(false);
   /** `true` enquanto a tela de cadastro da empresa está na frente. */
   const [cadastrando, setCadastrando] = useState(false);
+
+  /*
+    QUEM ACABOU DE SAIR DA CONTA chega aqui com o "Até logo" ainda na tela: a
+    camada fica no ar até existir o que revelar, e o que revelar é esta tela.
+    Um quadro depois de montar, para o login já estar pintado atrás. Na
+    abertura normal do programa não há camada nenhuma, e isto não faz nada.
+  */
+  useEffect(() => {
+    const quadro = requestAnimationFrame(() => encerrarEntrada());
+    return () => cancelAnimationFrame(quadro);
+  }, []);
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();

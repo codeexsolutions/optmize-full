@@ -26,17 +26,6 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </span>
 
-<span className="flex shrink-0 items-center gap-1">
-
-<label className="btn secondary btn-sm file-label mt-0!">
-{"\n                    Adicionar\n                    "}
-<input type="file" id="encaixe-files" accept="image/*,.tif,.tiff,.dxf,.plt,.hpgl,.svg,.pdf" multiple={true} className="hidden" />
-
-</label>
-
-
-
-</span>
 
 </div>
 
@@ -90,7 +79,20 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 {"Optmizar"}
 </button>
 
-<button id="btn-limpar-pecas" className="btn secondary hidden shrink-0 px-3!" type="button" title="Limpar a lista" aria-label="Limpar a lista">
+{/* Os três sempre à vista: Optmizar, Arquivos e a lixeira. A lixeira nasce
+    desligada e só acende quando há arquivo na lista (ver
+    `atualizarPainelDoTrabalho`, em producao/controlador.js). */}
+<label className="btn secondary file-label mt-0! shrink-0 gap-1.5 px-3!" title="Adicionar arquivos">
+<svg className="size-[15px]" viewBox="0 0 24 24" aria-hidden="true">
+<use href="icones.svg#file-plus">
+
+</use>
+</svg>
+{"Arquivos"}
+<input type="file" id="encaixe-files" accept="image/*,.tif,.tiff,.dxf,.plt,.hpgl,.svg,.pdf" multiple={true} className="hidden" />
+</label>
+
+<button id="btn-limpar-pecas" className="btn secondary shrink-0 px-3!" type="button" disabled={true} title="Limpar a lista" aria-label="Limpar a lista">
 
 <svg className="size-[15px]" viewBox="0 0 24 24" aria-hidden="true">
 <use href="icones.svg#trash-2">

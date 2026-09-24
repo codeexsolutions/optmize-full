@@ -30,6 +30,15 @@
  * Duração curta de propósito — ~2,2 s. Quem entra no programa várias vezes
  * por dia paga essa animação todas as vezes. Com movimento reduzido ela vira
  * um "Bem-vindo" parado de 0,7 s.
+ *
+ * ---------------------------------------------------------------------------
+ * A SAÍDA É A MESMA CAMADA, AO CONTRÁRIO
+ * ---------------------------------------------------------------------------
+ *
+ * Como no Flow: "Até logo, <nome>", as partículas descendo em vez de subir, e
+ * mais curta (~1,4 s) — esperar para entrar tem graça, esperar para sair não.
+ * Quem a toca é a casca, antes de pedir ao servidor para encerrar a sessão; e
+ * quem a abre é o login, quando já está desenhado atrás (ver `Entrar.tsx`).
  */
 
 import { useMemo, useSyncExternalStore } from "react";
@@ -38,8 +47,11 @@ import { useMemo, useSyncExternalStore } from "react";
 /* O ESTADO, FORA DO REACT                                                    */
 /* ------------------------------------------------------------------------- */
 
+export type Sentido = "entrada" | "saida";
+
 interface Estado {
   nome: string;
+  sentido: Sentido;
   /** A camada está se abrindo para revelar o programa. */
   saindo: boolean;
 }
@@ -70,9 +82,9 @@ const SAIDA_MS = 420;
  * caiu), a camada sai sozinha: uma tela escura com "Bem-vindo" parada para
  * sempre seria um programa que não abre.
  */
-export function tocarEntrada(nome: string): Promise<void> {
-  mudar({ nome, saindo: false });
-  const duracao = reduzido() ? 700 : 2200;
+export function tocarEntrada(nome: string, sentido: Sentido = "entrada"): Promise<void> {
+  mudar({ nome, sentido, saindo: false });
+  const duracao = reduzido() ? 700 : sentido === "entrada" ? 2200 : 1400;
   return new Promise((resolve) => {
     window.setTimeout(() => {
       resolve();
@@ -80,6 +92,9 @@ export function tocarEntrada(nome: string): Promise<void> {
     }, duracao);
   });
 }
+
+/** A mesma camada, para quem está saindo da conta. */
+export const tocarSaida = (nome: string) => tocarEntrada(nome, "saida");
 
 /** Abre a camada, revelando o que já está montado atrás. Chamar à toa não faz nada. */
 export function encerrarEntrada() {
@@ -97,12 +112,14 @@ const PARTICULAS = 26;
 export function CamadaDeEntrada() {
   const atual = useSyncExternalStore(assinar, () => estado);
   if (!atual) return null;
-  return <Passagem nome={atual.nome} saindo={atual.saindo} />;
+  return <Passagem nome={atual.nome} sentido={atual.sentido} saindo={atual.saindo} />;
 }
 
-function Passagem({ nome, saindo }: { nome: string; saindo: boolean }) {
-  const primeiro = nome.trim().split(/\s+/)[0] || "de volta";
-  const letras = `Bem-vindo, ${primeiro}`.split("");
+function Passagem({ nome, sentido, saindo }: { nome: string; sentido: Sentido; saindo: boolean }) {
+  const entrada = sentido === "entrada";
+  const primeiro = nome.trim().split(/\s+/)[0] || (entrada ? "de volta" : "");
+  const frase = entrada ? `Bem-vindo, ${primeiro}` : `Até logo${primeiro ? `, ${primeiro}` : ""}`;
+  const letras = frase.split("");
 
   /* Sorteadas uma vez: recalcular a cada desenho faria as partículas pularem
      de lugar no meio da subida. */
@@ -118,7 +135,11 @@ function Passagem({ nome, saindo }: { nome: string; saindo: boolean }) {
   );
 
   return (
-    <div className={`entrada-camada${saindo ? " saindo" : ""}`} role="status" aria-label={`Bem-vindo, ${primeiro}`}>
+    <div
+      className={`entrada-camada${entrada ? "" : " sentido-saida"}${saindo ? " saindo" : ""}`}
+      role="status"
+      aria-label={frase}
+    >
       <div aria-hidden="true" className="entrada-halo" />
 
       <div aria-hidden="true" className="entrada-particulas">
@@ -130,7 +151,8 @@ function Passagem({ nome, saindo }: { nome: string; saindo: boolean }) {
               width: p.tamanho,
               height: p.tamanho,
               animationDelay: `${p.atraso}s`,
-              ["--subida" as string]: `${-p.distancia}px`,
+              // Na entrada as partículas sobem; na saída, descem.
+              ["--subida" as string]: `${entrada ? -p.distancia : p.distancia}px`,
             }}
           />
         ))}
@@ -144,7 +166,10 @@ function Passagem({ nome, saindo }: { nome: string; saindo: boolean }) {
         <p className="entrada-kicker">CodeEx Optmize</p>
         <p className="entrada-letras">
           {letras.map((letra, i) => (
-            <span key={`${letra}-${i}`} style={{ animationDelay: `${0.5 + i * 0.028}s` }}>
+            <span
+              key={`${letra}-${i}`}
+              style={{ animationDelay: entrada ? `${0.5 + i * 0.028}s` : `${0.15 + i * 0.016}s` }}
+            >
               {letra}
             </span>
           ))}

@@ -250,6 +250,10 @@ const encaixeGuardadoAviso = document.getElementById("encaixe-guardado-aviso");
 const encaixeFilesInput = document.getElementById("encaixe-files");
 const encaixeUnidadeMoldeSelect = document.getElementById("encaixe-unidade-molde");
 const btnLimparPecas = document.getElementById("btn-limpar-pecas");
+// Há leitura de arquivos em curso. Declarado aqui, e não junto do relógio do
+// carregamento lá embaixo, porque `atualizarPainelDoTrabalho` o lê para
+// decidir a lixeira — e ela pode rodar antes de o código chegar lá.
+let carregamentoAtivo = false;
 const encaixePecasBody = document.getElementById("encaixe-pecas-body");
 const encaixeContagem = document.getElementById("encaixe-contagem");
 const encaixeNumeros = document.getElementById("encaixe-numeros");
@@ -685,7 +689,7 @@ async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
     throw err;
   } finally {
     btnEncaixar.disabled = false;
-    btnLimparPecas.disabled = false;
+    btnLimparPecas.disabled = pecasEncaixe.length === 0;
   }
 }
 
@@ -887,7 +891,7 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
     throw err;
   } finally {
     btnEncaixar.disabled = false;
-    btnLimparPecas.disabled = false;
+    btnLimparPecas.disabled = pecasEncaixe.length === 0;
   }
 }
 
@@ -1051,7 +1055,7 @@ async function adicionarArquivos(files) {
 
     encaixeFilesInput.disabled = false;
     btnEncaixar.disabled = false;
-    btnLimparPecas.disabled = false;
+    btnLimparPecas.disabled = pecasEncaixe.length === 0;
     if (labelArquivos) labelArquivos.classList.remove("carregando-arquivos");
   }
 }
@@ -1548,7 +1552,9 @@ function atualizarPainelDoTrabalho() {
   const copias = pecasEncaixe.reduce((soma, p) => soma + (Number(p.qtd) || 0), 0);
 
   if (encaixeContagem) encaixeContagem.textContent = `${arquivos} · ${copias} cóp.`;
-  if (btnLimparPecas) btnLimparPecas.classList.toggle("hidden", arquivos === 0);
+  // A lixeira fica sempre à vista, e desligada com a lista vazia. Durante uma
+  // leitura quem manda é o carregamento, que a desliga e religa no fim.
+  if (btnLimparPecas && !carregamentoAtivo) btnLimparPecas.disabled = arquivos === 0;
 
   if (!tempoAjustadoPeloUsuario && copias > 0) {
     encaixeTempoInput.value = tempoSugerido(copias);
@@ -2113,7 +2119,7 @@ const LIMITE_LOTE_GRANDE = 120;
 let inicioDoCarregamento = 0;
 let relogioDoCarregamento = null;
 let esconderCarregamentoTimer = null;
-let carregamentoAtivo = false;
+// (`carregamentoAtivo` mora lá no topo, junto dos botões: a lixeira o lê.)
 let resultadoGeradoNesteCarregamento = false;
 let tipoDoCarregamento = "encaixe";
 

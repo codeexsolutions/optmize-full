@@ -462,6 +462,16 @@
   pointer-events: none;
 }
 
+/*
+ * A SAÍDA DA CONTA (`tocarSaida`): tudo mais curto, e a camada se FECHA sobre
+ * o login em vez de se abrir — encolhe um pouco enquanto dissolve.
+ */
+.entrada-camada.sentido-saida.saindo { transform: scale(.96); }
+.sentido-saida .entrada-particulas span { top: 42%; animation-duration: 1s; }
+.sentido-saida .entrada-kicker { animation-delay: .1s; }
+.sentido-saida .entrada-traco { animation-delay: .6s; }
+.sentido-saida .entrada-anel circle { animation-duration: 1.2s; }
+
 /* O halo que respira atrás do nome. */
 .entrada-halo {
   position: absolute;

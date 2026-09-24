@@ -578,7 +578,7 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
                 aria-label="Configurações da conta"
                 className={({ isActive }) => [PE_ITEM, isActive ? PE_ATIVO : PE_PARADO].join(" ")}
               >
-                <Icone referencia="icones.svg#user-cog" className={PE_ICONE} />
+                <Icone referencia="icones.svg#settings" className={PE_ICONE} />
               </NavLink>
 
               {/*
@@ -606,24 +606,10 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
           </div>
 
           {/*
-            A VERSÃO, NO CANTO DE BAIXO.
-
-            É o primeiro dado que o suporte pede, e até pouco tempo morava só
-            na tela Sobre — o que transformava "qual versão você está usando?"
-            em duas instruções ao telefone. Aqui ela está sempre à vista, e uma
-            foto de tela de qualquer canto do programa já a traz junto.
-
-            BEM APAGADA, de propósito: quem trabalha não precisa dela, e um
-            número legível no pé competiria com os ícones que se clicam.
-
-            Na barra estreita (78px) ela some: não cabe em 58px úteis.
+            A VERSÃO NÃO MORA MAIS AQUI: fica na tela Sobre (o ícone de
+            informação, logo acima), que é onde o suporte manda procurar. No
+            pé da barra ela era um número a mais competindo com o que se clica.
           */}
-          <p
-            title={`CodeEx Optmize ${__VERSAO__}`}
-            className="m-0 px-1 font-mono text-[10.5px] leading-none text-tinta-apagada/60 tela:max-[1100px]:hidden"
-          >
-            v{__VERSAO__}
-          </p>
         </div>
       </aside>
     </>

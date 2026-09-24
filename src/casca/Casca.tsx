@@ -31,7 +31,7 @@ import { Suspense, useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
 import { Entrar } from "../telas/Entrar";
-import { encerrarEntrada } from "../telas/Entrada";
+import { encerrarEntrada, tocarSaida } from "../telas/Entrada";
 import { Espera } from "../telas/Espera";
 import { ProvedorDeEscopos } from "./Escopos";
 import { useSessao } from "./usuario";
@@ -103,9 +103,17 @@ export function Casca() {
    * dentro dele e pergunta sem dificuldade nenhuma.
    */
   async function sair() {
+    /*
+      A SAÍDA TOCA JUNTO COM O PEDIDO ao servidor, e a sessão só é relida
+      quando os dois terminaram: o "Até logo" cobre a troca do programa pelo
+      login, e o login fecha a camada assim que aparece (ver
+      `telas/Entrada.tsx`).
+    */
+    const passagem = tocarSaida(sessao.usuario?.nome ?? "");
     try {
       await fetch("/api/sessao/sair", { method: "POST" });
     } finally {
+      await passagem;
       // Mesmo se o pedido falhar, relê: o estado da tela tem de acompanhar o
       // do servidor, e é ele quem manda.
       sessao.recarregar();
