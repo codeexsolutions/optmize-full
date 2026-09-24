@@ -265,6 +265,20 @@
   window.encerrar = function () {
     document.body.classList.add("saindo");
   };
+
+  /*
+    A LINHA DE RECADO, trocada pelo `main.rs`.
+
+    Ela conta o que está acontecendo antes de o sistema aparecer: "Buscando
+    atualizações…", "Baixando a atualização… 40%", "Abrindo o sistema…". Sem
+    isso, uma atualização de 96 MB é um minuto de marca parada, e um minuto de
+    marca parada é indistinguível de travado — é nele que alguém desliga a
+    máquina no botão, no meio da instalação.
+  */
+  window.recado = function (texto) {
+    var linha = document.querySelector(".recado");
+    if (linha) linha.textContent = texto;
+  };
 </script>
 </body>
 </html>

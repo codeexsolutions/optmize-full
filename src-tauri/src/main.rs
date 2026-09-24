@@ -245,116 +245,122 @@ fn icone_da_barra(janela: &tauri::WebviewWindow) {
     }
 }
 
-/// Quanto esperar antes da PRIMEIRA ida ao servidor.
+/// Quanto tempo esperar o servidor de atualização responder.
 ///
-/// Eram noventa segundos, e agora são quinze. A espera longa nasceu de duas
-/// preocupações, e só uma delas se sustenta:
+/// A busca acontece com a tela de abertura na frente, então ela está no
+/// caminho de quem quer usar o programa. Oito segundos é o bastante para uma
+/// internet ruim de gráfica responder, e pouco o bastante para que um DNS
+/// bloqueado ou um cabo solto não vire um programa que não abre.
 ///
-///   O ARRANQUE OCUPADO — o Node subindo, o SQLite abrindo o banco, o WebView
-///   pintando a primeira tela. Isso dura segundos, não um minuto e meio;
-///   quinze já deixam a consulta de rede fora do caminho de quem está
-///   esperando a tela aparecer.
-///
-///   A TRAVA DA INSTALAÇÃO SOZINHA — esta continua sendo a razão de haver
-///   QUALQUER espera aqui. A rodada da abertura instala sem perguntar, e o
-///   tempo de programa vivo é o que prova que a versão instalada ABRE: sem
-///   ele, uma versão quebrada a ponto de não subir instalaria a seguinte por
-///   cima de um programa que nunca funcionou, e a loja entraria num laço de se
-///   reinstalar sem ninguém para dizer não.
-///
-/// Quinze segundos ainda provam o que interessa: um programa que quebra no
-/// arranque quebra nos primeiros segundos, antes do WebView pintar. O que se
-/// perde é a prova contra uma quebra que aparece no minuto seguinte — e essa
-/// nenhuma espera razoável pega.
-const PRIMEIRA_CHECAGEM: Duration = Duration::from_secs(15);
+/// Estourando o tempo, a busca falha e o Optmize abre na versão instalada —
+/// que é a resposta certa: quem tem trabalho para entregar não pode ficar
+/// parado porque o Railway não respondeu.
+const ESPERA_DO_SERVIDOR_DE_VERSOES: Duration = Duration::from_secs(8);
 
-/// De quanto em quanto tempo perguntar de novo.
+/// Escreve um recado na tela de abertura.
 ///
-/// O programa de uma produção fica aberto o dia inteiro — sem este laço, quem
-/// nunca fecha o Optimize nunca receberia correção nenhuma.
-///
-/// Eram duas horas; agora são cinco minutos, para uma correção publicada
-/// alcançar a gráfica enquanto ela ainda é a correção do problema que a pessoa
-/// acabou de relatar ao telefone.
-///
-/// O QUE PAGA ESSA FREQUÊNCIA É A RESPOSTA VAZIA. Quando não há versão nova, o
-/// servidor devolve `204 No Content` (ver `/app/update/tauri/...`, no backend):
-/// nenhum corpo, nenhuma consulta ao Storage, nenhum byte de instalador. É uma
-/// pergunta a cada cinco minutos, não um download.
-///
-/// Nenhuma dessas rodadas interrompe ninguém: não há caixa de perguntar. A
-/// versão nova entra na próxima abertura — ver `procurar_atualizacao`.
-const INTERVALO_CHECAGEM: Duration = Duration::from_secs(5 * 60);
+/// A tela tem uma linha de texto ("Abrindo o sistema…") e uma função para
+/// trocá-la (ver `empacotar/janela/index.html`). É por aqui que a busca de
+/// versão nova conta o que está fazendo, em vez de deixar a pessoa olhando
+/// uma marca parada sem saber por quê.
+fn recado(janela: &tauri::WebviewWindow, texto: &str) {
+    /*
+     * O TEXTO VIRA UM LITERAL JSON, e não um pedaço de JavaScript montado à
+     * mão.
+     *
+     * Parte do que passa por aqui vem DO SERVIDOR — o número da versão sai da
+     * resposta do atualizador —, e isto é um `eval`. Escapar à mão a barra e
+     * a aspa simples parecia bastar e não basta: falta a quebra de linha, que
+     * encerra a instrução, e faltam `U+2028` e `U+2029`, que o JavaScript
+     * trata como quebra de linha dentro de string.
+     *
+     * `serde_json::to_string` cobre os três e todo o resto, porque é a mesma
+     * regra que o JSON usa — e JSON válido é expressão JavaScript válida.
+     */
+    let Ok(seguro) = serde_json::to_string(texto) else { return };
+    let _ = janela.eval(&format!("window.recado && window.recado({seguro})"));
+}
 
-/// Procura versão nova e instala, sem perguntar nada a ninguém.
+
+/// Procura versão nova e instala, ANTES de o sistema aparecer.
 ///
 /// ---------------------------------------------------------------------------
-/// NÃO HÁ MAIS CAIXA DE "ATUALIZAR AGORA"
+/// POR QUE SÓ NA ABERTURA
 /// ---------------------------------------------------------------------------
 ///
-/// Havia, e ela perguntava a cada versão nova enquanto o programa estivesse
-/// aberto. Saiu porque uma caixa modal no meio do expediente é a pior forma de
-/// dar uma boa notícia: ela para o que a pessoa estava fazendo para falar de
-/// uma coisa que não é problema dela.
+/// Aqui houve um laço que perguntava de cinco em cinco minutos com o programa
+/// aberto, e uma rodada que instalava quinze segundos DEPOIS de a tela já estar
+/// na cara da pessoa. O resultado era o pior dos dois mundos: o Optmize abria,
+/// a pessoa começava a trabalhar, e então ele fechava para instalar.
 ///
-/// O programa se vira sozinho, e a regra cabe em uma linha: **a versão nova
-/// entra na próxima vez que o Optmize abrir.**
+/// Agora é como todo programa que se atualiza bem (o Discord é o exemplo que a
+/// gráfica conhece): a busca acontece na tela de abertura, antes de existir
+/// qualquer trabalho na tela. Se há versão nova, ela entra ali — não há nada
+/// para perder. Se não há, o programa segue abrindo, e não se pergunta mais
+/// nada até a próxima vez que alguém abrir o Optmize.
+///
+/// O QUE ISSO CUSTA: quem deixa o programa aberto a semana inteira fica na
+/// versão instalada até fechar. É o preço de nunca interromper o expediente —
+/// e a maioria fecha no fim do dia, e abre atualizada no dia seguinte.
 ///
 /// ---------------------------------------------------------------------------
-/// POR QUE NÃO INSTALAR NA HORA, COM O PROGRAMA ABERTO
+/// A ASSINATURA É QUEM MANDA
 /// ---------------------------------------------------------------------------
 ///
-/// Porque instalar REINICIA o programa, e reiniciar no meio de um encaixe perde
-/// o que está na tela. Sem caixa para perguntar, instalar na hora seria decidir
-/// por quem está trabalhando — e decidir errado justamente na gráfica
-/// movimentada, que é a que tem mais a perder e a que mais paga.
+/// O plugin confere a assinatura minisign do instalador com a `pubkey` do
+/// `tauri.conf.json` e recusa o que não bate. O servidor diz ONDE está o
+/// instalador; quem diz se ele é legítimo é a chave compilada dentro deste
+/// binário.
 ///
-/// Quem fecha o Optmize no fim do expediente (a maioria) abre atualizado no dia
-/// seguinte, sem ver nada. Quem nunca fecha continua na versão instalada até
-/// fechar — e é por isso que a próxima peça deste desenho é um aviso DISCRETO
-/// na barra, sem modal, dizendo que basta fechar e abrir.
-///
-/// Devolve `Ok(true)` quando instalou e o programa vai reiniciar.
-///
-/// A CONFERÊNCIA DA ASSINATURA É DO PLUGIN, não daqui. Ele compara o que baixou
-/// com a `pubkey` do `tauri.conf.json` e recusa o que não bate. É por isso que
-/// esta função pode confiar no que o servidor respondeu: o servidor diz ONDE
-/// está o instalador, mas quem diz se ele é legítimo é a chave compilada dentro
-/// deste binário.
-fn procurar_atualizacao(
+/// Devolve `Ok(true)` quando instalou — e aí o programa reinicia e esta função
+/// não chega a devolver nada.
+fn atualizar_na_abertura(
     app: &tauri::AppHandle,
-    instalar: bool,
+    janela: &tauri::WebviewWindow,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     use tauri_plugin_updater::UpdaterExt;
 
-    let Some(atualizacao) = tauri::async_runtime::block_on(app.updater()?.check())? else {
+    recado(janela, "Buscando atualizações…");
+
+    let updater = app
+        .updater_builder()
+        .timeout(ESPERA_DO_SERVIDOR_DE_VERSOES)
+        .build()?;
+
+    let Some(atualizacao) = tauri::async_runtime::block_on(updater.check())? else {
         return Ok(false); // nada novo — o caso de quase sempre
     };
 
-    if !instalar {
-        /*
-         * COM O PROGRAMA ABERTO, SÓ ANOTA.
-         *
-         * A linha vai para o console (visível no build de desenvolvimento) e
-         * serve de gancho para o aviso discreto na barra. Instalar aqui
-         * derrubaria o trabalho de quem está na tela.
-         */
-        println!(
-            "[atualizacao] versão {} disponível — entra na próxima abertura",
-            atualizacao.version
-        );
-        return Ok(false);
-    }
+    recado(
+        janela,
+        &format!("Atualizando para a versão {}…", atualizacao.version),
+    );
 
     /*
-     * NA ABERTURA, INSTALA CALADA.
+     * O PROGRESSO VAI PARA A TELA.
      *
-     * Não há nada na tela para perder, e o instalador do Windows é `passive`
-     * (ver `tauri.conf.json`): mostra a própria barra de progresso e não pede
-     * nada a ninguém. Quem abriu o programa vê o arranque virar uma instalação
-     * curta e o programa voltar já atualizado.
+     * São ~96 MB, e numa internet de gráfica isso pode levar um minuto. Sem
+     * número na tela, um minuto de marca parada é indistinguível de travado —
+     * e é nesse minuto que alguém desliga o computador no botão, justamente no
+     * meio de uma instalação.
      */
-    tauri::async_runtime::block_on(atualizacao.download_and_install(|_, _| {}, || {}))?;
+    let total_baixado = std::cell::Cell::new(0u64);
+    let janela_do_progresso = janela.clone();
+
+    tauri::async_runtime::block_on(atualizacao.download_and_install(
+        |pedaco: usize, total: Option<u64>| {
+            total_baixado.set(total_baixado.get() + pedaco as u64);
+            let Some(total) = total.filter(|t| *t > 0) else { return };
+            let por_cento = (total_baixado.get() * 100 / total).min(100);
+            recado(
+                &janela_do_progresso,
+                &format!("Baixando a atualização… {por_cento}%"),
+            );
+        },
+        || {},
+    ))?;
+
+    recado(janela, "Instalando…");
 
     /*
      * O servidor Node PRECISA morrer antes do reinício.
@@ -365,71 +371,6 @@ fn procurar_atualizacao(
      * Windows isso não é um aviso, é a instalação falhando pela metade.
      */
     app.restart();
-}
-
-/// Põe a checagem para rodar em segundo plano, para sempre.
-///
-/// Numa thread própria e não numa tarefa assíncrona: a checagem e a instalação
-/// bloqueiam quem as chama, e segurar uma thread do runtime assíncrono do Tauri
-/// enquanto 96 MB de instalador descem seguraria tudo o mais que passa por ele.
-///
-/// ---------------------------------------------------------------------------
-/// A PRIMEIRA RODADA NÃO PERGUNTA; AS SEGUINTES, SIM
-/// ---------------------------------------------------------------------------
-///
-/// São dois momentos com respostas diferentes para a mesma pergunta — "posso
-/// reiniciar agora?".
-///
-///   ABRINDO: pode. Não há encaixe na tela, nem pedido pela metade. Perguntar
-///   aqui só serve para alguém responder "agora não" por reflexo e a loja ficar
-///   na versão velha mais um dia. Então instala e volta sozinho — que é o que
-///   faz uma correção alcançar TODA loja que reabre o programa, sem depender
-///   de ninguém clicar em nada.
-///
-///   COM O PROGRAMA ABERTO HÁ HORAS: não pode. Ali existe trabalho na tela, e
-///   uma atualização que interrompe o serviço do cliente é pior que uma que
-///   chega no dia seguinte. Não instala e não pergunta: espera o programa
-///   fechar.
-fn cuidar_das_atualizacoes(app: tauri::AppHandle) {
-    std::thread::spawn(move || {
-        std::thread::sleep(PRIMEIRA_CHECAGEM);
-
-        // A rodada da abertura: instala calada. Se falhar — sem internet, o
-        // servidor fora do ar —, cai no laço de baixo, que volta a olhar de
-        // cinco em cinco minutos.
-        match procurar_atualizacao(&app, true) {
-            Ok(true) => return,
-            Ok(false) => {}
-            Err(erro) => eprintln!("[atualizacao] {erro}"),
-        }
-
-        /*
-         * O LAÇO OLHA, E NÃO INSTALA.
-         *
-         * Com o programa aberto há horas existe trabalho na tela, e instalar
-         * significa reiniciar. O que ele faz é saber que há versão nova —
-         * para o aviso discreto da barra, e para o log de quem está
-         * diagnosticando por telefone.
-         */
-        loop {
-            std::thread::sleep(INTERVALO_CHECAGEM);
-            match procurar_atualizacao(&app, false) {
-                // Instalou: o `restart()` acima não devolve, então isto não
-                // chega a acontecer — fica pelo compilador e por quem lê.
-                Ok(true) => return,
-                Ok(false) => {}
-                /*
-                 * FALHAR AQUI NÃO PODE INCOMODAR NINGUÉM.
-                 *
-                 * Sem internet, servidor fora do ar, DNS da gráfica bloqueando:
-                 * nada disso tem a ver com o trabalho que a pessoa está fazendo
-                 * na tela. Vai para o console (visível no build de
-                 * desenvolvimento) e a próxima rodada tenta de novo.
-                 */
-                Err(erro) => eprintln!("[atualizacao] {erro}"),
-            }
-        }
-    });
 }
 
 fn main() {
@@ -544,13 +485,31 @@ fn main() {
             // seguraria o `setup`, e o loop de eventos só começa quando ele
             // termina — a tela de "abrindo" ficaria branca, sem pintar, que é
             // exatamente o que ela existe para evitar.
-            // A partir daqui o programa se mantém sozinho: pergunta ao
-            // servidor por versão nova, hoje e de duas em duas horas.
-            cuidar_das_atualizacoes(app.handle().clone());
-
             let app = app.handle().clone();
             let abriu_em = Instant::now();
             std::thread::spawn(move || {
+                /*
+                 * A BUSCA DE VERSÃO NOVA VEM ANTES DE TUDO.
+                 *
+                 * Antes de esperar o Node, antes de navegar: é o único momento
+                 * em que não há trabalho na tela para perder. Se houver versão
+                 * nova, o programa instala e reinicia aqui mesmo — e a pessoa
+                 * vê a tela de abertura contando o que está acontecendo, em vez
+                 * de ver o Optmize abrir e fechar sozinho um minuto depois.
+                 *
+                 * Falhou? Segue em frente. Sem internet ou com o servidor fora
+                 * do ar, o Optmize abre na versão instalada — parar a produção
+                 * por causa de uma atualização seria o erro maior.
+                 */
+                if let Some(janela) = app.get_webview_window("principal") {
+                    match atualizar_na_abertura(&app, &janela) {
+                        Ok(true) => return, // reiniciando; nada mais a fazer
+                        Ok(false) => {}
+                        Err(erro) => eprintln!("[atualizacao] {erro}"),
+                    }
+                    recado(&janela, "Abrindo o sistema…");
+                }
+
                 let pronto = esperar_servidor(porta, &processo);
                 let Some(janela) = app.get_webview_window("principal") else {
                     return; // fecharam antes de abrir; não há o que mostrar
