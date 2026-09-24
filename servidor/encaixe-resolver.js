@@ -381,9 +381,8 @@ router.post("/resolver", async (req, res) => {
     /*
      * A MÍDIA, E NÃO O CONSUMO.
      *
-     * Com bancada, o que sai do rolo são mesas inteiras — o rabo vazio no fim
-     * de cada mesa é retalho que já foi pago. Ver "A MÍDIA QUE O TRABALHO
-     * CONSOME", em src/motores/encaixeMotor.js.
+     * Com bancada, a mídia é o comprimento do PDF: a soma do que cada mesa
+     * ocupa. Ver "A MÍDIA QUE O TRABALHO CONSOME", em src/motores/encaixeMotor.js.
      *
      * `consumo` continua na resposta, porque é ele que o Corel usa para saber
      * até onde o desenho vai; `midia` é o que se compra.

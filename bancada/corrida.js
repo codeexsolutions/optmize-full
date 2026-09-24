@@ -190,8 +190,8 @@ async function buscarComoAProducao(motor, trabalho,
     encolhimento = { antes, depois: campeao.consumo, relatos, rejeitados, partiu, motivos: [...motivos] };
   }
 
-  // A mídia que o trabalho consome, que com bancada são mesas inteiras e não a
-  // tira contínua do `consumo` — ver "A MÍDIA QUE O TRABALHO CONSOME", em
+  // A mídia que o trabalho consome, que com bancada é o comprimento do PDF e não
+  // a tira contínua do `consumo` — ver "A MÍDIA QUE O TRABALHO CONSOME", em
   // src/motores/encaixeMotor.js. Os trabalhos deste catálogo rodam sem bancada,
   // então hoje isto dá exatamente o `consumo`; vem daqui para que o dia em que
   // um trabalho com mesa entrar no catálogo a bancada não meça outra conta que

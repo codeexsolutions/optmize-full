@@ -321,6 +321,70 @@ async function principal() {
     assert.match(recado, /^Salvo: encaixe-/, `a tela tinha que confirmar o arquivo (veio "${recado}")`);
 
     /*
+     * ---- 4. o Complementar ----
+     *
+     * Com o encaixe na tela, o Optmizar vira Complementar. O caminho inteiro:
+     * uma arte miúda guardada na Galeria (pela API, como a tela de Projetos
+     * guarda), a procura acha que ela cabe nos vãos, o complemento a põe na
+     * lista e no risco sem sobrepor nada, e o Desfazer devolve tudo como era —
+     * que é o que deixa os passos seguintes conferirem a lista de três artes.
+     */
+    assert.equal(await p.$eval('#btn-encaixar', (n) => n.textContent.trim()), 'Complementar',
+      'com o encaixe na tela, o Optmizar tinha que virar Complementar');
+
+    const pngDaGaleria = Array.from(await require('sharp')({
+      create: { width: 60, height: 60, channels: 4, background: { r: 200, g: 40, b: 40, alpha: 1 } },
+    }).png().toBuffer());
+    const guardou = await p.evaluate(async (bytes) => {
+      const json = { 'content-type': 'application/json' };
+      const cliente = await (await fetch('/api/projetos/clientes', {
+        method: 'POST', headers: json, body: JSON.stringify({ nome: 'Cliente de teste' }),
+      })).json();
+      const projeto = await (await fetch('/api/projetos', {
+        method: 'POST', headers: json, body: JSON.stringify({ clienteId: cliente.id, nome: 'Sobras' }),
+      })).json();
+      const subida = await (await fetch(`/api/projetos/${projeto.id}/imagem`, {
+        method: 'POST', body: new Uint8Array(bytes),
+      })).json();
+      await fetch(`/api/projetos/${projeto.id}`, {
+        method: 'PUT', headers: json,
+        body: JSON.stringify({ nome: 'Sobras', pecas: [{ nome: 'manguito', arquivo: subida.arquivo, largura: 1, altura: 1 }] }),
+      });
+      return (await (await fetch('/api/projetos/galeria/artes')).json()).artes.length;
+    }, pngDaGaleria);
+    assert.equal(guardou, 1, 'a Galeria tinha que listar a arte guardada');
+
+    await p.evaluate(() => document.getElementById('btn-encaixar').click());
+    await esperar(500);
+    assert.equal(await p.$eval('#modal-complemento', (n) => n.classList.contains('hidden')), false,
+      'o Complementar tinha que abrir a caixa do complemento');
+
+    await p.evaluate(() => document.getElementById('btn-complemento-procurar').click());
+    await esperar(10000);
+    const achados = await p.$$eval('#complemento-lista .complemento-item',
+      (ns) => ns.map((n) => n.innerText.replace(/\s+/g, ' ')));
+    const estadoDaProcura = await p.$eval('#complemento-estado', (n) => n.textContent);
+    assert.ok(achados.some((l) => /manguito/.test(l) && /cabem \d+/.test(l)),
+      `a arte da Galeria tinha que caber nos vãos (lista: ${achados.join(' / ')} · ${estadoDaProcura})`);
+
+    await p.evaluate(() => document.getElementById('btn-complemento-aplicar').click());
+    await esperar(1500);
+    const entrou = await p.$eval('#complemento-estado', (n) => n.textContent);
+    assert.match(entrou, /^Entraram \d+ peças?: .*manguito/, `o complemento não entrou (veio "${entrou}")`);
+    assert.match(await p.$eval('#encaixe-contagem', (n) => n.textContent), /^4 · /,
+      'a arte da Galeria tinha que entrar na lista como a quarta peça');
+    // O guarda da sobreposição roda em todo risco novo: aceso é sem peça em cima de peça.
+    assert.equal(await p.$eval('#btn-exportar', (n) => n.disabled), false,
+      'o risco complementado não pode ter peça sobreposta');
+
+    await p.evaluate(() => document.getElementById('btn-complemento-desfazer').click());
+    await esperar(800);
+    assert.match(await p.$eval('#encaixe-contagem', (n) => n.textContent), /^3 · 3 cóp/,
+      'o Desfazer tinha que devolver a lista de antes');
+    await p.evaluate(() => document.getElementById('btn-fechar-complemento').click());
+    await esperar(400);
+
+    /*
      * ---- 5. o TIFF, que o navegador não abre ----
      *
      * Fica por ÚLTIMO de propósito: uma quarta peça mexeria na metragem e no
@@ -407,7 +471,8 @@ async function principal() {
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
-      + ` (${risco}), o PDF foi gravado onde a tela mandou, o TIFF entrou pela conversão`
+      + ` (${risco}), o PDF foi gravado onde a tela mandou, o complemento pôs a arte da Galeria`
+      + ` nos vãos e desfez, o TIFF entrou pela conversão`
       + ` e o × tirou a peça (${antesDoX} → ${depoisDoX}).`);
   } finally {
     if (navegador) await navegador.close().catch(() => {});

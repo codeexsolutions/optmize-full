@@ -10,7 +10,8 @@ import { COR_CMYK, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
 import { prepararArteParaONavegador } from "../api/arte";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
 import { assinaturaDoTrabalho,
-  midiaConsumida, aproveitamentoDaMidia, bancadasOcupadas } from "../motores/encaixeMotor";
+  midiaConsumida, aproveitamentoDaMidia,
+  prepararComplemento, analisarComplemento, complementarNosVaos } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
 import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
 import { grade, rotacaoBaseDe } from "../motores/encaixeMascara";
@@ -293,6 +294,22 @@ const itensDoExportar = [...menuExportarPainel.querySelectorAll(".menu-item")];
 let pecasEncaixe = [];
 let proximoIdPeca = 1;
 let ultimoResultado = null;
+/* Para o "Desfazer" do complemento: o risco e a lista de antes. Mora aqui, e
+   não junto do resto do complemento, porque `guardarResultado` o zera. */
+let antesDoComplemento = null;
+
+/* Há encaixe na tela que dá para complementar? É o que vira o Optmizar. */
+const podeComplementar = () => !!ultimoResultado && !ultimoResultado.sobreposto
+  && ultimoResultado.posicoes.length > 0;
+
+/** O botão principal diz o que o clique vai fazer. */
+function atualizarBotaoPrincipal() {
+  const complementar = podeComplementar();
+  btnEncaixar.textContent = complementar ? "Complementar" : "Optmizar";
+  btnEncaixar.title = complementar
+    ? "Pôr peças nos espaços que sobraram, sem mexer no encaixe"
+    : "";
+}
 
 /**
  * Guarda (ou joga fora) o risco atual — e acende ou apaga o Exportar com ele.
@@ -335,6 +352,11 @@ function guardarResultado(valor) {
     mostrarErroEncaixe(recusa, "aviso");
   }
   ultimoResultado = valor;
+  // Todo risco novo começa sem o que desfazer; o complemento guarda o dele
+  // logo depois de chamar aqui.
+  antesDoComplemento = null;
+  // Durante a busca o botão diz "Procurando…"; quem o devolve é o fim dela.
+  if (!btnEncaixar.disabled) atualizarBotaoPrincipal();
   if (!btnExportar) return valor;
   btnExportar.disabled = !valor || !!recusa;
   // Perder o risco com o menu aberto deixaria três itens mortos à vista.
@@ -2401,13 +2423,13 @@ function bancadaDaTela() {
  * TODA metragem que a tela mostra passa por aqui.
  *
  * O motor trabalha com `consumo` — do zero ao pé da silhueta mais baixa —, e
- * com bancada isso não é o que sai do rolo: a mídia sai em mesas inteiras (ver
- * "A MÍDIA QUE O TRABALHO CONSOME", em motores/encaixeMotor.js).
+ * com bancada isso não é o comprimento do PDF, que soma só o que cada mesa
+ * ocupa (ver "A MÍDIA QUE O TRABALHO CONSOME", em motores/encaixeMotor.js).
  *
  * A conversão precisa valer para os números de comparação também — o recorde, o
  * andamento da busca, o "esta procura deu X". Eles são todos `consumo`, e
  * mostrar uns em consumo e outros em mídia faria a tela discordar de si mesma:
- * a faixa diria 6,00 m e o andamento, 4,88 m, no mesmo encaixe.
+ * a faixa diria 4,32 m e o andamento, 4,88 m, no mesmo encaixe.
  *
  * `posicoes` é opcional, e quando vem deixa a contagem das mesas exata; sem
  * ela sobra a divisão, que é boa o bastante para um número de comparação.
@@ -2544,7 +2566,7 @@ async function optmizar() {
     mostrarErroEncaixe("As peças precisam ter largura e altura maiores que zero.", "aviso");
     finalizarCarregamento("com-erro");
     btnEncaixar.disabled = false;
-    btnEncaixar.textContent = "Optmizar";
+    atualizarBotaoPrincipal();
     btnPararBusca.classList.add("hidden");
     return;
   }
@@ -2744,7 +2766,7 @@ async function optmizar() {
       (soma, pos) => soma + pos.largura * pos.altura, 0);
     ultimoResultado.larguraTecido = larguraTecido;
     // A mesa acompanha o resultado: é ela que decide se a metragem da tela é a
-    // tira contínua ou mesas inteiras (ver `midiaConsumida`).
+    // tira contínua ou a soma das páginas do PDF (ver `midiaConsumida`).
     ultimoResultado.comprimentoBancada = comprimentoBancada;
     ultimoResultado.totalItens = itens.length;
     ultimoResultado.folgaPedida = espaco;
@@ -2769,7 +2791,7 @@ async function optmizar() {
       return;
     }
 
-    // A MESMA conta do painel, e do mesmo lugar: com bancada, mesas inteiras.
+    // A MESMA conta do painel, e do mesmo lugar: com bancada, o comprimento do PDF.
     // Ver "A MÍDIA QUE O TRABALHO CONSOME", em motores/encaixeMotor.js. Este
     // número vai para o recorde guardado e para a memória, então ele tem que
     // ser o mesmo que a pessoa leu na tela — senão o histórico conta uma
@@ -2872,7 +2894,7 @@ async function optmizar() {
   } finally {
     if (carregamentoAtivo) finalizarCarregamento(pararBusca ? "interrompido" : "com-erro");
     btnEncaixar.disabled = false;
-    btnEncaixar.textContent = "Optmizar";
+    atualizarBotaoPrincipal();
     btnPararBusca.classList.add("hidden");
   }
 }
@@ -3013,9 +3035,8 @@ function renderResultado() {
    * A MÍDIA, E NÃO O CONSUMO.
    *
    * `consumo` é o que o motor minimiza: do zero ao pé da silhueta mais baixa.
-   * Com bancada isso não é o que sai do rolo — a mídia sai em mesas inteiras, e
-   * o rabo vazio de cada mesa é retalho que já foi pago. Ver "A MÍDIA QUE O
-   * TRABALHO CONSOME", em motores/encaixeMotor.js.
+   * Com bancada a mídia é o comprimento do PDF, a soma do que cada mesa ocupa.
+   * Ver "A MÍDIA QUE O TRABALHO CONSOME", em motores/encaixeMotor.js.
    *
    * Sem bancada os dois são o mesmo número, e nada muda.
    */
@@ -3099,20 +3120,16 @@ function renderResultado() {
    * maior corte (a medida que precisa caber na mesa) e — o que faltava — DE
    * ONDE VEM A METRAGEM.
    *
-   * Sem esta última frase, pôr bancada fazia o número da faixa subir sem nada
-   * na tela explicando por quê. A explicação é uma subtração: a mídia sai em
-   * mesas inteiras, a arte ocupa parte de cada mesa, e a diferença é retalho de
-   * ponta — que existe porque nenhuma peça pode cruzar a linha entre mesas.
+   * A metragem é o comprimento do PDF: a soma do que cada mesa ocupa, a mesma
+   * conta de `midiaConsumida`. Dita aqui para que "3,40 m" na faixa bata com o
+   * arquivo que a pessoa abre.
    */
-  const mesas = bancadasOcupadas(r.posicoes, r.consumo, r.comprimentoBancada);
-  const arteNasMesas = bancadas.reduce((soma, b) => soma + (b.fundo - b.topo), 0);
   const porBancada = bancadas.length > 1
     ? `O rolo sai em ${bancadas.length} bancadas, cortadas em `
       + `${cortesEntreBancadas(bancadas).map((c) => formatarCm(c)).join(", ")} — `
       + `a maior tem ${formatarCm(Math.max(...bancadas.map((b) => b.fundo - b.topo)))}. `
-      + `A metragem conta as mesas inteiras: ${mesas} × ${formatarCm(r.comprimentoBancada)} `
-      + `= ${formatarMetros(midia)}, dos quais ${formatarMetros(arteNasMesas)} têm arte e `
-      + `${formatarMetros(midia - arteNasMesas)} são retalho de ponta. `
+      + `A metragem é o comprimento do PDF, a soma das ${bancadas.length} páginas: `
+      + `${formatarMetros(midia)}. `
     : "";
 
   /*
@@ -3951,6 +3968,434 @@ function atualizarContagemDosAjustes() {
     `${arquivos} arquivo${arquivos === 1 ? "" : "s"} · ${copias} peça${copias === 1 ? "" : "s"} no encaixe`;
 }
 
+// ==================== O COMPLEMENTO ====================
+/*
+ * Depois do encaixe, o "Optmizar" vira "Complementar". A caixa mede o tecido
+ * que sobrou sem peça, procura o que cabe ali — nas artes da Galeria (a tela
+ * de Projetos) e nas peças do próprio encaixe — e a pessoa escolhe quantas de
+ * cada entram. Nada do que já está assentado sai do lugar; quem faz a conta é
+ * `complementarNosVaos`, em motores/encaixeMotor.js.
+ *
+ * As artes da Galeria que entram viram peças da lista, como se tivessem sido
+ * mandadas de um projeto: é o que faz o PDF, a impressão e a lista saírem com
+ * elas sem caminho novo nenhum.
+ */
+const modalComplemento = document.getElementById("modal-complemento");
+const complementoResumo = document.getElementById("complemento-resumo");
+const complementoDaGaleria = document.getElementById("complemento-da-galeria");
+const complementoDoEncaixe = document.getElementById("complemento-do-encaixe");
+const complementoMeta = document.getElementById("complemento-meta");
+const complementoEstado = document.getElementById("complemento-estado");
+const complementoLista = document.getElementById("complemento-lista");
+const btnFecharComplemento = document.getElementById("btn-fechar-complemento");
+const btnComplementoProcurar = document.getElementById("btn-complemento-procurar");
+const btnComplementoAplicar = document.getElementById("btn-complemento-aplicar");
+const btnComplementoDesfazer = document.getElementById("btn-complemento-desfazer");
+const btnComplementoRefazer = document.getElementById("btn-complemento-refazer");
+
+let saidaDoModalComplemento = null;
+/* Até quantas cópias de cada arte a procura conta. */
+const LIMITE_DA_ANALISE = 200;
+/* O que a última procura achou. Vale só para o risco em que foi feita. */
+let analiseDoComplemento = null;
+/* As artes da Galeria já preparadas, pelo id da arte. Tirar o fundo de uma
+   arte de 30 megapixels custa segundos: a segunda procura não paga de novo. */
+const galeriaPreparada = new Map();
+
+const modoDoComplemento = () => {
+  const marcado = modalComplemento.querySelector('input[name="complemento-modo"]:checked');
+  return marcado ? marcado.value : "vaos";
+};
+
+function avisarNoComplemento(texto, erro = false) {
+  complementoEstado.textContent = texto;
+  complementoEstado.classList.toggle("erro", erro);
+  complementoEstado.classList.toggle("hidden", !texto);
+}
+
+/** O que o risco de agora gasta e quanto dele é tecido sem peça. */
+function resumirComplemento() {
+  const r = ultimoResultado;
+  if (!r) { complementoResumo.textContent = "—"; return; }
+  const midia = midiaConsumida(r.consumo, r.comprimentoBancada, r.posicoes);
+  const areaMidia = r.larguraTecido * midia;
+  const vazio = Math.max(0, areaMidia - r.areaReal);
+  complementoResumo.textContent = `Metragem ${formatarMetros(midia)} · `
+    + `${formatarM2(vazio / 10000)} sem peça (${formatarPorcento(areaMidia > 0 ? (vazio / areaMidia) * 100 : 0)})`;
+}
+
+function abrirComplemento() {
+  clearTimeout(saidaDoModalComplemento);
+  analiseDoComplemento = null;
+  complementoLista.replaceChildren();
+  complementoLista.classList.add("hidden");
+  btnComplementoAplicar.disabled = true;
+  btnComplementoDesfazer.classList.toggle("hidden", !antesDoComplemento);
+  avisarNoComplemento("");
+  resumirComplemento();
+  // A meta nasce um metro depois do que o risco já gasta: é o "fechar a
+  // metragem" mais comum, e a pessoa corrige o número em vez de digitá-lo.
+  const r = ultimoResultado;
+  const midia = midiaConsumida(r.consumo, r.comprimentoBancada, r.posicoes);
+  complementoMeta.value = String(Math.ceil(midia / 100) + 1);
+  modalComplemento.classList.remove("hidden", "saindo");
+  document.body.classList.add("modal-aberto");
+  btnComplementoProcurar.focus();
+}
+
+function fecharComplemento(devolverFoco) {
+  if (modalComplemento.classList.contains("hidden")) return;
+  modalComplemento.classList.add("saindo");
+  document.body.classList.remove("modal-aberto");
+  clearTimeout(saidaDoModalComplemento);
+  saidaDoModalComplemento = setTimeout(() => {
+    modalComplemento.classList.add("hidden");
+    modalComplemento.classList.remove("saindo");
+  }, 130);
+  if (devolverFoco) btnEncaixar.focus();
+}
+
+const complementoAberto = () => !modalComplemento.classList.contains("hidden");
+
+/**
+ * As artes da Galeria viram peças, prontas para o motor.
+ *
+ * O mesmo caminho de "Levar pro Encaixe" (`mandarProjetoParaOEncaixe`): baixa
+ * a arte original, tira o fundo nos workers e usa a medida gravada no projeto.
+ * A diferença é que aqui as peças NÃO entram na lista — só as que couberem e
+ * forem escolhidas entram, na hora de complementar.
+ */
+async function pecasDaGaleria(artes) {
+  const faltando = artes.filter((a) => !galeriaPreparada.has(a.id));
+  if (faltando.length > 0) {
+    const imagens = [];
+    const blobs = [];
+    for (let i = 0; i < faltando.length; i++) {
+      avisarNoComplemento(`Abrindo as artes da Galeria · ${i + 1} de ${faltando.length}`);
+      const blob = await fetch(faltando[i].url).then((r) => {
+        if (!r.ok) throw new Error(`a arte "${faltando[i].nome}" não abriu (${r.status})`);
+        return r.blob();
+      });
+      blobs.push(blob);
+      const teto = ladoDeTrabalho(Math.max(faltando[i].largura, faltando[i].altura));
+      imagens.push(await criarBitmapOuImagem(blob, faltando[i].url, teto));
+      await respirarNaTela();
+    }
+    const semFundos = await tirarFundoEmParalelo(imagens, false, async (i, total) => {
+      avisarNoComplemento(`Tirando o fundo das artes da Galeria · ${i + 1} de ${total}`);
+      await respirarNaTela();
+    });
+    for (let i = 0; i < faltando.length; i++) {
+      const arte = faltando[i];
+      const cortada = semFundos[i];
+      const img = cortada ? await criarBitmapOuImagem(cortada.blob, cortada.src) : imagens[i];
+      if (cortada) imagens[i].close?.();
+      galeriaPreparada.set(arte.id, {
+        nome: arte.nome,
+        src: cortada ? cortada.src : arte.url,
+        arquivoOriginal: blobs[i],
+        fundoNaExportacao: cortada ? "auto" : null,
+        miniatura: arte.miniatura || miniaturaDaArte(img),
+        img,
+        pxW: img.naturalWidth || img.width,
+        pxH: img.naturalHeight || img.height,
+        largura: arte.largura,
+        altura: arte.altura,
+        qtd: 0,
+        qtdDoArquivo: false,
+        giro: giroPadrao(),
+        contorno: "auto",
+        origem: `galeria · ${arte.cliente} / ${arte.projeto}${cortada ? " · fundo removido" : ""}`,
+      });
+    }
+  }
+  return artes.map((a) => ({ arte: a, peca: galeriaPreparada.get(a.id) }));
+}
+
+/** A configuração do motor para o risco de agora — a mesma com que ele foi feito. */
+function configDoRisco(r) {
+  const { passo, raio } = grade(r.larguraTecido, r.folgaPedida);
+  return {
+    larguraTecido: r.larguraTecido,
+    espaco: r.folgaPedida,
+    comprimentoBancada: r.comprimentoBancada || 0,
+    passo,
+    raio,
+  };
+}
+
+async function procurarComplemento() {
+  const r = ultimoResultado;
+  if (!podeComplementar()) return;
+  const usarGaleria = complementoDaGaleria.checked;
+  const usarEncaixe = complementoDoEncaixe.checked;
+  if (!usarGaleria && !usarEncaixe) {
+    avisarNoComplemento("Marque de onde tirar as peças: a Galeria, as peças deste encaixe ou as duas.", true);
+    return;
+  }
+
+  const midia = midiaConsumida(r.consumo, r.comprimentoBancada, r.posicoes);
+  let metaCm = 0;
+  if (modoDoComplemento() === "ate") {
+    metaCm = Math.round((Number(String(complementoMeta.value).replace(",", ".")) || 0) * 100);
+    if (!(metaCm > midia)) {
+      avisarNoComplemento(`Para completar até uma metragem, ela tem que passar dos ${formatarMetros(midia)} de agora.`, true);
+      complementoMeta.focus();
+      return;
+    }
+  }
+
+  const config = configDoRisco(r);
+  // A grade é a do risco: as máscaras dos candidatos têm que falar com as
+  // do encaixe célula por célula.
+  const passoDoRisco = r.posicoes[0] && r.posicoes[0].passo;
+  if (passoDoRisco && Math.abs(passoDoRisco - config.passo) > 1e-9) {
+    avisarNoComplemento("Este encaixe foi feito com outra medida de grade. Optmize de novo para complementar.", true);
+    return;
+  }
+
+  btnComplementoProcurar.disabled = true;
+  btnComplementoAplicar.disabled = true;
+  complementoLista.classList.add("hidden");
+  try {
+    const candidatos = [];
+    if (usarEncaixe) {
+      pecasEncaixe.forEach((peca, indice) => {
+        if (!(peca.largura > 0) || !(peca.altura > 0)) return;
+        candidatos.push({ peca, indice, daGaleria: false, origem: "deste encaixe" });
+      });
+    }
+    if (usarGaleria) {
+      avisarNoComplemento("Lendo a Galeria…");
+      const resposta = await fetch("/api/projetos/galeria/artes");
+      if (!resposta.ok) throw new Error("a Galeria não respondeu");
+      const { artes } = await resposta.json();
+      const validas = (artes || []).filter((a) => a.largura > 0 && a.altura > 0);
+      if (validas.length === 0 && !usarEncaixe) {
+        avisarNoComplemento("A Galeria está vazia. Guarde artes num projeto da Galeria para usá-las aqui.", true);
+        return;
+      }
+      (await pecasDaGaleria(validas)).forEach(({ arte, peca }) => {
+        candidatos.push({ peca, indice: null, daGaleria: true, origem: `Galeria · ${arte.cliente} / ${arte.projeto}` });
+      });
+    }
+
+    avisarNoComplemento("Lendo o contorno das peças…");
+    await prepararMascarasEmParalelo(candidatos.map((c) => c.peca), config.passo, config.raio);
+    await respirarNaTela();
+
+    const mapa = prepararComplemento(r.posicoes, config);
+    if (!mapa) {
+      avisarNoComplemento("Não deu para ler este encaixe. Optmize de novo para complementar.", true);
+      return;
+    }
+
+    // Os índices das artes da Galeria são provisórios: o definitivo sai na
+    // hora de complementar, quando elas entram na lista.
+    let proximo = pecasEncaixe.length;
+    candidatos.forEach((c) => {
+      c.item = {
+        ...c.peca,
+        indice: c.daGaleria ? proximo++ : c.indice,
+        copia: 0,
+        mascaras: c.peca._cacheMascaras,
+      };
+    });
+
+    for (let i = 0; i < candidatos.length; i++) {
+      avisarNoComplemento(`Medindo os espaços · ${i + 1} de ${candidatos.length}`);
+      await respirarNaTela();
+      if (ultimoResultado !== r) return; // o risco mudou no meio da procura
+      [candidatos[i].cabem] = analisarComplemento(mapa, [candidatos[i].item],
+        { metaCm, limite: LIMITE_DA_ANALISE });
+    }
+
+    candidatos.sort((a, b) => b.cabem - a.cabem);
+    analiseDoComplemento = { resultado: r, config, metaCm, candidatos };
+    mostrarCandidatos(candidatos);
+
+    const cabem = candidatos.filter((c) => c.cabem > 0).length;
+    avisarNoComplemento(cabem === 0
+      ? (metaCm > 0
+        ? "Nenhuma peça cabe até essa metragem. Tente uma metragem maior."
+        : "Nenhuma peça cabe nos espaços vazios deste encaixe. Tente “Completar até” uma metragem.")
+      : `${cabem} de ${candidatos.length} cabe${cabem === 1 ? "" : "m"}. O número é de cada uma sozinha — `
+        + "juntas elas disputam o mesmo espaço. Ajuste as quantidades e aperte Complementar.");
+    btnComplementoAplicar.disabled = cabem === 0;
+  } catch (erro) {
+    console.error("[complemento] falhou ao procurar:", erro);
+    avisarNoComplemento(`Não deu para procurar: ${erro && erro.message ? erro.message : erro}`, true);
+  } finally {
+    btnComplementoProcurar.disabled = false;
+  }
+}
+
+/** A lista do que cabe: uma linha por arte, com a quantidade editável. */
+function mostrarCandidatos(candidatos) {
+  const linhas = candidatos.map((c, i) => {
+    const li = document.createElement("li");
+    li.className = `complemento-item${c.cabem > 0 ? "" : " nao-cabe"}`;
+
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = c.peca.miniatura || c.peca.src;
+    li.append(img);
+
+    const texto = document.createElement("div");
+    texto.style.minWidth = "0";
+    const nome = document.createElement("div");
+    nome.className = "complemento-nome";
+    nome.textContent = c.peca.nome || "arte";
+    const origem = document.createElement("div");
+    origem.className = "complemento-origem";
+    origem.textContent = `${formatarCm(c.peca.largura)} × ${formatarCm(c.peca.altura)} · ${c.origem}`;
+    texto.append(nome, origem);
+    li.append(texto);
+
+    const qtd = document.createElement("label");
+    qtd.className = "complemento-qtd";
+    if (c.cabem > 0) {
+      // A conta para em LIMITE_DA_ANALISE: uma arte miúda num vão grande
+      // caberia às centenas, e contar todas só atrasaria a lista.
+      qtd.append(c.cabem >= LIMITE_DA_ANALISE ? `cabem ${c.cabem} ou mais` : `cabem ${c.cabem}`);
+      const campo = document.createElement("input");
+      campo.type = "number";
+      campo.min = "0";
+      campo.max = String(c.cabem);
+      campo.step = "1";
+      // As da Galeria nascem com a quantidade toda; as do próprio encaixe
+      // nascem zeradas — repetir peça do pedido é decisão de quem vende, não
+      // do vão.
+      campo.value = String(c.daGaleria ? c.cabem : 0);
+      campo.dataset.candidato = String(i);
+      campo.setAttribute("aria-label", `Quantas de ${c.peca.nome || "arte"}`);
+      qtd.append(campo);
+    } else {
+      qtd.append("não cabe");
+    }
+    li.append(qtd);
+    return li;
+  });
+  complementoLista.replaceChildren(...linhas);
+  complementoLista.classList.toggle("hidden", linhas.length === 0);
+}
+
+function complementar() {
+  const analise = analiseDoComplemento;
+  if (!analise || analise.resultado !== ultimoResultado) {
+    avisarNoComplemento("O encaixe mudou desde a procura. Procure de novo.", true);
+    return;
+  }
+
+  const pedidos = [];
+  complementoLista.querySelectorAll("input[data-candidato]").forEach((campo) => {
+    const c = analise.candidatos[Number(campo.dataset.candidato)];
+    const quantidade = Math.max(0, Math.min(c.cabem, Math.floor(Number(campo.value) || 0)));
+    if (quantidade > 0) pedidos.push({ c, item: c.item, quantidade });
+  });
+  if (pedidos.length === 0) {
+    avisarNoComplemento("Escolha a quantidade de pelo menos uma peça.", true);
+    return;
+  }
+
+  const r = analise.resultado;
+  const mapa = prepararComplemento(r.posicoes, analise.config);
+  const { novas, colocadas } = complementarNosVaos(mapa,
+    pedidos.map((p) => ({ item: p.item, quantidade: p.quantidade })), { metaCm: analise.metaCm });
+  const total = colocadas.reduce((soma, n) => soma + n, 0);
+  if (total === 0) {
+    avisarNoComplemento("Juntas, as peças escolhidas não couberam. Escolha menos ou outras.", true);
+    return;
+  }
+
+  const antes = { resultado: r, pecas: pecasEncaixe.map((p) => ({ ...p })) };
+
+  // As peças entram na lista: as da Galeria como peças novas, as do encaixe
+  // somando na quantidade. O índice definitivo vai para as posições novas.
+  const indiceFinal = new Map();
+  const copias = new Map();
+  pedidos.forEach((p, i) => {
+    if (!colocadas[i]) return;
+    if (p.c.daGaleria) {
+      const indice = pecasEncaixe.length;
+      pecasEncaixe.push({ ...p.c.peca, id: proximoIdPeca++, qtd: colocadas[i] });
+      indiceFinal.set(p.item, indice);
+      copias.set(indice, 0);
+    } else {
+      const peca = pecasEncaixe[p.c.indice];
+      copias.set(p.c.indice, Number(peca.qtd) || 0);
+      peca.qtd = (Number(peca.qtd) || 0) + colocadas[i];
+      indiceFinal.set(p.item, p.c.indice);
+    }
+  });
+  novas.forEach((pos) => {
+    const indice = indiceFinal.get(pos.item);
+    const copia = copias.get(indice) + 1;
+    copias.set(indice, copia);
+    pos.item = { ...pos.item, indice, copia };
+  });
+
+  const posicoes = [...r.posicoes, ...novas];
+  const peDaArte = posicoes.reduce((m, p) => Math.max(m, p.y + p.altura), 0);
+  const novo = {
+    ...r,
+    posicoes,
+    consumo: Math.max(r.consumo, peDaArte),
+    areaReal: r.areaReal + novas.reduce((s, p) => s + p.item.mascaras.areaReal, 0),
+    areaCaixas: (r.areaCaixas || 0) + novas.reduce((s, p) => s + p.largura * p.altura, 0),
+    totalItens: (r.totalItens || r.posicoes.length) + total,
+    complementado: (r.complementado || 0) + total,
+  };
+
+  guardarResultado(novo);
+  antesDoComplemento = antes;
+  renderPecasEncaixe();
+  renderResultado();
+
+  analiseDoComplemento = null;
+  complementoLista.replaceChildren();
+  complementoLista.classList.add("hidden");
+  btnComplementoAplicar.disabled = true;
+  btnComplementoDesfazer.classList.remove("hidden");
+  resumirComplemento();
+  const nomes = pedidos
+    .map((p, i) => (colocadas[i] ? `${colocadas[i]} × ${p.c.peca.nome || "arte"}` : null))
+    .filter(Boolean).join(", ");
+  avisarNoComplemento(`Entraram ${total} peça${total === 1 ? "" : "s"}: ${nomes}.`);
+}
+
+function desfazerComplemento() {
+  if (!antesDoComplemento) return;
+  const { resultado, pecas } = antesDoComplemento;
+  pecasEncaixe = pecas;
+  guardarResultado(resultado);
+  renderPecasEncaixe();
+  renderResultado();
+  btnComplementoDesfazer.classList.add("hidden");
+  resumirComplemento();
+  avisarNoComplemento("O último complemento foi desfeito.");
+}
+
+escopo.ouvir(btnFecharComplemento, "click", () => fecharComplemento(true));
+escopo.ouvir(btnComplementoProcurar, "click", () => { void procurarComplemento(); });
+escopo.ouvir(btnComplementoAplicar, "click", complementar);
+escopo.ouvir(btnComplementoDesfazer, "click", desfazerComplemento);
+escopo.ouvir(btnComplementoRefazer, "click", () => {
+  fecharComplemento(false);
+  abrirAjustes();
+});
+escopo.ouvir(modalComplemento, "click", (e) => {
+  if (e.target === modalComplemento) fecharComplemento(true);
+});
+// Escrever na meta já escolhe "Completar até": quem digita um número quer usá-lo.
+escopo.ouvir(complementoMeta, "input", () => {
+  const ate = modalComplemento.querySelector('input[name="complemento-modo"][value="ate"]');
+  if (ate) ate.checked = true;
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && complementoAberto()) fecharComplemento(true);
+});
+
 /*
  * Optmizar abre o confere. A lista vazia é barrada AQUI e não lá dentro:
  * abrir um modal de tecido para depois dizer "não há peças" é fazer a
@@ -3965,6 +4410,11 @@ escopo.ouvir(btnEncaixar, "click", () => {
   // seguinte — o mesmo que o botão Adicionar faria.
   if (pecasEncaixe.length === 0) {
     encaixeFilesInput.click();
+    return;
+  }
+  // Com encaixe pronto na tela, o botão é o "Complementar".
+  if (podeComplementar()) {
+    abrirComplemento();
     return;
   }
   abrirAjustes();

@@ -281,50 +281,32 @@ export function bancadaEmCentimetros(config, quantasPecas) {
  *   bancada 1   195,00 ..  388,50 cm    12 peças
  *   bancada 2   392,00 ..  490,50 cm    15 peças
  *
- * O `consumo` daquele encaixe é 4,885 m — do zero ao pé da última silhueta. A
- * mídia que vira três mesas de 200 cm é 6,00 m. São coisas diferentes, e a tela
- * mostrava a primeira com o nome da segunda: pôr bancada fazia a metragem subir
- * de um jeito que não correspondia a nada que se pudesse cortar.
+ * O `consumo` daquele encaixe é 4,885 m — do zero ao pé da última silhueta,
+ * contando os vãos entre as mesas. O PDF tem três páginas, de 139,5 + 193,5 +
+ * 98,5 cm: 4,315 m. É esse o número que vai para a impressora.
  *
  * ---------------------------------------------------------------------------
- * A REGRA: BANCADA INTEIRA
+ * A REGRA: O COMPRIMENTO DO PDF
  * ---------------------------------------------------------------------------
  *
- * A mídia sai em pedaços do tamanho da MESA, um por bancada. O que sobra no fim
- * de cada pedaço é retalho — não dá para emendar no pedaço seguinte, porque o
- * pedaço seguinte já nasce com o comprimento da mesa.
+ * Com bancada, o PDF sai com uma página por mesa, e cada página é cortada no
+ * que as peças daquela mesa ocupam — do topo da primeira arte ao pé da última
+ * (`paginasDoEncaixe`, em `servidor/encaixe-pdf.js`). A mídia é a SOMA DESSAS
+ * PÁGINAS: é o que vai para a impressora, é o que a tela mostra e é o que
+ * desconta da metragem do plano.
  *
- * Então: `mídia = quantas bancadas × comprimento da bancada`, e sem bancada
- * nenhuma a mídia é o `consumo` de sempre.
+ * Então: dois blocos numa mesa de 2 m, um com 1,95 m de arte e outro com
+ * 1,45 m, dão 3,40 m — e não 4,00 m. Sem bancada, uma página só, e a mídia é o
+ * `consumo` de sempre.
  *
- * Há uma terceira conta possível, e ela foi descartada de propósito: somar só o
- * que cada página do PDF ocupa (`servidor/encaixe-pdf.js` recorta cada bancada
- * no que ela usa — 431,5 cm no exemplo acima). Ela responde "quanto de tinta e
- * de avanço a impressora gastou", que é uma pergunta de impressora. A pergunta
- * de quem compra tecido é quanta mídia saiu do rolo, e quem responde isso é a
- * mesa.
+ * Até 2026-09-24 a regra era a mesa inteira (`bancadas × comprimento`), que
+ * contava o rabo vazio de cada mesa como mídia gasta. A tela e a cobrança
+ * diziam 4 m para um PDF de 3,40 m, e quem paga por metro não aceita pagar por
+ * um pedaço que a impressora nunca imprimiu.
  *
- * ---------------------------------------------------------------------------
- * A ÚLTIMA MESA TAMBÉM SAI INTEIRA
- * ---------------------------------------------------------------------------
- *
- * Esta é a parte que estranha à primeira vista, e ela é decisão da produção,
- * não descuido. Um trabalho que ocupa 98 cm com a mesa em 300 cm conta **3,00 m
- * de mídia**, e o aproveitamento cai de 63,9% para 20,9%:
- *
- *   quase-retangulo, 50 peças, rolo 160    consumo 0,98 m
- *     mesa 300 cm   mídia 3,00 m   aproveitamento 20,9%
- *     mesa 200 cm   mídia 2,00 m   aproveitamento 31,3%
- *     mesa 150 cm   mídia 1,50 m   aproveitamento 41,8%
- *
- * A alternativa — cortar a última onde a arte acaba, e só as do meio inteiras —
- * dá exatamente o `consumo` de volta, porque os cortes do meio já caem nas
- * linhas das mesas. Ou seja, não é uma terceira regra: é a regra antiga com
- * outro nome.
- *
- * Como aqui toda mesa sai no comprimento cheio, o número passa a dizer uma
- * coisa que o `consumo` não dizia: **escolher uma mesa grande demais para o
- * trabalho custa tecido**, e custa na hora, na tela. É para isso que ele serve.
+ * Sem as posições (o andamento da busca, um recorde guardado só com o
+ * consumo), não há páginas para somar, e a mídia é o `consumo`: é o número
+ * mais perto do PDF que dá para ter sem as peças.
  *
  * ---------------------------------------------------------------------------
  * POR QUE MORA AQUI
@@ -366,15 +348,40 @@ export function bancadasOcupadas(posicoes, consumo, comprimentoBancada) {
 
 /**
  * A mídia que o trabalho consome, em centímetros. É ela que a tela chama de
- * "Metragem" e é ela que divide o aproveitamento.
+ * "Metragem", que divide o aproveitamento e que desconta da metragem do plano:
+ * o comprimento do PDF (ver "A REGRA: O COMPRIMENTO DO PDF", acima).
  *
- * `posicoes` é opcional e serve só para contar as bancadas com exatidão; ver
- * `bancadasOcupadas`.
+ * Sem `posicoes`, devolve o `consumo`.
  */
 export function midiaConsumida(consumo, comprimentoBancada, posicoes) {
   if (!(consumo > 0)) return 0;
-  if (!(comprimentoBancada > 0)) return consumo;
-  return bancadasOcupadas(posicoes, consumo, comprimentoBancada) * comprimentoBancada;
+  if (!(comprimentoBancada > 0) || !posicoes || posicoes.length === 0) return consumo;
+  return comprimentoDoPdf(consumo, posicoes);
+}
+
+/**
+ * O comprimento do PDF, em centímetros: a soma das páginas, uma por bancada.
+ *
+ * A MESMA conta de `paginasDoEncaixe` (servidor/encaixe-pdf.js): cada página
+ * vai do topo da primeira peça ao pé da última daquela bancada, e uma bancada
+ * só vira uma página com o `consumo` inteiro. Se as duas divergirem, a tela e
+ * a cobrança dizem um número e o arquivo tem outro — que é o defeito que esta
+ * função existe para impedir.
+ */
+export function comprimentoDoPdf(consumo, posicoes) {
+  const paginas = new Map();
+  for (let i = 0; i < posicoes.length; i++) {
+    const pos = posicoes[i];
+    const numero = Number(pos.bancada) || 0;
+    const pagina = paginas.get(numero) || { topo: Infinity, fundo: -Infinity };
+    pagina.topo = Math.min(pagina.topo, pos.y);
+    pagina.fundo = Math.max(pagina.fundo, pos.y + pos.altura);
+    paginas.set(numero, pagina);
+  }
+  if (paginas.size <= 1) return consumo;
+  let soma = 0;
+  for (const pagina of paginas.values()) soma += pagina.fundo - pagina.topo;
+  return soma;
 }
 
 /**
@@ -2152,6 +2159,238 @@ export function repescarNosVaos(colocacoes, colsTecido, linhasBancada, voltas = 
   }
 
   return fundoMax;
+}
+
+// ==================== O COMPLEMENTO ====================
+
+/*
+ * ===========================================================================
+ * COMPLEMENTAR UM ENCAIXE PRONTO
+ * ===========================================================================
+ *
+ * Depois do encaixe, sobra tecido: os cantos, o vão entre as peças, o rabo de
+ * cada mesa. O complemento põe ali peças que NÃO estavam no pedido — uma arte
+ * guardada na Galeria (o manguito que sempre cabe) ou mais cópias das próprias
+ * peças do encaixe — SEM MEXER EM NADA DO QUE JÁ ESTÁ ASSENTADO.
+ *
+ * É a mesma descida da repescagem (`descerNosVaos`), que para dentro de um vão
+ * fechado por cima, sobre o mapa de intervalos do encaixe pronto. O mapa é
+ * remontado das POSIÇÕES, porque é isso que a tela guarda: cada posição traz a
+ * máscara e o giro da peça, e a colocação na grade sai da conta inversa de
+ * `posicoesDasColocacoes`.
+ *
+ * Dois limites, e quem escolhe é a pessoa:
+ *
+ *   só os vãos     nenhuma página do PDF cresce — a metragem não muda, o
+ *                  tecido que já ia ser impresso passa a ter peça;
+ *   até a metragem o PDF pode crescer até `metaCm` no total.
+ *
+ * AS DUAS TRAVAS SÃO NA ARTE, EM CENTÍMETROS, página por página — a mesma
+ * conta de `comprimentoDoPdf`, que é a metragem que a tela mostra e que a
+ * cobrança desconta. A grade só serve para descer a peça e achar a vaga; quem
+ * decide se ela fica é a página. Com bancada, a página também não passa do
+ * comprimento da mesa.
+ */
+
+/** A colocação na grade de uma posição pronta: a conta inversa de `posicoesDasColocacoes`. */
+function colocacaoDaPosicao(pos, passo) {
+  const mascara = pos.mascara
+    || (pos.item && pos.item.mascaras && pos.item.mascaras.rotacoes[pos.rot || 0]);
+  if (!mascara) return null;
+  const forma = formaDePartes([{ item: pos.item, mascara, rot: pos.rot || 0, dcol: 0, drow: 0 }]);
+  return {
+    forma,
+    x: Math.round((pos.x + mascara.offX) / passo),
+    y: Math.round((pos.y + mascara.offY) / passo),
+  };
+}
+
+/**
+ * As páginas do PDF por bancada: topo e pé da arte. A mesma conta de
+ * `comprimentoDoPdf` — sem bancada, uma página só, que começa no zero do rolo.
+ */
+function paginasPorBancada(posicoes, comBancada) {
+  const paginas = new Map();
+  if (!comBancada) {
+    const fundo = posicoes.reduce((m, p) => Math.max(m, p.y + p.altura), 0);
+    paginas.set(0, { topo: 0, fundo });
+    return paginas;
+  }
+  for (let i = 0; i < posicoes.length; i++) {
+    const pos = posicoes[i];
+    const numero = Number(pos.bancada) || 0;
+    const pagina = paginas.get(numero) || { topo: Infinity, fundo: -Infinity };
+    pagina.topo = Math.min(pagina.topo, pos.y);
+    pagina.fundo = Math.max(pagina.fundo, pos.y + pos.altura);
+    paginas.set(numero, pagina);
+  }
+  return paginas;
+}
+
+/**
+ * Prepara o complemento: o mapa do encaixe pronto e o que cada peça pode usar.
+ *
+ * `config` é o do encaixe (`larguraTecido`, `espaco`, `comprimentoBancada`,
+ * `passo`, `raio`); as máscaras dos candidatos têm de ter sido feitas com o
+ * mesmo `passo` e `raio`, senão as grades não conversam.
+ *
+ * Devolve `null` quando o encaixe não dá para remontar (posição sem máscara) —
+ * a tela diz isso em vez de complementar em cima de um mapa errado.
+ */
+export function prepararComplemento(posicoes, config) {
+  const { passo } = config;
+  const colsTecido = colunasDoTecido(config);
+  const colocacoes = [];
+  for (let i = 0; i < posicoes.length; i++) {
+    const col = colocacaoDaPosicao(posicoes[i], passo);
+    if (!col) return null;
+    colocacoes.push(col);
+  }
+  const fundoAtual = colocacoes.reduce((m, c) => Math.max(m, fundoDaColocacao(c)), 0);
+  const unidadesAtuais = colocacoes.map((c) => ({ formas: [c.forma] }));
+  const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidadesAtuais, passo));
+  return {
+    config,
+    colsTecido,
+    linhasBancada,
+    fundoAtual,
+    posicoes,
+    colunas: intervalosDoRolo(colocacoes, colsTecido),
+  };
+}
+
+/**
+ * O teto de descida, em células: o fundo de agora, ou a metragem pedida. É só
+ * uma poda — quem manda é a trava da página, em `assentarNoComplemento`.
+ */
+function tetoDoComplemento(mapa, metaCm) {
+  if (!(metaCm > 0)) return mapa.fundoAtual + 1;
+  const { passo } = mapa.config;
+  // `consumoDoFundo` desconta o engorde de cima e de baixo; aqui ele volta.
+  const pelaMeta = Math.floor(metaCm / passo + 1e-9) + 2 * raioDaBorda(mapa.config) + 1;
+  // Com bancada, o rolo tem os vãos entre as mesas, que não entram no PDF: a
+  // descida precisa de folga para chegar à mesa seguinte.
+  if (mapa.linhasBancada) return mapa.fundoAtual + pelaMeta;
+  return Math.max(mapa.fundoAtual + 1, pelaMeta);
+}
+
+/**
+ * Tenta assentar UMA cópia do item: a vaga mais alta que caiba no teto e passe
+ * nas travas da página. Devolve a posição nova (já nas colunas) ou `null`.
+ *
+ * `estado` é `{ paginas, originais, metaCm }`: as páginas como estão agora,
+ * as de antes do complemento (a trava de "só os vãos") e a meta, quando há.
+ */
+function assentarNoComplemento(mapa, item, teto, estado, jaPostas) {
+  const { passo, comprimentoBancada } = mapa.config;
+  const comBancada = comprimentoBancada > 0 && !!mapa.linhasBancada;
+  const formas = formasDaPeca(item).filter((f) => f.cols <= mapa.colsTecido);
+  if (formas.length === 0) return null;
+
+  // A melhor vaga de cada forma, da mais alta para a mais baixa: quando a
+  // primeira não passa na trava, a seguinte ainda pode servir.
+  const vagas = [];
+  formas.forEach((forma) => {
+    const vaga = melhorVagaNosVaos(mapa.colunas, mapa.colsTecido, { formas: [forma] }, teto,
+      mapa.linhasBancada);
+    if (vaga) vagas.push(vaga);
+  });
+  vagas.sort((a, b) => a.fundo - b.fundo);
+
+  for (let i = 0; i < vagas.length; i++) {
+    const col = { forma: vagas[i].forma, x: vagas[i].x, y: vagas[i].y };
+    const [pos] = posicoesDasColocacoes([col], passo, mapa.linhasBancada);
+    const numero = comBancada ? pos.bancada : 0;
+    const pagina = estado.paginas.get(numero);
+    const topo = pagina ? Math.min(pagina.topo, pos.y) : pos.y;
+    const fundo = pagina ? Math.max(pagina.fundo, pos.y + pos.altura) : pos.y + pos.altura;
+
+    if (estado.metaCm > 0) {
+      // Até a metragem: a soma das páginas, com esta, não passa da meta.
+      let total = fundo - topo;
+      estado.paginas.forEach((pg, n) => { if (n !== numero) total += pg.fundo - pg.topo; });
+      if (total > estado.metaCm + 1e-6) continue;
+    } else {
+      // Só os vãos: a página de antes não cresce, e mesa nova não nasce.
+      const original = estado.originais.get(numero);
+      if (!original || topo < original.topo - 1e-6 || fundo > original.fundo + 1e-6) continue;
+    }
+    if (comBancada && fundo - topo > comprimentoBancada + 1e-6) continue;
+
+    estado.paginas.set(numero, { topo, fundo });
+    ocuparIntervalos(mapa.colunas, col, 1);
+    jaPostas.push(pos);
+    return pos;
+  }
+  return null;
+}
+
+/** O estado das páginas no começo de um complemento. */
+function estadoDoComplemento(mapa, metaCm) {
+  const comBancada = mapa.config.comprimentoBancada > 0 && !!mapa.linhasBancada;
+  return {
+    paginas: paginasPorBancada(mapa.posicoes, comBancada),
+    originais: paginasPorBancada(mapa.posicoes, comBancada),
+    metaCm: metaCm > 0 ? metaCm : 0,
+  };
+}
+
+/** Uma cópia rasa do mapa de intervalos: cada análise mexe na sua. */
+function copiarColunas(colunas) {
+  return colunas.map((lista) => lista.slice());
+}
+
+/**
+ * QUANTO CABE DE CADA CANDIDATO, sozinho.
+ *
+ * Cada um é medido num mapa próprio, como se fosse o único a entrar: é a
+ * resposta de "o que poderia completar este encaixe?", e não uma soma — dois
+ * candidatos disputam os mesmos vãos. `limite` segura a conta num trabalho com
+ * vão enorme.
+ */
+export function analisarComplemento(mapa, candidatos, opcoes = {}) {
+  const teto = tetoDoComplemento(mapa, opcoes.metaCm);
+  const limite = opcoes.limite || 200;
+  return candidatos.map((item) => {
+    const copia = { ...mapa, colunas: copiarColunas(mapa.colunas) };
+    const estado = estadoDoComplemento(mapa, opcoes.metaCm);
+    const postas = [];
+    while (postas.length < limite && assentarNoComplemento(copia, item, teto, estado, postas)) {
+      // assentou mais uma
+    }
+    return postas.length;
+  });
+}
+
+/**
+ * Assenta os candidatos, cada um até a quantidade pedida.
+ *
+ * `pedidos` é `[{ item, quantidade }]`; a quantidade `Infinity` é "quantas
+ * couberem". Os maiores entram primeiro: eles só cabem nos vãos grandes, e as
+ * peças miúdas fecham o que sobrar depois — ao contrário, a miúda ocuparia o
+ * vão grande e a grande não entraria em lugar nenhum.
+ *
+ * Devolve as posições novas (no formato das do encaixe, com `bancada`) e
+ * quantas entraram de cada pedido. NÃO mexe em `mapa.posicoes`.
+ */
+export function complementarNosVaos(mapa, pedidos, opcoes = {}) {
+  const teto = tetoDoComplemento(mapa, opcoes.metaCm);
+  const estado = estadoDoComplemento(mapa, opcoes.metaCm);
+  const ordem = pedidos
+    .map((pedido, indice) => ({ ...pedido, indice }))
+    .sort((a, b) => areaDaPeca(b.item) - areaDaPeca(a.item));
+  const colocadas = new Array(pedidos.length).fill(0);
+  const novas = [];
+
+  ordem.forEach((pedido) => {
+    while (colocadas[pedido.indice] < pedido.quantidade) {
+      const pos = assentarNoComplemento(mapa, pedido.item, teto, estado, novas);
+      if (!pos) break;
+      colocadas[pedido.indice]++;
+    }
+  });
+
+  return { novas, colocadas };
 }
 
 export function resultadoDoEncaixe(posicoes, naoEncaixadas, fundoMax, passo, config = {}) {

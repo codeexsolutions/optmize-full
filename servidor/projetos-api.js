@@ -115,6 +115,38 @@ router.get("/clientes/:id/projetos", (req, res) => {
   res.json({ cliente, projetos });
 });
 
+/**
+ * A GALERIA INTEIRA: toda arte guardada, de todo cliente e projeto.
+ *
+ * É o que o "Complementar" do Encaixe consulta para achar o que cabe nos vãos
+ * de um encaixe pronto — o manguito guardado num projeto qualquer pode fechar
+ * o buraco de uma camisa de outro cliente. Vai só o que a conta precisa (a
+ * medida e o endereço da arte) e a miniatura para a lista.
+ *
+ * Declarada ANTES de `/:id`, senão "galeria" seria lido como id de projeto.
+ */
+router.get("/galeria/artes", (req, res) => {
+  const artes = db.prepare(`
+    SELECT pp.id, pp.nome, pp.arquivo, pp.largura, pp.altura, pp.miniatura,
+           p.id AS projeto_id, p.nome AS projeto, c.nome AS cliente
+    FROM projeto_pecas pp
+    JOIN projetos p ON p.id = pp.projeto_id
+    JOIN projeto_clientes c ON c.id = p.cliente_id
+    ORDER BY c.nome COLLATE NOCASE, p.nome COLLATE NOCASE, pp.ordem, pp.id
+  `).all().map((a) => ({
+    id: a.id,
+    nome: a.nome,
+    url: `/uploads/projetos/${a.arquivo}`,
+    largura: a.largura,
+    altura: a.altura,
+    miniatura: a.miniatura,
+    projetoId: a.projeto_id,
+    projeto: a.projeto,
+    cliente: a.cliente,
+  }));
+  res.json({ artes });
+});
+
 router.get("/:id", (req, res) => {
   const projeto = db.prepare("SELECT * FROM projetos WHERE id = ?").get(req.params.id);
   if (!projeto) return res.status(404).json({ error: "Projeto não encontrado." });

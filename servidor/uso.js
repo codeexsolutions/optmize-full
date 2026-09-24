@@ -44,8 +44,8 @@ const { pedirComToken } = require("./sessao");
 /**
  * Pede a metragem desta exportação ao servidor.
  *
- * `metrosPedidos` sai do consumo do encaixe — o mesmo número que a tela
- * mostra e que vira o comprimento do PDF.
+ * `metrosPedidos` é o comprimento do PDF — a soma das páginas, o mesmo
+ * número que a tela mostra como metragem.
  *
  * Devolve sempre um objeto, nunca lança: quem chama está no meio de gerar um
  * PDF e não tem o que fazer com uma exceção de rede.

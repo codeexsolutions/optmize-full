@@ -3218,3 +3218,164 @@
 :where(.producao) .page[hidden] {
   display: none !important;
 }
+
+/* ===========================================================================
+   O COMPLEMENTO — a caixa que o Optmizar vira depois do encaixe.
+
+   A mesma moldura da caixa de ajustes (topo, corpo, rodapé), mais larga: a
+   lista do que cabe traz miniatura, nome, de onde veio e a quantidade, e a
+   400 px ela viraria um corredor de nomes cortados.
+   =========================================================================== */
+:where(.producao) .modal-complemento {
+  width: min(600px, 100%);
+  max-height: min(88vh, 760px);
+}
+
+:where(.producao) .complemento-grupo {
+  display: block;
+}
+
+:where(.producao) .complemento-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+}
+
+:where(.producao) .complemento-opcoes-coluna {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+:where(.producao) .complemento-opcao {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+:where(.producao) .complemento-opcao input[type="checkbox"],
+:where(.producao) .complemento-opcao input[type="radio"] {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* A caixa da meta mora dentro da linha do "Completar até": sem isto ela
+   herdava a margem de campo solto e empurrava a linha para baixo. */
+:where(.producao) .complemento-opcao .campo-caixa {
+  margin: 0;
+}
+
+/* Os ícones dos botões da caixa, todos no mesmo tamanho — o de "Procurar"
+   fica no corpo, onde a regra do rodapé não alcança. */
+:where(.producao) .modal-complemento .btn svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+:where(.producao) .complemento-meta {
+  width: 110px;
+}
+
+:where(.producao) .complemento-estado {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+:where(.producao) .complemento-estado.erro {
+  color: var(--danger);
+}
+
+:where(.producao) .complemento-lista {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  list-style: none;
+  overflow: hidden;
+}
+
+:where(.producao) .complemento-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+
+:where(.producao) .complemento-item:first-child {
+  border-top: 0;
+}
+
+/* Não cabe: fica na lista, apagado. "Não cabe" também é resposta — é o que
+   diz à pessoa que não adianta procurar aquela arte para este vão. */
+:where(.producao) .complemento-item.nao-cabe {
+  opacity: 0.5;
+}
+
+:where(.producao) .complemento-item img {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--card-bg-soft);
+  object-fit: contain;
+}
+
+:where(.producao) .complemento-nome {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(.producao) .complemento-origem {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(.producao) .complemento-qtd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+:where(.producao) .complemento-qtd input {
+  width: 64px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg-soft);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: right;
+}
+
+/* "Optmizar de novo" vai para a esquerda, longe do Complementar: um refaz o
+   encaixe inteiro, o outro só acrescenta — não podem ser vizinhos de clique. */
+:where(.producao) .complemento-rodape .complemento-refazer {
+  margin-right: auto;
+}
+
+@media (max-width: 480px) {
+  :where(.producao) .complemento-rodape {
+    flex-wrap: wrap;
+  }
+}

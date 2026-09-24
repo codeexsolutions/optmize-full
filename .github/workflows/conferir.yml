@@ -85,3 +85,6 @@ jobs:
 
       - name: Encolher
         run: npm run bancada:encolher
+
+      - name: Complemento
+        run: npm run bancada:complemento

@@ -23,6 +23,7 @@
     "bancada:arte": "node bancada/conferir-arte.js",
     "bancada:grupos": "node bancada/conferir-grupos.js",
     "bancada:corte": "node bancada/conferir-bancada.js",
+    "bancada:complemento": "node bancada/conferir-complemento.js",
     "bancada:sobreposicao": "node bancada/conferir-sobreposicao.js",
     "bancada:rotacoes": "node bancada/conferir-rotacoes.js",
     "bancada:guarda": "node bancada/conferir-guarda-sobreposicao.js",

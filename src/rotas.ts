@@ -194,10 +194,13 @@ export const TELAS: readonly Tela[] = [
   {
     nome: "projetos",
     grupo: "producao",
-    rotulo: "Projetos",
-    apoioMenu: "Trabalho que se repete",
-    apoioTopo: "Guarde por cliente o trabalho pronto para repetir e mandar ao encaixe.",
-    icone: "icones.svg#folder-open",
+    // A tela se chama Galeria desde que o Encaixe passou a complementar com
+    // as artes guardadas aqui; o nome interno continua `projetos`, que é o
+    // da rota, da API e das tabelas.
+    rotulo: "Galeria",
+    apoioMenu: "Artes guardadas por cliente",
+    apoioTopo: "Guarde por cliente as artes prontas: repita o trabalho ou complete os vãos do encaixe com elas.",
+    icone: "icones.svg#image",
     Componente: Projetos,
   },
   {

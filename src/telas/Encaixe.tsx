@@ -809,4 +809,63 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </div>
 
+
+{/* O COMPLEMENTO: depois do encaixe, o Optmizar vira Complementar e abre
+    esta caixa. Ela mede o espaço que sobrou, procura na Galeria e nas peças
+    do próprio encaixe o que cabe ali, e a pessoa escolhe quantas de cada.
+    Quem preenche a lista e faz a conta é producao/controlador.js. */}
+<div id="modal-complemento" className="modal-fundo modal-animado hidden" role="dialog" aria-modal="true" aria-labelledby="modal-complemento-titulo">
+<div className="modal modal-ajustes modal-complemento">
+<div className="ajustes-topo">
+<span className="ajustes-selo" aria-hidden="true">
+<svg viewBox="0 0 24 24"><use href="icones.svg#puzzle"></use></svg>
+</span>
+<span className="ajustes-topo-texto">
+<h3 id="modal-complemento-titulo">{"Complementar"}</h3>
+<p id="complemento-resumo">{"—"}</p>
+</span>
+<button type="button" id="btn-fechar-complemento" className="ajustes-x" title="Fechar" aria-label="Fechar">
+<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#x"></use></svg>
+</button>
+</div>
+<div className="ajustes-corpo">
+<div className="complemento-grupo">
+<span className="campo-rotulo">{"Procurar em"}</span>
+<div className="complemento-opcoes">
+<label className="complemento-opcao"><input type="checkbox" id="complemento-da-galeria" defaultChecked={true} /><span>{"Galeria"}</span></label>
+<label className="complemento-opcao"><input type="checkbox" id="complemento-do-encaixe" defaultChecked={true} /><span>{"Peças deste encaixe"}</span></label>
+</div>
+</div>
+<div className="complemento-grupo">
+<span className="campo-rotulo">{"Até onde"}</span>
+<div className="complemento-opcoes complemento-opcoes-coluna">
+<label className="complemento-opcao"><input type="radio" name="complemento-modo" value="vaos" defaultChecked={true} /><span>{"Só os espaços vazios — a metragem não muda"}</span></label>
+<label className="complemento-opcao"><input type="radio" name="complemento-modo" value="ate" /><span>{"Completar até"}</span>
+<span className="campo-caixa complemento-meta"><input type="number" id="complemento-meta" min="0.1" step="0.1" /><span className="campo-unidade">{"m"}</span></span>
+</label>
+</div>
+</div>
+<button type="button" id="btn-complemento-procurar" className="btn secondary justify-center">
+<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#search"></use></svg>
+{"Procurar o que cabe"}
+</button>
+<p id="complemento-estado" className="complemento-estado hidden"></p>
+<ul id="complemento-lista" className="complemento-lista hidden"></ul>
+</div>
+<div className="ajustes-rodape complemento-rodape">
+<button type="button" id="btn-complemento-refazer" className="btn secondary complemento-refazer" title="Abre os ajustes e refaz o encaixe do zero">
+<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#zap"></use></svg>
+{"Optmizar de novo"}
+</button>
+<button type="button" id="btn-complemento-desfazer" className="btn secondary hidden">
+<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#rotate-ccw"></use></svg>
+{"Desfazer"}
+</button>
+<button type="button" id="btn-complemento-aplicar" className="btn primary" disabled={true}>
+<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#puzzle"></use></svg>
+{"Complementar"}
+</button>
+</div>
+</div>
+</div>
 </div></>; });

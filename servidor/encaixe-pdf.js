@@ -580,11 +580,16 @@ router.post("/pdf", async (req, res) => {
     existir.
   */
   /*
-    `consumo` VEM EM CENTÍMETROS — é o que o PDF multiplica por `PT_POR_CM`
-    umas linhas abaixo. A metragem do plano fala em metros, então a conversão
-    acontece aqui, uma vez, e não espalhada por quem lê o número.
+    O QUE DESCONTA É O COMPRIMENTO DO ARQUIVO: a soma das páginas, uma por
+    bancada, cada uma cortada no que as peças ocupam. Descontar o `consumo`
+    cobraria os vãos entre as mesas, que não vão para a impressora.
+
+    As medidas vêm em CENTÍMETROS; a metragem do plano fala em metros, então a
+    conversão acontece aqui, uma vez.
   */
-  const cota = await permitirExportacao(consumo / 100);
+  const comprimentoCm = paginasDoEncaixe(posicoes, consumo)
+    .reduce((soma, pagina) => soma + (pagina.fundo - pagina.topo), 0);
+  const cota = await permitirExportacao(comprimentoCm / 100);
   if (!cota.permitido) {
     return res.status(402).json({
       error: cota.motivo,
