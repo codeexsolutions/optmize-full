@@ -567,25 +567,33 @@ router.post("/pdf", async (req, res) => {
   }
 
   /*
-    A COTA DO DIA, ANTES DE MONTAR QUALQUER COISA.
+    A METRAGEM DO PLANO, ANTES DE MONTAR QUALQUER COISA.
 
     Aqui, e não no encaixe: encaixar é experimentar, e cota em cima de
     tentativa ensina a tentar menos. Este é o ponto em que o arquivo vai para
-    a impressora — ver `servidor/uso.js` e `domain/uso-diario.ts`.
+    a impressora, e é o tamanho DELE que desconta do saldo — ver
+    `servidor/uso.js` e `domain/metragem.ts`.
 
     O `error` é o que a tela já mostra sozinha (`api/encaixe.ts` lê esse
     campo), então a recusa chega à pessoa escrita em português sem tela nova
     nenhuma. Os outros campos ficam para a tela de comprar avulso, quando ela
     existir.
   */
-  const cota = await permitirExportacao();
+  /*
+    `consumo` VEM EM CENTÍMETROS — é o que o PDF multiplica por `PT_POR_CM`
+    umas linhas abaixo. A metragem do plano fala em metros, então a conversão
+    acontece aqui, uma vez, e não espalhada por quem lê o número.
+  */
+  const cota = await permitirExportacao(consumo / 100);
   if (!cota.permitido) {
     return res.status(402).json({
       error: cota.motivo,
-      codigo: "cota_do_dia",
-      limite: cota.limite,
-      usadas: cota.usadas,
+      codigo: "metragem_do_plano",
+      metros: cota.metros,
+      metrosUsados: cota.metrosUsados,
+      metrosRestantes: cota.metrosRestantes,
       plano: cota.plano,
+      periodo: cota.periodo,
       podeComprarAvulso: cota.podeComprarAvulso,
     });
   }

@@ -65,7 +65,7 @@
 
 import { useEffect, useState } from "react";
 import AliceCarousel from "react-alice-carousel";
-import { Check, FileUp, Printer, Users } from "lucide-react";
+import { Check, Printer, Ruler, Users } from "lucide-react";
 
 import "react-alice-carousel/lib/alice-carousel.css";
 
@@ -74,6 +74,24 @@ import { CAMPO, mascararDocumento, Porta, ROTULO } from "./Porta";
 
 /** Em qual dos dois passos a pessoa está. */
 type Passo = "plano" | "dados";
+
+/**
+ * A METRAGEM DO PLANO, em uma linha.
+ *
+ * É o que a gráfica está comprando: quantos metros de tecido ela pode mandar
+ * para a impressora antes de o saldo acabar. Encaixar é de graça e não entra
+ * nessa conta — o que desconta é o arquivo que vai para a produção.
+ */
+function metragemDoPlano(plano: Plano): string {
+  if (plano.metrosPorPeriodo === null) return "Metragem sem limite";
+  const quando =
+    plano.periodoDaCota === "mensal"
+      ? "por mês"
+      : plano.periodoDaCota === "semanal"
+        ? "por semana"
+        : "por dia";
+  return `${plano.metrosPorPeriodo.toLocaleString("pt-BR")} metros ${quando}`;
+}
 
 /** Centavos como se lê em português: R$ 3.500,00. */
 function emReais(centavos: number, moeda: string): string {
@@ -92,8 +110,10 @@ interface Plano {
   cobranca: "mensal" | "anual" | "creditos";
   vantagens: string[];
   acessos: number;
-  /** Quantas exportações por dia. `null` = sem teto. */
-  exportacoesPorDia: number | null;
+  /** A metragem do plano, em metros por período. `null` = sem teto. */
+  metrosPorPeriodo: number | null;
+  /** De quanto em quanto tempo ela volta a encher. */
+  periodoDaCota: "diario" | "semanal" | "mensal";
   /** Dias de teste. Hoje é 7 em todos — a tela não decide isso. */
   diasDeTeste: number;
 }
@@ -291,7 +311,7 @@ export function CriarConta({
     riscada ela responde de relance a pergunta que fazia a pessoa abrir a
     lista de vantagens: "o que eu perco escolhendo o barato?".
   */
-  const temCentral = (plano: Plano) => plano.exportacoesPorDia === null || plano.acessos > 1;
+  const temCentral = (plano: Plano) => plano.metrosPorPeriodo === null || plano.acessos > 1;
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
@@ -540,10 +560,8 @@ export function CriarConta({
                     */}
                     <span className="mt-2.5 flex flex-col gap-1 border-t border-linha pt-2.5 text-[11px] leading-snug text-tinta-fraca">
                       <span className="flex items-center gap-1.5">
-                        <FileUp size={12} className="shrink-0 text-ambar" />
-                        {plano.exportacoesPorDia === null
-                          ? "Exportação sem limite"
-                          : `${plano.exportacoesPorDia} exportações por dia`}
+                        <Ruler size={12} className="shrink-0 text-ambar" />
+                        {metragemDoPlano(plano)}
                       </span>
                       <span className="flex items-center gap-1.5">
                         <Users size={12} className="shrink-0 text-ambar" />

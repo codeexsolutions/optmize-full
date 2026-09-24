@@ -1,16 +1,19 @@
 /**
  * ===========================================================================
- * O USO DO DIA — pedir licença antes de exportar
+ * A METRAGEM DO PLANO — pedir licença antes de exportar
  * ===========================================================================
  *
- * A escada de planos limita EXPORTAÇÕES POR DIA: o Essencial dá cinco, o
- * Profissional vinte e cinco, o Completo e o anual não têm teto. Encaixar
- * continua à vontade em todos — quem experimenta não gasta nada, e é
+ * Cada plano dá uma METRAGEM por período: 150 m no Essencial, 800 m no
+ * Profissional, sem teto no Completo e no anual. O saldo cai conforme a
+ * gráfica exporta — por METRO, e não por exportação, porque quem manda 2 m
+ * para a impressora não pode gastar a mesma cota de quem manda 60 m.
+ *
+ * Encaixar continua à vontade em todos: quem experimenta não gasta nada, e é
  * experimentando que a pessoa descobre que o encaixe é bom.
  *
  * Quem conta é o backend, e tem de ser ele: as três máquinas de uma conta do
- * Profissional dividem as mesmas vinte e cinco exportações, e cada uma
- * contando sozinha daria setenta e cinco.
+ * Profissional gastam dos mesmos 800 metros, e cada uma contando sozinha daria
+ * 2.400.
  *
  * ---------------------------------------------------------------------------
  * SEM INTERNET, EXPORTA
@@ -39,18 +42,37 @@
 const { pedirComToken } = require("./sessao");
 
 /**
- * Pede uma exportação ao servidor.
+ * Pede a metragem desta exportação ao servidor.
+ *
+ * `metrosPedidos` sai do consumo do encaixe — o mesmo número que a tela
+ * mostra e que vira o comprimento do PDF.
  *
  * Devolve sempre um objeto, nunca lança: quem chama está no meio de gerar um
  * PDF e não tem o que fazer com uma exceção de rede.
  *
  * `permitido: false` só acontece quando o SERVIDOR disse não — ou seja,
- * quando a conta existe, a rede foi, e a cota do dia acabou.
+ * quando a conta existe, a rede foi, e a metragem do período não cobre este
+ * trabalho.
  */
-async function permitirExportacao() {
+async function permitirExportacao(metrosPedidos) {
+  const metros = Number(metrosPedidos);
+  /*
+    SEM METRAGEM CONHECIDA, LIBERA.
+
+    Acontece em caminho de bancada e em pedido antigo sem o campo. Recusar
+    seria inventar uma trava onde não há o que descontar.
+  */
+  if (!Number.isFinite(metros) || metros <= 0) {
+    return { permitido: true, semMetragem: true };
+  }
+
   let resposta;
   try {
-    resposta = await pedirComToken("/uso/exportacao", { method: "POST" });
+    resposta = await pedirComToken("/uso/exportacao", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metros }),
+    });
   } catch {
     return { permitido: true, offline: true };
   }
@@ -71,10 +93,12 @@ async function permitirExportacao() {
   if (resposta.status === 402 && dados) {
     return {
       permitido: false,
-      motivo: dados.motivo || "A cota de exportações de hoje acabou.",
-      limite: dados.limite ?? null,
-      usadas: dados.usadas ?? null,
+      motivo: dados.motivo || "A metragem do seu plano acabou.",
+      metros: dados.metros ?? null,
+      metrosUsados: dados.metrosUsados ?? null,
+      metrosRestantes: dados.metrosRestantes ?? null,
       plano: dados.plano || "",
+      periodo: dados.periodoEmPalavras || "",
       podeComprarAvulso: Boolean(dados.podeComprarAvulso),
     };
   }
@@ -83,9 +107,9 @@ async function permitirExportacao() {
 
   return {
     permitido: true,
-    restantes: dados?.restantes ?? null,
-    limite: dados?.limite ?? null,
-    usadas: dados?.usadas ?? null,
+    metrosRestantes: dados?.metrosRestantes ?? null,
+    metros: dados?.metros ?? null,
+    metrosUsados: dados?.metrosUsados ?? null,
   };
 }
 
