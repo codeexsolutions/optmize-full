@@ -282,53 +282,89 @@ fn recado(janela: &tauri::WebviewWindow, texto: &str) {
 }
 
 
+type Falha = Box<dyn std::error::Error>;
+
+/// Pergunta ao servidor se há versão nova. `None` é o caso de quase sempre.
+///
+/// A ASSINATURA É QUEM MANDA: o plugin confere a assinatura minisign do
+/// instalador com a `pubkey` do `tauri.conf.json` e recusa o que não bate. O
+/// servidor diz ONDE está o instalador; quem diz se ele é legítimo é a chave
+/// compilada dentro deste binário.
+fn buscar_versao_nova(
+    app: &tauri::AppHandle,
+    espera: Duration,
+) -> Result<Option<tauri_plugin_updater::Update>, Falha> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater_builder().timeout(espera).build()?;
+    Ok(tauri::async_runtime::block_on(updater.check())?)
+}
+
+/// Baixa o instalador, avisando a porcentagem a cada número novo.
+///
+/// O aviso recebe `None` quando o servidor não diz o tamanho total — aí a
+/// tela mostra uma barra correndo, em vez de um número inventado. Só chama
+/// quando o número MUDA: o plugin entrega pedaços de poucos KB, e um `eval`
+/// por pedaço seriam milhares de repinturas por um download.
+fn baixar(
+    atualizacao: &tauri_plugin_updater::Update,
+    mut aviso: impl FnMut(Option<u64>),
+) -> Result<Vec<u8>, Falha> {
+    let mut baixado = 0u64;
+    let mut ultimo: Option<Option<u64>> = None;
+    let pacote = tauri::async_runtime::block_on(atualizacao.download(
+        |pedaco: usize, total: Option<u64>| {
+            baixado += pedaco as u64;
+            let por_cento = total.filter(|t| *t > 0).map(|t| (baixado * 100 / t).min(100));
+            if ultimo != Some(por_cento) {
+                ultimo = Some(por_cento);
+                aviso(por_cento);
+            }
+        },
+        || {},
+    ))?;
+    Ok(pacote)
+}
+
+/// Desliga o servidor e entrega a vez ao instalador. Não volta.
+///
+/// BAIXAR E INSTALAR SÃO DOIS PASSOS, e não o `download_and_install`. No
+/// Windows o `install` do plugin abre o instalador e encerra o programa na
+/// hora, com `std::process::exit(0)`. Isso pula o `RunEvent::Exit` lá embaixo
+/// — o único lugar que matava o `node.exe` filho. Era esse o "conflito" de
+/// toda atualização: o Node ficava órfão, segurando os arquivos de
+/// `servidor\`, e o instalador não conseguia sobrescrevê-los.
+///
+/// O instalador roda em silêncio (`/S /UPDATE /R`) e reabre o programa.
+fn instalar(
+    app: &tauri::AppHandle,
+    atualizacao: &tauri_plugin_updater::Update,
+    pacote: Vec<u8>,
+) -> Result<(), Falha> {
+    if let Some(processo) = app.state::<Servidor>().0.lock().unwrap().as_mut() {
+        let _ = processo.kill();
+        let _ = processo.wait();
+    }
+    atualizacao.install(pacote)?;
+    Ok(())
+}
+
 /// Procura versão nova e instala, ANTES de o sistema aparecer.
 ///
-/// ---------------------------------------------------------------------------
-/// POR QUE SÓ NA ABERTURA
-/// ---------------------------------------------------------------------------
-///
-/// Aqui houve um laço que perguntava de cinco em cinco minutos com o programa
-/// aberto, e uma rodada que instalava quinze segundos DEPOIS de a tela já estar
-/// na cara da pessoa. O resultado era o pior dos dois mundos: o Optmize abria,
-/// a pessoa começava a trabalhar, e então ele fechava para instalar.
-///
-/// Agora é como todo programa que se atualiza bem (o Discord é o exemplo que a
-/// gráfica conhece): a busca acontece na tela de abertura, antes de existir
-/// qualquer trabalho na tela. Se há versão nova, ela entra ali — não há nada
-/// para perder. Se não há, o programa segue abrindo, e não se pergunta mais
-/// nada até a próxima vez que alguém abrir o Optmize.
-///
-/// O QUE ISSO CUSTA: quem deixa o programa aberto a semana inteira fica na
-/// versão instalada até fechar. É o preço de nunca interromper o expediente —
-/// e a maioria fecha no fim do dia, e abre atualizada no dia seguinte.
-///
-/// ---------------------------------------------------------------------------
-/// A ASSINATURA É QUEM MANDA
-/// ---------------------------------------------------------------------------
-///
-/// O plugin confere a assinatura minisign do instalador com a `pubkey` do
-/// `tauri.conf.json` e recusa o que não bate. O servidor diz ONDE está o
-/// instalador; quem diz se ele é legítimo é a chave compilada dentro deste
-/// binário.
+/// É o momento em que não há trabalho na tela para perder: se há versão nova,
+/// ela entra ali mesmo, com a tela de abertura contando o que está
+/// acontecendo. Quem já está com o programa aberto é atendido pelo
+/// `vigiar_atualizacoes`, mais abaixo.
 ///
 /// Devolve `Ok(true)` quando instalou — e aí o programa já se encerrou para o
 /// instalador trabalhar, e esta função não chega a devolver nada.
 fn atualizar_na_abertura(
     app: &tauri::AppHandle,
     janela: &tauri::WebviewWindow,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    use tauri_plugin_updater::UpdaterExt;
-
+) -> Result<bool, Falha> {
     recado(janela, "Buscando atualizações…");
 
-    let updater = app
-        .updater_builder()
-        .timeout(ESPERA_DO_SERVIDOR_DE_VERSOES)
-        .build()?;
-
-    let Some(atualizacao) = tauri::async_runtime::block_on(updater.check())? else {
-        return Ok(false); // nada novo — o caso de quase sempre
+    let Some(atualizacao) = buscar_versao_nova(app, ESPERA_DO_SERVIDOR_DE_VERSOES)? else {
+        return Ok(false);
     };
 
     recado(
@@ -337,59 +373,124 @@ fn atualizar_na_abertura(
     );
 
     /*
-     * O PROGRESSO VAI PARA A TELA.
-     *
-     * São ~96 MB, e numa internet de gráfica isso pode levar um minuto. Sem
-     * número na tela, um minuto de marca parada é indistinguível de travado —
-     * e é nesse minuto que alguém desliga o computador no botão, justamente no
-     * meio de uma instalação.
+     * O PROGRESSO VAI PARA A TELA. São dezenas de MB, e numa internet de
+     * gráfica isso pode levar um minuto. Sem número na tela, um minuto de
+     * marca parada é indistinguível de travado — e é nesse minuto que alguém
+     * desliga o computador no botão, no meio de uma instalação.
      */
-    let total_baixado = std::cell::Cell::new(0u64);
-    let janela_do_progresso = janela.clone();
-
-    /*
-     * BAIXAR E INSTALAR SÃO DOIS PASSOS, e não o `download_and_install`.
-     *
-     * No Windows o `install` do plugin abre o instalador e encerra o programa
-     * na hora, com `std::process::exit(0)`. Isso pula o `RunEvent::Exit` lá
-     * embaixo — o único lugar que matava o `node.exe` filho. Era aqui o
-     * "conflito" de toda atualização: o Node ficava órfão, segurando os
-     * arquivos de `servidor\`, e o instalador não conseguia sobrescrevê-los.
-     * O `app.restart()` que vinha depois nunca chegava a rodar.
-     *
-     * Separando os passos, o servidor morre entre um e outro, com o download
-     * já conferido pela assinatura.
-     */
-    let pacote = tauri::async_runtime::block_on(atualizacao.download(
-        |pedaco: usize, total: Option<u64>| {
-            total_baixado.set(total_baixado.get() + pedaco as u64);
-            let Some(total) = total.filter(|t| *t > 0) else { return };
-            let por_cento = (total_baixado.get() * 100 / total).min(100);
-            recado(
-                &janela_do_progresso,
-                &format!("Baixando a atualização… {por_cento}%"),
-            );
-        },
-        || {},
-    ))?;
+    let pacote = baixar(&atualizacao, |por_cento| {
+        if let Some(por_cento) = por_cento {
+            recado(janela, &format!("Baixando a atualização… {por_cento}%"));
+        }
+    })?;
 
     recado(janela, "Instalando… o Optmize reabre sozinho em instantes");
-
-    if let Some(processo) = app.state::<Servidor>().0.lock().unwrap().as_mut() {
-        let _ = processo.kill();
-        let _ = processo.wait();
-    }
-
-    /*
-     * Um instante para o recado ser lido. Depois do `install` a janela some e
-     * o instalador trabalha em silêncio por alguns segundos antes de reabrir o
-     * programa; sem aviso, a pessoa clica no ícone de novo no meio disso.
-     */
+    // Um instante para o recado ser lido: depois do `install` a janela some,
+    // e sem aviso a pessoa clica no ícone de novo no meio da instalação.
     std::thread::sleep(Duration::from_millis(1500));
 
-    // Não volta: abre o instalador (`/S /UPDATE /R`) e encerra o processo.
-    atualizacao.install(pacote)?;
+    instalar(app, &atualizacao, pacote)?;
     Ok(true)
+}
+
+/// De quanto em quanto tempo o programa aberto pergunta se há versão nova.
+///
+/// A abertura já perguntou; isto é para quem deixa o Optmize aberto o dia
+/// inteiro. Vinte minutos põem uma versão nova na máquina no mesmo expediente
+/// em que ela foi lançada, sem que o servidor seja consultado a toda hora.
+const INTERVALO_DA_BUSCA: Duration = Duration::from_secs(20 * 60);
+
+/// Com o programa aberto a busca não segura a abertura de ninguém, então pode
+/// esperar mais pelo servidor do que a busca da tela de abertura.
+const ESPERA_EM_SEGUNDO_PLANO: Duration = Duration::from_secs(30);
+
+/// Os segundos da contagem na tela cheia, entre o fim do download e o reinício.
+const CONTAGEM_PARA_REINICIAR: u64 = 5;
+
+/// A tela de atualização (`atualizacao.js`), com a marca já embutida.
+///
+/// A marca vai em data URI, e não como endereço do servidor: na hora de
+/// instalar o servidor já foi desligado, e a imagem sumiria da tela justamente
+/// no momento em que a pessoa mais olha para ela.
+fn script_da_atualizacao() -> &'static str {
+    use base64::Engine;
+    static SCRIPT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SCRIPT.get_or_init(|| {
+        let marca = base64::engine::general_purpose::STANDARD
+            .encode(include_bytes!("../../empacotar/janela/icone.png"));
+        include_str!("atualizacao.js")
+            .replace("__LOGO__", &format!("data:image/png;base64,{marca}"))
+    })
+}
+
+/// Mostra um estado da tela de atualização na página que estiver aberta.
+///
+/// O script vai inteiro em toda chamada: ele só se define se ainda não
+/// existir, e assim uma página que recarregou no meio do download ganha a tela
+/// de volta na chamada seguinte.
+fn painel(janela: &tauri::WebviewWindow, estado: serde_json::Value) {
+    let _ = janela.eval(&format!(
+        "{};window.__optmizeAtualizacao({estado})",
+        script_da_atualizacao()
+    ));
+}
+
+/// Com o programa aberto, baixa a versão nova em segundo plano e reinicia.
+///
+/// Enquanto baixa, um cartão no canto conta o progresso e a pessoa continua
+/// trabalhando, na tela que estiver. Terminado o download, a tela cheia de
+/// atualização cobre o sistema, conta alguns segundos e o programa reinicia
+/// sozinho na versão nova.
+fn atualizar_com_o_programa_aberto(
+    app: &tauri::AppHandle,
+    janela: &tauri::WebviewWindow,
+) -> Result<(), Falha> {
+    use serde_json::json;
+
+    let Some(atualizacao) = buscar_versao_nova(app, ESPERA_EM_SEGUNDO_PLANO)? else {
+        return Ok(());
+    };
+    let versao = atualizacao.version.clone();
+
+    painel(janela, json!({ "fase": "baixando", "versao": versao }));
+    let pacote = baixar(&atualizacao, |por_cento| {
+        painel(
+            janela,
+            json!({ "fase": "baixando", "versao": versao, "porcento": por_cento }),
+        );
+    })?;
+
+    for segundos in (1..=CONTAGEM_PARA_REINICIAR).rev() {
+        painel(
+            janela,
+            json!({ "fase": "reiniciando", "versao": versao, "porcento": 100, "segundos": segundos }),
+        );
+        std::thread::sleep(Duration::from_secs(1));
+    }
+
+    painel(janela, json!({ "fase": "instalando", "versao": versao }));
+    // O tempo de a mensagem aparecer antes de a janela ir embora.
+    std::thread::sleep(Duration::from_millis(1200));
+
+    instalar(app, &atualizacao, pacote)
+}
+
+/// O laço que atende quem fica com o programa aberto. Não volta.
+///
+/// Uma falha (sem internet, servidor fora, download cortado) some com o
+/// cartão e espera a próxima rodada: atualização nenhuma pode virar erro na
+/// cara de quem está trabalhando.
+fn vigiar_atualizacoes(app: tauri::AppHandle) {
+    loop {
+        std::thread::sleep(INTERVALO_DA_BUSCA);
+        let Some(janela) = app.get_webview_window("principal") else {
+            return;
+        };
+        if let Err(erro) = atualizar_com_o_programa_aberto(&app, &janela) {
+            eprintln!("[atualizacao] {erro}");
+            painel(&janela, serde_json::json!({ "fase": "oculto" }));
+        }
+    }
 }
 
 fn main() {
@@ -596,6 +697,10 @@ fn main() {
                 if let Ok(url) = format!("http://127.0.0.1:{porta}/").parse() {
                     let _ = janela.navigate(url);
                 }
+
+                // Daqui em diante esta thread só cuida das versões novas que
+                // saírem com o programa aberto.
+                vigiar_atualizacoes(app);
             });
 
             Ok(())
