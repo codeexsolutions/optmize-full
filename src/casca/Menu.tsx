@@ -91,6 +91,7 @@
 
 import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
+import { RedeAnimada } from "../telas/RedeAnimada";
 import { Icone } from "./Icone";
 import { useDialogo } from "./Dialogo";
 import { iniciais, type Usuario } from "./usuario";
@@ -324,6 +325,26 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
           "tela:translate-x-0",
         ].join(" ")}
       >
+        {/*
+          A REDE, ATRÁS DE TUDO — a mesma da porta de entrar.
+
+          `-z-10` a põe ACIMA do degradê da barra e ABAIXO do conteúdo: com
+          `z-0` ela venceria o texto, porque elemento posicionado pinta por
+          cima de texto de elemento estático, e a lista de telas sumiria atrás
+          dos pontinhos. O `-z-10` fica preso aqui dentro porque a barra tem
+          `transform` (o `translate-x` que a esconde no celular), e transform
+          abre contexto de empilhamento.
+
+          `opacity-70` porque esta barra fica aberta o dia inteiro, e o que na
+          porta é recepção aqui seria distração: a rede tem de ser textura de
+          fundo, não coisa para olhar.
+        */}
+        <RedeAnimada
+          className="absolute inset-0 -z-10 opacity-70"
+          densidade={6000}
+          seguirPonteiro={false}
+        />
+
         {/*
           O CABEÇALHO: QUEM ESTÁ USANDO O PROGRAMA.
 

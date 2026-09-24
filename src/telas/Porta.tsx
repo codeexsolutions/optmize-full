@@ -28,6 +28,7 @@
 import type { ReactNode } from "react";
 
 import { Icone } from "../casca/Icone";
+import { RedeAnimada } from "./RedeAnimada";
 
 /** O que o programa faz, para a coluna da esquerda. */
 const VANTAGENS = [
@@ -79,6 +80,16 @@ export function Porta({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_50%_at_0%_0%,var(--accent-soft)_0%,transparent_60%),linear-gradient(178deg,var(--card-bg)_0%,var(--sidebar-bg)_45%,var(--bg)_100%)]"
         />
+        {/*
+          A REDE, POR CIMA DO DEGRADÊ E POR BAIXO DE TUDO O MAIS.
+
+          É o fundo do login do Flow trazido para cá em laranja — os pontos se
+          ligam por raios quando chegam perto, e de vez em quando um pulso de
+          luz corre pelo raio. Só nesta coluna: atrás do cartão ela disputaria
+          a atenção com o campo da senha, que é a única coisa aqui que alguém
+          precisa achar.
+        */}
+        <RedeAnimada className="absolute inset-0 z-0" />
         <div className="relative flex items-center gap-3">
           {/*
             O HALO QUE RESPIRA atrás da marca — o mesmo do painel web, em

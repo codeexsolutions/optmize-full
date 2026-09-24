@@ -539,10 +539,15 @@
  * OS EFEITOS DA TELA DE ENTRAR
  * ===========================================================================
  *
- * Tudo aqui é CSS puro — sem framer-motion, sem canvas, sem imagem. Numa tela
- * que aparece antes de o programa montar, cada coisa a carregar é tempo de
- * porta fechada; e num programa instalado, cada dependência é peso permanente
- * no instalador por um efeito de dez segundos por dia.
+ * Tudo aqui é CSS puro — sem framer-motion e sem imagem. Numa tela que
+ * aparece antes de o programa montar, cada coisa a carregar é tempo de porta
+ * fechada; e num programa instalado, cada dependência é peso permanente no
+ * instalador por um efeito de dez segundos por dia.
+ *
+ * HÁ UM CANVAS, E SÓ UM: a rede de pontos do fundo da coluna
+ * (`telas/RedeAnimada.tsx`). Raio que liga dois pontos EM MOVIMENTO é conta a
+ * cada quadro, e isso CSS não faz — mas continua sem biblioteca nenhuma
+ * atrás, que era o ponto desta regra.
  *
  * Nenhuma cor é escrita à mão: todas saem de `--accent*`, em tokens.css.
  * Trocar o laranja da marca leva esta tela junto.
