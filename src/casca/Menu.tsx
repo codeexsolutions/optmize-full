@@ -469,6 +469,34 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
         </div>
 
         {/*
+          O PAINEL, logo acima do pé: é onde o dono cria, desliga e exclui os
+          acessos dos funcionários. Só a conta dona da empresa o vê — o papel
+          vem do servidor local, que pergunta ao `/team` do backend (ver
+          `servidor/sessao.js`). Esconder aqui é conforto; a trava é o backend.
+        */}
+        {usuario?.papel === "dono" && (
+          <nav aria-label="Administração" className="mt-3 shrink-0 px-1">
+            <NavLink
+              to="/painel"
+              onClick={aoFechar}
+              title="Painel — acessos dos funcionários"
+              className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO].join(" ")}
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && <span aria-hidden="true" className={TRILHO} />}
+                  <Icone
+                    referencia="icones.svg#shield-user"
+                    className={`${ICONE} ${isActive ? ICONE_ATIVO : ""}`}
+                  />
+                  <span className={TEXTO_DO_ITEM}>Painel</span>
+                </>
+              )}
+            </NavLink>
+          </nav>
+        )}
+
+        {/*
           ===========================================================================
           O PÉ DA BARRA — o que não é trabalho
           ===========================================================================

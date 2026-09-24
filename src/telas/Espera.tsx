@@ -56,6 +56,8 @@ export function Espera({
   aoSair: () => void;
 }) {
   const [conferindo, setConferindo] = useState(false);
+  const [pagando, setPagando] = useState(false);
+  const [erroDoPagamento, setErroDoPagamento] = useState<string | null>(null);
 
   /*
     DUAS ESPERAS DIFERENTES, e a diferença é o que a pessoa faz a seguir.
@@ -68,6 +70,26 @@ export function Espera({
     não vai vir, porque quem tem de agir são elas.
   */
   const naMaoDeles = acesso.pendente;
+
+  /** Plano que se paga pelo checkout: a pessoa resolve sozinha, agora. */
+  const podePagar = !naMaoDeles && Boolean(acesso.podePagar);
+
+  async function pagar() {
+    if (pagando) return;
+    setPagando(true);
+    setErroDoPagamento(null);
+    try {
+      const resposta = await fetch("/api/sessao/pagar", { method: "POST" });
+      const dados = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) setErroDoPagamento(dados.message || "Não foi possível abrir o pagamento.");
+      // Já liberado (sem link): a conferência abaixo tira a pessoa daqui.
+      else if (!dados.checkoutUrl) await aoConferir();
+    } catch {
+      setErroDoPagamento("O Optmize não respondeu. Tente de novo.");
+    } finally {
+      setPagando(false);
+    }
+  }
 
   async function conferir() {
     if (conferindo) return;
@@ -107,7 +129,9 @@ export function Espera({
           <p className="mt-2 mb-0 text-[13.5px] leading-relaxed text-tinta-fraca">
             {naMaoDeles
               ? `${nome}, o seu cadastro chegou aqui. Assim que a CodeEx Solutions confirmar, o Optmize abre — não é preciso instalar nada de novo.`
-              : `${nome}, a sua conta existe e o plano ainda não foi acertado. Fale com a CodeEx Solutions para liberar o programa.`}
+              : podePagar
+                ? `${nome}, a sua conta existe e falta pagar o plano. Clique em "Pagar agora": o pagamento abre no navegador e, aprovado, o programa libera sozinho.`
+                : `${nome}, a sua conta existe e o plano ainda não foi acertado. Fale com a CodeEx Solutions para liberar o programa.`}
           </p>
         </div>
 
@@ -132,14 +156,35 @@ export function Espera({
           </p>
         )}
 
+        {podePagar && (
+          <button
+            type="button"
+            onClick={pagar}
+            disabled={pagando}
+            className="botao-entrar w-full gap-2 px-4 text-[15px]"
+          >
+            <Icone referencia="icones.svg#external-link" className="size-4" />
+            {pagando ? "Abrindo o pagamento…" : "Pagar agora"}
+          </button>
+        )}
+        {erroDoPagamento && (
+          <p className="m-0 text-[12.5px] text-[var(--danger)]">{erroDoPagamento}</p>
+        )}
+
+        {/*
+          Com "Pagar agora" na frente, o conferir vira o segundo botão —
+          contornado, e não cheio: são dois passos, e o primeiro é pagar.
+        */}
         <button
           type="button"
           onClick={conferir}
           disabled={conferindo}
-          className="botao-entrar w-full gap-2 px-4 text-[15px]"
+          className={podePagar
+            ? "flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 py-3 text-[14px] font-medium text-ambar transition-colors hover:border-[var(--accent)]"
+            : "botao-entrar w-full gap-2 px-4 text-[15px]"}
         >
           <Icone referencia="icones.svg#refresh-cw" className="size-4" />
-          {conferindo ? "Conferindo…" : "Já liberaram — conferir de novo"}
+          {conferindo ? "Conferindo…" : podePagar ? "Já paguei — conferir" : "Já liberaram — conferir de novo"}
         </button>
 
         <p className="m-0 text-[12px] leading-relaxed text-tinta-apagada">

@@ -71,6 +71,7 @@ import "react-alice-carousel/lib/alice-carousel.css";
 
 import { Icone } from "../casca/Icone";
 import { CAMPO, mascararDocumento, Porta, ROTULO } from "./Porta";
+import { usePlanos, type Plano } from "../estado/planos";
 import { useErroEmAlerta } from "../casca/Alerta";
 
 /** Em qual dos dois passos a pessoa está. */
@@ -102,22 +103,6 @@ function emReais(centavos: number, moeda: string): string {
   });
 }
 
-interface Plano {
-  id: string;
-  nome: string;
-  descricao: string;
-  precoCentavos: number;
-  moeda: string;
-  cobranca: "mensal" | "anual" | "creditos";
-  vantagens: string[];
-  acessos: number;
-  /** A metragem do plano, em metros por período. `null` = sem teto. */
-  metrosPorPeriodo: number | null;
-  /** De quanto em quanto tempo ela volta a encher. */
-  periodoDaCota: "diario" | "semanal" | "mensal";
-  /** Dias de teste; `0` = sem teste. Quem decide é o catálogo, não a tela. */
-  diasDeTeste: number;
-}
 
 /** O nome sem o prefixo da marca: "Completo", "Licença anual". */
 function nomeCurto(plano: Plano): string {
@@ -244,7 +229,12 @@ export function CriarConta({
 }) {
   const [passo, setPasso] = useState<Passo>("plano");
 
-  const [planos, setPlanos] = useState<Plano[] | null>(null);
+  /*
+    OS PLANOS VÊM DO STORE (`estado/planos.ts`). A tela de entrar já os pediu
+    ao abrir, então aqui eles costumam estar prontos na primeira pintura.
+  */
+  const planos = usePlanos((e) => e.planos);
+  const carregarPlanos = usePlanos((e) => e.carregar);
   const [escolhido, setEscolhido] = useState<string | null>(null);
 
   const [documento, setDocumento] = useState("");
@@ -257,32 +247,31 @@ export function CriarConta({
 
   const setErro = useErroEmAlerta("Não foi possível criar a conta");
   const [enviando, setEnviando] = useState(false);
-  const [pronto, setPronto] = useState<{ liberado: boolean } | null>(null);
+  const [pronto, setPronto] = useState<{ liberado: boolean; checkoutUrl: string | null } | null>(null);
 
+  /*
+    Reconfere ao abrir, sem esvaziar a lista: o que já estava aparece na hora,
+    e o que mudou no painel troca por baixo.
+  */
+  useEffect(() => { carregarPlanos(); }, [carregarPlanos]);
+
+  /*
+    O MAIS BARATO JÁ VEM MARCADO.
+
+    Deixar tudo desmarcado obrigaria um clique a mais antes do primeiro
+    campo. E o degrau de entrada é o padrão honesto: ninguém se arrepende
+    de ter começado barato e subido, e quem precisa de mais sobe com a
+    régua de cada linha na frente. O contrário — vir marcado no caro —
+    seria a tela escolhendo pelo bolso de quem está lendo.
+
+    A lista chega ordenada do mais barato ao mais caro pelo servidor. Só marca
+    quando nada foi escolhido — ou quando o escolhido saiu do catálogo.
+  */
   useEffect(() => {
-    let vivo = true;
-    fetch("/api/sessao/planos")
-      .then((r) => r.json())
-      .then((dados: { planos?: Plano[] }) => {
-        if (!vivo) return;
-        const lista = dados.planos ?? [];
-        setPlanos(lista);
-        /*
-          O MAIS BARATO JÁ VEM MARCADO.
-
-          Deixar tudo desmarcado obrigaria um clique a mais antes do primeiro
-          campo. E o degrau de entrada é o padrão honesto: ninguém se arrepende
-          de ter começado barato e subido, e quem precisa de mais sobe com a
-          régua de cada linha na frente. O contrário — vir marcado no caro —
-          seria a tela escolhendo pelo bolso de quem está lendo.
-
-          A lista chega ordenada do mais barato ao mais caro pelo servidor.
-        */
-        setEscolhido(lista[0]?.id ?? null);
-      })
-      .catch(() => vivo && setPlanos([]));
-    return () => { vivo = false; };
-  }, []);
+    if (!planos?.length) return;
+    setEscolhido((atual) =>
+      atual && planos.some((p) => p.id === atual) ? atual : planos[0]!.id);
+  }, [planos]);
 
   /*
     Os dois derivados do catálogo. Calculados no corpo, e não guardados em
@@ -292,33 +281,16 @@ export function CriarConta({
   const planoEscolhido = (planos ?? []).find((p) => p.id === escolhido) ?? null;
   const economia = economiaDoAnual(planos ?? []);
   /*
-    O TESTE NÃO É DE TODOS: só o Completo e a Licença anual têm.
-
-    Quem decide é o catálogo (`diasDeTeste` de cada plano); a tela só junta
-    os que têm, para a frase de cima nomeá-los em vez de prometer teste a quem
-    escolher o Essencial. O `Math.min` garante que ela não diga mais dias do
-    que o plano mais curto dá.
-  */
-  const planosComTeste = (planos ?? []).filter((p) => p.diasDeTeste > 0);
-  const diasDeTeste = planosComTeste.length
-    ? Math.min(...planosComTeste.map((p) => p.diasDeTeste))
-    : 0;
-  const nomesComTeste = planosComTeste.map((p) => nomeCurto(p));
-  const quemTesta =
-    planosComTeste.length === (planos ?? []).length
-      ? "qualquer plano"
-      : nomesComTeste.length > 1
-        ? `${nomesComTeste.slice(0, -1).join(", ")} ou ${nomesComTeste.at(-1)}`
-        : nomesComTeste[0];
-  /*
     O DO MEIO É O SUGERIDO.
 
-    Não é achismo de marketing: numa escada de quatro, o degrau de entrada
-    existe para caber no bolso e o de cima para a gráfica grande. Quem está
-    lendo pela primeira vez quase nunca é nenhum dos dois, e um selo no meio
-    responde "por onde eu começo?" sem precisar ler as quatro réguas.
+    Não é achismo de marketing: o degrau de entrada existe para caber no
+    bolso e o de cima para a gráfica grande. Quem está lendo pela primeira vez
+    quase nunca é nenhum dos dois, e um selo no meio responde "por onde eu
+    começo?" sem precisar ler todas as réguas. O meio é calculado, e não uma
+    posição fixa: o catálogo vem da API, e um plano a mais não pode mudar o
+    selo de lugar por acidente.
   */
-  const sugerido = (planos ?? [])[1]?.id ?? null;
+  const sugerido = planos?.length ? planos[Math.floor(planos.length / 2)]!.id : null;
 
   /*
     A CENTRAL DAS IMPRESSORAS ENTRA NA RÉGUA, riscada em quem não a tem.
@@ -358,7 +330,14 @@ export function CriarConta({
         setErro(dados.message || "Não foi possível criar a conta agora.");
         return;
       }
-      setPronto({ liberado: Boolean(dados.liberado) });
+      /*
+        Essencial e Profissional voltam com o link do checkout — o servidor
+        local já o abriu no navegador. Ver `servidor/sessao.js`.
+      */
+      setPronto({
+        liberado: Boolean(dados.liberado),
+        checkoutUrl: typeof dados.checkoutUrl === "string" ? dados.checkoutUrl : null,
+      });
     } catch {
       setErro("O Optmize não respondeu. Feche e abra o programa de novo.");
     } finally {
@@ -386,8 +365,30 @@ export function CriarConta({
           <p className="mt-2 mb-0 text-[13.5px] leading-relaxed text-tinta-fraca">
             {pronto.liberado
               ? "Sua empresa está cadastrada e já pode trabalhar. Entre com o e-mail e a senha que você acabou de escolher."
-              : "Sua empresa está cadastrada. Para liberar o plano escolhido falta acertar o pagamento — fale com a CodeEx Solutions pelo @codeexsolutions."}
+              : pronto.checkoutUrl
+                ? "Sua empresa está cadastrada. Abrimos o pagamento no seu navegador — assim que ele for aprovado, o plano libera sozinho. Depois é só entrar com o e-mail e a senha que você escolheu."
+                : "Sua empresa está cadastrada. Para liberar o plano escolhido falta acertar o pagamento — fale com a CodeEx Solutions pelo @codeexsolutions."}
           </p>
+          {/*
+            O PAGAMENTO DE NOVO, para quem fechou a aba sem querer. Pede ao
+            servidor local para abrir — ver `abrirPagamento` em sessao.js.
+          */}
+          {!pronto.liberado && pronto.checkoutUrl && (
+            <button
+              type="button"
+              onClick={() => {
+                fetch("/api/sessao/abrir-pagamento", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ url: pronto.checkoutUrl }),
+                }).catch(() => {});
+              }}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 py-3 text-[14px] font-medium text-ambar transition-colors hover:border-[var(--accent)]"
+            >
+              <Icone referencia="icones.svg#external-link" className="size-4" />
+              Abrir o pagamento de novo
+            </button>
+          )}
           <button
             type="button"
             onClick={() => aoCadastrar(email.trim().toLowerCase())}
@@ -414,23 +415,6 @@ export function CriarConta({
             <Trilha passo="plano" />
           </header>
 
-          {/*
-            O TESTE É DITO AQUI EM CIMA, com o nome de quem o tem.
-
-            Não são todos os planos: dizer "qualquer plano" levaria quem
-            escolheu o Essencial a esperar uma semana grátis que não vem. O
-            cartão de cada um repete, embaixo do preço, se ele tem teste.
-          */}
-          {diasDeTeste > 0 && (
-            <p className="entrada-degrau m-0 flex items-start gap-2 text-[12px] leading-relaxed text-tinta-fraca">
-              <Icone
-                referencia="icones.svg#badge-check"
-                className="mt-0.5 size-3.5 shrink-0 text-ambar"
-              />
-              Você testa {quemTesta} por {diasDeTeste} dias, sem cartão. Dá
-              para mudar de plano depois — fale com a CodeEx Solutions.
-            </p>
-          )}
 
           {planos === null && (
             <p className="m-0 text-[13px] text-tinta-apagada">Buscando os planos…</p>
@@ -813,14 +797,30 @@ export function CriarConta({
  * do formulário, e sair do cadastro não é uma opção do cadastro.
  */
 function VoltarAoLogin({ aoVoltar }: { aoVoltar: () => void }) {
+  /*
+    O MESMO DESENHO do "Cadastrar a minha empresa" do login — traço com a
+    pergunta e o botão contornado em âmbar —, para ir e voltar serem o mesmo
+    gesto nos dois lados. Um link cinza miúdo aqui fazia quem entrou no
+    cadastro por engano procurar a saída.
+  */
   return (
-    <button
-      type="button"
-      onClick={aoVoltar}
-      className="mt-5 flex w-full items-center justify-center gap-2 border-0 bg-transparent p-0 text-[13px] text-tinta-apagada transition-colors hover:text-ambar"
-    >
-      <Icone referencia="icones.svg#arrow-left" className="size-4" />
-      Já tenho conta — voltar ao login
-    </button>
+    <>
+      <div className="mt-6 flex items-center gap-3">
+        <span className="h-px flex-1 bg-linha" />
+        <span className="text-[10.5px] tracking-[1.4px] text-tinta-apagada uppercase">
+          Já tem conta?
+        </span>
+        <span className="h-px flex-1 bg-linha" />
+      </div>
+
+      <button
+        type="button"
+        onClick={aoVoltar}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 py-3 text-[14px] font-medium text-ambar transition-colors hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
+      >
+        <Icone referencia="icones.svg#arrow-left" className="size-4" />
+        Voltar ao login
+      </button>
+    </>
   );
 }

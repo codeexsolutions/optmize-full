@@ -81,6 +81,7 @@ const Ponto = lazy(() => import("./telas/Ponto").then((m) => ({ default: m.Ponto
 const Funcionarios = lazy(() => import("./telas/Funcionarios").then((m) => ({ default: m.Funcionarios })));
 const Sobre = lazy(() => import("./telas/Sobre").then((m) => ({ default: m.Sobre })));
 const Conta = lazy(() => import("./telas/Conta").then((m) => ({ default: m.Conta })));
+const Painel = lazy(() => import("./telas/Painel").then((m) => ({ default: m.Painel })));
 
 export type NomeDeTela =
   | "moldes" | "projetos" | "encaixe" | "digitalizar" | "macros"
@@ -88,7 +89,9 @@ export type NomeDeTela =
   | "historico" | "reposicao" | "ponto" | "funcionarios"
   // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
   // programa falando de si mesmo e da conta, não trabalho de produção.
-  | "sobre" | "conta";
+  | "sobre" | "conta"
+  // O painel do dono: abre pelo botão logo acima do pé, e só para ele.
+  | "painel";
 
 export type NomeDeGrupo = "producao" | "impressao" | "relatorios";
 
@@ -348,6 +351,21 @@ export const TELAS: readonly Tela[] = [
     apoioTopo: "A conta que está aberta nesta máquina e a empresa dela.",
     icone: "icones.svg#user-cog",
     Componente: Conta,
+  },
+  {
+    /*
+      O PAINEL DO DONO. `foraDoMenu` como as duas acima: quem o abre é o botão
+      logo acima do pé da barra (ver `casca/Menu.tsx`), que só aparece para a
+      conta dona da empresa.
+    */
+    nome: "painel",
+    grupo: "relatorios",
+    foraDoMenu: true,
+    rotulo: "Painel",
+    apoioMenu: "Acessos dos funcionários",
+    apoioTopo: "Crie, desative e exclua os acessos dos funcionários da empresa.",
+    icone: "icones.svg#shield-user",
+    Componente: Painel,
   },
 ];
 

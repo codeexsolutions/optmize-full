@@ -70,6 +70,8 @@ export interface Acesso {
   /** O motivo como o servidor o escreveu, em português. */
   motivo: string | null;
   plano: string;
+  /** O backend diz que há checkout para pagar agora (ver `payable`). */
+  podePagar?: boolean;
   status: string;
   conferidoEm: string;
 }

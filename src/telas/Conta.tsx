@@ -101,11 +101,10 @@ export function Conta() {
       <div className="rounded-xl border border-linha bg-painel p-4">
         <span className="eyebrow">MUDANÇAS NA CONTA</span>
         <p className="mt-2 mb-0 text-[13px] leading-relaxed text-tinta-fraca">
-          Trocar a senha, cadastrar funcionários e escolher as telas de cada um
-          são feitos no <strong className="font-semibold text-tinta">painel web
-          da empresa</strong>, e não aqui — assim o dono resolve de qualquer
-          computador, sem precisar estar na máquina onde o Optmize está
-          instalado.
+          Os acessos dos funcionários — criar, desativar e excluir — ficam no
+          botão <strong className="font-semibold text-tinta">Painel</strong>,
+          logo acima do pé da barra, visível só para o administrador da
+          empresa. Trocar a senha é feito no painel web da empresa.
         </p>
         <p className="mt-2 mb-0 text-[13px] leading-relaxed text-tinta-apagada">
           Não sabe o endereço do painel? Fale com quem cuida do Optmize na sua

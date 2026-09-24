@@ -42,6 +42,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const express = require("express");
+const { spawn } = require("node:child_process");
 
 const { pastaDeDados } = require("./caminhos");
 
@@ -231,15 +232,59 @@ async function conferirAcesso(forcar = false) {
     pendente: Boolean(dados.pendingRelease),
     motivo: dados.blockedReason || null,
     plano: dados.planName || "",
+    /**
+     * Há "Pagar agora"? Quem decide é o backend, pelo plano no banco — a tela
+     * não guarda lista de planos nenhuma.
+     */
+    podePagar: Boolean(dados.payable),
     status: dados.status || "none",
     conferidoEm: new Date().toISOString(),
   };
 
   gravar({ ...ler(), acesso });
+  await conferirPapel();
   return acesso;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * QUEM É O DONO
+ * ---------------------------------------------------------------------------
+ *
+ * O `role` do `/auth/me` não responde isto: ele é do USUÁRIO (cliente ou
+ * admin da CodeEx), não do lugar dele na empresa. Quem sabe se a conta é a
+ * dona é o `GET /team`, no `isOwner` — a mesma regra que o backend usa para
+ * deixar criar, desativar e excluir funcionário.
+ *
+ * O papel vai para o perfil porque é dele que a barra decide mostrar o botão
+ * do Painel. Esconder o botão é conforto, não trava: a trava é o backend, que
+ * recusa com 403 quem não é dono.
+ *
+ * Sem rede, fica o papel que já estava.
+ */
+async function conferirPapel() {
+  let resposta;
+  try {
+    resposta = await pedirComToken("/team");
+  } catch {
+    return;
+  }
+  if (!resposta || !resposta.ok) return;
+  const dados = await resposta.json().catch(() => null);
+  if (!dados) return;
+
+  const atual = ler();
+  if (!atual) return;
+  gravar({
+    ...atual,
+    perfil: { ...atual.perfil, papel: dados.isOwner ? "dono" : "operador" },
+    papelConferidoEm: new Date().toISOString(),
+  });
+}
+
 const rotas = express.Router();
+
+let papelTentado = false;
 
 /**
  * Quem está usando agora, e se pode trabalhar. A tela chama isto ao abrir.
@@ -250,7 +295,17 @@ const rotas = express.Router();
  * gravado é de uma hora atrás, no máximo — e o que muda nele muda uma vez na
  * vida da conta.
  */
-rotas.get("/eu", (_req, res) => {
+rotas.get("/eu", async (_req, res) => {
+  /*
+    Sessão gravada antes de o papel existir: descobre agora, UMA vez, e só
+    então responde. Sem isto, o dono que já estava logado abriria o programa
+    sem o botão do Painel até a conferência de uma hora passar.
+  */
+  if (ler() && !ler().papelConferidoEm && !papelTentado) {
+    // Uma tentativa por processo: sem rede, não pode segurar toda abertura.
+    papelTentado = true;
+    await conferirPapel().catch(() => null);
+  }
   res.json(perfilDaTela());
   const atual = ler();
   if (atual && !acessoFresco(atual)) {
@@ -406,6 +461,8 @@ rotas.post("/cadastrar", async (req, res) => {
       body: JSON.stringify(req.body || {}),
     });
     const dados = await resposta.json().catch(() => ({}));
+    // Plano pago na compra: o checkout já abre no navegador.
+    if (resposta.ok && dados.checkoutUrl) abrirPagamento(dados.checkoutUrl);
     res.status(resposta.status).json(dados);
   } catch {
     res.status(503).json({
@@ -413,6 +470,149 @@ rotas.post("/cadastrar", async (req, res) => {
       message: "O Optmize não conseguiu falar com o servidor. Confira a internet.",
     });
   }
+});
+
+/*
+ * ===========================================================================
+ * O PAINEL — os acessos dos funcionários
+ * ===========================================================================
+ *
+ * Repasse para o `/team` do backend, com o token que só este arquivo enxerga.
+ * Quem decide TUDO é o servidor: se a conta é a dona, se o plano comporta
+ * equipe, quantas vagas sobram, se o e-mail já existe. Aqui só se traduz o
+ * caminho e se devolve a resposta como veio — inclusive a mensagem de erro,
+ * que o backend já escreve em português.
+ *
+ * Desativar e excluir derrubam a sessão do funcionário lá no backend, na
+ * hora: não é preciso esperar o token dele vencer.
+ */
+async function repassar(res, rota, opcoes = {}) {
+  let resposta;
+  try {
+    resposta = await pedirComToken(rota, {
+      ...opcoes,
+      headers: opcoes.body ? { "Content-Type": "application/json" } : {},
+    });
+  } catch {
+    return res.status(503).json({
+      code: "sem_rede",
+      message: "O Optmize não conseguiu falar com o servidor. Confira a internet.",
+    });
+  }
+  if (!resposta) {
+    return res.status(401).json({ code: "fora", message: "Entre na conta de novo." });
+  }
+  if (resposta.status === 204) return res.status(204).end();
+  const dados = await resposta.json().catch(() => ({}));
+  res.status(resposta.status).json(dados);
+}
+
+rotas.get("/equipe", (_req, res) => repassar(res, "/team"));
+
+rotas.post("/equipe", (req, res) => {
+  const corpo = req.body || {};
+  return repassar(res, "/team/members", {
+    method: "POST",
+    body: JSON.stringify({
+      name: String(corpo.nome || "").trim(),
+      email: String(corpo.email || "").trim().toLowerCase(),
+      password: String(corpo.senha || ""),
+    }),
+  });
+});
+
+rotas.patch("/equipe/:id/ativo", (req, res) =>
+  repassar(res, `/team/members/${encodeURIComponent(req.params.id)}/active`, {
+    method: "PATCH",
+    body: JSON.stringify({ isActive: Boolean(req.body && req.body.ativo) }),
+  }));
+
+rotas.delete("/equipe/:id", (req, res) =>
+  repassar(res, `/team/members/${encodeURIComponent(req.params.id)}`, { method: "DELETE" }));
+
+/*
+ * ===========================================================================
+ * O PAGAMENTO NA HORA DA COMPRA
+ * ===========================================================================
+ *
+ * Essencial e Profissional são pagos no cadastro: o backend devolve o link do
+ * checkout do Mercado Pago, e este arquivo o abre no navegador da máquina. É
+ * o Node quem abre, e não a página: a interface roda dentro da janela do
+ * Tauri, que não é um navegador onde se paga com cartão.
+ *
+ * Quem libera a conta é o webhook do Mercado Pago, lá no backend. Aqui não se
+ * decide nada — a tela de espera só pergunta de novo.
+ */
+
+/**
+ * Só abre link de pagamento: Mercado Pago, ou o próprio backend (o checkout
+ * de mentira do ambiente de desenvolvimento). Qualquer outro endereço seria
+ * este servidor, alcançável pela rede da gráfica, abrindo o que lhe mandarem.
+ */
+function linkDePagamento(url) {
+  try {
+    const endereco = new URL(String(url));
+    const host = endereco.hostname;
+    if (endereco.origin === new URL(BACKEND).origin) return endereco.href;
+    if (endereco.protocol !== "https:") return null;
+    const doMercadoPago = /(^|\.)mercadopago\.com(\.br)?$/.test(host);
+    return doMercadoPago ? endereco.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function abrirPagamento(url) {
+  const link = linkDePagamento(url);
+  if (!link) return false;
+  /*
+    No Windows, `rundll32 url.dll` e não `cmd /c start`: o `start` lê o `&`
+    da URL como separador de comando e abriria o checkout cortado ao meio.
+  */
+  const [programa, argumentos] =
+    process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", link]]
+      : process.platform === "darwin" ? ["open", [link]]
+        : ["xdg-open", [link]];
+  try {
+    spawn(programa, argumentos, { detached: true, stdio: "ignore" }).unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Abre de novo o link que o cadastro devolveu (o botão "abrir o pagamento"). */
+rotas.post("/abrir-pagamento", (req, res) => {
+  const aberto = abrirPagamento(req.body && req.body.url);
+  if (!aberto) {
+    return res.status(400).json({ code: "link_invalido", message: "Este link de pagamento não é válido." });
+  }
+  res.json({ aberto: true });
+});
+
+/**
+ * Pede ao backend o checkout do plano da conta logada e o abre.
+ *
+ * É o "Pagar agora" da tela de espera: quem fechou o navegador antes de pagar
+ * volta a ele sem refazer o cadastro. O backend reaproveita o checkout
+ * pendente, então clicar de novo não cria uma segunda assinatura.
+ */
+rotas.post("/pagar", async (_req, res) => {
+  let resposta;
+  try {
+    resposta = await pedirComToken("/billing/checkout", { method: "POST" });
+  } catch {
+    return res.status(503).json({
+      code: "sem_rede",
+      message: "O Optmize não conseguiu falar com o servidor. Confira a internet.",
+    });
+  }
+  if (!resposta) {
+    return res.status(401).json({ code: "fora", message: "Entre na conta de novo." });
+  }
+  const dados = await resposta.json().catch(() => ({}));
+  if (resposta.ok && dados.checkoutUrl) abrirPagamento(dados.checkoutUrl);
+  res.status(resposta.status).json(dados);
 });
 
 rotas.post("/sair", (_req, res) => {

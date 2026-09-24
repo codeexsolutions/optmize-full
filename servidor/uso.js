@@ -3,7 +3,7 @@
  * A METRAGEM DO PLANO — pedir licença antes de exportar
  * ===========================================================================
  *
- * Cada plano dá uma METRAGEM por período: 150 m no Essencial, 800 m no
+ * Cada plano dá uma METRAGEM por período: 200 m no Essencial, 800 m no
  * Profissional, sem teto no Completo e no anual. O saldo cai conforme a
  * gráfica exporta — por METRO, e não por exportação, porque quem manda 2 m
  * para a impressora não pode gastar a mesma cota de quem manda 60 m.

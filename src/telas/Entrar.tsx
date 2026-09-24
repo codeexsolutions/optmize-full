@@ -51,6 +51,7 @@ import { Icone } from "../casca/Icone";
 import { encerrarEntrada, tocarEntrada } from "./Entrada";
 import { CriarConta } from "./CriarConta";
 import { mascararDocumento, Porta } from "./Porta";
+import { usePlanos } from "../estado/planos";
 
 export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
   /*
@@ -68,6 +69,14 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
   const [enviando, setEnviando] = useState(false);
   /** O cartão se desfazendo, enquanto a entrada no programa acende. */
   const [consumindo, setConsumindo] = useState(false);
+
+  /*
+    OS PLANOS JÁ SÃO PEDIDOS AQUI, enquanto a pessoa ainda está no login. Se
+    ela for criar conta, a lista chega pronta ao cadastro em vez de mostrar
+    "Buscando os planos…". Ver `estado/planos.ts`.
+  */
+  const carregarPlanos = usePlanos((e) => e.carregar);
+  useEffect(() => { carregarPlanos(); }, [carregarPlanos]);
   /** O olho da senha: ver o que se digitou poupa um telefonema. */
   const [senhaAberta, setSenhaAberta] = useState(false);
   /** O texto de "Esqueci a senha", que abre e fecha no mesmo botão. */
@@ -227,9 +236,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
           clique mais óbvio da linha seria justamente o pedaço morto.
         */}
         <label className="entrada-degrau flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-tinta-fraca">
-            CNPJ ou CPF da empresa
-          </span>
+          <span className="text-[11px] font-medium text-tinta-fraca">CNPJ ou CPF</span>
           <span className="relative flex items-center">
             <Icone
               referencia="icones.svg#file-text"
@@ -241,7 +248,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
               autoFocus
               value={documento}
               onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
-              placeholder="o CNPJ ou CPF da empresa aqui"
+              placeholder="CNPJ/CPF"
               className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 font-mono text-[14px] text-tinta outline-none transition-[border-color,box-shadow] placeholder:font-texto focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
             />
           </span>
@@ -260,7 +267,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu e-mail aqui"
+              placeholder="E-mail"
               className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
             />
           </span>
@@ -279,7 +286,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
               required
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
-              placeholder="sua senha aqui"
+              placeholder="Senha"
               className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-11 pl-10 text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
             />
             {/*
