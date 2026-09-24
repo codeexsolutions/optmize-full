@@ -4,6 +4,7 @@ import { montarProducao } from "./controlador";
 import { ProvedorDaLigacao, type Ligacao } from "./ligacao";
 import type { NomeDeTela } from "../rotas";
 import "./producao.css";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 /**
  * As telas que o controlador imperativo ainda desenha.
@@ -59,7 +60,7 @@ export function Producao({ pagina, irPara, children }: {
   const controle = useRef<ReturnType<typeof montarProducao> | null>(null);
   const navegar = useRef(irPara);
   navegar.current = irPara;
-  const [erro, setErro] = useState("");
+  const setErro = useErroEmAlerta("Não deu certo na produção");
 
   /** Se o editor está na página. Começa montado só se a tela for a dele. */
   const [montado, setMontado] = useState(() => ehProducaoIntegrada(pagina));
@@ -172,7 +173,6 @@ export function Producao({ pagina, irPara, children }: {
   return <ProvedorDaLigacao value={ligacao}>
     {montado && (
       <div ref={raiz} className="producao h-full" hidden={!ehProducaoIntegrada(pagina)}>
-        {erro && <p role="alert">{erro} <button type="button" onClick={() => setErro("")}>Fechar aviso</button></p>}
         <Estrutura />
       </div>
     )}

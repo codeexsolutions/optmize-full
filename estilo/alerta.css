@@ -1,0 +1,341 @@
+/*
+ * ===========================================================================
+ * O ALERTA (`src/casca/Alerta.tsx`) — o desenho do CodeEx Flow
+ * ===========================================================================
+ *
+ * As cores vêm por tipo, num token só (`--al-cor`), e dele sai todo o resto:
+ * o anel, o sinal, o halo, o fio de luz e o botão. Mudar a cor de um tipo é
+ * mudar uma linha aqui.
+ */
+
+[data-tipo] {
+  --al-cor: var(--accent);
+}
+[data-tipo="sucesso"]  { --al-cor: var(--success); }
+[data-tipo="erro"]     { --al-cor: var(--danger); }
+[data-tipo="aviso"]    { --al-cor: var(--warn); }
+
+/* ------------------------------------------------------------------ o véu */
+
+.alerta-veu {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(11, 11, 12, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: alerta-veu-entra .2s ease both;
+}
+.alerta-veu.fechando { animation: alerta-veu-sai .2s ease forwards; }
+
+/* ---------------------------------------------------------------- a caixa */
+
+.alerta-caixa {
+  position: relative;
+  width: 100%;
+  max-width: 390px;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 30px 26px 24px;
+  text-align: center;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: rgba(20, 20, 22, 0.86);
+  border: 1px solid rgba(244, 242, 239, 0.09);
+  backdrop-filter: blur(22px) saturate(1.8);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  box-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(0, 0, 0, 0.3);
+  animation: alerta-caixa-entra .34s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+.alerta-caixa.fechando { animation: alerta-caixa-sai .18s ease forwards; }
+
+/* O halo da cor do tipo, vindo de cima, atrás do conteúdo. */
+.alerta-brilho {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--al-cor) 22%, transparent) 0%, transparent 55%);
+}
+
+/* O fio de luz no topo. */
+.alerta-fio {
+  position: absolute;
+  top: 0;
+  left: 18%;
+  right: 18%;
+  height: 1px;
+  opacity: .8;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--al-cor), transparent);
+}
+
+.alerta-x {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(244, 242, 239, 0.04);
+  color: var(--text-faint);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease;
+}
+.alerta-x:hover { background: rgba(244, 242, 239, 0.08); color: var(--text); }
+
+/* ---------------------------------------------------------------- o ícone */
+
+.alerta-icone {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  margin: 0 auto 18px;
+}
+.alerta-icone svg { position: relative; display: block; }
+
+.alerta-halo {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--al-cor) 22%, transparent) 0%, transparent 70%);
+  animation: alerta-halo 2.4s ease-in-out infinite;
+}
+
+.alerta-anel,
+.alerta-trilho,
+.alerta-gira {
+  fill: none;
+  stroke: var(--al-cor);
+  stroke-width: 4;
+}
+.alerta-anel {
+  opacity: .9;
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  animation: alerta-desenha .5s cubic-bezier(.65, 0, .35, 1) forwards;
+}
+.alerta-trilho { opacity: .16; }
+.alerta-gira {
+  stroke-linecap: round;
+  transform-origin: 50% 50%;
+  animation: alerta-gira .9s linear infinite;
+}
+
+.alerta-sinal {
+  fill: none;
+  stroke: var(--al-cor);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: alerta-desenha .38s cubic-bezier(.65, 0, .35, 1) .32s forwards;
+}
+.alerta-sinal-2 { animation-delay: .42s; }
+.alerta-ponto { fill: var(--al-cor); }
+
+/* --------------------------------------------------------------- o texto */
+
+.alerta-kicker {
+  position: relative;
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.alerta-titulo {
+  position: relative;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+.alerta-texto {
+  position: relative;
+  margin-top: 8px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.alerta-campo {
+  position: relative;
+  width: 100%;
+  margin-top: 16px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.alerta-campo:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ------------------------------------------------------------- os botões */
+
+.alerta-botoes {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+}
+.alerta-botao {
+  flex: 1;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform .12s ease, filter .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.alerta-botao:hover { filter: brightness(1.07); }
+.alerta-botao:active { transform: translateY(1px) scale(.99); }
+.alerta-botao:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-cor) 35%, transparent); }
+
+.alerta-botao.secundario {
+  border: 1px solid rgba(244, 242, 239, 0.1);
+  background: rgba(244, 242, 239, 0.04);
+  color: var(--text);
+}
+.alerta-botao.secundario:hover { background: rgba(244, 242, 239, 0.08); }
+
+.alerta-botao.principal {
+  border: 0;
+  background: var(--al-cor);
+  color: #fff;
+  box-shadow: 0 6px 20px -8px var(--al-cor);
+}
+/* No amarelo e no verde o branco some; o texto escuro é o que se lê. */
+[data-tipo="aviso"] .alerta-botao.principal,
+[data-tipo="sucesso"] .alerta-botao.principal { color: #111; }
+.alerta-botao.principal.perigoso {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 6px 20px -8px var(--danger);
+}
+
+/* ---------------------------------------------------------------- o toast */
+
+.alerta-toast {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 360px;
+  overflow: hidden;
+  padding: 13px 15px;
+  border-radius: 16px;
+  font-family: var(--font-body);
+  background: rgba(20, 20, 22, 0.9);
+  border: 1px solid rgba(244, 242, 239, 0.09);
+  backdrop-filter: blur(18px) saturate(1.6);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.85);
+  animation: alerta-toast-entra .32s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+.alerta-toast.fechando { animation: alerta-toast-sai .2s ease forwards; }
+
+.alerta-toast-faixa {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--al-cor);
+}
+.alerta-toast-sinal {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--al-cor);
+  background: color-mix(in srgb, var(--al-cor) 18%, transparent);
+}
+.alerta-toast-sinal .alerta-trilho,
+.alerta-toast-sinal .alerta-gira { stroke-width: 2.5; }
+.alerta-toast-corpo { min-width: 0; flex: 1; }
+.alerta-toast-titulo { font-size: 13.5px; line-height: 1.3; color: var(--text); }
+.alerta-toast-texto { margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--text-dim); }
+.alerta-toast-x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+  cursor: pointer;
+}
+.alerta-toast-x:hover { background: rgba(244, 242, 239, 0.08); color: var(--text); }
+.alerta-toast-tempo {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2.5px;
+  opacity: .7;
+  transform-origin: left;
+  background: var(--al-cor);
+  animation-name: alerta-tempo;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+/* -------------------------------------------------------------- os passos */
+
+@keyframes alerta-veu-entra { from { opacity: 0; } to { opacity: 1; } }
+@keyframes alerta-veu-sai { to { opacity: 0; } }
+@keyframes alerta-caixa-entra {
+  0%   { opacity: 0; transform: translateY(14px) scale(.94); }
+  60%  { opacity: 1; transform: translateY(0) scale(1.01); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes alerta-caixa-sai { to { opacity: 0; transform: translateY(8px) scale(.96); } }
+@keyframes alerta-halo {
+  0%, 100% { transform: scale(1); opacity: .45; }
+  50%      { transform: scale(1.1); opacity: .7; }
+}
+@keyframes alerta-desenha { to { stroke-dashoffset: 0; } }
+@keyframes alerta-gira { to { transform: rotate(360deg); } }
+@keyframes alerta-toast-entra { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes alerta-toast-sai { to { opacity: 0; transform: translateY(-6px) scale(.98); } }
+@keyframes alerta-tempo { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/*
+ * Menos movimento: o sinal aparece já desenhado. O giro do carregamento NÃO
+ * para — desacelera —, porque é a única coisa na tela dizendo que o programa
+ * ainda está trabalhando.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .alerta-anel, .alerta-sinal { animation: none; stroke-dashoffset: 0; }
+  .alerta-halo, .alerta-caixa, .alerta-veu, .alerta-toast { animation: none; }
+  .alerta-gira { animation-duration: 3s; }
+}

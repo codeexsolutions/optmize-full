@@ -26,6 +26,9 @@
 /* A paleta vem primeiro, e fora de camada: é dela que todo o resto depende. */
 @import "./tokens.css";
 
+/* O alerta do programa (`src/casca/Alerta.tsx`). */
+@import "./alerta.css";
+
 @layer theme, base, components, utilities;
 
 @import "tailwindcss/theme.css" layer(theme);
@@ -432,56 +435,179 @@
 }
 
 /*
- * A CORTINA entre o login e a área de trabalho (`telas/Cortina.tsx`).
- * As três animações que o painel web faz com framer-motion.
+ * A ENTRADA no programa (`telas/Entrada.tsx`) — o efeito do CodeEx Flow.
+ *
+ * Só se anima `opacity`, `transform` e `filter`: são as propriedades que a
+ * placa de vídeo compõe sem recalcular a página, e a entrada continua lisa
+ * na máquina fraca do balcão.
  */
 
-@keyframes cortina-entra {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+.entrada-camada {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--bg);
+  animation: entrada-aparece .25s ease both;
+  transition: opacity .42s ease, transform .42s cubic-bezier(.22, .61, .36, 1), filter .42s ease;
 }
 
-.cortina-entra {
-  animation: cortina-entra .25s ease both;
+/* A camada se ABRE revelando o programa: cresce, desfoca e dissolve. */
+.entrada-camada.saindo {
+  opacity: 0;
+  transform: scale(1.12);
+  filter: blur(8px);
+  pointer-events: none;
 }
 
-@keyframes cortina-sobe {
-  from { opacity: 0; transform: translateY(12px) scale(.96); }
-  to   { opacity: 1; transform: none; }
+/* O halo que respira atrás do nome. */
+.entrada-halo {
+  position: absolute;
+  inset: 0;
+  width: 520px;
+  height: 520px;
+  margin: auto;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 28%, transparent), transparent 65%);
+  filter: blur(60px);
+  opacity: 0;
+  animation: entrada-halo 1.6s cubic-bezier(.22, .61, .36, 1) forwards;
 }
 
-.cortina-sobe {
-  animation: cortina-sobe .45s cubic-bezier(.2, .8, .3, 1) .1s both;
+/* As partículas do cartão que se desfez, subindo. */
+.entrada-particulas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.entrada-particulas span {
+  position: absolute;
+  top: 58%;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  opacity: 0;
+  animation: entrada-particula 1.4s ease-out both;
 }
 
-@keyframes cortina-pulsa {
-  0%, 100% { opacity: .40; transform: scale(1); }
-  50%      { opacity: .80; transform: scale(1.18); }
+/* O anel que se desenha (perímetro de r=46 ≈ 289). */
+.entrada-anel {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  pointer-events: none;
+}
+.entrada-anel circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: .6;
+  stroke-linecap: round;
+  stroke-dasharray: 289;
+  stroke-dashoffset: 289;
+  opacity: 0;
+  transform-origin: 50% 50%;
+  transform: rotate(-90deg);
+  animation: entrada-anel 1.8s ease-in-out forwards;
 }
 
-.cortina-pulsa {
-  animation: cortina-pulsa 2.4s ease-in-out infinite;
+.entrada-nome {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 24px;
+  text-align: center;
+}
+.entrada-kicker {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  animation: entrada-sobe-leve .4s ease .35s both;
+}
+.entrada-letras {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 12px 0 0;
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+/* `pre` guarda o espaço entre as palavras, que o flex comeria. */
+.entrada-letras span {
+  white-space: pre;
+  animation: entrada-letra .42s cubic-bezier(.22, .61, .36, 1) both;
+}
+.entrada-traco {
+  display: block;
+  width: 112px;
+  height: 1px;
+  margin-top: 24px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  transform: scaleX(0);
+  opacity: 0;
+  animation: entrada-traco .5s ease 1.1s forwards;
 }
 
-@keyframes cortina-gira {
-  to { transform: rotate(360deg); }
+@keyframes entrada-aparece { from { opacity: 0; } to { opacity: 1; } }
+@keyframes entrada-halo {
+  0%   { opacity: 0;  transform: scale(.4); }
+  60%  { opacity: .9; transform: scale(1.15); }
+  100% { opacity: .6; transform: scale(1); }
 }
-
-.cortina-gira {
-  animation: cortina-gira 1s linear infinite;
+@keyframes entrada-particula {
+  0%   { opacity: 0; transform: translateY(0); }
+  40%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(var(--subida)); }
 }
+@keyframes entrada-anel {
+  0%   { stroke-dashoffset: 289; opacity: 0; }
+  50%  { opacity: .7; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes entrada-sobe-leve { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes entrada-letra {
+  from { opacity: 0; transform: translateY(14px); filter: blur(6px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes entrada-traco { to { transform: scaleX(1); opacity: 1; } }
 
 /*
- * Quem pediu menos movimento recebe a cortina PARADA, e não sem cortina: ela
- * não é enfeite — é o que diz em nome de quem o programa abriu.
+ * O CARTÃO DO LOGIN SE DESFAZ enquanto a entrada acende — encolhe, desfoca e
+ * sobe um pouco. É ele que "vira" as partículas. Ver `Porta.tsx`.
+ */
+.porta-cartao {
+  transition: opacity .55s cubic-bezier(.22, .61, .36, 1), transform .55s cubic-bezier(.22, .61, .36, 1), filter .55s ease;
+}
+.porta-cartao.consumido {
+  opacity: 0;
+  transform: translateY(-12px) scale(.94);
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+/* O giro do "Entrando…" dentro do botão. */
+@keyframes gira { to { transform: rotate(360deg); } }
+.gira { animation: gira 1s linear infinite; }
+
+/*
+ * Menos movimento: sem partículas nem anel, o nome aparece inteiro de uma vez.
+ * O giro do botão desacelera em vez de parar — parado, parece travado.
  */
 @media (prefers-reduced-motion: reduce) {
-  .cortina-entra,
-  .cortina-sobe,
-  .cortina-pulsa,
-  .cortina-gira {
-    animation: none;
-  }
+  .entrada-particulas, .entrada-anel { display: none; }
+  .entrada-halo { animation: none; opacity: .6; }
+  .entrada-kicker, .entrada-letras span, .entrada-traco { animation: none; opacity: 1; transform: none; filter: none; }
+  .entrada-camada, .porta-cartao { transition-duration: .2s; }
+  .porta-cartao.consumido { transform: none; filter: none; }
+  .gira { animation-duration: 3s; }
 }
 
 /*

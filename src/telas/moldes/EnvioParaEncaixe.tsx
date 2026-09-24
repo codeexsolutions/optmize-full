@@ -36,6 +36,7 @@ import { carregarImagem, lerComoDataURL } from "../../utils/arquivoDeImagem";
 import { formatarNumero } from "../../utils/numero";
 import { useLigacao } from "../../producao/ligacao";
 import { emCm } from "./vocabulario";
+import { useErroEmAlerta } from "../../casca/Alerta";
 
 /** A prévia é pequena de propósito: serve para conferir, não para imprimir. */
 const LADO_DA_PREVIA = 260;
@@ -79,7 +80,7 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
   /** As estampas guardadas, cada uma com a quantidade pedida agora. */
   const [pedidos, setPedidos] = useState<Record<number, number>>({});
 
-  const [erro, setErro] = useState("");
+  const setErro = useErroEmAlerta("Não deu certo no envio");
   const [ocupado, setOcupado] = useState("");
 
   useEffect(() => {
@@ -469,7 +470,6 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
           </div>
 
           <p className="hint">{resumo}</p>
-          {erro && <p className="hint error">{erro}</p>}
         </div>
 
         <footer className="modal-rodape">

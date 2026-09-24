@@ -30,8 +30,8 @@ import { useEffect, useState } from "react";
 import { api } from "../api/cliente";
 import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
-import { Icone } from "../casca/Icone";
 import type { AjustesDoWhatsapp, EstadoDoWhatsapp } from "../impressoras/tipos";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 interface RespostaDeAjustes {
   settings: AjustesDoWhatsapp;
@@ -53,7 +53,7 @@ export function Whatsapp() {
   const estado = useDados<EstadoDoWhatsapp>(() => api.get<EstadoDoWhatsapp>("/impressoras/whatsapp/status"));
   const ajustes = useDados<RespostaDeAjustes>(() => api.get<RespostaDeAjustes>("/impressoras/whatsapp/settings"));
 
-  const [erro, setErro] = useState<string | null>(null);
+  const setErro = useErroEmAlerta("Não deu certo no WhatsApp");
   const [recado, setRecado] = useState<string | null>(null);
 
   // Enquanto está subindo ou mostrando QR, o estado muda sozinho no servidor:
@@ -177,12 +177,6 @@ export function Whatsapp() {
           </p>
         </details>
 
-        {erro && (
-          <p className="mt-2.5 mb-0 flex items-center gap-2 text-[0.8rem] text-alerta">
-            <Icone referencia="icones.svg#triangle-alert" className="size-4 shrink-0" />
-            {erro}
-          </p>
-        )}
         {recado && <p className="mt-2.5 mb-0 text-[0.8rem] text-certo">{recado}</p>}
       </Cartao>
 
@@ -202,7 +196,7 @@ function PainelDeAjustes({ dados, conectado, aoSalvar, aoTestar }: {
   dados: RespostaDeAjustes; conectado: boolean; aoSalvar: () => void; aoTestar: () => void;
 }) {
   const [ajustes, setAjustes] = useState(dados.settings);
-  const [erro, setErro] = useState<string | null>(null);
+  const setErro = useErroEmAlerta("Não deu certo no WhatsApp");
   const [salvando, setSalvando] = useState(false);
 
   // Os grupos só existem com a conexão de pé: pedi-los desconectado devolveria
@@ -311,7 +305,6 @@ function PainelDeAjustes({ dados, conectado, aoSalvar, aoTestar }: {
       )}
 
       {salvando && <p className="mt-2.5 mb-0 text-[0.78rem] text-tinta-apagada">Salvando...</p>}
-      {erro && <p className="mt-2.5 mb-0 text-[0.8rem] text-alerta">{erro}</p>}
     </Cartao>
   );
 }

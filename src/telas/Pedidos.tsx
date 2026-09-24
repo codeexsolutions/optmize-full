@@ -44,6 +44,7 @@ import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { dataBr, metros, metrosCurtos } from "../utils/formato";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 type AndamentoDoPedido = "aberto" | "pausado" | "concluido";
 type ResultadoDaCalandra = "pendente" | "ok" | "erro";
@@ -186,7 +187,7 @@ function ProgressoDaCalandra({ pedido }: { pedido: PedidoNaLista }) {
 function Detalhe({ id, aoMudar }: { id: string; aoMudar: () => void }) {
   const pedido = useDados<PedidoCompleto>(() => api.get<PedidoCompleto>(`/impressoras/pedidos/${id}`), [id]);
 
-  const [erro, setErro] = useState<string | null>(null);
+  const setErro = useErroEmAlerta("Não deu certo no pedido");
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
 
   const trocarAndamento = async (status: AndamentoDoPedido) => {
@@ -276,8 +277,6 @@ function Detalhe({ id, aoMudar }: { id: string; aoMudar: () => void }) {
           </li>
         ))}
       </ul>
-
-      {erro && <p className="mt-2.5 mb-0 text-[0.8rem] text-alerta">{erro}</p>}
 
       <div className="mt-3 flex gap-2">
         {confirmandoExclusao ? (

@@ -61,6 +61,7 @@ import { useDialogo } from "../casca/Dialogo";
 import { moldesApi, type Molde, type MoldeNaEstante } from "../api/moldes";
 import { EditorDeMolde } from "./moldes/EditorDeMolde";
 import { EnvioParaEncaixe } from "./moldes/EnvioParaEncaixe";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 /** Qual modal está na frente. `null` = só a estante. */
 type Aberto =
@@ -73,7 +74,7 @@ export function Moldes() {
   const [moldes, setMoldes] = useState<MoldeNaEstante[]>([]);
   const [aberto, setAberto] = useState<Aberto>(null);
   const ultimaAbertura = useRef(0);
-  const [erro, setErro] = useState("");
+  const setErro = useErroEmAlerta("Não deu certo nos moldes");
   /** O recado de "salvo, mas faltou arquivo em tal tamanho". */
   const [aviso, setAviso] = useState("");
   const [busca, setBusca] = useState("");
@@ -185,7 +186,6 @@ export function Moldes() {
 
       {/* ---------------------------------------------------------- A ESTANTE */}
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {erro && <p className="hint error mt-0!">{erro}</p>}
         {aviso && <p className="hint error mt-0!">{aviso}</p>}
 
         {moldes.length === 0 ? (

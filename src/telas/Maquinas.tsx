@@ -34,6 +34,7 @@ import { PainelDaVarredura } from "../impressoras/Procura";
 import { useVarredura } from "../impressoras/varredura";
 import { dataBr, metrosCurtos } from "../utils/formato";
 import type { AchadoDaVarredura, MaquinaGerenciada, RotasDaMaquina } from "../impressoras/tipos";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 export function Maquinas() {
   const cadastradas = useDados<MaquinaGerenciada[]>(
@@ -210,7 +211,7 @@ function Pendente({ achado, aoMudar }: { achado: AchadoDaVarredura; aoMudar: () 
   // "Impressora 04", não de "DESKTOP-I756TIT".
   const [nome, setNome] = useState(achado.host);
   const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const setErro = useErroEmAlerta("Não deu certo com a máquina");
 
   const cadastrar = async () => {
     if (!nome.trim()) { setErro("Dê um nome para a máquina antes de cadastrar."); return; }
@@ -269,8 +270,6 @@ function Pendente({ achado, aoMudar }: { achado: AchadoDaVarredura; aoMudar: () 
         </button>
       </div>
 
-      {erro && <Aviso texto={erro} />}
-
       <ListaDeRotas rotas={achado.paths} />
     </li>
   );
@@ -298,7 +297,7 @@ function Pendente({ achado, aoMudar }: { achado: AchadoDaVarredura; aoMudar: () 
  * painel, para de ser lida, e o histórico continua inteiro e consultável.
  */
 function Cadastrada({ maquina, aoMudar }: { maquina: MaquinaGerenciada; aoMudar: () => void }) {
-  const [erro, setErro] = useState<string | null>(null);
+  const setErro = useErroEmAlerta("Não deu certo com a máquina");
   const [ocupado, setOcupado] = useState(false);
   const [renomeando, setRenomeando] = useState(false);
   const [nome, setNome] = useState(maquina.name);
@@ -500,7 +499,6 @@ function Cadastrada({ maquina, aoMudar }: { maquina: MaquinaGerenciada; aoMudar:
       {!maquina.online && maquina.error && (
         <p className="mt-2 mb-0 text-[0.75rem] text-atencao">{maquina.error}</p>
       )}
-      {erro && <Aviso texto={erro} />}
 
       <ListaDeRotas rotas={maquina.paths} />
     </li>

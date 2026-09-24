@@ -30,6 +30,7 @@ import { api } from "../api/cliente";
 import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 interface Macro {
   id: string;
@@ -158,7 +159,7 @@ function CartaoDaMacro({ macro, temCorel, aoMudar }: {
   macro: Macro; temCorel: boolean; aoMudar: () => void;
 }) {
   const [ocupado, setOcupado] = useState<string | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
+  const setErro = useErroEmAlerta("Não deu certo com a macro");
   const [ondeSalvou, setOndeSalvou] = useState<string | null>(null);
 
   /**
@@ -267,8 +268,6 @@ function CartaoDaMacro({ macro, temCorel, aoMudar }: {
           {ondeSalvou}
         </p>
       )}
-
-      {erro && <p className="m-0 border-t border-linha px-3 py-2 text-[0.78rem] text-alerta">{erro}</p>}
 
       {macro.instalada ? (
         <p className="m-0 border-t border-linha px-3 py-2.5 text-[0.78rem] leading-relaxed text-tinta-apagada">

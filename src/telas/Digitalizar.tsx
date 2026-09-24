@@ -75,6 +75,7 @@ import {
   CELULAS_NO_LADO_MAIOR, ERRO_DE_CURVA_PADRAO, FORMATOS_DE_IMAGEM, areaDo, caixaDo,
   ehImagemDeMolde, riscosDosPixels, riscosEmCm, svgDosRiscos,
 } from "../motores/moldeDaImagem";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 type Lado = "largura" | "altura";
 type Ponto = { x: number; y: number };
@@ -132,7 +133,7 @@ export function Digitalizar() {
   const [nome, setNome] = useState("");
   const [imagem, setImagem] = useState<HTMLImageElement | null>(null);
   const [achado, setAchado] = useState<any>(null);
-  const [erro, setErro] = useState("");
+  const setErro = useErroEmAlerta("Não deu certo no Vetor");
   const [ocupado, setOcupado] = useState(false);
   const [erroDeCurva, setErroDeCurva] = useState(ERRO_DE_CURVA_PADRAO);
 
@@ -830,13 +831,6 @@ export function Digitalizar() {
               Foto tirada de lado sai torta: esta tela ainda não corrige perspectiva.
             </p>
           </div>
-        )}
-
-        {erro && (
-          <p className="m-0 flex items-start gap-2 text-[0.85rem] text-alerta">
-            <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-4 shrink-0" />
-            {erro}
-          </p>
         )}
 
         {imagem && (

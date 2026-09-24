@@ -27,6 +27,7 @@ import { api } from "../api/cliente";
 import { Icone } from "../casca/Icone";
 import { dataBr, metros, metrosCurtos } from "../utils/formato";
 import type { Registro } from "./tipos";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 interface ConferenciaDoItem {
   recordId: string;
@@ -46,14 +47,16 @@ interface Props {
 export function LancarPedido({ itens, aoFechar, aoCriar }: Props) {
   const [conferencia, setConferencia] = useState<ConferenciaDoItem[] | null>(null);
   const [observacao, setObservacao] = useState("");
-  const [erro, setErro] = useState<string | null>(null);
+  const setErro = useErroEmAlerta("Não deu certo no pedido");
+  /** A conferência falhou: o "Conferindo…" sai, e o alerta diz por quê. */
+  const [semConferencia, setSemConferencia] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
   // A conferência é pedida uma vez, quando a caixa abre. Ela lê o histórico
   // inteiro no servidor, então não é coisa de refazer a cada tecla.
   useEffect(() => {
     let cancelado = false;
-    setErro(null);
+    setSemConferencia(false);
 
     api
       .post<{ items: ConferenciaDoItem[] }>("/impressoras/pedidos/preview", {
@@ -63,11 +66,13 @@ export function LancarPedido({ itens, aoFechar, aoCriar }: Props) {
         if (!cancelado) setConferencia(resposta.items);
       })
       .catch((e: unknown) => {
-        if (!cancelado) setErro(e instanceof Error ? e.message : "Não consegui conferir os itens.");
+        if (cancelado) return;
+        setSemConferencia(true);
+        setErro(e instanceof Error ? e.message : "Não consegui conferir os itens.");
       });
 
     return () => { cancelado = true; };
-  }, [itens]);
+  }, [itens, setErro]);
 
   const confirmar = async () => {
     setSalvando(true);
@@ -110,15 +115,8 @@ export function LancarPedido({ itens, aoFechar, aoCriar }: Props) {
         </button>
       </div>
 
-      {!conferencia && !erro && (
+      {!conferencia && !semConferencia && (
         <p className="m-0 text-[0.82rem] text-tinta-fraca">Conferindo contra o histórico...</p>
-      )}
-
-      {erro && (
-        <p className="m-0 flex items-center gap-2 text-[0.82rem] text-alerta">
-          <Icone referencia="icones.svg#triangle-alert" className="size-4 shrink-0" />
-          {erro}
-        </p>
       )}
 
       {conferencia && (

@@ -37,6 +37,7 @@ import {
   nomeDaParte, novoIdDeParte, parteVazia, umArtigo,
   type ParteEmEdicao, type TipoDeMolde,
 } from "./vocabulario";
+import { useErroEmAlerta } from "../../casca/Alerta";
 
 /** Uma peça fechada, do jeito que o leitor de DXF/PLT/SVG/PDF a devolve. */
 interface DesenhoLido {
@@ -78,7 +79,7 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
   const [tamanhoNovo, setTamanhoNovo] = useState("");
 
   const [passo, setPasso] = useState(molde ? 3 : 1);
-  const [erro, setErro] = useState("");
+  const setErro = useErroEmAlerta("Não deu certo no molde");
   const [salvando, setSalvando] = useState(false);
 
   /*
@@ -595,7 +596,6 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
             </section>
           )}
 
-          {erro && <p className="hint error">{erro}</p>}
         </div>
 
         <footer className="modal-rodape">

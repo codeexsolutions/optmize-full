@@ -7,6 +7,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "../estilo/entrada.css";
 import { App } from "./App";
+import { ProvedorDeAlerta } from "./casca/Alerta";
+import { CamadaDeEntrada } from "./telas/Entrada";
 
 /*
  * O LINK ANTIGO, COM "#", CONTINUA LEVANDO À TELA CERTA
@@ -30,6 +32,14 @@ if (!raiz) throw new Error("Falta a <div id=\"raiz\"> no index.html.");
 
 createRoot(raiz).render(
   <StrictMode>
-    <App />
+    {/*
+      O ALERTA E A ENTRADA FICAM ACIMA DE TUDO. O login usa o alerta antes de
+      a casca existir, e a entrada precisa continuar na tela enquanto o login
+      é desmontado e o programa monta atrás dela (ver `telas/Entrada.tsx`).
+    */}
+    <ProvedorDeAlerta>
+      <App />
+      <CamadaDeEntrada />
+    </ProvedorDeAlerta>
   </StrictMode>,
 );

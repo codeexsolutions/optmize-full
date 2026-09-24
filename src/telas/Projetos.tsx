@@ -60,6 +60,7 @@ import { projetosApi, type Cliente, type Projeto, type ProjetoNaLista } from "..
 import { medidasDoArquivo, pixelsPorCmDoArquivo, PPCM_PADRAO } from "../motores/medidaDoArquivo";
 import { useLigacao } from "../producao/ligacao";
 import { carregarImagem } from "../utils/arquivoDeImagem";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 /**
  * A arte reduzida para caber na tela.
@@ -456,7 +457,7 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
   /** A caixa que pergunta quantas unidades, no caminho para o Encaixe. */
   const [perguntandoQuantas, setPerguntandoQuantas] = useState(false);
   const [pecas, setPecas] = useState<Peca[]>(projeto.pecas);
-  const [erro, setErro] = useState("");
+  const setErro = useErroEmAlerta("Não deu certo no projeto");
   const [status, setStatus] = useState("");
   const entrada = useRef<HTMLInputElement>(null);
 
@@ -838,12 +839,6 @@ function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
           </CampoDoAjuste>
         </div>
 
-        {erro && (
-          <p className="mt-4 mb-0 flex items-center gap-2 text-sm text-[var(--danger)]">
-            <Icone referencia="icones.svg#triangle-alert" className="size-4 shrink-0" />
-            {erro}
-          </p>
-        )}
       </div>
 
       {/*

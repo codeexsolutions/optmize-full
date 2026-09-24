@@ -57,7 +57,13 @@ const VANTAGENS = [
 export function Porta({
   children,
   rodape,
+  consumido = false,
 }: {
+  /**
+   * O cartão se desfaz: encolhe, desfoca e some, enquanto a entrada no
+   * programa acende por cima (ver `telas/Entrada.tsx`).
+   */
+  consumido?: boolean;
   /** O miolo do cartão. */
   children: ReactNode;
   /** O que vem debaixo do cartão, fora dele. */
@@ -178,7 +184,12 @@ export function Porta({
           mesma: é o que faz as duas telas parecerem o mesmo cartão com outro
           conteúdo dentro, em vez de duas telas parecidas.
         */}
-        <div className="entrada-sobe relative z-10 my-auto w-full max-w-[480px]">
+        {/*
+          A chegada (`entrada-sobe`) SAI quando o cartão é consumido: uma
+          animação com `both` segura o `transform` e a opacidade do fim dela,
+          e a transição de se desfazer não teria como mexer em nenhum dos dois.
+        */}
+        <div className={`${consumido ? "consumido" : "entrada-sobe"} porta-cartao relative z-10 my-auto w-full max-w-[480px]`}>
           {/* No computador a marca já está na coluna ao lado; aqui repetiria. */}
           <div className="mb-6 flex flex-col items-center gap-3 tela:hidden">
             <span className="relative grid place-items-center">

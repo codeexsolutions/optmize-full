@@ -71,6 +71,7 @@ import "react-alice-carousel/lib/alice-carousel.css";
 
 import { Icone } from "../casca/Icone";
 import { CAMPO, mascararDocumento, Porta, ROTULO } from "./Porta";
+import { useErroEmAlerta } from "../casca/Alerta";
 
 /** Em qual dos dois passos a pessoa está. */
 type Passo = "plano" | "dados";
@@ -254,7 +255,7 @@ export function CriarConta({
   /** O olho da senha, igual ao do login: ver o que se digitou poupa um erro. */
   const [senhaAberta, setSenhaAberta] = useState(false);
 
-  const [erro, setErro] = useState<string | null>(null);
+  const setErro = useErroEmAlerta("Não foi possível criar a conta");
   const [enviando, setEnviando] = useState(false);
   const [pronto, setPronto] = useState<{ liberado: boolean } | null>(null);
 
@@ -791,15 +792,6 @@ export function CriarConta({
             </span>
           </label>
         </fieldset>
-
-        {erro && (
-          <p
-            role="alert"
-            className="entrada-treme m-0 rounded-xl border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-2 text-[13px] text-[var(--danger)]"
-          >
-            {erro}
-          </p>
-        )}
 
         <button
           type="submit"

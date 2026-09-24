@@ -27,10 +27,11 @@
  * some junto com o `controlador.js`.
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
 import { Entrar } from "../telas/Entrar";
+import { encerrarEntrada } from "../telas/Entrada";
 import { Espera } from "../telas/Espera";
 import { ProvedorDeEscopos } from "./Escopos";
 import { useSessao } from "./usuario";
@@ -75,6 +76,22 @@ export function Casca() {
   // Quem está usando. Lido UMA vez aqui e passado adiante — ver a prop
   // `usuario` do Menu para por que a barra não lê sozinha.
   const sessao = useSessao();
+
+  /*
+    A ENTRADA SE ABRE QUANDO JÁ HÁ O QUE REVELAR.
+
+    O login toca a passagem e só então pede a sessão; esta é a outra ponta:
+    com o programa (ou a espera do pagamento) já desenhado atrás, a camada
+    cresce e dissolve. Um quadro depois do efeito, e não no efeito, para o
+    navegador ter pintado a tela nova antes de a camada começar a sair. Ver
+    `telas/Entrada.tsx`.
+  */
+  const dentro = sessao.estado === "dentro" || sessao.estado === "bloqueado";
+  useEffect(() => {
+    if (!dentro) return;
+    const quadro = requestAnimationFrame(() => encerrarEntrada());
+    return () => cancelAnimationFrame(quadro);
+  }, [dentro]);
 
   /**
    * Sair da conta, já confirmado.

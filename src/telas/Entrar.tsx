@@ -46,8 +46,9 @@
 
 import { useState } from "react";
 
+import { alerta } from "../casca/Alerta";
 import { Icone } from "../casca/Icone";
-import { Cortina, CORTINA_MS } from "./Cortina";
+import { tocarEntrada } from "./Entrada";
 import { CriarConta } from "./CriarConta";
 import { mascararDocumento, Porta } from "./Porta";
 
@@ -64,10 +65,9 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
   const [documento, setDocumento] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-  const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  /** Nome de quem entrou, enquanto a cortina está na tela. */
-  const [entrando, setEntrando] = useState<string | null>(null);
+  /** O cartão se desfazendo, enquanto a entrada no programa acende. */
+  const [consumindo, setConsumindo] = useState(false);
   /** O olho da senha: ver o que se digitou poupa um telefonema. */
   const [senhaAberta, setSenhaAberta] = useState(false);
   /** O texto de "Esqueci a senha", que abre e fecha no mesmo botão. */
@@ -78,7 +78,6 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
     if (enviando) return;
-    setErro(null);
     setEnviando(true);
     try {
       const resposta = await fetch("/api/sessao/entrar", {
@@ -92,7 +91,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
       });
       if (!resposta.ok) {
         const corpo = await resposta.json().catch(() => ({}));
-        setErro(corpo.message || "Não foi possível entrar agora.");
+        void alerta.erro("Não foi possível entrar", corpo.message || "Tente de novo em instantes.");
         /*
           SOLTA O BOTÃO AQUI, e não num `finally`.
 
@@ -102,39 +101,36 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
           destravava.
 
           Um `finally` resolveria esta linha e quebraria a de cima: no
-          sucesso o botão TEM de continuar travado, porque a cortina fica
-          meio segundo na tela antes de a casca trocar, e um botão que volta
-          a "Entrar" nesse intervalo convida a um segundo login.
+          sucesso o botão TEM de continuar travado, porque a entrada leva
+          dois segundos antes de a casca trocar, e um botão que volta a
+          "Entrar" nesse intervalo convida a um segundo login.
         */
         setEnviando(false);
         return;
       }
       /*
-        A CORTINA SOBE ANTES DE A CASCA TROCAR.
+        A ENTRADA ACENDE ANTES DE A CASCA TROCAR.
 
-        O `aoEntrar()` faz a casca reler a sessão e desenhar o programa — e é
-        justamente esse instante que a cortina existe para cobrir. Chamá-lo
-        primeiro e mostrar a cortina depois seria cobrir uma espera que já
-        aconteceu.
+        Não há mais a tela "Bom trabalho": a espera aconteceu aqui dentro, no
+        botão girando. O que vem agora é a passagem do Flow — o cartão se
+        desfaz, o nome aparece — e só quando ela termina o `aoEntrar()` faz a
+        casca reler a sessão e desenhar o programa. A camada da entrada
+        continua na tela até a casca avisar que montou (ver `Entrada.tsx`).
 
-        O nome vem da própria resposta do login, então a cortina já abre
-        dizendo de quem é a conta, sem uma segunda ida ao servidor.
+        O nome vem da própria resposta do login, sem segunda ida ao servidor.
       */
       const dados = await resposta.json().catch(() => null);
-      setEntrando((dados && dados.perfil && dados.perfil.nome) || "");
-      window.setTimeout(aoEntrar, CORTINA_MS);
+      setConsumindo(true);
+      await tocarEntrada((dados && dados.perfil && dados.perfil.nome) || "");
+      aoEntrar();
       return;
     } catch {
       // O servidor local não respondeu — é o Optmize fechando, ou ainda
       // subindo. Distinto de senha errada, e o texto tem de dizer isso.
-      setErro("O Optmize não respondeu. Feche e abra o programa de novo.");
+      void alerta.erro("O Optmize não respondeu", "Feche e abra o programa de novo.");
       setEnviando(false);
     }
   }
-
-  // A cortina cobre a tela inteira e FICA FORA do cartão: dentro dele, ela
-  // sumiria junto com o formulário ao trocar de tela.
-  if (entrando !== null) return <Cortina nome={entrando} />;
 
   /*
     O CADASTRO SUBSTITUI O LOGIN, em vez de abrir por cima dele.
@@ -162,6 +158,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
 
   return (
     <Porta
+      consumido={consumindo}
       rodape={
         <>
           {/*
@@ -196,7 +193,14 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
         </>
       }
     >
-      <form onSubmit={enviar} className="flex flex-col gap-5">
+      <form onSubmit={enviar}>
+        {/*
+          O "ENTRANDO" ACONTECE AQUI DENTRO, como no optmize-lite: o botão
+          gira e os campos travam enquanto o servidor confere a senha. O
+          `fieldset` desliga os campos todos de uma vez, sem um `disabled`
+          em cada um.
+        */}
+        <fieldset disabled={enviando} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
         <div className="entrada-degrau">
           <h2 className="m-0 font-titulo text-xl font-semibold text-tinta">Entrar</h2>
           <p className="mt-1 mb-0 text-[12px] text-tinta-apagada">
@@ -287,15 +291,6 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
           </span>
         </label>
 
-        {erro && (
-          <p
-            role="alert"
-            className="entrada-treme m-0 rounded-xl border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-2 text-[13px] text-[var(--danger)]"
-          >
-            {erro}
-          </p>
-        )}
-
         {/*
           ESQUECI A SENHA — acima do botão e à esquerda.
 
@@ -329,7 +324,10 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
           */
           className="entrada-degrau botao-entrar mt-1 w-full gap-2 px-4 text-[15px]"
         >
-          <Icone referencia="icones.svg#log-in" className="size-4" />
+          <Icone
+            referencia={enviando ? "icones.svg#loader-circle" : "icones.svg#log-in"}
+            className={`size-4${enviando ? " gira" : ""}`}
+          />
           {enviando ? "Entrando…" : "Entrar"}
         </button>
 
@@ -346,6 +344,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
             </p>
           </div>
         )}
+        </fieldset>
       </form>
     </Porta>
   );

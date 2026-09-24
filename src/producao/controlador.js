@@ -112,7 +112,28 @@ const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/<
     return new Promise((resolve) => { finish = resolve; });
   }
 
-  const uiConfirm = (text, options = {}) => open({
+  /*
+   * O ALERTA DO PROGRAMA, QUANDO ELE ESTÁ LÁ.
+
+   * A caixa daqui é a antiga, desenhada à mão no `#ui-dialog`. O alerta novo
+   * (`casca/Alerta.tsx`, no desenho do CodeEx Flow) deixa uma ponte em
+   * `window.__alertaOptmize`, e as três portas abaixo passam por ela — a
+   * mesma caixa do resto do programa. A antiga fica só de reserva, para o dia
+   * em que este editor rodar fora da casca.
+   */
+  const alertaNovo = () => window.__alertaOptmize;
+
+  const uiConfirm = (text, options = {}) => alertaNovo()
+    ? alertaNovo().mostrar({
+      tipo: options.danger !== false ? "aviso" : "pergunta",
+      titulo: options.title || "Confirmar ação",
+      kicker: options.kicker,
+      texto: text,
+      confirmar: options.confirmText || "Confirmar",
+      cancelavel: true,
+      perigoso: options.danger !== false,
+    }).then((r) => r.confirmado)
+    : open({
     title: options.title || "Confirmar ação",
     message: text,
     kicker: options.kicker || "CONFIRMAÇÃO",
@@ -120,7 +141,14 @@ const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/<
     cancel: true,
     danger: options.danger !== false
   });
-  const uiAlert = (text, options = {}) => open({
+  const uiAlert = (text, options = {}) => alertaNovo()
+    ? alertaNovo().mostrar({
+      tipo: options.danger ? "erro" : "aviso",
+      titulo: options.title || "Atenção",
+      kicker: options.kicker,
+      texto: text,
+    }).then(() => true)
+    : open({
     title: options.title || "Atenção",
     message: text,
     kicker: options.kicker || "AVISO DO SISTEMA",
@@ -133,7 +161,14 @@ const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/<
    * Pergunta que espera um texto de volta: devolve o que foi escrito, ou null
    * se a pessoa desistir.
    */
-  const uiPergunta = (options = {}) => open({
+  const uiPergunta = (options = {}) => alertaNovo()
+    ? alertaNovo().perguntar(options.titulo || "Digite", options.texto || undefined, {
+      kicker: options.kicker,
+      confirmar: options.confirmar || "Confirmar",
+      cancelavel: options.cancelavel !== false,
+      campo: { valor: options.valor, exemplo: options.exemplo },
+    })
+    : open({
     title: options.titulo || "Digite",
     message: options.texto || "",
     kicker: options.kicker || "",
@@ -293,7 +328,7 @@ function guardarResultado(valor) {
   const recusa = valor ? recusarPorSobreposicao(valor) : null;
   if (recusa) {
     valor.sobreposto = recusa;
-    mostrarErroEncaixe(recusa);
+    mostrarErroEncaixe(recusa, "aviso");
   }
   ultimoResultado = valor;
   if (!btnExportar) return valor;
@@ -324,7 +359,7 @@ function producaoTravada() {
 function recusouPorTrava() {
   const motivo = producaoTravada();
   if (!motivo) return false;
-  mostrarErroEncaixe(motivo);
+  mostrarErroEncaixe(motivo, "aviso");
   fecharMenuExportar();
   if (btnExportar) btnExportar.disabled = true;
   return true;
@@ -341,7 +376,25 @@ const CORES_PECA = coresDePeca();
 
 // ==================== ERROS ====================
 
-function mostrarErroEncaixe(msg) {
+/**
+ * Mostra um problema do Encaixe.
+ *
+ * Passa pelo alerta do programa (`casca/Alerta.tsx`): era uma linha vermelha
+ * embaixo da tabela, fácil de não ver com a mesa do risco ocupando a tela.
+ * `tipo` é "aviso" para o que a pessoa resolve na hora (um campo vazio, uma
+ * peça grande demais) e "erro" para o que deu errado de verdade.
+ */
+function mostrarErroEncaixe(msg, tipo = "erro") {
+  const alerta = window.__alertaOptmize;
+  if (alerta) {
+    encaixeError.classList.add("hidden");
+    void alerta.mostrar({
+      tipo,
+      titulo: tipo === "aviso" ? "Atenção" : "Não deu certo no encaixe",
+      texto: msg,
+    });
+    return;
+  }
   encaixeError.textContent = msg;
   encaixeError.classList.remove("hidden");
 }
@@ -873,7 +926,7 @@ async function emParalelo(quantidade, teto, tarefa) {
 async function adicionarArquivos(files) {
   if (!files || files.length === 0) return; // nada a fazer, e o painel nem abre
   if (carregamentoAtivo) {
-    mostrarErroEncaixe("Aguarde o trabalho atual terminar antes de adicionar outros arquivos.");
+    mostrarErroEncaixe("Aguarde o trabalho atual terminar antes de adicionar outros arquivos.", "aviso");
     return;
   }
 
@@ -2034,7 +2087,7 @@ function mostrarOfertaDoGuardado(guardado, consumoAgora) {
     const deu = await usarEncaixeGuardado(guardado);
     if (!deu) {
       botao.disabled = false;
-      mostrarErroEncaixe("As peças da tabela mudaram desde aquele encaixe; não dá para trazer de volta.");
+      mostrarErroEncaixe("As peças da tabela mudaram desde aquele encaixe; não dá para trazer de volta.", "aviso");
     }
   });
   encaixeGuardadoAviso.append(texto, botao);
@@ -2428,7 +2481,7 @@ async function optmizar() {
   redesenharMesaVazia();
 
   if (!larguraTecido || larguraTecido <= 0) {
-    mostrarErroEncaixe("Informe a largura do tecido em centímetros.");
+    mostrarErroEncaixe("Informe a largura do tecido em centímetros.", "aviso");
     return;
   }
   // A menor peça do trabalho tem que caber numa bancada. Sem esta conferência a
@@ -2438,7 +2491,7 @@ async function optmizar() {
     const menorLado = Math.min(...pecasEncaixe.map((p) => Math.min(p.largura, p.altura)));
     if (menorLado > comprimentoBancada) {
       mostrarErroEncaixe(`A bancada de ${comprimentoBancada} cm é menor que a menor peça do `
-        + `trabalho (${formatarCm(menorLado)}). Aumente a bancada ou deixe o campo vazio.`);
+        + `trabalho (${formatarCm(menorLado)}). Aumente a bancada ou deixe o campo vazio.`, "aviso");
       return;
     }
   }
@@ -2482,7 +2535,7 @@ async function optmizar() {
   });
 
   if (itens.length === 0) {
-    mostrarErroEncaixe("As peças precisam ter largura e altura maiores que zero.");
+    mostrarErroEncaixe("As peças precisam ter largura e altura maiores que zero.", "aviso");
     finalizarCarregamento("com-erro");
     btnEncaixar.disabled = false;
     btnEncaixar.textContent = "Optmizar";
@@ -2705,7 +2758,7 @@ async function optmizar() {
     // Um resultado sem todas as peças parece consumir menos tecido. Guardá-lo
     // como recorde faria as próximas buscas restaurarem um trabalho incompleto.
     if (producaoTravada() || ultimoResultado.naoEncaixadas.length > 0) {
-      if (!producaoTravada()) mostrarErroEncaixe("Há peças fora do tecido. Este resultado não foi guardado como recorde.");
+      if (!producaoTravada()) mostrarErroEncaixe("Há peças fora do tecido. Este resultado não foi guardado como recorde.", "aviso");
       finalizarCarregamento("com-erro");
       return;
     }
