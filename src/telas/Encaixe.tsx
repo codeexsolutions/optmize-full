@@ -36,16 +36,6 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 
-<button id="btn-limpar-pecas" className="hidden grid size-7 shrink-0 place-items-center rounded-md text-tinta-apagada transition-colors hover:text-[var(--danger)]" type="button" title="Limpar a lista">
-
-<svg className="size-[15px]" viewBox="0 0 24 24" aria-hidden="true">
-<use href="icones.svg#trash-2">
-
-</use>
-</svg>
-
-</button>
-
 </span>
 
 </div>
@@ -94,9 +84,23 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </div>
 
-<button id="btn-encaixar" className="btn primary w-full justify-center">
+<div className="flex items-stretch gap-2">
+
+<button id="btn-encaixar" className="btn primary min-w-0 flex-1 justify-center">
 {"Optmizar"}
 </button>
+
+<button id="btn-limpar-pecas" className="btn secondary hidden shrink-0 px-3!" type="button" title="Limpar a lista" aria-label="Limpar a lista">
+
+<svg className="size-[15px]" viewBox="0 0 24 24" aria-hidden="true">
+<use href="icones.svg#trash-2">
+
+</use>
+</svg>
+
+</button>
+
+</div>
 
 </div>
 

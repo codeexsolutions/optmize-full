@@ -1009,7 +1009,27 @@ escopo.ouvir(encaixeFilesInput, "change", async () => {
   encaixeFilesInput.value = ""; // permite reenviar o mesmo arquivo depois
 });
 
-escopo.ouvir(btnLimparPecas, "click", () => {
+/*
+ * LIMPAR A LISTA PERGUNTA ANTES — e não perguntava.
+ *
+ * Enquanto ele era um ícone de 28px escondido no alto da coluna, não
+ * perguntar era defensável: ninguém esbarra ali. Agora ele está colado no
+ * Optmizar, que é o botão mais apertado da tela — e um clique dois
+ * centímetros ao lado jogaria fora a lista inteira e o risco, sem desfazer.
+ *
+ * `uiConfirm` e não `confirm` do navegador: a caixa nativa TRAVA a página, e
+ * esta tela passa minutos calculando (ver o cabeçalho do diálogo).
+ */
+escopo.ouvir(btnLimparPecas, "click", async () => {
+  if (!pecasEncaixe.length) return;
+
+  const quantas = pecasEncaixe.length === 1
+    ? "a peça da lista"
+    : `as ${pecasEncaixe.length} peças da lista`;
+  const comRisco = ultimoResultado ? " O risco que está na tela sai junto." : "";
+
+  if (!(await uiConfirm(`Tirar ${quantas}?${comRisco}`))) return;
+
   pecasEncaixe = [];
   guardarResultado(null);
   encaixeResultado.classList.add("hidden");
