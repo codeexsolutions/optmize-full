@@ -611,4 +611,62 @@
   outline-offset: 2px;
 }
 
+/*
+ * A LETRA DA CASA, NA RAIZ.
+ *
+ * O `html` e o `body` estavam sem família nenhuma: o Tailwind entra aqui sem
+ * o preflight (ver o alto deste arquivo), e sem ele ninguém declara a fonte
+ * base. Funcionava porque toda tela pede a fonte pelo nome — mas o dia em que
+ * alguém escrevesse um `<p>` solto, ele sairia em Times New Roman.
+ *
+ * `:where` para não brigar com ninguém: é piso, não teto.
+ */
+:where(html, body) {
+  font-family: var(--font-body);
+}
 
+/*
+ * ===========================================================================
+ * O PESO DA LETRA — tudo leve, de uma vez
+ * ===========================================================================
+ *
+ * A tela inteira foi escrita com `font-semibold` e `font-bold` espalhados por
+ * ~40 arquivos, e trocar um por um seria quarenta chances de esquecer um.
+ * Aqui o peso é achatado no fim da folha, e vale para o que já existe e para
+ * o que for escrito amanhã.
+ *
+ * O TETO É 500. Não é birra com negrito: é que hierarquia em tela escura se
+ * faz melhor com COR e ESPAÇO do que com gordura — o texto claro sobre fundo
+ * escuro já parece mais pesado do que é (o brilho "vaza" para os lados), e um
+ * 700 em cima disso vira borrão. O que separa título de texto passa a ser o
+ * tamanho e o tom, que é como o Flow faz.
+ *
+ * FORA DE CAMADA, de propósito: as classes do Tailwind moram em
+ * `@layer utilities`, e CSS sem camada ganha de CSS em camada por mais
+ * específica que a outra seja. É o que faz um `font-bold` escrito no JSX
+ * obedecer sem precisar de `!important` nenhum.
+ *
+ * QUEM QUISER MAIS PESO usa `style={{ fontWeight: 600 }}` — inline ganha
+ * disto aqui. Ficou difícil de propósito: é para ser exceção pensada, não o
+ * reflexo de quem quer destacar alguma coisa.
+ */
+:where(html) :is(.font-bold, .font-semibold, b, strong, h1, h2, h3, h4, h5, h6) {
+  font-weight: 500;
+}
+
+:where(html) .font-medium {
+  font-weight: 400;
+}
+
+/*
+ * OS NÚMEROS CONTINUAM ALINHANDO.
+ *
+ * Era a IBM Plex Mono que fazia isso — e ela saiu. `tabular-nums` devolve a
+ * função sem a letra de máquina de escrever: numa lista de metragens, o 1 e o
+ * 8 ocupam a mesma largura e as colunas ficam no prumo. Vale onde a tela pedia
+ * "mono", que é exatamente onde há número: versão, CNPJ, metragem, relógio.
+ */
+:where(html) :is(.font-mono, .tabular) {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}

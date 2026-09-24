@@ -17,9 +17,34 @@
  * quantidades diferentes para o mesmo arquivo conforme a porta de entrada.
  */
 
+/*
+ * O X PODE VIR REPETIDO: "2XX", "3XX", "10XXXX".
+ *
+ * É como parte das gráficas escreve, e o leitor antigo exigia um X só —
+ * "frente 2XX" chegava ao encaixe como UMA peça, e o operador só descobria
+ * depois de mandar para a impressora. O `+` no X resolve os três casos de
+ * uma vez, e não abre porta nenhuma: o que decide se aquilo é quantidade
+ * continua sendo o que vem DEPOIS do X (fim do nome ou separador).
+ *
+ * O TAMANHO CONTINUA DE FORA, e é o caso que prova a regra: "camisa 2XG" tem
+ * um G depois do X, que não é fim nem separador — então não é quantidade, é
+ * tamanho, e a camisa continua sendo uma. Mesmo para "2XL" e "3XG".
+ *
+ * A MEDIDA TAMBÉM: "bandeira 30x40" é mascarada antes da procura (logo
+ * abaixo), porque tem número dos dois lados do x.
+ */
 const PADROES_QTD = [
-  /(^|[^\d])(\d{1,4})\s*[xX](?=$|[\s._\-)\]])/,   // "5x", "12 x", "costas-8x", "manga4x"
-  /(^|[^\d\0])[xX]\s*(\d{1,4})(?=$|[\s._\-)\]])/, // "x5", "x 12"
+  // "5x", "12 x", "costas-8x", "manga4x", "2XX", "10XXXX"
+  /(^|[^\d])(\d{1,4})\s*[xX]+(?=$|[\s._\-)\]])/,
+  /*
+    "x5", "x 12", "XX3" — o X vem na frente.
+
+    A BORDA AQUI É MAIS ESTREITA que a de cima, e de propósito: exigir início
+    ou separador antes do X impede que "max 3.png" vire três peças chamadas
+    "ma". Na de cima o número vem antes do X, e aí "manga4x" é claro o
+    bastante para não precisar de borda.
+  */
+  /(^|[\s._\-([])[xX]+\s*(\d{1,4})(?=$|[\s._\-)\]])/,
 ];
 
 export function lerQuantidadeDoNome(nomeArquivo) {

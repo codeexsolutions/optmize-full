@@ -539,8 +539,15 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
     return g;
   };
 
-  // ── A superfície ─────────────────────────────────────────────────────────
-  ctx.fillStyle = sumindo("#171d21", "rgba(23, 29, 33, 0)");
+  /*
+   * ── A SUPERFÍCIE ─────────────────────────────────────────────────────────
+   *
+   * Um cinza QUENTE, e não o azulado de antes (`#171d21`). A interface inteira
+   * é quente (o fundo é `#0b0b0c` com o laranja lavando as bordas), e a mesa
+   * azulada era a única coisa fria da tela — lia como um retângulo colado de
+   * outro programa.
+   */
+  ctx.fillStyle = sumindo("#16120f", "rgba(22, 18, 15, 0)");
   ctx.fillRect(0, 0, largura, alturaDoTecido);
 
   /*
@@ -581,8 +588,21 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
     ctx.stroke();
   };
 
-  if (passo5 > 3) malha(passo10, passo5, "#1e262b", "rgba(30, 38, 43, 0)");
-  malha(passo10, 0, "#2b3438", "rgba(43, 52, 56, 0)");
+  /*
+   * A GRADE É LARANJA, no acento da marca e em opacidade baixa.
+   *
+   * Era cinza-azulada, e o laranja aparecia só na borda da mídia — a malha
+   * ficava sendo de outro programa. Em laranja ela vira parte da mesma tela,
+   * e a borda continua sendo o traço FORTE porque é opaca, enquanto a grade
+   * vive em 6% e 13%.
+   *
+   * OS NÚMEROS SÃO BAIXOS DE PROPÓSITO. A grade é referência de medida, não
+   * desenho: ela tem de estar lá quando o olho procura e sumir quando o olho
+   * olha para a peça. Acima de uns 15% o laranja começa a disputar com as
+   * peças encaixadas, que são o que interessa ali.
+   */
+  if (passo5 > 3) malha(passo10, passo5, "rgba(255, 83, 31, 0.06)", "rgba(255, 83, 31, 0)");
+  malha(passo10, 0, "rgba(255, 83, 31, 0.13)", "rgba(255, 83, 31, 0)");
 
   /*
    * ── A BORDA DA MÍDIA, em três lados ──────────────────────────────────────

@@ -34,6 +34,7 @@
     "bancada:qualidade": "node bancada/conferir-qualidade-encaixe.cjs",
     "bancada:encolher": "node bancada/conferir-encolher.js",
     "bancada:arte-cmyk": "node bancada/conferir-arte-cmyk.cjs",
+    "bancada:nomes": "node bancada/conferir-nome-de-arquivo.mjs",
     "tipos": "tsc --noEmit",
     "app": "npm run front && tauri dev",
     "build:app": "npm run front && node empacotar/instalador.js",

@@ -94,9 +94,28 @@
   --radius: 12px;
   --radius-sm: 9px;
 
-  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
-  --font-body: "Inter", "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", Consolas, monospace;
+  /*
+   * UMA FAMÍLIA SÓ: Inter, em tudo.
+   *
+   * Eram três — Space Grotesk nos títulos, Inter no texto, IBM Plex Mono nos
+   * números. Três desenhos de letra numa tela de trabalho é ruído: o olho
+   * gasta um tempinho reconhecendo cada um, e num programa que fica aberto o
+   * dia inteiro esse tempinho é o que faz a interface parecer "cheia".
+   *
+   * Os três tokens continuam existindo porque a tela inteira os usa pelo
+   * nome, e porque eles dizem a INTENÇÃO (título, texto, número) — que
+   * continua valendo mesmo com a mesma letra atrás dos três. No dia em que
+   * uma delas precisar de outra família, muda aqui e só aqui.
+   */
+  --font-display: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  /*
+   * O "mono" perdeu a fonte monoespaçada, mas não o que ela fazia: os números
+   * continuam alinhando em coluna por `font-variant-numeric: tabular-nums`
+   * (ver `entrada.css`). É o que importava numa lista de metragens — a letra
+   * de máquina de escrever era efeito, o alinhamento era função.
+   */
+  --font-mono: "Inter", "Segoe UI", system-ui, sans-serif;
 }
 
 /* Identificação das peças no risco, preservada da tela original. */

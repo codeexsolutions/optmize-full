@@ -225,32 +225,32 @@ const ICONE_ATIVO = "text-ambar drop-shadow-[0_0_5px_var(--accent-line)]";
 
 /*
  * ---------------------------------------------------------------------------
- * OS ITENS DO PÉ — Sobre, Conta e Sair
+ * OS ÍCONES DO PÉ — Sobre, Conta e Sair
  * ---------------------------------------------------------------------------
  *
- * MENORES QUE OS DA LISTA, de propósito: 34px contra 44px, ícone de 16 contra
- * 20, texto de 12,5 contra 14. A diferença de tamanho é o que diz, sem
- * palavra nenhuma, que ali embaixo não é trabalho — são três coisas que se
- * procuram de vez em quando, e dar a elas o mesmo peso das telas de produção
- * faria a barra parecer ter nove destinos igualmente importantes.
+ * SÓ O ÍCONE, num alvo quadrado de 28px. Eles já foram três linhas com rótulo
+ * escrito, empilhadas: ocupavam ~100px do pé para dizer três palavras que
+ * ninguém lê duas vezes. Ao lado do nome de quem está logado — que é onde eles
+ * passaram a viver —, o rótulo por extenso empurraria o nome para as
+ * reticências, e "Configurações da conta" é a mais comprida das três.
+ *
+ * O `title` e o `aria-label` de cada um continuam dizendo o nome inteiro: o
+ * desenho perde a palavra, não a informação.
  *
  * E SEM A BARRINHA ÂMBAR do ativo: o indicador da lista existe para dizer "a
  * tela aberta é esta". Repeti-lo aqui criaria dois lugares acesos ao mesmo
  * tempo quando alguém abre o Sobre — a lista apagada e o pé aceso —, e o olho
- * perderia a referência de onde está. No pé, o aberto é só o texto em âmbar.
+ * perderia a referência de onde está. No pé, o aberto é só o ícone em âmbar.
  */
 const PE_ITEM =
-  "grid min-h-[34px] grid-cols-[16px_minmax(0,1fr)] items-center gap-2.5 rounded-lg" +
-  " border-0 bg-transparent px-2.5 py-1 text-left no-underline transition-colors duration-100" +
-  " tela:max-[1100px]:grid-cols-[1fr] tela:max-[1100px]:justify-items-center tela:max-[1100px]:px-0";
+  "grid size-7 shrink-0 place-items-center rounded-lg border-0 bg-transparent p-0" +
+  " no-underline transition-colors duration-100";
 
 const PE_PARADO = "text-tinta-apagada hover:bg-[var(--surface-hover)] hover:text-tinta";
 
 const PE_ATIVO = "text-ambar-claro";
 
 const PE_ICONE = "size-4 shrink-0";
-
-const PE_TEXTO = "truncate text-[12.5px] font-medium tela:max-[1100px]:hidden";
 
 export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
   const dialogo = useDialogo();
@@ -346,119 +346,62 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
         />
 
         {/*
-          O CABEÇALHO: QUEM ESTÁ USANDO O PROGRAMA.
+          A CABEÇA DA BARRA: DE QUEM É ESTE PROGRAMA.
 
-          AQUI MORAVA A MARCA — o logo, o nome e "Moldes & encaixe" —, e ela
-          saiu justamente por ocupar ~70px de altura para dizer uma coisa que
-          não muda, num programa que se abre o dia inteiro. O logo desceu para
-          o pé e o alto virou a lista de telas.
+          Aqui morava o cartão de quem está USANDO — avatar, nome, empresa e um
+          ícone de sair —, e ele desceu para o pé. No lugar dele voltou a
+          marca, com a empresa embaixo.
 
-          O que volta agora NÃO é a marca: é a conta. A diferença é que isto
-          muda, e importa saber. O sistema está deixando de ser um programa por
-          máquina e virando UMA EMPRESA COM VÁRIOS ACESSOS — cada pessoa entra
-          com a própria conta, e o que ela faz fica no nome dela. Numa fábrica
-          onde três pessoas dividem o mesmo computador, "em nome de quem este
-          encaixe vai sair?" é a primeira pergunta do dia, e o lugar de
-          respondê-la é o alto da barra, antes de qualquer tela.
+          A divisão é a do Flow, e ela responde duas perguntas diferentes em
+          dois lugares: em cima, de quem é a casa (o programa e a gráfica que
+          assina a licença); embaixo, quem está sentado nesta máquina agora.
+          Juntas num bloco só, as duas se misturavam — o nome da pessoa colado
+          no nome da empresa parecia um endereço.
 
-          POR ENQUANTO É UM USUÁRIO DE TESTE, fixo em `casca/usuario.ts`. Não
-          há login ainda; há a tela dele. O valor é de mentira, o formato não —
-          ver o cabeçalho daquele arquivo para o que troca no dia em que a
-          autenticação existir (resposta curta: a função `usuarioAtual()`, e
-          nada aqui).
-
-          O bloco é uma FAIXA, igual à do pé: sangra até as duas bordas
-          (`-mx-[10px]`) e até o topo (`-mt-4`, o `pt` da barra devolvido), com
-          fundo sólido separando-o do degradê. A barra passa a ter cabeça,
-          corpo e pé — três superfícies, e a lista de telas no meio, que é onde
-          o olho deve cair.
-
-          O BLOCO CONTINUA SENDO UMA `<div>`: não há tela de conta para onde
-          ir, e um bloco inteiro que parece botão e não leva a lugar nenhum é
-          pior que um bloco parado. O que é clicável é só o ícone de sair, no
-          canto — uma ação, num alvo do tamanho dela.
+          A EMPRESA SAIU DO PÉ por isto: ela é da instalação, não da sessão.
+          Repeti-la nos dois cantos gastaria duas linhas para dizer o mesmo.
         */}
-        {usuario && (
-          <div
-            title={`${usuario.nome} — ${usuario.empresa}`}
-            /*
-              `px-7` são 28px, e eles não são estéticos: é exatamente onde
-              começa a coluna de ícones da lista (12px do `px-3` da barra, mais
-              4px do `px-1` do contêiner, mais 12px do `px-3` do item). Antes
-              eram 21px contra 24px dos ícones — três pixels de diferença, que
-              ninguém mede e todo mundo sente: o avatar pairava fora do prumo
-              da coluna. Mexer no recuo do item obriga a mexer aqui junto.
-            */
-            className="-mx-3 -mt-4 mb-4 shrink-0 border-b border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-7 py-4 curta:mb-2 curta:py-3"
-          >
-            <div className="flex items-center gap-3 tela:max-[1100px]:justify-center">
-              {/*
-                O AVATAR: as iniciais num quadrado de canto arredondado.
+        <div className="-mx-3 -mt-4 mb-4 flex shrink-0 items-center gap-2.5 border-b border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-4 py-3 curta:mb-2 curta:py-2 tela:max-[1100px]:justify-center tela:max-[1100px]:px-0">
+          {/*
+            O HALO ATRÁS DA MARCA é o mesmo da porta de entrar (`porta-pulsa`),
+            e aqui ele NÃO pulsa: na porta o movimento diz "o programa está
+            vivo" para quem espera; numa barra que fica aberta oito horas ele
+            seria uma luz piscando no canto do olho o dia inteiro.
+          */}
+          <span className="relative grid shrink-0 place-items-center">
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -inset-1.5 rounded-full bg-ambar opacity-25 blur-md"
+            />
+            <img
+              src={`${import.meta.env.BASE_URL}icone.png`}
+              alt=""
+              className="relative size-[30px] rounded-[9px]"
+            />
+          </span>
 
-                Quadrado, e não círculo: o arredondamento de 9px é o mesmo dos
-                itens do menu e do botão do pé, e um círculo no meio disso
-                seria a única forma redonda da barra inteira.
+          {/*
+            Na barra estreita o texto vira `sr-only`, como no pé: some da vista
+            e continua sendo lido. A marca sozinha basta para o olho, não para
+            quem ouve a tela.
+          */}
+          <span className="min-w-0 flex-1 tela:max-[1100px]:sr-only">
+            <span className="block truncate font-titulo text-[13px] leading-[1.25] tracking-[-0.01em]">
+              <span className="text-tinta-fraca">CodeEx </span>
+              <span className="text-ambar">Optmize</span>
+            </span>
+            {/*
+              A EMPRESA, ou o que o programa faz enquanto não há conta.
 
-                As cores são as do acento em brilho baixo — o mesmo par
-                (`--accent-soft` no fundo, `--accent-line` na borda) que o item
-                ativo usa. Sem foto, é o que dá ao bloco a marca da casa em vez
-                de um quadrado cinza.
-              */}
-              <span
-                aria-hidden="true"
-                className="grid size-[30px] shrink-0 place-items-center rounded-[9px] border border-[var(--accent-line)] bg-[var(--accent-soft)] font-mono text-[11px] font-semibold text-ambar tela:max-[1100px]:size-[32px]"
-              >
-                {iniciais(usuario.nome)}
-              </span>
-
-              {/*
-                Na barra estreita o texto vira `sr-only` em vez de `hidden`:
-                some da vista mas continua sendo lido, senão o avatar ficaria
-                sozinho e mudo — um quadrado com duas letras não diz a ninguém
-                de quem é a conta.
-              */}
-              <span className="min-w-0 flex-1 tela:max-[1100px]:sr-only">
-                <span className="block truncate font-titulo text-[12.5px] leading-[1.3] font-semibold tracking-[-0.01em] text-tinta">
-                  {usuario.nome}
-                </span>
-                {/*
-                  SÓ A EMPRESA. O papel (dono, operador…) continua no dado, em
-                  `usuario.ts`, mas não aparece aqui: quem está usando o
-                  programa já sabe o próprio cargo, e ler "Dono" na barra o dia
-                  inteiro não muda nada do que a pessoa vai fazer. O lugar do
-                  papel é onde ele TEM efeito — na tela que lista os membros da
-                  empresa, e no botão que a pessoa não pode apertar.
-                */}
-                <span className="block truncate font-mono text-[10px] leading-[1.35] tracking-[0.02em] text-tinta-apagada">
-                  {usuario.empresa}
-                </span>
-              </span>
-
-              {/*
-                SAIR.
-
-                Um ícone, e não um botão com a palavra: o bloco tem 28px de
-                respiro de cada lado e o nome da pessoa já disputa a largura —
-                "Sair" escrito empurraria o nome para as reticências.
-
-                O aviso antes de sair NÃO é cerimônia. Sair apaga a sessão
-                guardada, e a próxima abertura volta a pedir a senha; num
-                computador compartilhado da produção, um clique acidental no
-                fim do expediente deixa o turno seguinte parado na porta sem
-                saber a senha de ninguém.
-              */}
-              <button
-                type="button"
-                onClick={pedirParaSair}
-                title="Sair da conta"
-                aria-label="Sair da conta"
-                className="grid size-7 shrink-0 place-items-center rounded-md text-tinta-apagada transition-colors hover:bg-[var(--surface-hover)] hover:text-tinta tela:max-[1100px]:hidden"
-              >
-                <Icone referencia="icones.svg#log-out" className="size-4" />
-              </button>
-            </div>
-          </div>
-        )}
+              O segundo caso é a bancada e o primeiro minuto antes do login —
+              deixar a linha vazia ali faria a marca dançar para cima quando a
+              conta chegasse.
+            */}
+            <span className="block truncate font-mono text-[9px] leading-[1.35] tracking-[0.06em] text-tinta-apagada uppercase">
+              {usuario?.empresa || "Moldes & encaixe"}
+            </span>
+          </span>
+        </div>
 
         {/*
           Um <nav> por grupo, cada um rotulado pelo próprio título. É o que faz
@@ -551,63 +494,133 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
           Na barra estreita (78px) sobram os três ícones, centrados: o rótulo
           não cabe em 58px úteis, e o `title` de cada um diz o nome.
         */}
-        <div className="-mx-3 -mb-4 mt-4 flex shrink-0 flex-col gap-0.5 border-t border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-4 py-3">
-          <NavLink
-            to="/sobre"
-            onClick={aoFechar}
-            title="Sobre o Optmize"
-            className={({ isActive }) => [PE_ITEM, isActive ? PE_ATIVO : PE_PARADO].join(" ")}
-          >
-            <Icone referencia="icones.svg#info" className={PE_ICONE} />
-            <span className={PE_TEXTO}>Sobre</span>
-          </NavLink>
-
-          <NavLink
-            to="/conta"
-            onClick={aoFechar}
-            title="Configurações da conta"
-            className={({ isActive }) => [PE_ITEM, isActive ? PE_ATIVO : PE_PARADO].join(" ")}
-          >
-            <Icone referencia="icones.svg#user-cog" className={PE_ICONE} />
-            <span className={PE_TEXTO}>Configurações da conta</span>
-          </NavLink>
-
+        <div className="-mx-3 -mb-4 mt-4 flex shrink-0 flex-col gap-2 border-t border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-3 py-3">
           {/*
-            SAIR só existe quando há de quem sair. Sem conta, o item some em
-            vez de aparecer desabilitado: um botão apagado convida a descobrir
-            por que não funciona.
+            UMA LINHA SÓ: quem está usando, e as três coisas que se faz com
+            isso.
+
+            Eram dois blocos — o cartão da conta no alto da barra e uma pilha
+            de três linhas aqui embaixo —, e o "Sair" ficava a uma barra
+            inteira de distância do nome de quem sai. Numa linha só, com os
+            três como ícones ao lado do nome, o pé custa ~50px em vez de ~130,
+            e a lista de telas fica com o que sobrou.
+
+            NA BARRA ESTREITA (78px) a linha vira coluna: o avatar em cima, os
+            três ícones embaixo. Lado a lado seriam quatro alvos em 58px úteis,
+            e nenhum deles acertável.
           */}
-          {usuario && (
-            <button
-              type="button"
-              onClick={pedirParaSair}
-              title="Sair da conta"
-              className={`${PE_ITEM} ${PE_PARADO} w-full text-left`}
-            >
-              <Icone referencia="icones.svg#log-out" className={PE_ICONE} />
-              <span className={PE_TEXTO}>Sair</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2.5 tela:max-[1100px]:flex-col tela:max-[1100px]:gap-2">
+            {usuario && (
+              <>
+                {/*
+                  O AVATAR: as iniciais num quadrado de canto arredondado.
+
+                  Quadrado, e não círculo: o arredondamento de 9px é o mesmo
+                  dos itens do menu, e um círculo seria a única forma redonda
+                  da barra inteira. As cores são as do item ativo em brilho
+                  baixo — sem foto, é o que dá ao bloco a marca da casa em vez
+                  de um quadrado cinza.
+                */}
+                <span
+                  aria-hidden="true"
+                  className="grid size-[30px] shrink-0 place-items-center rounded-[9px] border border-[var(--accent-line)] bg-[var(--accent-soft)] font-mono text-[11px] font-semibold text-ambar"
+                >
+                  {iniciais(usuario.nome)}
+                </span>
+
+                {/*
+                  Na barra estreita o texto vira `sr-only` em vez de `hidden`:
+                  some da vista mas continua sendo lido, senão o avatar ficaria
+                  sozinho e mudo — um quadrado com duas letras não diz a
+                  ninguém de quem é a conta.
+                */}
+                {/*
+                  UMA LINHA SÓ: o nome de quem está logado.
+
+                  A empresa subiu para a cabeça da barra — ela é da
+                  instalação, não de quem sentou na máquina. E o papel (dono,
+                  operador) continua fora: quem usa o programa já sabe o
+                  próprio cargo, e o lugar do papel é onde ele TEM efeito — na
+                  tela dos membros, e no botão que a pessoa não pode apertar.
+                */}
+                <span
+                  title={`${usuario.nome} — ${usuario.empresa}`}
+                  className="min-w-0 flex-1 truncate font-titulo text-[12.5px] leading-[1.3] tracking-[-0.01em] text-tinta tela:max-[1100px]:sr-only"
+                >
+                  {usuario.nome}
+                </span>
+              </>
+            )}
+
+            {/*
+              OS TRÊS ÍCONES, sem rótulo escrito: o nome da pessoa já disputa a
+              largura, e "Configurações da conta" por extenso empurraria o nome
+              para as reticências. O `title` de cada um diz o que é.
+
+              Sem usuário, os ícones ficam sozinhos e centrados — é o que
+              acontece na bancada, antes de haver conta.
+            */}
+            <span className={`flex shrink-0 items-center gap-0.5 ${usuario ? "" : "flex-1 justify-center"}`}>
+              <NavLink
+                to="/sobre"
+                onClick={aoFechar}
+                title="Sobre o Optmize"
+                aria-label="Sobre o Optmize"
+                className={({ isActive }) => [PE_ITEM, isActive ? PE_ATIVO : PE_PARADO].join(" ")}
+              >
+                <Icone referencia="icones.svg#info" className={PE_ICONE} />
+              </NavLink>
+
+              <NavLink
+                to="/conta"
+                onClick={aoFechar}
+                title="Configurações da conta"
+                aria-label="Configurações da conta"
+                className={({ isActive }) => [PE_ITEM, isActive ? PE_ATIVO : PE_PARADO].join(" ")}
+              >
+                <Icone referencia="icones.svg#user-cog" className={PE_ICONE} />
+              </NavLink>
+
+              {/*
+                SAIR só existe quando há de quem sair. Sem conta, o ícone some
+                em vez de aparecer desabilitado: um botão apagado convida a
+                descobrir por que não funciona.
+
+                O aviso antes de sair NÃO é cerimônia: sair apaga a sessão
+                guardada, e num computador compartilhado da produção um clique
+                acidental no fim do expediente deixa o turno seguinte parado na
+                porta sem saber a senha de ninguém.
+              */}
+              {usuario && (
+                <button
+                  type="button"
+                  onClick={pedirParaSair}
+                  title="Sair da conta"
+                  aria-label="Sair da conta"
+                  className={`${PE_ITEM} ${PE_PARADO}`}
+                >
+                  <Icone referencia="icones.svg#log-out" className={PE_ICONE} />
+                </button>
+              )}
+            </span>
+          </div>
 
           {/*
             A VERSÃO, NO CANTO DE BAIXO.
 
-            É o primeiro dado que o suporte pede, e até agora ele morava só na
-            tela Sobre — o que transformava "qual versão você está usando?" em
-            duas instruções ao telefone. Aqui ela está sempre à vista, e uma
+            É o primeiro dado que o suporte pede, e até pouco tempo morava só
+            na tela Sobre — o que transformava "qual versão você está usando?"
+            em duas instruções ao telefone. Aqui ela está sempre à vista, e uma
             foto de tela de qualquer canto do programa já a traz junto.
 
             BEM APAGADA, de propósito: quem trabalha não precisa dela, e um
-            número legível no pé da barra competiria com os itens que se
-            clicam. Quem procura, acha; quem não procura, não vê.
+            número legível no pé competiria com os ícones que se clicam.
 
-            Na barra estreita (78px) ela some junto com os rótulos: `1.1.158`
-            não cabe em 58px úteis, e o `title` de cada item continua dizendo o
-            que é o quê.
+            Na barra estreita (78px) ela some: não cabe em 58px úteis.
           */}
           <p
             title={`CodeEx Optmize ${__VERSAO__}`}
-            className="m-0 mt-1.5 px-2 font-mono text-[10.5px] leading-none text-tinta-apagada/60 tela:max-[1100px]:hidden"
+            className="m-0 px-1 font-mono text-[10.5px] leading-none text-tinta-apagada/60 tela:max-[1100px]:hidden"
           >
             v{__VERSAO__}
           </p>

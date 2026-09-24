@@ -1327,7 +1327,23 @@ function renderPecasEncaixe() {
     const linha = document.createElement("div");
     linha.className = "group border-b border-linha";
     linha.innerHTML = `
-      <div class="peca-linha px-3 py-2${selecionadas.has(peca.id) ? " marcada" : ""}" data-sel-peca="${peca.id}"
+      <!--
+        DUAS CAIXAS LADO A LADO: o item e o botão de tirar.
+
+        O × morava DENTRO da caixa que marca a peça — uma caixa com
+        \`role="button"\` que ocupa a linha inteira. Botão dentro de botão é
+        confusão para todo mundo: para o leitor de tela, que anuncia um alvo
+        dentro do outro; para quem usa teclado, que passa por dois; e para o
+        clique, que precisa de um \`closest\` na ordem certa para não marcar a
+        peça em vez de tirá-la — foi assim que este × já ficou anos sem
+        funcionar.
+
+        Agora são irmãos. O clique de tirar não passa mais por dentro do
+        clique de marcar, e a ordem do despachante deixa de ser o que segura
+        a coisa de pé.
+      -->
+      <div class="flex items-stretch">
+      <div class="peca-linha min-w-0 flex-1 px-3 py-2${selecionadas.has(peca.id) ? " marcada" : ""}" data-sel-peca="${peca.id}"
            role="button" tabindex="0" aria-pressed="${selecionadas.has(peca.id) ? "true" : "false"}"
            aria-label="${escapeHtml(peca.nome)} — marcar para agrupar">
         ${seloDeCor(peca)}
@@ -1354,10 +1370,23 @@ function renderPecasEncaixe() {
         <input type="number" min="1" step="1" value="${peca.qtd}" data-campo="qtd" data-id="${peca.id}"
                aria-label="Cópias de ${escapeHtml(peca.nome)}"
                class="w-12! shrink-0 px-1.5! py-1! text-center! text-[0.8rem]!" />
-
-        <button type="button" data-del-peca="${peca.id}" aria-label="Tirar ${escapeHtml(peca.nome)}"
-                class="grid size-6 shrink-0 place-items-center rounded text-tinta-apagada transition-colors hover:text-[var(--danger)]">×</button>
         </div>
+      </div>
+
+      <!--
+        O BOTÃO DE TIRAR, FORA DA CAIXA DO ITEM.
+
+        Uma coluna de 32px colada na direita, da altura inteira da linha: o
+        alvo deixa de ser um quadradinho de 24 e passa a ser a faixa toda, que
+        é o que se acerta com o mouse sem mirar. O \`border-l\` diz, sem
+        palavra nenhuma, que ali começa outra coisa.
+
+        O vermelho só aparece no passar do mouse. Uma coluna vermelha fixa ao
+        lado de cada peça faria a lista parecer um monte de erro.
+      -->
+      <button type="button" data-del-peca="${peca.id}" aria-label="Tirar ${escapeHtml(peca.nome)}"
+              title="Tirar esta peça do encaixe"
+              class="grid w-8 shrink-0 place-items-center self-stretch border-l border-linha text-[13px] leading-none text-tinta-apagada transition-colors hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]">×</button>
       </div>
 
       <div data-detalhes="${peca.id}" class="hidden border-t border-linha bg-painel-suave px-3 py-2.5">
@@ -3503,20 +3532,29 @@ function redesenharMesaVazia() {
  * janela — momentos em que a medida já está inteira.
  */
 
+/*
+ * REDESENHA O QUE ESTIVER NA TELA DO ENCAIXE.
+ *
+ * Mesa vazia ou risco pronto: quem decide é o estado, não quem chama. Os dois
+ * dependem do TAMANHO da caixa que os contém, então todo momento em que esse
+ * tamanho pode ter mudado passa por aqui — a janela redimensionada e a
+ * chegada à tela do Encaixe (ver `navegar`).
+ */
+function redesenharEncaixe() {
+  if (!ultimoResultado || encaixeResultado.classList.contains("hidden")) {
+    redesenharMesaVazia();
+    return;
+  }
+  vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
+}
+
 // Redesenha ao mudar o tamanho da janela para o encaixe continuar cabendo.
 let redimensionarTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(redimensionarTimer);
-  redimensionarTimer = setTimeout(() => {
-    // Mesa vazia e risco pronto usam a mesma espera: são o mesmo gesto de
-    // arrastar a janela, e quem decide qual dos dois desenhar é o estado.
-    if (!ultimoResultado || encaixeResultado.classList.contains("hidden")) {
-      redesenharMesaVazia();
-      return;
-    }
-    vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
-      { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
-  }, 150);
+  // A espera é a mesma para os dois: é o mesmo gesto de arrastar a janela.
+  redimensionarTimer = setTimeout(redesenharEncaixe, 150);
 });
 
 renderPecasEncaixe();
@@ -4026,8 +4064,42 @@ return {
    document.dispatchEvent(new CustomEvent("optimize:trocou-de-tela", { detail: { pagina } }));
    raiz.dataset.tela = pagina;
    raiz.querySelectorAll(".page[data-page]").forEach(el => el.classList.toggle("active", el.dataset.page === pagina));
-   if (pagina === "encaixe") requestAnimationFrame(() => { if (ultimoResultado) renderResultado(); });
+   if (pagina !== "encaixe") return;
+
+   /*
+    * CHEGOU AO ENCAIXE: REDESENHA.
+    *
+    * Enquanto a tela da vez era outra, este editor inteiro estava com
+    * `hidden` (ver `Producao.tsx`) — e elemento escondido tem largura zero.
+    * O primeiro desenho da mesa, lá no fim da montagem, saiu num canvas de
+    * tamanho nenhum, e nada na tela acusava: a mesa ficava preta, sem grade,
+    * até alguém apertar F5 ou arrastar a janela.
+    *
+    * Era o que acontecia com quem abria o programa no Moldes e clicava em
+    * Encaixe — ou seja, com todo mundo. Quem abria direto em /encaixe via a
+    * grade, porque ali a montagem acontecia com a tela já visível.
+    *
+    * `requestAnimationFrame` porque o `hidden` acabou de sair neste mesmo
+    * ciclo: a conta do espaço só existe no quadro seguinte.
+    */
+   requestAnimationFrame(() => {
+     if (ultimoResultado) renderResultado();
+     else redesenharMesaVazia();
+   });
  },
+ /*
+  * TEM TRABALHO GUARDADO?
+  *
+  * Quem pergunta é o `Producao.tsx`, ao sair do Encaixe: com trabalho, o
+  * editor fica montado e escondido; sem trabalho, ele sai da página inteira.
+  *
+  * "Trabalho" é peça na lista ou risco pronto — as duas coisas que custam
+  * minutos e que ninguém quer refazer por ter ido ver o Histórico. Os campos
+  * de ajuste não contam: têm valor padrão e se preenchem de novo num
+  * segundo.
+  */
+ temTrabalho() { return pecasEncaixe.length > 0 || !!ultimoResultado; },
+
  destruir() { pararBusca = true; escopo.destruir(); derrubarPool(); derrubarPoolPrepara(); for (const p of pecasEncaixe) p.img?.close?.(); }
 };
 } catch (erro) { escopo.destruir(); throw erro; }
