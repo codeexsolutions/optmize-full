@@ -31,6 +31,7 @@
 
 import {
   comGiroBase, gradeDaPeca, mascarasDeSilhueta, pecaSemGiro, rotacaoBaseDe, silhuetaDeDados,
+  subamostrasDaArte,
   tirarFundoDosPixels,
 } from "./encaixeMascara";
 
@@ -92,7 +93,10 @@ const canvasMascara = document.createElement("canvas");
 const ctxMascara = canvasMascara.getContext("2d", { willReadFrequently: true });
 
 /**
- * Os pixels da arte já reduzidos à grade do encaixe.
+ * Os pixels da arte já reduzidos à grade do encaixe — com `sub` sub-amostras
+ * de lado por célula (ver "A CÉLULA É PEÇA SE QUALQUER PEDAÇO DELA É PEÇA", em
+ * `silhuetaDeDados`). Devolve `{ data, sub }`, e `data` tem `cols × sub` por
+ * `rows × sub` pixels.
  *
  * Mesma história do `pixelsDaImagem`: porta única, para o worker receber
  * exatamente estes bytes. Vale reparar que a redução tem que sair daqui — o
@@ -101,9 +105,15 @@ const ctxMascara = canvasMascara.getContext("2d", { willReadFrequently: true });
  * prepara-worker.js).
  */
 export function pixelsDaArteNaGrade(peca, cols, rows, passo) {
-  canvasMascara.width = cols;
-  canvasMascara.height = rows;
-  ctxMascara.clearRect(0, 0, cols, rows);
+  const img = peca.img;
+  const larguraImg = img.naturalWidth || img.width;
+  const alturaImg = img.naturalHeight || img.height;
+  const sub = subamostrasDaArte(larguraImg, peca.largura, cols, rows, passo);
+  const W = cols * sub;
+  const H = rows * sub;
+  canvasMascara.width = W;
+  canvasMascara.height = H;
+  ctxMascara.clearRect(0, 0, W, H);
   /*
    * A arte entra NO TAMANHO DELA, e não esticada até a grade. A grade
    * arredonda para cima (ver `gradeDaPeca`), então sobra menos de uma célula
@@ -111,19 +121,16 @@ export function pixelsDaArteNaGrade(peca, cols, rows, passo) {
    * última linha da arte: deixada transparente, ela faria uma arte opaca de
    * fundo branco parecer arte recortada, e a leitura do fundo erraria.
    */
-  const img = peca.img;
-  const larguraImg = img.naturalWidth || img.width;
-  const alturaImg = img.naturalHeight || img.height;
-  const w = passo > 0 ? Math.min(cols, peca.largura / passo) : cols;
-  const h = passo > 0 ? Math.min(rows, peca.altura / passo) : rows;
+  const w = passo > 0 ? Math.min(W, (peca.largura / passo) * sub) : W;
+  const h = passo > 0 ? Math.min(H, (peca.altura / passo) * sub) : H;
   ctxMascara.drawImage(img, 0, 0, w, h);
-  if (w < cols) ctxMascara.drawImage(img, larguraImg - 1, 0, 1, alturaImg, w, 0, cols - w, h);
-  if (h < rows) ctxMascara.drawImage(img, 0, alturaImg - 1, larguraImg, 1, 0, h, w, rows - h);
-  if (w < cols && h < rows) {
-    ctxMascara.drawImage(img, larguraImg - 1, alturaImg - 1, 1, 1, w, h, cols - w, rows - h);
+  if (w < W) ctxMascara.drawImage(img, larguraImg - 1, 0, 1, alturaImg, w, 0, W - w, h);
+  if (h < H) ctxMascara.drawImage(img, 0, alturaImg - 1, larguraImg, 1, 0, h, w, H - h);
+  if (w < W && h < H) {
+    ctxMascara.drawImage(img, larguraImg - 1, alturaImg - 1, 1, 1, w, h, W - w, H - h);
   }
   try {
-    return ctxMascara.getImageData(0, 0, cols, rows);
+    return { data: ctxMascara.getImageData(0, 0, W, H).data, sub };
   } catch (e) {
     return null; // canvas bloqueado por imagem de outra origem
   }
@@ -151,7 +158,7 @@ export function silhuetaDaImagem(peca, cols, rows, passo) {
 
   // Daqui para frente é só conta em cima dos pixels, e mora no
   // encaixe-mascara.js para o worker poder fazer a mesma coisa.
-  return silhuetaDeDados(dados.data, cols, rows);
+  return silhuetaDeDados(dados.data, cols, rows, dados.sub);
 }
 
 /**

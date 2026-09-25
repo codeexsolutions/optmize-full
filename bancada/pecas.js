@@ -55,30 +55,6 @@ function contorno(inicio, comandos) {
   return pontos;
 }
 
-/** Rasteriza o polígono na grade, pelo centro de cada célula. */
-function rasterizar(poligono, cols, rows) {
-  const bits = new Uint8Array(cols * rows);
-  for (let linha = 0; linha < rows; linha++) {
-    const y = (linha + 0.5) / rows;
-    // Onde a linha cruza cada aresta: com os cruzamentos ordenados, o dentro
-    // e o fora se alternam, e a linha inteira sai numa varrida só.
-    const cruzamentos = [];
-    for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
-      const [xi, yi] = poligono[i];
-      const [xj, yj] = poligono[j];
-      if ((yi > y) === (yj > y)) continue;
-      cruzamentos.push(xi + ((y - yi) / (yj - yi)) * (xj - xi));
-    }
-    cruzamentos.sort((a, b) => a - b);
-    for (let k = 0; k + 1 < cruzamentos.length; k += 2) {
-      const de = Math.max(0, Math.ceil(cruzamentos[k] * cols - 0.5));
-      const ate = Math.min(cols - 1, Math.floor(cruzamentos[k + 1] * cols - 0.5));
-      for (let c = de; c <= ate; c++) bits[linha * cols + c] = 1;
-    }
-  }
-  return bits;
-}
-
 // ==================== O CATÁLOGO ====================
 
 /**
@@ -299,7 +275,9 @@ function prepararPeca(motor, nome, { passo, raio, giro = "180", qtd = 1 }) {
   const ex = molde.largura / (cols * passo);
   const ey = molde.altura / (rows * passo);
   (molde.blocos || [molde.poligono]).forEach((poligono) => {
-    const parte = rasterizar(poligono.map(([x, y]) => [x * ex, y * ey]), cols, rows);
+    // A MESMA rasterização do contorno do Corel (`rasterizarPoligono`): toda
+    // célula que a peça toca.
+    const parte = motor.rasterizarPoligono(poligono.map(([x, y]) => [x * ex, y * ey]), cols, rows);
     for (let i = 0; i < bits.length; i++) if (parte[i]) bits[i] = 1;
   });
   const mascaras = motor.mascarasDeSilhueta({ bits, modo: "alfa" }, cols, rows, passo, raio,
@@ -337,4 +315,4 @@ function expandir(pecas) {
   return itens;
 }
 
-module.exports = { CATALOGO, prepararPeca, expandir, rasterizar };
+module.exports = { CATALOGO, prepararPeca, expandir };

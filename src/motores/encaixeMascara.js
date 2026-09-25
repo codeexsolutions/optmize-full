@@ -245,23 +245,89 @@ function validarSilhueta(bits, total, modo) {
 /**
  * A largura de cada linha do disco de raio `raio`, em células.
  *
- * `alcance[dy]` é até onde a borda vai na horizontal, `dy` linhas acima ou
- * abaixo do centro. O arredondamento é para CIMA de propósito: o disco fica um
- * tiquinho maior que o pedido, nunca menor. Errar para mais gasta um pouco de
- * tecido; errar para menos encosta a peça e estraga o corte.
+ * `disco[dy]` é até onde a borda vai na horizontal, `dy` linhas acima ou
+ * abaixo do centro. Fica guardado por raio: o mesmo disco serve para todas as
+ * peças do trabalho.
  *
- * Fica guardado por raio: o mesmo disco serve para todas as peças do trabalho.
+ * ---------------------------------------------------------------------------
+ * A FOLGA É ENTRE QUADRADOS, NÃO ENTRE CENTROS
+ * ---------------------------------------------------------------------------
+ *
+ * Até 2026-09-25 o disco era o círculo de raio `raio` medido de CENTRO a
+ * centro de célula. Só que a peça não mora no centro da célula: a célula
+ * marcada é um quadrado inteiro de tecido (ver `silhuetaDeDados`). Duas peças
+ * cujos discos não se tocam podiam ter as células a UMA célula de distância na
+ * diagonal — e no raio 1, que é a folga de 4 mm no rolo de 179 cm, o círculo
+ * vira uma cruz e isso acontece em todo degrau de borda inclinada. Medido pelo
+ * contorno de verdade no `producao-avulsa`: pedia-se 4 mm e saíam 1,87 mm.
+ *
+ * A regra agora é a que o corte precisa. Duas peças encostam os discos quando
+ * a diferença entre uma célula de uma e uma célula da outra cai em `D + D`;
+ * então `D + D` tem de conter TODA diferença (dx, dy) cujos quadrados ficam a
+ * menos de `2 × raio` células um do outro:
+ *
+ *   (|dx| − 1)₊² + (|dy| − 1)₊²  <  (2 × raio)²
+ *
+ * O disco é o menor da família "bola medida da borda do quadrado":
+ *
+ *   D(t) = { (dx, dy) : (|dx| − ½)₊² + (|dy| − ½)₊² ≤ t }
+ *
+ * com o menor `t` que cumpre a regra, achado por conferência direta. No raio 1
+ * ele é o quadrado 3×3; a partir do 3 fica a menos de 10% de área do círculo
+ * de antes. `bancada/conferir-folga-real.js` confere o resultado no contorno.
  */
 const discosPorRaio = new Map();
 
 export function discoDoRaio(raio) {
   let disco = discosPorRaio.get(raio);
   if (disco) return disco;
-  disco = new Int32Array(raio + 1);
-  for (let dy = 0; dy <= raio; dy++) {
-    disco[dy] = Math.ceil(Math.sqrt(Math.max(0, raio * raio - dy * dy)) - 1e-9);
-  }
+  disco = discoQueGaranteAFolga(raio);
   discosPorRaio.set(raio, disco);
+  return disco;
+}
+
+/** O `D(t)` do comentário acima, com o menor `t` que garante a folga. */
+function discoQueGaranteAFolga(raio) {
+  const disco = new Int32Array(raio + 1);
+  if (raio <= 0) return disco;
+  const medida = (dx, dy) => Math.max(0, dx - 0.5) ** 2 + Math.max(0, dy - 0.5) ** 2;
+
+  // As diferenças que precisam ficar cobertas (basta o quadrante positivo: o
+  // disco é simétrico nos dois eixos).
+  const lim = 2 * raio + 1;
+  const precisa = [];
+  for (let dx = 0; dx <= lim; dx++) {
+    for (let dy = 0; dy <= lim; dy++) {
+      if (Math.max(0, dx - 1) ** 2 + Math.max(0, dy - 1) ** 2 < 4 * raio * raio) precisa.push([dx, dy]);
+    }
+  }
+  // (dx, dy) está em D + D se alguma linha `a` do disco, somada à linha
+  // `dy − a`, alcança `dx` na horizontal.
+  const cobre = (dx, dy) => {
+    for (let a = -raio; a <= raio; a++) {
+      const b = dy - a;
+      if (b < -raio || b > raio) continue;
+      if (dx <= disco[Math.abs(a)] + disco[Math.abs(b)]) return true;
+    }
+    return false;
+  };
+
+  const candidatos = [];
+  for (let dx = 0; dx <= raio + 1; dx++) for (let dy = 0; dy <= raio + 1; dy++) candidatos.push(medida(dx, dy));
+  candidatos.sort((p, q) => p - q);
+  for (const t of candidatos) {
+    let valido = true;
+    for (let dy = 0; dy <= raio; dy++) {
+      let dx = -1;
+      while (medida(dx + 1, dy) <= t) dx++;
+      if (dx < 0) { valido = false; break; }
+      disco[dy] = dx;
+    }
+    if (valido && precisa.every(([dx, dy]) => cobre(dx, dy))) return disco;
+  }
+  // Não acontece (o maior candidato cobre tudo), mas se um dia acontecer, o
+  // quadrado cheio garante a folga com sobra.
+  disco.fill(raio);
   return disco;
 }
 
@@ -281,8 +347,9 @@ export function discoDoRaio(raio) {
  *
  * Era isso que fazia a folga se comportar como um MÍNIMO em vez de uma medida:
  * pedir 4 mm e receber de 4 a 5,7 mm, conforme o ângulo do encosto. Com o
- * disco, o excesso na diagonal cai de 41% para menos de 6% — o que sobra é a
- * grade, que só tem células inteiras.
+ * disco, o excesso na diagonal cai — o que sobra é a grade, que só tem
+ * células inteiras. (O disco já foi estreito demais para isso: ver "A FOLGA É
+ * ENTRE QUADRADOS", em `discoDoRaio`.)
  *
  * O laço percorre só as células de borda da silhueta: o disco de uma célula do
  * meio já está inteiro dentro do disco das vizinhas dela, então carimbá-la de
@@ -426,6 +493,74 @@ function prepararMascara(engordados, reais, cols, rows, passo) {
 }
 
 
+// ==================== O CONTORNO VETORIAL ====================
+
+/**
+ * Rasteriza um polígono na grade: TODA célula que ele toca fica marcada.
+ *
+ * Os pontos chegam normalizados (0..1 da grade). Quem usa é o contorno que vem
+ * do CorelDRAW (`servidor/encaixe-resolver.js`) e as peças da bancada
+ * (`bancada/pecas.js`) — as duas moravam cada uma com a sua cópia, "que
+ * precisavam continuar iguais"; agora é uma só.
+ *
+ * A cópia de antes marcava a célula pelo CENTRO. A peça passava da célula
+ * marcada em até meia célula de cada lado, e esse pedaço saía da folga (ver
+ * "A FOLGA É ENTRE QUADRADOS", em `discoDoRaio`). Aqui são duas passadas:
+ *
+ *   miolo   a varredura por linha de sempre, pelo centro: pega as células de
+ *           dentro, que nenhuma aresta atravessa;
+ *   borda   cada aresta marca toda célula por onde passa, coluna por coluna
+ *           — inclusive a que ela só encosta.
+ *
+ * Toda célula que tem um pedaço da peça ou está inteira dentro (miolo) ou é
+ * cortada pelo contorno (borda). Mais de um polígono na mesma grade é só
+ * chamar de novo e juntar.
+ */
+export function rasterizarPoligono(poligono, cols, rows) {
+  const bits = new Uint8Array(cols * rows);
+  const n = poligono.length;
+  if (n === 0) return bits;
+
+  for (let linha = 0; linha < rows; linha++) {
+    const y = (linha + 0.5) / rows;
+    const cruzamentos = [];
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const [xi, yi] = poligono[i];
+      const [xj, yj] = poligono[j];
+      if ((yi > y) === (yj > y)) continue;
+      cruzamentos.push(xi + ((y - yi) / (yj - yi)) * (xj - xi));
+    }
+    cruzamentos.sort((a, b) => a - b);
+    for (let k = 0; k + 1 < cruzamentos.length; k += 2) {
+      const de = Math.max(0, Math.ceil(cruzamentos[k] * cols - 0.5));
+      const ate = Math.min(cols - 1, Math.floor(cruzamentos[k + 1] * cols - 0.5));
+      for (let c = de; c <= ate; c++) bits[linha * cols + c] = 1;
+    }
+  }
+
+  const dentro = (v, max) => Math.max(0, Math.min(max - 1, Math.floor(v)));
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xa = poligono[j][0] * cols, ya = poligono[j][1] * rows;
+    const xb = poligono[i][0] * cols, yb = poligono[i][1] * rows;
+    const x0 = Math.min(xa, xb), x1 = Math.max(xa, xb);
+    for (let c = dentro(x0, cols); c <= dentro(x1, cols); c++) {
+      // O pedaço da aresta dentro da faixa da coluna `c`.
+      let y0, y1;
+      if (xa === xb) { y0 = ya; y1 = yb; }
+      else {
+        const na = (Math.max(x0, c) - xa) / (xb - xa);
+        const nb = (Math.min(x1, c + 1) - xa) / (xb - xa);
+        y0 = ya + na * (yb - ya);
+        y1 = ya + nb * (yb - ya);
+      }
+      const de = dentro(Math.min(y0, y1), rows);
+      const ate = dentro(Math.max(y0, y1), rows);
+      for (let l = de; l <= ate; l++) bits[l * cols + c] = 1;
+    }
+  }
+  return bits;
+}
+
 // ==================== AS DUAS PONTAS QUE O WORKER USA ====================
 
 /**
@@ -457,9 +592,77 @@ export function tirarFundoDosPixels(px, largura, altura, forcar) {
 
 /**
  * Descobre quais células têm tecido, a partir dos pixels da arte já reduzida
- * ao tamanho da grade. É o miolo do `silhuetaDaImagem`.
+ * à grade. É o miolo do `silhuetaDaImagem`.
+ *
+ * ---------------------------------------------------------------------------
+ * A CÉLULA É PEÇA SE QUALQUER PEDAÇO DELA É PEÇA
+ * ---------------------------------------------------------------------------
+ *
+ * `sub` é quantas sub-amostras de lado cada célula tem nos `dados`: eles vêm
+ * com `cols × sub` por `rows × sub` pixels (ver `pixelsDaArteNaGrade`). A
+ * silhueta é lida nessa resolução fina, com as regras de sempre, e a célula
+ * fica marcada se QUALQUER sub-amostra dela for peça.
+ *
+ * Com uma amostra por célula (o jeito de antes), a arte que ocupava menos de
+ * um sexto da célula da borda sumia na média, e a célula ficava vazia com
+ * tecido dentro. A folga é contada a partir das células (ver `discoDoRaio`),
+ * então esse tecido invisível saía da folga: somado ao disco estreito, pedir
+ * 4 mm dava 1,87 mm. Com quatro sub-amostras, o que pode escapar é menos de um
+ * sexto de um quarto de célula.
+ *
+ * A área (`cobertura`) continua sendo a MÉDIA do alfa: ela mede quanto de
+ * tecido a peça tem, e não por onde a folga passa.
  */
-export function silhuetaDeDados(dados, cols, rows) {
+export function silhuetaDeDados(dados, cols, rows, sub = 1) {
+  if (!(sub > 1)) return silhuetaNaGrade(dados, cols, rows);
+  const fina = silhuetaNaGrade(dados, cols * sub, rows * sub);
+  const total = cols * rows;
+  if (fina.modo === "caixa") return { bits: new Uint8Array(total).fill(1), modo: "caixa" };
+
+  // Sem alfa (fundo lido pela cor), a área de cada célula é a fração das
+  // sub-amostras que são peça — mais perto da verdade que a célula inteira.
+  const valor = fina.cobertura || fina.bits;
+  const bits = new Uint8Array(total);
+  const cobertura = new Float32Array(total);
+  const larguraFina = cols * sub;
+  for (let y = 0; y < rows * sub; y++) {
+    const linha = ((y / sub) | 0) * cols;
+    for (let x = 0; x < larguraFina; x++) {
+      const i = y * larguraFina + x;
+      const c = linha + ((x / sub) | 0);
+      if (fina.bits[i]) bits[c] = 1;
+      cobertura[c] += valor[i];
+    }
+  }
+  const n = sub * sub;
+  for (let c = 0; c < total; c++) cobertura[c] /= n;
+  return { bits, modo: fina.modo, cobertura };
+}
+
+/** Até quantas sub-amostras de lado por célula a arte é lida. */
+export const SUBAMOSTRAS_MAX = 4;
+/**
+ * O teto de pixels da leitura fina. Uma peça de 60 x 80 cm na grade de 0,2 cm
+ * são 120 mil células; com 4 x 4 sub-amostras, 1,9 milhão de pixels (7,7 MB,
+ * que vão ao worker por transferência, sem cópia). A peça gigante lê com menos
+ * sub-amostras em vez de estourar a memória.
+ */
+export const SUBAMOSTRAS_TETO_PIXELS = 4000000;
+
+/**
+ * Quantas sub-amostras de lado a arte ganha por célula: até
+ * `SUBAMOSTRAS_MAX`, sem passar do teto de pixels e sem passar da resolução do
+ * próprio arquivo (esticar a arte não mostra nada que ela não tenha).
+ */
+export function subamostrasDaArte(larguraImg, largura, cols, rows, passo) {
+  const celulasNaArte = passo > 0 && largura > 0 ? largura / passo : cols;
+  const pelaArte = Math.floor((Number(larguraImg) || 0) / celulasNaArte);
+  const peloTeto = Math.floor(Math.sqrt(SUBAMOSTRAS_TETO_PIXELS / Math.max(1, cols * rows)));
+  return Math.max(1, Math.min(SUBAMOSTRAS_MAX, pelaArte, peloTeto));
+}
+
+/** A silhueta com uma amostra por célula: o `silhuetaDeDados` de antes. */
+function silhuetaNaGrade(dados, cols, rows) {
   const total = cols * rows;
   const cheio = () => ({ bits: new Uint8Array(total).fill(1), modo: "caixa" });
   const bits = new Uint8Array(total);

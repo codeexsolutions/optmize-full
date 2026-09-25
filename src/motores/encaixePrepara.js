@@ -179,7 +179,7 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
       const pixels = dados ? dados.data.buffer : null;
       tarefas.push({
         peca,
-        mensagem: { tipo: "mascaras", id: peca.id, pixels, cols, rows, passo, raio,
+        mensagem: { tipo: "mascaras", id: peca.id, pixels, sub: dados ? dados.sub : 1, cols, rows, passo, raio,
           contorno: peca.contorno, medida: { largura: crua.largura, altura: crua.altura } },
         transferir: pixels ? [pixels] : [],
       });
