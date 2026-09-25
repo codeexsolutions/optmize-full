@@ -111,6 +111,33 @@ function conferirFundo(motor) {
   if (cheias(fica) !== cols * rows) {
     falhar(`fundo: com o fundo FICANDO no PDF, a peça devia valer a caixa (${cols * rows}), valeu ${cheias(fica)}`);
   }
+
+  // A remoção automática não pode comer a peça: camiseta BRANCA (245) sobre
+  // fundo branco (255), sem contorno. O espalhamento a partir da borda aceita
+  // tudo a menos de 48 da cor do fundo e levava o corpo junto — sobrava a
+  // faixa escura, e o encaixe punha peça dentro da camiseta.
+  const W = 300;
+  const H = 400;
+  const camiseta = (contorno) => {
+    const px = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const d = Math.hypot((x - W / 2) / (W * 0.4), (y - H / 2) / (H * 0.45));
+        let cor = [255, 255, 255];
+        if (d < 1) cor = contorno && d > 0.97 ? [40, 40, 40] : Math.abs(y - H / 2) < 12 ? [20, 20, 20] : [245, 245, 240];
+        const i = (y * W + x) * 4;
+        px[i] = cor[0]; px[i + 1] = cor[1]; px[i + 2] = cor[2]; px[i + 3] = 255;
+      }
+    }
+    return px;
+  };
+  if (motor.tirarFundoDosPixels(camiseta(false), W, H, false)) {
+    falhar("fundo: a remoção automática comeu o corpo de uma camiseta branca sem contorno");
+  }
+  const comContorno = motor.tirarFundoDosPixels(camiseta(true), W, H, false);
+  if (!comContorno || comContorno.apagados / (W * H) > 0.5) {
+    falhar("fundo: a camiseta branca COM contorno devia perder só o fundo em volta");
+  }
 }
 
 // ---------- o encaixe ----------

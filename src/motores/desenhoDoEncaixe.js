@@ -201,6 +201,31 @@ export function cortesEntreBancadas(faixas) {
   return cortes;
 }
 
+/*
+ * O TETO DO CANVAS.
+ *
+ * O Chrome (e o WebView2, que é o que o aplicativo usa no Windows) não pinta
+ * canvas com mais de 65.535 px num lado nem com mais de 16.384² de área —
+ * medido em 2026-09-25: passando disso, o canvas fica EM BRANCO, sem erro
+ * nenhum. O risco deitado tem de largura `comprimento × escala × dpr`, e numa
+ * produção de 127 m numa tela a 150% isso deu 68.922 px: a metragem aparecia e
+ * o desenho não. Fica uma margem abaixo do teto medido.
+ */
+const CANVAS_LADO_MAXIMO = 64000;
+const CANVAS_AREA_MAXIMA = 16000 * 16000;
+
+/**
+ * Quantos pixels do canvas por pixel de tela: o `dpr` pedido, ou menos quando
+ * o desenho, nessa resolução, passaria do teto. O tamanho na TELA não muda —
+ * o clique da seleção continua caindo no lugar certo —, só a nitidez de um rolo
+ * muito longo.
+ */
+export function resolucaoQueCabe(largura, altura, dpr) {
+  const peloLado = CANVAS_LADO_MAXIMO / Math.max(1, largura, altura);
+  const pelaArea = Math.sqrt(CANVAS_AREA_MAXIMA / Math.max(1, largura * altura));
+  return Math.min(dpr, peloLado, pelaArea);
+}
+
 /**
  * Desenha o risco.
  *
@@ -248,15 +273,15 @@ export function desenharEncaixe(canvas, r, {
   const alturaCanvas = deitar
     ? Math.round(r.larguraTecido * px) + REGUA
     : Math.round(r.consumo * px);
-  const dpr = escala ? 1 : (window.devicePixelRatio || 1);
+  const dpr = resolucaoQueCabe(larguraCanvas, alturaCanvas, escala ? 1 : (window.devicePixelRatio || 1));
 
   // A escala do desenho NA TELA é o que traduz pixel do mouse em centímetro de
   // tecido. Só vale para o desenho da tela: o PNG e o PDF vêm com `escala`
   // própria, e guardar a deles faria a seleção mirar no lugar errado.
   const vista = escala ? null : { px, regua: REGUA, deitado: deitar, larguraTecido: r.larguraTecido };
 
-  canvas.width = larguraCanvas * dpr;
-  canvas.height = alturaCanvas * dpr;
+  canvas.width = Math.floor(larguraCanvas * dpr);
+  canvas.height = Math.floor(alturaCanvas * dpr);
   canvas.style.width = `${larguraCanvas}px`;
   canvas.style.height = `${alturaCanvas}px`;
 

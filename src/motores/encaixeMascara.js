@@ -111,6 +111,41 @@ function marcarFundoDaBorda(px, largura, altura, cor, tolerancia = FUNDO_TOLERAN
   return { ehFundo, quantos };
 }
 
+/**
+ * O fundo que se espalhou para dentro da peça.
+ *
+ * O espalhamento aceita tudo a menos de `FUNDO_TOLERANCIA` da cor do fundo, e
+ * arte clara sem contorno fica dentro disso: uma camiseta branca (245) sobre
+ * fundo branco (255) perdia o corpo inteiro e sobrava a estampa. A máscara, a
+ * tela, o PDF e a conferência pela arte passavam a ver só a estampa — e o
+ * encaixe punha peça DENTRO da camiseta sem trava nenhuma reclamar.
+ *
+ * O fundo de verdade tem quase exatamente a cor dele: medido em JPEG de
+ * qualidade 50 a 95, o apagado a mais de `FUNDO_VAZAMENTO_DISTANCIA` da cor do
+ * fundo fica abaixo de 0,7% da imagem (ruído na borda da arte). Quando a
+ * remoção comeu uma camiseta branca ou creme, passa de 50%. Acima de
+ * `FUNDO_VAZAMENTO_MAXIMO` a remoção automática recusa, e a peça vale a caixa
+ * (ver "O FUNDO QUE A MÁSCARA IGNORA TEM DE SAIR NO PDF") — gasta um pouco de
+ * tecido e não recebe peça nenhuma dentro. Papel com sombra também cai aqui, e
+ * pelo mesmo lado seguro.
+ */
+const FUNDO_VAZAMENTO_DISTANCIA = 12;
+const FUNDO_VAZAMENTO_MAXIMO = 0.03;
+
+function fundoVazouNaPeca(px, ehFundo, cor, total) {
+  const teto = total * FUNDO_VAZAMENTO_MAXIMO;
+  const limite2 = FUNDO_VAZAMENTO_DISTANCIA * FUNDO_VAZAMENTO_DISTANCIA;
+  let diferentes = 0;
+  for (let p = 0; p < total; p++) {
+    if (!ehFundo[p]) continue;
+    const dr = px[p * 4] - cor[0];
+    const dg = px[p * 4 + 1] - cor[1];
+    const db = px[p * 4 + 2] - cor[2];
+    if (dr * dr + dg * dg + db * db > limite2 && ++diferentes > teto) return true;
+  }
+  return false;
+}
+
 // ==================== A GRADE DA PEÇA ====================
 
 /**
@@ -585,6 +620,7 @@ export function tirarFundoDosPixels(px, largura, altura, forcar) {
   // Comeu quase tudo: o que parecia fundo era a arte. Melhor não recortar nada
   // do que devolver uma peça esfarelada.
   if (total - quantos < total * 0.015) return null;
+  if (!forcar && fundoVazouNaPeca(px, ehFundo, fundo.cor, total)) return null;
 
   for (let p = 0; p < ehFundo.length; p++) if (ehFundo[p]) px[p * 4 + 3] = 0;
   return { apagados: quantos, cor: fundo.cor };
