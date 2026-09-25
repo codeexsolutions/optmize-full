@@ -612,12 +612,31 @@ export function tirarFundoDosPixels(px, largura, altura, forcar) {
  *
  * A área (`cobertura`) continua sendo a MÉDIA do alfa: ela mede quanto de
  * tecido a peça tem, e não por onde a folga passa.
+ *
+ * ---------------------------------------------------------------------------
+ * O FUNDO QUE A MÁSCARA IGNORA TEM DE SAIR NO PDF
+ * ---------------------------------------------------------------------------
+ *
+ * Arte opaca de fundo claro é lida pela cor: o fundo que encosta na borda não
+ * é peça. Só que quem tira esse fundo da IMPRESSÃO é a carga da arte
+ * (`fundoNaExportacao`), com outras regras e na resolução do arquivo — e ela
+ * pode recusar (fundo de menos de 1%, fundo que "come" a arte) ou ainda não ter
+ * terminado. Aí a máscara deixava a vizinha entrar no fundo, e a tela e o PDF
+ * imprimiam o fundo branco, opaco, POR CIMA dela: peça dentro de peça, com a
+ * trava apagada (2026-09-25).
+ *
+ * `fundoSaiNoPdf` diz se o fundo vai mesmo sair. Sem ele, a arte opaca vale a
+ * caixa inteira — que é exatamente o que vai ser impresso.
  */
-export function silhuetaDeDados(dados, cols, rows, sub = 1) {
-  if (!(sub > 1)) return silhuetaNaGrade(dados, cols, rows);
-  const fina = silhuetaNaGrade(dados, cols * sub, rows * sub);
+export function silhuetaDeDados(dados, cols, rows, sub = 1, { fundoSaiNoPdf = false } = {}) {
   const total = cols * rows;
-  if (fina.modo === "caixa") return { bits: new Uint8Array(total).fill(1), modo: "caixa" };
+  const semFundo = (s) => (s.modo === "fundo" && !fundoSaiNoPdf
+    ? { bits: new Uint8Array(total).fill(1), modo: "caixa" } : s);
+  if (!(sub > 1)) return semFundo(silhuetaNaGrade(dados, cols, rows));
+  const fina = silhuetaNaGrade(dados, cols * sub, rows * sub);
+  if (fina.modo === "caixa" || (fina.modo === "fundo" && !fundoSaiNoPdf)) {
+    return { bits: new Uint8Array(total).fill(1), modo: "caixa" };
+  }
 
   // Sem alfa (fundo lido pela cor), a área de cada célula é a fração das
   // sub-amostras que são peça — mais perto da verdade que a célula inteira.

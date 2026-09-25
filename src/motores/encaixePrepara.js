@@ -24,7 +24,7 @@
 
 import { comGiroBase, gradeDaPeca, pecaSemGiro, rotacaoBaseDe } from "./encaixeMascara";
 import {
-  chaveDasMascaras, mascarasDaPeca, pixelsDaArteNaGrade, pixelsDaImagem,
+  chaveDasMascaras, contornoDaPeca, mascarasDaPeca, pixelsDaArteNaGrade, pixelsDaImagem,
   removerFundoDaImagem,
 } from "./pecaNaGrade";
 import { respirarNaTela } from "../utils/respirar";
@@ -170,8 +170,9 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
       // A arte como chegou; o giro base entra na volta (ver `comGiroBase`).
       const crua = pecaSemGiro(peca);
       const { cols, rows } = gradeDaPeca(crua, passo);
-      const dados = peca.contorno === "caixa" ? null : pixelsDaArteNaGrade(crua, cols, rows, passo);
-      if (peca.contorno !== "caixa" && !dados) {
+      const contorno = contornoDaPeca(peca);
+      const dados = contorno === "caixa" ? null : pixelsDaArteNaGrade(crua, cols, rows, passo);
+      if (contorno !== "caixa" && !dados) {
         // Canvas bloqueado: esta peça é resolvida na tela mesmo, mais adiante.
         semPixels.push(peca);
         return;
@@ -180,7 +181,8 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
       tarefas.push({
         peca,
         mensagem: { tipo: "mascaras", id: peca.id, pixels, sub: dados ? dados.sub : 1, cols, rows, passo, raio,
-          contorno: peca.contorno, medida: { largura: crua.largura, altura: crua.altura } },
+          contorno, fundoSaiNoPdf: !!peca.fundoNaExportacao,
+          medida: { largura: crua.largura, altura: crua.altura } },
         transferir: pixels ? [pixels] : [],
       });
     });

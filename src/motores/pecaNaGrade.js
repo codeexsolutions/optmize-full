@@ -151,23 +151,36 @@ export function pixelsDaArteNaGrade(peca, cols, rows, passo) {
 export function silhuetaDaImagem(peca, cols, rows, passo) {
   const total = cols * rows;
   const cheio = () => ({ bits: new Uint8Array(total).fill(1), modo: "caixa" });
-  if (peca.contorno === "caixa") return cheio();
+  if (contornoDaPeca(peca) === "caixa") return cheio();
 
   const dados = pixelsDaArteNaGrade(peca, cols, rows, passo);
   if (!dados) return cheio();
 
   // Daqui para frente é só conta em cima dos pixels, e mora no
   // encaixe-mascara.js para o worker poder fazer a mesma coisa.
-  return silhuetaDeDados(dados.data, cols, rows, dados.sub);
+  return silhuetaDeDados(dados.data, cols, rows, dados.sub, { fundoSaiNoPdf: !!peca.fundoNaExportacao });
 }
 
 /**
  * Monta (e guarda em cache) as máscaras de uma peça nas quatro rotações. O
  * cache evita refazer tudo a cada clique em "Optmizar" quando nada mudou.
  */
+/**
+ * Como a silhueta da peça é lida: o `contorno` que a pessoa escolheu, ou a
+ * caixa inteira quando a conferência pela arte pegou a peça num encaixe (o
+ * `reforco`, ver `conferenciaDaArte.js`). A caixa é o que a arte imprime no
+ * pior caso, então com ela não há leitura de silhueta que possa errar.
+ */
+export function contornoDaPeca(peca) {
+  return peca.reforco === "caixa" ? "caixa" : peca.contorno;
+}
+
 /** A chave do cache de máscaras: muda quando qualquer entrada muda. */
 export function chaveDasMascaras(peca, passo, raio) {
-  return `${passo}|${raio}|${peca.largura}|${peca.altura}|${peca.contorno}|g${rotacaoBaseDe(peca)}`;
+  // O fundo entra porque decide se a leitura pela cor vale (ver "O FUNDO QUE
+  // A MÁSCARA IGNORA TEM DE SAIR NO PDF", em encaixeMascara.js).
+  return `${passo}|${raio}|${peca.largura}|${peca.altura}|${contornoDaPeca(peca)}`
+    + `|f${peca.fundoNaExportacao ? 1 : 0}|g${rotacaoBaseDe(peca)}`;
 }
 
 export function mascarasDaPeca(peca, passo, raio) {

@@ -110,7 +110,8 @@ self.onmessage = async (evento) => {
       const silhueta = contorno === "caixa"
         // Peça marcada como retângulo: não há silhueta para ler.
         ? { bits: new Uint8Array(cols * rows).fill(1), modo: "caixa" }
-        : silhuetaDeDados(new Uint8ClampedArray(pixels), cols, rows, evento.data.sub || 1);
+        : silhuetaDeDados(new Uint8ClampedArray(pixels), cols, rows, evento.data.sub || 1,
+          { fundoSaiNoPdf: evento.data.fundoSaiNoPdf === true });
       const mascaras = mascarasDeSilhueta(silhueta, cols, rows, passo, raio, evento.data.medida);
       self.postMessage({ tipo: "mascaras", id, mascaras }, buffersDasMascaras(mascaras));
       return;

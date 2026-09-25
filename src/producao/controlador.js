@@ -14,6 +14,9 @@ import { assinaturaDoTrabalho,
   prepararComplemento, analisarComplemento, complementarNosVaos } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
 import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
+import {
+  conferirEncaixePelaArte, pecasDaConferencia, recadoDaConferencia,
+} from "../motores/conferenciaDaArte";
 import { grade, rotacaoBaseDe } from "../motores/encaixeMascara";
 import { mascarasDaPeca } from "../motores/pecaNaGrade";
 import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../motores/encaixePrepara";
@@ -352,16 +355,64 @@ function guardarResultado(valor) {
     mostrarErroEncaixe(recusa, "aviso");
   }
   ultimoResultado = valor;
+  // A segunda trava, pela arte, começa já: ela é assíncrona e o Exportar fica
+  // apagado até ela responder (ver `conferirPelaArte`).
+  if (valor && !recusa) conferirPelaArte(valor);
   // Todo risco novo começa sem o que desfazer; o complemento guarda o dele
   // logo depois de chamar aqui.
   antesDoComplemento = null;
   // Durante a busca o botão diz "Procurando…"; quem o devolve é o fim dela.
   if (!btnEncaixar.disabled) atualizarBotaoPrincipal();
   if (!btnExportar) return valor;
-  btnExportar.disabled = !valor || !!recusa;
+  btnExportar.disabled = !valor || !!producaoTravada();
   // Perder o risco com o menu aberto deixaria três itens mortos à vista.
   if (!valor || recusa) fecharMenuExportar();
   return valor;
+}
+
+/*
+ * A SEGUNDA TRAVA: A ARTE, E NÃO A MÁSCARA.
+ *
+ * A de cima confere as máscaras — a mesma grade que o encaixe usou. Se a
+ * leitura da arte errou, as duas erram juntas e ela diz "limpo": foi assim que
+ * a produção viu peça dentro de peça com a trava apagada (2026-09-25). Esta
+ * pinta a ARTE de cada par de vizinhas como a tela e o PDF a pintam e confere
+ * sobreposição e folga ali (ver `motores/conferenciaDaArte.js`).
+ *
+ * Mora aqui pelo mesmo motivo da outra: todo risco passa por `guardarResultado`
+ * — a busca, o guardado retomado, o complemento. Enquanto ela não responde, o
+ * Exportar fica apagado e as saídas recusam (`producaoTravada`).
+ *
+ * `valor.conferido` é a promessa: a busca espera por ela antes de guardar o
+ * recorde, e refaz o encaixe quando ela falha (ver `optmizar`).
+ */
+function conferirPelaArte(valor) {
+  const folga = folgaPedida();
+  valor.conferencia = { estado: "conferindo" };
+  const travar = (motivo) => {
+    valor.sobreposto = motivo;
+    mostrarErroEncaixe(motivo, "aviso");
+    fecharMenuExportar();
+    if (btnExportar) btnExportar.disabled = true;
+    redesenharRisco();
+  };
+  valor.conferido = conferirEncaixePelaArte(valor, { folga, deveParar: () => ultimoResultado !== valor })
+    .then((res) => {
+      if (res.parado || ultimoResultado !== valor) return res;
+      valor.conferencia = { estado: res.ok ? "ok" : "falhou", folga, ...res };
+      if (!res.ok) travar(recadoDaConferencia(valor, res, folga));
+      else if (btnExportar) btnExportar.disabled = !!producaoTravada();
+      return res;
+    })
+    .catch((erro) => {
+      // Conferência que quebrou não destrava nada: o que não foi olhado não sai.
+      console.error("[encaixe] a conferência pela arte falhou:", erro);
+      if (ultimoResultado !== valor) return null;
+      valor.conferencia = { estado: "falhou", ok: false, sobrepostos: [], curtos: [] };
+      travar("A conferência pela arte não terminou "
+        + `(${erro && erro.message ? erro.message : erro}). O Exportar ficou travado — refaça o encaixe.`);
+      return null;
+    });
 }
 
 /*
@@ -378,7 +429,12 @@ function guardarResultado(valor) {
  * conveniência; isto é a trava.
  */
 function producaoTravada() {
-  return ultimoResultado && ultimoResultado.sobreposto ? ultimoResultado.sobreposto : null;
+  if (!ultimoResultado) return null;
+  if (ultimoResultado.sobreposto) return ultimoResultado.sobreposto;
+  if (ultimoResultado.conferencia && ultimoResultado.conferencia.estado === "conferindo") {
+    return "Ainda conferindo o encaixe pela arte — um instante.";
+  }
+  return null;
 }
 
 /** Recusa a saída e repete o motivo na tela. `true` quando travou. */
@@ -2484,8 +2540,14 @@ function mostrarAndamento(estado, aprendido) {
  * abaixo. A busca gasta minutos e come os núcleos da máquina; ver o rolo
  * e a bancada uma última vez antes de disparar é barato perto disso.
  */
-async function optmizar() {
+/*
+ * `refeito` é a segunda rodada que a conferência pela arte pede (ver o fim da
+ * busca): ela não pede uma terceira. `avisoDoRefeito` conta, no resumo, o que
+ * mudou de uma para a outra.
+ */
+async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
   limparErroEncaixe();
+  let refazer = null;
 
   // Sem peça não há o que fazer. Não avisa nada porque não há como chegar
   // aqui assim: quem aperta Optmizar com a mesa vazia é levado ao seletor de
@@ -2783,6 +2845,34 @@ async function optmizar() {
     renderPecasEncaixe(); // mostra quanto da caixa cada silhueta ocupa
     renderResultado();
 
+    /*
+     * A CONFERÊNCIA PELA ARTE ANTES DO RECORDE. Ela começou em
+     * `guardarResultado`; um encaixe que ela recusar não pode virar "o melhor
+     * já conseguido". Recusou na primeira rodada: as peças envolvidas passam a
+     * valer a caixa inteira (`reforco`, ver `contornoDaPeca`) e o encaixe é
+     * refeito uma vez, sozinho. Na segunda, trava e diz onde.
+     */
+    if (ultimoResultado.conferido) {
+      atualizarCarregamento({
+        etapa: "Conferindo",
+        titulo: "Conferindo o encaixe pela arte",
+        detalhe: "Cada par de peças vizinhas, desenhado como vai ser impresso.",
+        progresso: 94,
+      });
+      const conferencia = await ultimoResultado.conferido;
+      if (conferencia && !conferencia.ok && !conferencia.parado && !refeito && !pararBusca) {
+        const indices = [...pecasDaConferencia(ultimoResultado, conferencia)];
+        indices.forEach((i) => { if (pecasEncaixe[i]) pecasEncaixe[i].reforco = "caixa"; });
+        const nomes = indices.map((i) => pecasEncaixe[i] && pecasEncaixe[i].nome).filter(Boolean);
+        refazer = `Refeito sozinho — ${recadoDaConferencia(ultimoResultado, conferencia, espaco)
+          .replace(" O Exportar ficou travado.", "")} `
+          + `${nomes.length === 1 ? "A peça" : "As peças"} ${nomes.join(", ")} `
+          + `${nomes.length === 1 ? "passou" : "passaram"} a valer a caixa inteira.`;
+        finalizarCarregamento("com-erro");
+        return;
+      }
+    }
+
     // Um resultado sem todas as peças parece consumir menos tecido. Guardá-lo
     // como recorde faria as próximas buscas restaurarem um trabalho incompleto.
     if (producaoTravada() || ultimoResultado.naoEncaixadas.length > 0) {
@@ -2842,6 +2932,7 @@ async function optmizar() {
     });
 
     mostrarResumoDaBusca(ultimoResultado, aprendido, anotado, guardadoAntes);
+    if (avisoDoRefeito) encaixeAndamento.textContent = `${avisoDoRefeito} · ${encaixeAndamento.textContent}`;
 
     /*
      * A TELA FICA COM O MELHOR.
@@ -2896,6 +2987,9 @@ async function optmizar() {
     btnEncaixar.disabled = false;
     atualizarBotaoPrincipal();
     btnPararBusca.classList.add("hidden");
+    // A segunda rodada depois do `finally`, e não dentro do `try`: ela começa
+    // com a tela devolvida, como se a pessoa tivesse clicado de novo.
+    if (refazer) setTimeout(() => optmizar({ refeito: true, avisoDoRefeito: refazer }), 0);
   }
 }
 
@@ -2932,6 +3026,13 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado, guardadoAntes) {
     if (diferenca > 0.05) partes.push(`${formatarPorcento(diferenca)} melhor que o recorde deste trabalho`);
     else if (diferenca < -0.05) partes.push(`o melhor deste trabalho segue em ${metrosNaTela(recorde)}`);
     else partes.push("empatou com o melhor deste trabalho");
+  }
+
+  const conferencia = resultado.conferencia;
+  if (conferencia && conferencia.estado === "ok") {
+    partes.push(`conferido pela arte: ${conferencia.pares} pares vizinhos`
+      + (Number.isFinite(conferencia.menorFolga)
+        ? `, menor folga ${(conferencia.menorFolga * 10).toFixed(1).replace(".", ",")} mm` : ""));
   }
 
   encaixeAndamento.textContent = partes.join(" · ");

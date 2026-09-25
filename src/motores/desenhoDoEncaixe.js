@@ -364,6 +364,21 @@ export function desenharEncaixe(canvas, r, {
     ctx.restore();
   }
 
+  // Onde a conferência pela arte pegou peça em cima de peça ou folga curta
+  // (ver `conferenciaDaArte.js`). Só na tela: o PNG e o PDF nem saem com isso.
+  const conferencia = r.conferencia;
+  if (!escala && conferencia && conferencia.estado === "falhou") {
+    ctx.save();
+    ctx.strokeStyle = "#ff3b3b";
+    ctx.lineWidth = 2.5;
+    [...(conferencia.sobrepostos || []), ...(conferencia.curtos || [])].forEach((c) => {
+      ctx.beginPath();
+      ctx.arc(REGUA + c.x * px, c.y * px, Math.max(8, 2.5 * px), 0, Math.PI * 2);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
   // Contorno do tecido
   ctx.strokeStyle = "#3a4448";
   ctx.lineWidth = 1;

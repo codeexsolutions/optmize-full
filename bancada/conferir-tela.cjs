@@ -277,6 +277,12 @@ async function principal() {
     assert.match(stats, /\d+,\d+ m/, 'a metragem tinha que aparecer em metros');
     assert.match(stats, /\d+,\d+%/, 'o aproveitamento tinha que aparecer');
 
+    // A segunda trava rodou e passou: a conferência pela arte, que pinta cada
+    // par de vizinhas como o PDF as pinta (ver `conferenciaDaArte.js`). Sem
+    // ela o Exportar não acende — o PDF logo abaixo depende disto.
+    const resumo = await p.$eval('#encaixe-andamento', (n) => n.textContent);
+    assert.match(resumo, /conferido pela arte/, `a conferência pela arte não apareceu no resumo (veio "${resumo}")`);
+
     // O risco é desenhado: um canvas do tamanho do rolo, e não o padrão de 300x150.
     const risco = await p.$eval('#encaixe-canvas', (c) => `${c.width}x${c.height}`);
     assert.notEqual(risco, '300x150', 'o risco não foi desenhado');

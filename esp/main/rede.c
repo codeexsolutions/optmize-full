@@ -56,6 +56,7 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -78,6 +79,7 @@ static bool hora_certa;
 static uint32_t espera_ms = ESPERA_INICIAL_MS;
 static uint32_t quedas;
 static uint8_t  ultimo_motivo;   /* por que caiu da ultima vez */
+static esp_timer_handle_t religar;   /* a proxima tentativa, marcada na queda */
 
 bool rede_conectada(void)   { return conectado; }
 bool rede_tem_hora(void)    { return hora_certa; }
@@ -102,6 +104,11 @@ const char *rede_por_que_nao(void)
     case 0:
         return NULL;                       /* nunca caiu */
     case WIFI_REASON_NO_AP_FOUND:
+    /* O C6 manda estes tres quando a rede nao aparece na varredura -- e o que
+     * chega com o roteador desligado (rssi -128), nao o 201. */
+    case WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY:
+    case WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD:
+    case WIFI_REASON_NO_AP_FOUND_IN_RSSI_THRESHOLD:
         return "rede nao encontrada";
     case WIFI_REASON_AUTH_FAIL:
     case WIFI_REASON_HANDSHAKE_TIMEOUT:
@@ -196,15 +203,34 @@ static void aconteceu(void *ctx, esp_event_base_t base, int32_t id, void *dados)
         quedas++;
 
         /*
+         * O motivo vem no evento, e e ele que a tela mostra ("senha errada",
+         * "rede nao encontrada"). Ate 2026-09-25 ninguem o guardava: ficava 0,
+         * `rede_por_que_nao()` devolvia NULL, e o `%s` do log abaixo lia o
+         * endereco zero -- a placa travava e reiniciava a cada queda, e sem a
+         * rede por perto isso virava um laco com a tela piscando.
+         */
+        const wifi_event_sta_disconnected_t *queda = dados;
+        ultimo_motivo = queda ? queda->reason : 0;
+        const char *porque = rede_por_que_nao();
+
+        /*
          * Espera crescente. Sem ela, um roteador fora do ar recebe uma
          * tentativa a cada poucos milissegundos, e quem paga e o C6.
          */
         ESP_LOGW(TAG, "caiu (%" PRIu32 "a vez, motivo %u: %s), de novo em %" PRIu32 " ms",
-                 quedas, ultimo_motivo, rede_por_que_nao(), espera_ms);
-        vTaskDelay(pdMS_TO_TICKS(espera_ms));
-        espera_ms = espera_ms * 2 > ESPERA_MAXIMA_MS ? ESPERA_MAXIMA_MS : espera_ms * 2;
+                 quedas, ultimo_motivo, porque ? porque : "sem motivo", espera_ms);
 
-        esp_wifi_connect();
+        /*
+         * A ESPERA E MARCADA, NAO DORMIDA. Isto ja foi um `vTaskDelay` aqui
+         * dentro, e aqui dentro e a tarefa dos eventos: enquanto ela dormia (ate
+         * 30 s), nenhum outro evento de rede andava, e trocar de rede na tela
+         * ficava esperando a soneca acabar. Agora um temporizador de uma vez so
+         * chama `esp_wifi_connect` na hora certa, e trocar de rede o cancela
+         * (ver `rede_conectar`).
+         */
+        esp_timer_stop(religar);   /* nao marcado: devolve erro, e tudo bem */
+        esp_timer_start_once(religar, (uint64_t)espera_ms * 1000);
+        espera_ms = espera_ms * 2 > ESPERA_MAXIMA_MS ? ESPERA_MAXIMA_MS : espera_ms * 2;
         return;
     }
 
@@ -219,6 +245,13 @@ static void aconteceu(void *ctx, esp_event_base_t base, int32_t id, void *dados)
         acertar_a_hora();
         return;
     }
+}
+
+/* A tentativa marcada na queda. Roda na tarefa do `esp_timer`. */
+static void tentar_de_novo(void *arg)
+{
+    (void)arg;
+    esp_wifi_connect();
 }
 
 /* ------------------------------------------------------------- subir */
@@ -246,7 +279,9 @@ esp_err_t rede_conectar(const char *nome, const char *senha)
         ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "esp_wifi_start falhou");
         ligada = true;
     } else {
-        /* Ja estava no ar: derruba para subir com a rede nova. */
+        /* Ja estava no ar: derruba para subir com a rede nova. A tentativa
+         * marcada era para a rede velha. */
+        esp_timer_stop(religar);
         esp_wifi_disconnect();
         espera_ms = ESPERA_INICIAL_MS;
         ultimo_motivo = 0;   /* rede nova: o motivo da anterior nao diz nada */
@@ -274,6 +309,9 @@ esp_err_t rede_iniciar(void)
     ESP_RETURN_ON_ERROR(esp_netif_init(), TAG, "esp_netif_init falhou");
     ESP_RETURN_ON_ERROR(esp_event_loop_create_default(), TAG, "o laco de eventos falhou");
     esp_netif_create_default_wifi_sta();
+
+    const esp_timer_create_args_t marcar = { .callback = tentar_de_novo, .name = "religar" };
+    ESP_RETURN_ON_ERROR(esp_timer_create(&marcar, &religar), TAG, "o temporizador nao subiu");
 
     const wifi_init_config_t inicio = WIFI_INIT_CONFIG_DEFAULT();
     ESP_RETURN_ON_ERROR(esp_wifi_init(&inicio), TAG, "esp_wifi_init falhou");
