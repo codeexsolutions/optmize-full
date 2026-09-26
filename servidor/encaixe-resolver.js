@@ -129,38 +129,6 @@ function carregarMotor() {
 // ==================== O CONTORNO VIRA MÁSCARA ====================
 
 /**
- * Rasteriza um polígono na grade, pelo centro de cada célula.
- *
- * Varredura por linha: onde a linha horizontal cruza cada aresta, com os
- * cruzamentos ordenados, dentro e fora se alternam — e a linha inteira sai
- * numa passada só.
- *
- * Os pontos chegam normalizados (0..1). É a mesma função de `bancada/pecas.js`;
- * o comentário de lá vale aqui, e as duas precisam continuar iguais — se um
- * dia divergirem, a bancada estará medindo um preparo que o Corel não usa.
- */
-function rasterizar(poligono, cols, rows) {
-  const bits = new Uint8Array(cols * rows);
-  for (let linha = 0; linha < rows; linha++) {
-    const y = (linha + 0.5) / rows;
-    const cruzamentos = [];
-    for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
-      const [xi, yi] = poligono[i];
-      const [xj, yj] = poligono[j];
-      if ((yi > y) === (yj > y)) continue;
-      cruzamentos.push(xi + ((y - yi) / (yj - yi)) * (xj - xi));
-    }
-    cruzamentos.sort((a, b) => a - b);
-    for (let k = 0; k + 1 < cruzamentos.length; k += 2) {
-      const de = Math.max(0, Math.ceil(cruzamentos[k] * cols - 0.5));
-      const ate = Math.min(cols - 1, Math.floor(cruzamentos[k + 1] * cols - 0.5));
-      for (let c = de; c <= ate; c++) bits[linha * cols + c] = 1;
-    }
-  }
-  return bits;
-}
-
-/**
  * Uma peça do pedido vira uma peça do motor.
  *
  * O contorno chega em centímetros, na medida real do desenho. Aqui ele é
@@ -210,7 +178,9 @@ function prepararPeca(motor, peca, { passo, raio }) {
       (x - minX) / (cols * passo),
       (y - minY) / (rows * passo),
     ]);
-    const parte = rasterizar(normalizado, cols, rows);
+    // Toda célula que o contorno toca (ver `rasterizarPoligono`, em
+    // encaixeMascara.js): pelo centro, a peça passava da célula e comia a folga.
+    const parte = motor.rasterizarPoligono(normalizado, cols, rows);
     for (let i = 0; i < bits.length; i++) if (parte[i]) bits[i] = 1;
   });
 

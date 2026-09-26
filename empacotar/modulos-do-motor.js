@@ -53,6 +53,10 @@ const PARA_A_BANCADA = [
   "motores/encaixeSobreposicao.js",
   // A ponte do encolhedor (o sparrow): a segunda fase da busca da produção.
   "motores/encaixeEncolher.js",
+  // A conferência pela arte, a segunda trava da tela: a bancada prova a conta
+  // dela (`bancada/conferir-conferencia.js`) sem canvas, com a arte pintada
+  // pelos polígonos das peças.
+  "motores/conferenciaDaArte.js",
 ];
 
 module.exports = { PARA_O_SERVIDOR, PARA_A_BANCADA };

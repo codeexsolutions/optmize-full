@@ -251,7 +251,11 @@ export function chaveDoTrabalho(
   // e não vai para a borda do tecido (ver "A BORDA DO TECIDO NÃO LEVA FOLGA",
   // em motores/encaixeMotor.js). Um encaixe guardado antes dela pode ter folga
   // curta, e não pode voltar como "o melhor já conseguido".
-  return `f2/${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
+  // O "f3/" é a folga medida entre QUADRADOS de célula, com a arte lida por
+  // sub-amostra (ver "A FOLGA É ENTRE QUADRADOS", em motores/encaixeMascara.js):
+  // antes dela, 4 mm pedidos davam 1,87 mm num degrau. Um guardado "f2" voltaria
+  // com as máscaras de hoje, e a trava o acusaria de peça em cima de peça.
+  return `f3/${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
 }
 
 /** O encaixe do jeito que ele vai para o banco: só o essencial de cada peça. */
