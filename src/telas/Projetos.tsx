@@ -5,10 +5,10 @@
  *
  * O trabalho começa numa árvore à esquerda e acontece à direita:
  *
- *   CLIENTES            TIME AZUL
- *   ├─ Time Azul        └─ Camisa 2026  → as artes e os ajustes do encaixe
- *   │  ├─ Camisa 2026
- *   │  └─ Abrigo
+ *   CLIENTES            TIME AZUL / CAMISA 2026
+ *   ├─ Time Azul        [Camisa] [Short]           ← subprojetos
+ *   │  ├─ Camisa 2026   P ×10  M ×5  G ×2          ← categorias
+ *   │  └─ Abrigo        Frente · Costas · Manga    ← peças, com a arte
  *   └─ Padaria Sol
  *
  * O que esta tela NÃO faz, de propósito: aplicar estampa em molde. Isso é a
@@ -16,7 +16,7 @@
  * contorno; aqui ela já chega colocada.
  *
  * ---------------------------------------------------------------------------
- * O DESENHO VEIO DO OPTMIZE LITE, E SÓ O DESENHO
+ * VEIO DO OPTMIZE LITE: O DESENHO E, DEPOIS, A ESTRUTURA
  * ---------------------------------------------------------------------------
  *
  * A árvore na lateral, o cabeçalho em versalete com a contagem ao lado, o item
@@ -24,15 +24,13 @@
  * vazio com o ícone grande no meio: tudo isso é a tela de Projetos do painel web
  * (`optmize-lite/src/features/projects/ProjectsPage.tsx`), reproduzida aqui.
  *
- * O que NÃO veio é a estrutura de dados dela. Lá um projeto tem subprojetos,
- * tamanhos e categorias, e as artes moram na nuvem por conta; aqui continua
- * **Cliente → Projeto → peças**, no `dados.db` desta máquina, com os ajustes do
- * encaixe guardados no projeto. Nenhum projeto salvo mudou de forma, e o
- * "levar pro Encaixe" é o mesmo de sempre.
- *
- * A correspondência entre as duas telas é direta, e é o que faz o desenho
- * encaixar sem forçar: o CLIENTE ocupa o lugar do "projeto" de lá (é o que
- * expande) e o PROJETO ocupa o do "subprojeto" (é o que abre no miolo).
+ * Por dentro do projeto também: subprojetos em abas, categorias com a
+ * quantidade pedida e as peças de cada uma, com a arte — o editor do lite, em
+ * `galeria/EditorDoProjeto.tsx`. Por fora continua **Cliente → Projeto**, no
+ * `dados.db` desta máquina; o CLIENTE ocupa o lugar do "projeto" de lá na
+ * árvore (é o que expande) e o PROJETO é o que abre no miolo. Os projetos de
+ * antes da estrutura abrem como um subprojeto com uma categoria só, com as
+ * mesmas peças — nada guardado se perdeu.
  *
  * Duas diferenças assumidas:
  *
@@ -51,41 +49,52 @@
  * Encaixe ainda é imperativo. É a última amarra desta tela, e some com ele.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useDialogo } from "../casca/Dialogo";
 import { Icone } from "../casca/Icone";
-import { Botao, BotaoDeIcone } from "../casca/Botao";
-import { Modal } from "../casca/Modal";
+import { BotaoDeIcone } from "../casca/Botao";
 import { projetosApi, type Cliente, type Projeto, type ProjetoNaLista } from "../api/projetos";
-import { medidasDoArquivo, pixelsPorCmDoArquivo, PPCM_PADRAO } from "../motores/medidaDoArquivo";
-import { useLigacao } from "../producao/ligacao";
-import { carregarImagem } from "../utils/arquivoDeImagem";
-import { useErroEmAlerta } from "../casca/Alerta";
+import { ArquivosDaGaleria } from "./galeria/Arquivos";
+import { EditorDoProjeto } from "./galeria/EditorDoProjeto";
+import {
+  FundoDaGaleria, LateralDaGaleria, useResumoDaGaleria, type AbaDaGaleria, type NavegacaoDaGaleria,
+} from "./galeria/Casca";
 
-/**
- * A arte reduzida para caber na tela.
- *
- * A lista mostra a peça num quadrado pequeno. Apontar o `<img>` para o arquivo
- * de impressão faz o navegador decodificar dezenas de megapixels para pintar
- * isso — medido em 526 ms ao abrir o editor e 1,8 s ao trocar de aba. A
- * miniatura é gerada uma vez, no envio, e fica guardada.
- */
-const LADO_DA_MINIATURA = 240;
+/** Qual metade da Galeria estava aberta, para voltar a ela. */
+const CHAVE_DA_ABA = "optmize.galeria.aba";
 
-/** Uma peça enquanto está sendo editada. Sem `id` quando acabou de subir. */
-interface Peca {
-  id?: number;
-  nome: string;
-  arquivo: string;
-  url: string;
-  miniatura: string | null;
-  largura: number;
-  altura: number;
-  quantidade: number;
+function lerAbaGuardada(): AbaDaGaleria {
+  try {
+    return localStorage.getItem(CHAVE_DA_ABA) === "arquivos" ? "arquivos" : "projetos";
+  } catch {
+    return "projetos";
+  }
 }
 
+/**
+ * A Galeria tem duas metades, trocadas na lateral como as seções de um drive:
+ * os ARQUIVOS (o drive da fábrica, em `galeria/Arquivos.tsx`) e os PROJETOS
+ * DA PRODUÇÃO (arte pronta para o encaixe, logo abaixo). A moldura das duas —
+ * lateral, armazenamento e o fundo com aurora — é `galeria/Casca.tsx`.
+ */
 export function Projetos() {
+  const [aba, setAba] = useState<AbaDaGaleria>(lerAbaGuardada);
+  const [resumo, atualizarResumo] = useResumoDaGaleria();
+  const trocarAba = (nova: AbaDaGaleria) => {
+    setAba(nova);
+    try { localStorage.setItem(CHAVE_DA_ABA, nova); } catch { /* fica só nesta visita */ }
+  };
+  const nav: NavegacaoDaGaleria = { aba, aoTrocar: trocarAba, resumo, atualizarResumo };
+
+  return aba === "arquivos"
+    ? <ArquivosDaGaleria nav={nav} />
+    : <ProjetosDaGaleria nav={nav} />;
+}
+
+function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
   const dialogo = useDialogo();
+  /** O cliente cujos projetos aparecem em cartões no miolo (sem projeto aberto). */
+  const [clienteNoMiolo, setClienteNoMiolo] = useState<number | null>(null);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   /** Os projetos de cada cliente, lidos quando a pasta dele abre. */
   const [projetosPorCliente, setProjetosPorCliente] = useState<Record<number, ProjetoNaLista[]>>({});
@@ -123,6 +132,7 @@ export function Projetos() {
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     }
+    nav.atualizarResumo();
   };
 
   const carregarProjetos = useCallback(async (clienteId: number) => {
@@ -138,7 +148,17 @@ export function Projetos() {
       else proximo.add(cliente.id);
       return proximo;
     });
-    if (!aberto) await tentar(() => carregarProjetos(cliente.id));
+    if (!aberto) {
+      setClienteNoMiolo(cliente.id);
+      await tentar(() => carregarProjetos(cliente.id));
+    }
+  };
+
+  /** O cartão de um cliente, no miolo: abre a pasta dele ali e na árvore. */
+  const entrarNoCliente = async (cliente: Cliente) => {
+    setClienteNoMiolo(cliente.id);
+    setAbertos((antes) => new Set(antes).add(cliente.id));
+    await tentar(() => carregarProjetos(cliente.id));
   };
 
   const abrirProjeto = async (id: number) => {
@@ -188,6 +208,7 @@ export function Projetos() {
     await tentar(async () => {
       await projetosApi.apagarCliente(cliente.id);
       if (projetoAberto?.cliente?.id === cliente.id) setProjetoAberto(null);
+      if (clienteNoMiolo === cliente.id) setClienteNoMiolo(null);
       await carregarClientes();
     });
   };
@@ -217,25 +238,14 @@ export function Projetos() {
     await carregarClientes();
   };
 
+  const clienteAberto = clientes.find((c) => c.id === clienteNoMiolo) ?? null;
+  const projetosDoMiolo = clienteAberto ? projetosPorCliente[clienteAberto.id] : undefined;
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* ---------------------------------------------- a árvore, à esquerda */}
-      <aside className="flex w-64 shrink-0 flex-col overflow-hidden border-r border-linha bg-painel">
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-linha bg-painel-suave px-3 py-2">
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className="text-[10px] font-bold tracking-widest text-tinta-fraca uppercase">Clientes</span>
-            <span className="font-mono text-[10px] text-tinta-apagada">{clientes.length}</span>
-          </span>
-          <Botao
-            tamanho="pequeno"
-            onClick={() => void novoCliente()}
-            icone={<Icone referencia="icones.svg#plus" className="size-3.5" />}
-          >
-            Novo
-          </Botao>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <LateralDaGaleria nav={nav}>
+        <div className="ml-4 border-l border-linha py-0.5 pl-1.5">
           {/*
             Falha de carga tem lugar próprio, acima da lista. Sem isto, um erro
             de rede aparecia como "nenhum cliente ainda" — a mensagem mais cara
@@ -258,20 +268,16 @@ export function Projetos() {
           )}
 
           {carregando ? (
-            <p className="px-2 py-6 text-center text-[11px] text-tinta-apagada">Carregando…</p>
+            <p className="m-0 px-2 py-1.5 text-[11px] text-tinta-apagada">carregando…</p>
           ) : clientes.length === 0 && !erro ? (
-            <p className="px-2 py-6 text-center text-[11px] leading-relaxed text-tinta-apagada">
-              Nenhum cliente ainda.
-              <br />
-              Crie a pasta do primeiro.
-            </p>
+            <p className="m-0 px-2 py-1.5 text-[11px] text-tinta-apagada">nenhum cliente ainda</p>
           ) : (
             clientes.map((cliente) => (
               <PastaDoCliente
                 key={cliente.id}
                 cliente={cliente}
                 aberto={abertos.has(cliente.id)}
-                ativo={projetoAberto?.cliente?.id === cliente.id}
+                ativo={projetoAberto?.cliente?.id === cliente.id || (!projetoAberto && clienteNoMiolo === cliente.id)}
                 projetos={projetosPorCliente[cliente.id]}
                 projetoAbertoId={projetoAberto?.id ?? null}
                 aoAlternar={() => void alternarCliente(cliente)}
@@ -283,42 +289,158 @@ export function Projetos() {
             ))
           )}
         </div>
-      </aside>
+      </LateralDaGaleria>
 
       {/* ------------------------------------------- o trabalho, à direita */}
-      {projetoAberto === null ? (
-        <div className="grid flex-1 place-items-center p-8">
-          <div className="flex max-w-sm flex-col items-center gap-5 text-center">
-            <span className="grid size-14 place-items-center rounded-2xl bg-painel text-tinta-apagada">
-              <Icone referencia="icones.svg#folder-tree" className="size-6" />
-            </span>
-            <div>
-              <p className="m-0 font-titulo text-lg font-semibold text-tinta">Abra um projeto</p>
-              <p className="mt-1 mb-0 text-sm leading-relaxed text-tinta-fraca">
-                Cada cliente tem a sua pasta; dentro dela, uma pasta por projeto. O projeto guarda
-                a arte já finalizada, a medida real e os ajustes do encaixe — repetir o pedido é
-                abrir, dizer quantas unidades e mandar calcular.
-              </p>
+      <FundoDaGaleria>
+        {projetoAberto !== null ? (
+          <EditorDoProjeto
+            // `key`: trocar de projeto monta um editor novo, em vez de
+            // reaproveitar o anterior com os campos do projeto de antes.
+            key={projetoAberto.id}
+            projeto={projetoAberto}
+            aoFechar={() => {
+              setClienteNoMiolo(projetoAberto.cliente?.id ?? null);
+              setProjetoAberto(null);
+            }}
+            aoMudarOProjeto={recarregarPasta}
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-7 pb-16">
+            {/* O título, com as migalhas de drive */}
+            <nav className="mb-1 flex items-center gap-1 text-xs text-tinta-apagada">
+              <button type="button" onClick={() => setClienteNoMiolo(null)} className="rounded-md px-1 py-0.5 hover:bg-[var(--surface-hover)] hover:text-ambar">
+                Projetos da produção
+              </button>
+              {clienteAberto && (
+                <>
+                  <Icone referencia="icones.svg#chevron-right" className="size-3" />
+                  <span className="px-1">{clienteAberto.nome}</span>
+                </>
+              )}
+            </nav>
+            <div className="mb-6 flex flex-wrap items-end gap-4">
+              <div className="min-w-0 flex-1">
+                <h1 className="m-0 truncate font-titulo text-3xl font-semibold tracking-tight text-tinta">
+                  {clienteAberto ? clienteAberto.nome : "Clientes"}
+                </h1>
+                <p className="mt-1 mb-0 text-xs text-tinta-apagada">
+                  {clienteAberto
+                    ? `${clienteAberto.projetos} projeto(s) — a arte pronta, a medida real e os ajustes do encaixe`
+                    : `${clientes.length} cliente(s) — uma pasta por empresa, um projeto por fardamento`}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {clienteAberto && (
+                  <>
+                    <BotaoDeIcone title="Renomear cliente" onClick={() => void renomearCliente(clienteAberto)}>
+                      <Icone referencia="icones.svg#pencil" className="size-3.5" />
+                    </BotaoDeIcone>
+                    <BotaoDeIcone title="Excluir cliente" perigoso onClick={() => void excluirCliente(clienteAberto)}>
+                      <Icone referencia="icones.svg#trash-2" className="size-3.5" />
+                    </BotaoDeIcone>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void (clienteAberto ? novoProjeto(clienteAberto) : novoCliente())}
+                  className="galeria-novo flex h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold"
+                >
+                  <Icone referencia="icones.svg#plus" className="size-4" />
+                  {clienteAberto ? "Novo projeto" : "Novo cliente"}
+                </button>
+              </div>
             </div>
-            <Botao
-              jeito="primario"
-              onClick={() => void novoCliente()}
-              icone={<Icone referencia="icones.svg#plus" className="size-4" />}
-            >
-              Novo cliente
-            </Botao>
+
+            {clienteAberto === null ? (
+              clientes.length === 0 && !carregando ? (
+                <VazioDosProjetos
+                  titulo="Guarde o fardamento de cada empresa"
+                  texto="Cada cliente é uma pasta; dentro dela, um projeto por trabalho. O projeto guarda a arte já finalizada, a medida real e os ajustes do encaixe — repetir o pedido é abrir, dizer quantas unidades e mandar calcular."
+                  botao="Novo cliente"
+                  aoClicar={() => void novoCliente()}
+                />
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+                  {clientes.map((cliente, i) => (
+                    <button
+                      key={cliente.id}
+                      type="button"
+                      onClick={() => void entrarNoCliente(cliente)}
+                      style={{ "--ordem": i } as CSSProperties}
+                      className="galeria-cartao galeria-entra flex items-center gap-3.5 rounded-2xl px-4 py-4 text-left"
+                    >
+                      <span className="galeria-pasta" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-tinta">{cliente.nome}</span>
+                        <span className="block text-[11px] text-tinta-apagada">{cliente.projetos} projeto(s)</span>
+                      </span>
+                      <Icone referencia="icones.svg#chevron-right" className="size-4 shrink-0 text-tinta-apagada" />
+                    </button>
+                  ))}
+                </div>
+              )
+            ) : projetosDoMiolo === undefined ? (
+              <p className="py-10 text-center text-sm text-tinta-apagada">Carregando…</p>
+            ) : projetosDoMiolo.length === 0 ? (
+              <VazioDosProjetos
+                titulo="Nenhum projeto ainda"
+                texto={`Crie o primeiro projeto de ${clienteAberto.nome}: a camisa, o avental, a bandeira — cada trabalho que se repete.`}
+                botao="Novo projeto"
+                aoClicar={() => void novoProjeto(clienteAberto)}
+              />
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-4">
+                {projetosDoMiolo.map((projeto, i) => (
+                  <button
+                    key={projeto.id}
+                    type="button"
+                    onClick={() => void abrirProjeto(projeto.id)}
+                    style={{ "--ordem": i, "--cor-do-tipo": "var(--accent)" } as CSSProperties}
+                    className="galeria-cartao galeria-entra group flex flex-col overflow-hidden rounded-2xl text-left"
+                  >
+                    <span className="galeria-previa grid aspect-[4/3] place-items-center overflow-hidden">
+                      {projeto.capa
+                        ? <img src={projeto.capa} alt="" className="size-full object-contain p-3" />
+                        : <span className="galeria-pasta scale-150" aria-hidden="true" />}
+                    </span>
+                    <span className="block min-w-0 px-3.5 py-3">
+                      <span className="block truncate text-sm font-medium text-tinta">{projeto.nome}</span>
+                      <span className="block text-[11px] text-tinta-apagada">
+                        {projeto.pecas} arte(s) · {projeto.pecasPorUnidade} peça(s) por unidade
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+        )}
+      </FundoDaGaleria>
+    </div>
+  );
+}
+
+function VazioDosProjetos({ titulo, texto, botao, aoClicar }: {
+  titulo: string; texto: string; botao: string; aoClicar: () => void;
+}) {
+  return (
+    <div className="grid place-items-center py-14">
+      <div className="flex max-w-md flex-col items-center gap-6 text-center">
+        <div className="relative h-24 w-44" aria-hidden="true">
+          <span className="galeria-pasta absolute top-5 left-4 scale-[1.5] -rotate-12 opacity-40" />
+          <span className="galeria-pasta absolute top-5 right-4 scale-[1.5] rotate-12 opacity-40" />
+          <span className="galeria-pasta absolute top-9 left-1/2 -ml-[23px] scale-[2] drop-shadow-[0_20px_40px_rgba(255,83,31,0.45)]" />
         </div>
-      ) : (
-        <EditorDoProjeto
-          // `key`: trocar de projeto monta um editor novo, em vez de
-          // reaproveitar o anterior com os campos do projeto de antes.
-          key={projetoAberto.id}
-          projeto={projetoAberto}
-          aoFechar={() => setProjetoAberto(null)}
-          aoMudarOProjeto={recarregarPasta}
-        />
-      )}
+        <div>
+          <p className="m-0 font-titulo text-2xl font-semibold text-tinta">{titulo}</p>
+          <p className="mt-2 mb-0 text-sm leading-relaxed text-tinta-fraca">{texto}</p>
+        </div>
+        <button type="button" onClick={aoClicar} className="galeria-novo flex h-11 items-center gap-2 rounded-full px-6 text-sm font-semibold">
+          <Icone referencia="icones.svg#plus" className="size-4" />
+          {botao}
+        </button>
+      </div>
     </div>
   );
 }
@@ -363,12 +485,19 @@ function PastaDoCliente({
           />
         </button>
 
-        <button type="button" onClick={aoAlternar} className="min-w-0 flex-1 text-left">
-          <span className={`block truncate text-xs font-medium ${ativo ? "text-ambar" : "text-tinta"}`}>
-            {cliente.nome}
-          </span>
-          <span className="block font-mono text-[10px] text-tinta-apagada">
-            {cliente.projetos} projeto(s)
+        {/* A pasta do cliente, aberta quando os projetos dele estão à vista. */}
+        <button type="button" onClick={aoAlternar} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <Icone
+            referencia={aberto ? "icones.svg#folder-open" : "icones.svg#folder"}
+            className={`size-4 shrink-0 ${ativo || aberto ? "text-ambar" : "text-tinta-apagada"}`}
+          />
+          <span className="min-w-0">
+            <span className={`block truncate text-xs font-medium ${ativo ? "text-ambar" : "text-tinta"}`}>
+              {cliente.nome}
+            </span>
+            <span className="block font-mono text-[10px] text-tinta-apagada">
+              {cliente.projetos} projeto(s)
+            </span>
           </span>
         </button>
 
@@ -413,13 +542,17 @@ function PastaDoCliente({
                 type="button"
                 onClick={() => aoAbrirProjeto(projeto.id)}
                 className={[
-                  "block w-full truncate rounded-md px-2 py-1 text-left text-[11px] transition-colors",
+                  "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] transition-colors",
                   projeto.id === projetoAbertoId
                     ? "bg-[var(--accent-soft)] font-medium text-ambar"
                     : "text-tinta-fraca hover:bg-painel-suave hover:text-tinta",
                 ].join(" ")}
               >
-                {projeto.nome}
+                <Icone
+                  referencia={projeto.id === projetoAbertoId ? "icones.svg#folder-open" : "icones.svg#folder"}
+                  className="size-3.5 shrink-0"
+                />
+                <span className="truncate">{projeto.nome}</span>
               </button>
             ))
           )}
@@ -436,573 +569,4 @@ function PastaDoCliente({
       )}
     </div>
   );
-}
-
-// ==================== O EDITOR, NA ÁREA PRINCIPAL ====================
-
-function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
-  projeto: Projeto;
-  aoFechar: () => void;
-  aoMudarOProjeto: () => Promise<void>;
-}) {
-  const dialogo = useDialogo();
-  const ligacao = useLigacao();
-
-  const [nome, setNome] = useState(projeto.nome);
-  const [observacoes, setObservacoes] = useState(projeto.observacoes || "");
-  const [larguraTecido, setLarguraTecido] = useState(projeto.largura_tecido?.toString() ?? "");
-  const [comprimento, setComprimento] = useState(projeto.comprimento_bancada?.toString() ?? "");
-  const [giro, setGiro] = useState(projeto.giro || "180");
-  const [unidades, setUnidades] = useState("1");
-  /** A caixa que pergunta quantas unidades, no caminho para o Encaixe. */
-  const [perguntandoQuantas, setPerguntandoQuantas] = useState(false);
-  const [pecas, setPecas] = useState<Peca[]>(projeto.pecas);
-  const setErro = useErroEmAlerta("Não deu certo no projeto");
-  const [status, setStatus] = useState("");
-  const entrada = useRef<HTMLInputElement>(null);
-
-  /**
-   * Peça guardada antes da miniatura existir mostra o arquivo inteiro no
-   * quadradinho — o que trava a página. Aqui ela ganha a sua, sem bloquear:
-   * `createImageBitmap` decodifica fora da thread da tela. As medidas saem do
-   * cabeçalho do arquivo para a redução manter a proporção.
-   */
-  useEffect(() => {
-    const faltando = projeto.pecas.filter((peca) => !peca.miniatura && peca.url);
-    if (faltando.length === 0) return;
-    let cancelado = false;
-
-    (async () => {
-      const feitas: { id: number; miniatura: string }[] = [];
-      for (const peca of faltando) {
-        try {
-          const blob = await fetch(peca.url).then((r) => r.blob());
-          const medidas = medidasDoArquivo(new Uint8Array(await blob.arrayBuffer()));
-          const miniatura = await miniaturaDoBlob(blob, medidas);
-          if (cancelado) return;
-          if (!miniatura) continue;
-          feitas.push({ id: peca.id, miniatura });
-          setPecas((atuais) => atuais.map((x) => (x.id === peca.id ? { ...x, miniatura } : x)));
-        } catch {
-          // sem miniatura: a linha continua mostrando o arquivo, como antes
-        }
-      }
-
-      // Guarda as prévias recém-feitas, para a próxima abertura ser instantânea.
-      // Falhar aqui não é problema: a tela continua funcionando e tenta de novo
-      // na próxima vez.
-      if (feitas.length > 0 && !cancelado) {
-        projetosApi.guardarMiniaturas(projeto.id, feitas).catch(() => {});
-      }
-    })();
-
-    return () => { cancelado = true; };
-  }, [projeto]);
-
-  const mexerNaPeca = (indice: number, mudanca: Partial<Peca>) =>
-    setPecas((atuais) => atuais.map((peca, i) => (i === indice ? { ...peca, ...mudanca } : peca)));
-
-  /**
-   * A medida sai do dpi gravado no arquivo, exatamente como no Encaixe — é a
-   * única fonte confiável do tamanho real. Sem dpi, vale 300 (o padrão de arte
-   * para impressão) e o número fica editável na linha.
-   */
-  const mandarArquivos = async (arquivos: File[]) => {
-    setErro("");
-    let enviados = 0;
-
-    for (const arquivo of arquivos) {
-      setStatus(`Enviando ${arquivo.name}…`);
-      try {
-        const bytes = new Uint8Array(await arquivo.arrayBuffer());
-        const ppcm = pixelsPorCmDoArquivo(bytes) || PPCM_PADRAO;
-        const { arquivo: nomeNoDisco, url } = await projetosApi.mandarImagem(projeto.id, arquivo);
-        const img = await carregarImagem(url);
-
-        setPecas((atuais) => [...atuais, {
-          nome: arquivo.name.replace(/\.[^.]+$/, "").slice(0, 120) || "peça",
-          arquivo: nomeNoDisco,
-          url,
-          miniatura: miniaturaDaImagem(img),
-          largura: Math.round((img.naturalWidth / ppcm) * 10) / 10,
-          altura: Math.round((img.naturalHeight / ppcm) * 10) / 10,
-          quantidade: 1,
-        }]);
-        enviados++;
-      } catch (e) {
-        setErro(`"${arquivo.name}": ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-
-    setStatus(enviados > 0 ? `${enviados} arte(s) adicionada(s).` : "");
-  };
-
-  const salvar = async (): Promise<boolean> => {
-    if (!nome.trim()) { setErro("Dê um nome ao projeto."); return false; }
-    const semMedida = pecas.find((peca) => !(Number(peca.largura) > 0) || !(Number(peca.altura) > 0));
-    if (semMedida) {
-      setErro(`"${semMedida.nome}" está sem medida. Preencha largura e altura em centímetros.`);
-      return false;
-    }
-
-    try {
-      await projetosApi.gravar(projeto.id, {
-        nome: nome.trim(),
-        observacoes: observacoes.trim(),
-        larguraTecido: larguraTecido === "" ? null : Number(larguraTecido),
-        /*
-         * A folga saiu da tela, mas NÃO do banco: quem decide a folga é o
-         * confere do Optmizar, com o padrão dele. O valor que o projeto já
-         * tinha vai de volta como veio — apagá-lo seria perder, na primeira
-         * gravação de um projeto antigo, um número que alguém escolheu.
-         */
-        espaco: projeto.espaco,
-        comprimentoBancada: comprimento === "" ? null : Number(comprimento),
-        giro,
-        pecas: pecas.map((peca) => ({
-          nome: peca.nome,
-          arquivo: peca.arquivo,
-          miniatura: peca.miniatura,
-          largura: Number(peca.largura),
-          altura: Number(peca.altura),
-          quantidade: Math.max(1, Math.floor(Number(peca.quantidade) || 1)),
-        })),
-      });
-      setErro("");
-      return true;
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e));
-      return false;
-    }
-  };
-
-  /**
-   * A repetição: salva, leva os ajustes guardados ao Encaixe e manda as peças.
-   *
-   * A troca de tela vem ANTES do trabalho, e não depois. O painel de andamento
-   * do Encaixe mora dentro daquela tela; com esta ainda na frente ele ficava
-   * escondido, e a pessoa via só a tela parada.
-   */
-  const mandarParaOEncaixe = async () => {
-    if (pecas.length === 0) { setErro("O projeto não tem nenhuma arte para encaixar."); return; }
-    if (!ligacao) { setErro("O editor de produção não está montado."); return; }
-    if (!await salvar()) return;
-    setPerguntandoQuantas(false);
-
-    const quantas = Math.max(1, Math.floor(Number(unidades) || 1));
-    const paraEnviar = pecas.slice();
-    const nomeDoTrabalho = nome.trim();
-
-    ligacao.irPara("encaixe");
-
-    try {
-      await ligacao.mandarProjetoParaOEncaixe({
-        nome: nomeDoTrabalho,
-        unidades: quantas,
-        pecas: paraEnviar.map((peca) => ({
-          nome: peca.nome,
-          url: peca.url,
-          largura: Number(peca.largura),
-          altura: Number(peca.altura),
-          quantidade: Math.max(1, Math.floor(Number(peca.quantidade) || 1)),
-        })),
-        ajustes: {
-          larguraTecido: larguraTecido === "" ? null : Number(larguraTecido),
-          /*
-           * A FOLGA NÃO VAI DAQUI. Ela é do confere do Optmizar, e vale o
-           * padrão dele — `null` quer dizer "não mexa no que está lá".
-           *
-           * O projeto continua guardando o número que tinha (ver `salvar`),
-           * mas a tela parou de perguntá-lo: eram dois lugares decidindo a
-           * mesma coisa, e o que valia era o último a escrever no campo.
-           */
-          espaco: null,
-          comprimentoBancada: comprimento === "" ? null : Number(comprimento),
-          giro,
-        },
-      });
-    } catch (e) {
-      // O aviso aparece na tela do Encaixe, que é onde a pessoa está agora.
-      await dialogo.avisar(
-        `Não deu para mandar o projeto ao encaixe: ${e instanceof Error ? e.message : String(e)}`,
-        { perigoso: true },
-      );
-    }
-  };
-
-  const excluir = async () => {
-    const certeza = await dialogo.confirmar(
-      "Apagar este projeto apaga as artes dentro dele. Não tem volta.",
-      { titulo: "Excluir projeto", confirmar: "Excluir" },
-    );
-    if (!certeza) return;
-    try {
-      await projetosApi.apagar(projeto.id);
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e));
-      return;
-    }
-    aoFechar();
-    await aoMudarOProjeto();
-  };
-
-  const porUnidade = pecas.reduce((soma, peca) => soma + (Number(peca.quantidade) || 0), 0);
-  const quantas = Math.max(1, Math.floor(Number(unidades) || 1));
-
-  return (
-    <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      {/* O topo e o pé ficam parados; o miolo é que rola. */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-linha bg-painel-suave px-4 py-2.5">
-        <div className="min-w-0 flex-1">
-          <span className="block text-[10px] font-bold tracking-widest text-tinta-apagada uppercase">
-            {projeto.cliente?.nome ?? "Cliente"}
-          </span>
-          {/*
-            O nome do projeto é editado ali mesmo, sem campo com moldura — é o
-            `EditableText` do painel web. A moldura aparece ao passar o ponteiro.
-          */}
-          <input
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            maxLength={120}
-            aria-label="Nome do projeto"
-            className="w-full truncate rounded-md border border-transparent bg-transparent px-1 py-0.5 font-titulo text-base font-semibold text-tinta transition-colors hover:border-linha focus:border-[var(--accent-line)] focus:outline-none"
-          />
-        </div>
-
-        {/*
-          Aqui em cima ficam só as ações do CADASTRO. O que leva o trabalho
-          adiante mora no pé da tela, onde o olho termina de ler o projeto —
-          ver o rodapé.
-        */}
-        <span className="flex shrink-0 items-center gap-2">
-          <BotaoDeIcone title="Excluir projeto" perigoso onClick={() => void excluir()}>
-            <Icone referencia="icones.svg#trash-2" className="size-3.5" />
-          </BotaoDeIcone>
-          <Botao
-            tamanho="pequeno"
-            onClick={async () => {
-              if (await salvar()) { setStatus("Projeto salvo."); await aoMudarOProjeto(); }
-            }}
-          >
-            Salvar
-          </Botao>
-        </span>
-      </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <label className="block max-w-xl">
-          <span className="mb-1.5 block text-[10px] font-bold tracking-widest text-tinta-fraca uppercase">
-            Observações
-          </span>
-          <input
-            value={observacoes}
-            onChange={(e) => setObservacoes(e.target.value)}
-            maxLength={500}
-            placeholder="opcional"
-            className={CAMPO}
-          />
-        </label>
-
-        {/* ---------------------------------------------------- as artes */}
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className="text-[10px] font-bold tracking-widest text-tinta-fraca uppercase">
-              Peças da produção
-            </span>
-            <span className="font-mono text-[10px] text-tinta-apagada">{pecas.length}</span>
-          </span>
-
-          <span className="flex shrink-0 items-center gap-2">
-            <span className="font-mono text-[10px] text-tinta-apagada">{status}</span>
-            <Botao
-              tamanho="pequeno"
-              onClick={() => entrada.current?.click()}
-              icone={<Icone referencia="icones.svg#plus" className="size-3.5" />}
-            >
-              Adicionar arte
-            </Botao>
-            <input
-              ref={entrada}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              multiple
-              className="hidden"
-              onChange={(evento) => {
-                const arquivos = [...(evento.target.files || [])];
-                evento.target.value = "";
-                if (arquivos.length > 0) void mandarArquivos(arquivos);
-              }}
-            />
-          </span>
-        </div>
-
-        <p className="mt-1 mb-0 text-xs leading-relaxed text-tinta-apagada">
-          A arte já finalizada. A medida vem do dpi gravado no arquivo; quando ele não traz,
-          digite os centímetros — fica guardado para a próxima vez.
-        </p>
-
-        <div className="mt-3 space-y-2">
-          {pecas.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-linha px-4 py-8 text-center">
-              <p className="m-0 text-sm font-medium text-tinta-fraca">Nenhuma arte no projeto</p>
-              <p className="mt-1 mb-0 text-xs text-tinta-apagada">
-                Clique em "Adicionar arte" e mande a estampa já aplicada na peça.
-              </p>
-            </div>
-          ) : pecas.map((peca, indice) => (
-            <article
-              key={peca.id ?? `nova-${indice}-${peca.arquivo}`}
-              className="group flex flex-wrap items-center gap-3 rounded-xl border border-linha bg-painel px-3 py-2.5 transition-colors hover:border-[var(--accent-line)] animar-entrada"
-            >
-              <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-linha bg-painel-suave">
-                {peca.miniatura
-                  ? <img src={peca.miniatura} alt="" className="size-full object-contain" />
-                  : <span className="text-[10px] text-tinta-apagada">…</span>}
-              </span>
-
-              <input
-                value={peca.nome}
-                onChange={(e) => mexerNaPeca(indice, { nome: e.target.value })}
-                maxLength={120}
-                aria-label="Nome da peça"
-                className="min-w-32 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-sm text-tinta transition-colors hover:border-linha focus:border-[var(--accent-line)] focus:outline-none"
-              />
-
-              <MedidaDaPeca rotulo="Larg. cm">
-                <input
-                  type="number" min="0.1" step="0.1"
-                  value={peca.largura}
-                  onChange={(e) => mexerNaPeca(indice, { largura: Number(e.target.value) })}
-                  className={MEDIDA}
-                />
-              </MedidaDaPeca>
-
-              <MedidaDaPeca rotulo="Alt. cm">
-                <input
-                  type="number" min="0.1" step="0.1"
-                  value={peca.altura}
-                  onChange={(e) => mexerNaPeca(indice, { altura: Number(e.target.value) })}
-                  className={MEDIDA}
-                />
-              </MedidaDaPeca>
-
-              <MedidaDaPeca rotulo="Qtd">
-                <input
-                  type="number" min="1" step="1"
-                  value={peca.quantidade}
-                  onChange={(e) => mexerNaPeca(indice, { quantidade: Number(e.target.value) })}
-                  className={`${MEDIDA} w-16`}
-                />
-              </MedidaDaPeca>
-
-              <button
-                type="button"
-                onClick={() => setPecas((atuais) => atuais.filter((_, i) => i !== indice))}
-                aria-label="Tirar esta arte"
-                title="Tirar esta arte"
-                className="grid size-7 shrink-0 place-items-center rounded-lg text-tinta-apagada opacity-0 transition-all hover:bg-[color-mix(in_srgb,var(--danger)_20%,transparent)] hover:text-[var(--danger)] group-hover:opacity-100 focus:opacity-100"
-              >
-                <Icone referencia="icones.svg#trash-2" className="size-3.5" />
-              </button>
-            </article>
-          ))}
-        </div>
-
-        {/* ------------------------------------------ os ajustes do encaixe */}
-        <p className="mt-6 mb-1 text-[10px] font-bold tracking-widest text-tinta-fraca uppercase">
-          Ajustes do encaixe
-        </p>
-        <p className="mt-0 mb-3 text-xs leading-relaxed text-tinta-apagada">
-          Guardados com o projeto, para a repetição já sair calculada do mesmo jeito.
-          A <strong className="font-semibold text-tinta-fraca">folga entre as peças</strong> não
-          está aqui de propósito: quem a decide é o confere do Optmizar, com o padrão dele.
-        </p>
-
-        <div className="flex flex-wrap gap-3">
-          <CampoDoAjuste rotulo="Largura do tecido (cm)">
-            <input type="number" min="10" step="1" placeholder="160"
-              value={larguraTecido} onChange={(e) => setLarguraTecido(e.target.value)} className={CAMPO} />
-          </CampoDoAjuste>
-
-          <CampoDoAjuste rotulo="Comprimento da bancada (cm)">
-            <input type="number" min="0" step="1" placeholder="sem limite"
-              value={comprimento} onChange={(e) => setComprimento(e.target.value)} className={CAMPO} />
-          </CampoDoAjuste>
-
-          <CampoDoAjuste rotulo="Giro das peças">
-            <select value={giro} onChange={(e) => setGiro(e.target.value)} className={CAMPO}>
-              <option value="180">180° — vira de cabeça para baixo</option>
-              <option value="livre">90° — a volta inteira</option>
-              <option value="fixa">Fixa — não gira</option>
-            </select>
-          </CampoDoAjuste>
-        </div>
-
-      </div>
-
-      {/*
-        ---------------------------------------------------------------------
-        O PÉ: É DAQUI QUE O TRABALHO SAI
-        ---------------------------------------------------------------------
-
-        O botão estava no canto superior direito, do tamanho dos outros dois, e
-        é o mais importante da tela — o que leva o pedido para o tecido. Agora
-        ele fecha a leitura: o projeto é lido de cima para baixo e, no fim,
-        está a saída, grande e sozinha, sem disputar com "Salvar".
-
-        Ele não vai direto: abre o confere das unidades, que é onde a
-        quantidade é decidida.
-      */}
-      <footer className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-linha bg-painel-suave px-4 py-3">
-        <span className="min-w-0 flex-1 text-xs leading-relaxed text-tinta-apagada">
-          {pecas.length === 0
-            ? "Mande as artes acima para poder encaixar."
-            : <>
-                {porUnidade} peça(s) por unidade pronta. O cálculo não começa sozinho: no Encaixe
-                você escolhe o tempo de procura e aperta{" "}
-                <strong className="font-semibold text-tinta-fraca">Optmizar</strong>.
-              </>}
-        </span>
-
-        <Botao
-          jeito="primario"
-          tamanho="grande"
-          disabled={pecas.length === 0}
-          onClick={() => setPerguntandoQuantas(true)}
-          icone={<Icone referencia="icones.svg#blocks" className="size-4" />}
-          className="px-7 text-base"
-        >
-          Levar pro Encaixe
-        </Botao>
-      </footer>
-
-      {/*
-        O confere das unidades. Uma coisa só é perguntada aqui — quantas peças
-        prontas —, porque é a única que muda de um pedido para o outro: as
-        artes e a largura do tecido ficam guardadas no projeto, a quantidade
-        não.
-      */}
-      <Modal
-        aberto={perguntandoQuantas}
-        aoFechar={() => setPerguntandoQuantas(false)}
-        titulo="Levar pro Encaixe"
-        icone="icones.svg#blocks"
-        rodape={
-          <>
-            <Botao onClick={() => setPerguntandoQuantas(false)}>Cancelar</Botao>
-            <Botao
-              jeito="primario"
-              onClick={() => void mandarParaOEncaixe()}
-              icone={<Icone referencia="icones.svg#blocks" className="size-4" />}
-            >
-              Levar
-            </Botao>
-          </>
-        }
-      >
-        <label className="block">
-          <span className="mb-1.5 block text-[10px] font-bold tracking-widest text-tinta-fraca uppercase">
-            Quantas peças prontas
-          </span>
-          <input
-            type="number" min="1" step="1"
-            autoFocus
-            value={unidades}
-            onChange={(e) => setUnidades(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") void mandarParaOEncaixe(); }}
-            className="h-12 w-full rounded-xl border border-linha bg-painel px-3.5 text-center font-mono text-xl text-tinta focus:border-[var(--accent-line)] focus:outline-none"
-          />
-        </label>
-
-        {/* A conta que a pessoa faria de cabeça, feita à vista dela. */}
-        <p className="mt-3 mb-0 font-mono text-xs text-tinta-fraca">
-          {porUnidade} peça(s) por unidade × {quantas} ={" "}
-          <strong className="font-semibold text-ambar">{porUnidade * quantas} peça(s)</strong> no encaixe
-        </p>
-
-        <p className="mt-2 mb-0 text-xs leading-relaxed text-tinta-apagada">
-          O projeto é salvo antes de ir. A folga entre as peças é a do confere do Optmizar.
-        </p>
-      </Modal>
-    </section>
-  );
-}
-
-/** O campo dos ajustes, na medida do painel web: rótulo em versalete sobre a caixa. */
-const CAMPO =
-  "h-10 w-full rounded-xl border border-linha bg-painel-suave px-3 text-sm text-tinta" +
-  " placeholder:text-tinta-apagada focus:border-[var(--accent-line)] focus:outline-none";
-
-/** O campo miúdo de medida, dentro da linha de uma peça. */
-const MEDIDA =
-  "w-20 rounded-lg border border-linha bg-painel-suave px-2 py-1 text-center font-mono text-xs" +
-  " text-tinta focus:border-[var(--accent-line)] focus:outline-none";
-
-function CampoDoAjuste({ rotulo, children }: { rotulo: string; children: ReactNode }) {
-  return (
-    <label className="block w-52 shrink-0">
-      <span className="mb-1.5 block text-[10px] font-semibold tracking-wider text-tinta-fraca uppercase">
-        {rotulo}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function MedidaDaPeca({ rotulo, children }: { rotulo: string; children: ReactNode }) {
-  return (
-    <label className="shrink-0">
-      <span className="mb-0.5 block text-[9px] font-semibold tracking-wider text-tinta-apagada uppercase">
-        {rotulo}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-// ==================== AS MINIATURAS ====================
-
-function miniaturaDaImagem(img: HTMLImageElement): string | null {
-  try {
-    const fator = Math.min(1, LADO_DA_MINIATURA / Math.max(img.naturalWidth, img.naturalHeight));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(img.naturalWidth * fator));
-    canvas.height = Math.max(1, Math.round(img.naturalHeight * fator));
-    canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/png");
-  } catch {
-    return null;
-  }
-}
-
-/**
- * A miniatura de uma arte que já está no disco.
- *
- * Decodifica JÁ no tamanho da miniatura: o navegador faz a redução fora da
- * thread da tela, e o canvas só copia 240 px. Abrir e desenhar a arte inteira
- * para depois encolher custava quase 1 s de página parada, para chegar ao
- * mesmo quadradinho.
- */
-async function miniaturaDoBlob(
-  blob: Blob,
-  medidas: { largura: number; altura: number } | null,
-): Promise<string | null> {
-  let opcoes: ImageBitmapOptions | undefined;
-  if (medidas && medidas.largura > 0 && medidas.altura > 0) {
-    const fator = Math.min(1, LADO_DA_MINIATURA / Math.max(medidas.largura, medidas.altura));
-    opcoes = {
-      resizeWidth: Math.max(1, Math.round(medidas.largura * fator)),
-      resizeHeight: Math.max(1, Math.round(medidas.altura * fator)),
-      resizeQuality: "medium",
-    };
-  }
-
-  const bitmap = await createImageBitmap(blob, opcoes);
-  const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
-  bitmap.close();
-  return canvas.toDataURL("image/png");
 }

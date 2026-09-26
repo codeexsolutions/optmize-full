@@ -118,6 +118,20 @@
   --font-mono: "Inter", "Segoe UI", system-ui, sans-serif;
 }
 
+/*
+ * As cores dos TIPOS de arquivo, na Galeria: o selo do cartão e o ícone da
+ * linha. A Galeria guarda só imagem e PDF, e um drive se lê pela cor antes do
+ * nome — o PDF vermelho de sempre, e as imagens separadas pelo formato.
+ */
+:root {
+  --tipo-pdf: #ff6b8a;
+  --tipo-imagem: #4aa8ff;
+  --tipo-png: #33d6c4;
+  --tipo-tiff: #ff8556;
+  /* O segundo tom da aurora do fundo, só para ela não ser toda laranja. */
+  --aurora-frio: rgba(120, 90, 255, 0.10);
+}
+
 /* Identificação das peças no risco, preservada da tela original. */
 :root {
   --peca-1: #2bd672;

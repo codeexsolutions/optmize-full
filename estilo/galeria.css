@@ -1,0 +1,176 @@
+/*
+ * ===========================================================================
+ * GALERIA — o fundo com aurora e os cartões de vidro
+ * ===========================================================================
+ *
+ * O que o Tailwind não faz sozinho: pseudo-elementos animados e máscara.
+ * Tudo aqui é da Galeria e começa com `galeria-`,
+ * para não encostar em regra de outra tela (este arquivo fica fora de camada
+ * e ganharia de qualquer utilitário).
+ *
+ * Duas camadas, de trás para a frente:
+ *
+ *   1. a AURORA: três manchas de luz (duas laranjas, uma fria) desfocadas,
+ *      derivando devagar — 40 s por volta, para ser clima e não distração;
+ *   2. a GRADE DE PONTOS, que só aparece perto do topo e some em direção à
+ *      borda (máscara radial).
+ *
+ * NADA AQUI REAGE AO MOUSE, de propósito: nem brilho seguindo o ponteiro, nem
+ * cartão que sobe, inclina ou dá zoom ao passar por cima. Foi pedido assim —
+ * o movimento fica só no fundo, que anda sozinho e devagar. O "passar por
+ * cima" só troca a cor da borda, que é o aviso de que dá para clicar.
+ *
+ * Quem pediu menos movimento no sistema (`prefers-reduced-motion`) fica com
+ * a aurora parada.
+ */
+
+.galeria-fundo {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.galeria-fundo::before {
+  content: "";
+  position: absolute;
+  inset: -25%;
+  z-index: -3;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 32% at 18% 12%, rgba(255, 83, 31, 0.26), transparent 70%),
+    radial-gradient(30% 28% at 88% 22%, rgba(255, 133, 86, 0.14), transparent 70%),
+    radial-gradient(42% 38% at 62% 96%, var(--aurora-frio), transparent 72%);
+  filter: blur(28px);
+  animation: galeria-aurora 40s ease-in-out infinite alternate;
+}
+
+.galeria-fundo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(244, 242, 239, 0.085) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 78%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 78%);
+}
+
+@keyframes galeria-aurora {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(5%, 3%, 0) rotate(7deg) scale(1.06); }
+  100% { transform: translate3d(-4%, 6%, 0) rotate(-5deg) scale(1.02); }
+}
+
+/* ---------------------------------------------------------------- a lateral */
+
+.galeria-lateral {
+  background:
+    linear-gradient(180deg, rgba(255, 83, 31, 0.06), transparent 220px),
+    var(--sidebar-bg);
+}
+
+/* O botão "Novo": o gesto principal de um drive, grande e com brilho. */
+.galeria-novo {
+  position: relative;
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent) 55%, var(--accent-dark));
+  color: var(--accent-ink);
+  box-shadow: 0 10px 30px -12px rgba(255, 83, 31, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: box-shadow 0.18s ease, filter 0.18s ease;
+}
+.galeria-novo:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 16px 36px -12px rgba(255, 83, 31, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* ---------------------------------------------------------------- os cartões */
+
+.galeria-vidro {
+  background: color-mix(in srgb, var(--card-bg) 72%, transparent);
+  border: 1px solid var(--border-hairline);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+.galeria-cartao {
+  position: relative;
+  background: color-mix(in srgb, var(--card-bg) 78%, transparent);
+  border: 1px solid var(--border-hairline);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.galeria-cartao:hover {
+  border-color: var(--accent-line);
+  background: color-mix(in srgb, var(--card-bg-soft) 88%, transparent);
+}
+/* O cartão aceso por um arraste que vai cair nele. */
+.galeria-cartao[data-alvo="sim"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* A pasta desenhada: a aba de cima e o corpo, na cor da marca. */
+.galeria-pasta {
+  position: relative;
+  width: 46px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.galeria-pasta::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 9px;
+  border-radius: 5px 6px 0 0;
+  background: var(--accent-dark);
+}
+.galeria-pasta::after {
+  content: "";
+  position: absolute;
+  inset: 5px 0 0 0;
+  border-radius: 4px 8px 8px 8px;
+  background: linear-gradient(160deg, var(--accent-bright), var(--accent) 60%, var(--accent-dark));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 18px -10px rgba(255, 83, 31, 0.8);
+}
+
+/* A prévia do arquivo: o quadro onde a miniatura ou o selo do tipo aparecem. */
+.galeria-previa {
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--cor-do-tipo) 16%, transparent), transparent 70%),
+    var(--card-bg-soft);
+}
+
+.galeria-selo {
+  color: var(--cor-do-tipo);
+  background: color-mix(in srgb, var(--cor-do-tipo) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor-do-tipo) 30%, transparent);
+}
+
+/* A entrada dos cartões, um depois do outro. O atraso vem do `--ordem`. */
+.galeria-entra {
+  animation: galeria-entra 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--ordem, 0), 14) * 28ms);
+}
+@keyframes galeria-entra {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* A barra de andamento, com um reflexo correndo por cima. */
+.galeria-andamento {
+  background: linear-gradient(90deg, var(--accent-dark), var(--accent), var(--accent-bright));
+  background-size: 200% 100%;
+  animation: galeria-reflexo 1.4s linear infinite;
+}
+@keyframes galeria-reflexo { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .galeria-fundo::before,
+  .galeria-entra,
+  .galeria-andamento { animation: none; }
+}

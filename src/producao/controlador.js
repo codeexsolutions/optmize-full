@@ -246,10 +246,19 @@ const encaixeGrupoConta = document.getElementById("encaixe-grupo-conta");
 const btnEncaixeCriarGrupo = document.getElementById("btn-encaixe-criar-grupo");
 const btnEncaixeTirarGrupo = document.getElementById("btn-encaixe-tirar-grupo");
 const btnEncaixeLimparSelecao = document.getElementById("btn-encaixe-limpar-selecao");
-const encaixeModoSelect = document.getElementById("encaixe-modo");
+/*
+ * O JEITO DE ENCAIXAR E A UNIDADE DO MOLDE SAÍRAM DO CONFERE DO OPTMIZAR.
+ *
+ * Os dois eram seletores na caixa que abre antes de calcular, e os dois
+ * ficam sempre no automático: o encaixe escolhe entre contorno e caixa por
+ * conta própria (e fica com o melhor), e a unidade de um DXF/PLT sai do
+ * próprio arquivo. Um seletor que só servia para piorar o resultado quando
+ * mexido por engano não tinha por que estar ali.
+ */
+const MODO_DE_ENCAIXE = "auto";
+const UNIDADE_DO_MOLDE = null;
 const encaixeGuardadoAviso = document.getElementById("encaixe-guardado-aviso");
 const encaixeFilesInput = document.getElementById("encaixe-files");
-const encaixeUnidadeMoldeSelect = document.getElementById("encaixe-unidade-molde");
 const btnLimparPecas = document.getElementById("btn-limpar-pecas");
 // Há leitura de arquivos em curso. Declarado aqui, e não junto do relógio do
 // carregamento lá embaixo, porque `atualizarPainelDoTrabalho` o lê para
@@ -609,7 +618,7 @@ const ehMoldeVetorial = (file) => ehArquivoDeMolde(file);
  * PNG recortado.
  */
 async function lerMoldesDoArquivo(file) {
-  const unidade = encaixeUnidadeMoldeSelect.value || null;
+  const unidade = UNIDADE_DO_MOLDE;
   // Sempre "marcador": cada peça fechada do arquivo vira uma linha da tabela.
   // Havia um seletor aqui para ler o arquivo como UMA peça só ("inteiro"), e ele
   // saiu da tela de Encaixe — quem chega aqui com um DXF/PLT está trazendo um
@@ -2071,7 +2080,7 @@ async function usarEncaixeGuardado(guardado) {
     areaCaixas: posicoes.reduce((soma, pos) => soma + pos.largura * pos.altura, 0),
     receita: guardado.receita,
     venceuContorno: posicoes.some((p) => p.mascara),
-    modoDeEncaixe: encaixeModoSelect.value || "auto",
+    modoDeEncaixe: MODO_DE_ENCAIXE,
     doGuardado: true,
     tentativas: 0,
     decorridoMs: 0,
@@ -2524,7 +2533,7 @@ async function optmizar() {
     }
   }
 
-  const modoDeEncaixe = encaixeModoSelect.value || "auto";
+  const modoDeEncaixe = MODO_DE_ENCAIXE;
 
   // O aviso de "procurando" aparece JÁ AQUI, antes da espera do fundo logo
   // abaixo — não depois dela. Quando alguma arte ainda estava com o fundo

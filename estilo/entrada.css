@@ -29,6 +29,9 @@
 /* O alerta do programa (`src/casca/Alerta.tsx`). */
 @import "./alerta.css";
 
+/* O fundo animado e os cartões de vidro da Galeria (`src/telas/galeria/`). */
+@import "./galeria.css";
+
 @layer theme, base, components, utilities;
 
 @import "tailwindcss/theme.css" layer(theme);

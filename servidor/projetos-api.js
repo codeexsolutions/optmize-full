@@ -151,7 +151,150 @@ router.get("/:id", (req, res) => {
   const projeto = db.prepare("SELECT * FROM projetos WHERE id = ?").get(req.params.id);
   if (!projeto) return res.status(404).json({ error: "Projeto não encontrado." });
   const cliente = db.prepare("SELECT * FROM projeto_clientes WHERE id = ?").get(projeto.cliente_id);
-  res.json({ ...projeto, cliente, pecas: pecasDoProjeto(projeto.id) });
+  const pecas = pecasDoProjeto(projeto.id);
+  res.json({ ...projeto, cliente, pecas, estrutura: estruturaDoProjeto(projeto, pecas) });
+});
+
+// ==================== A ESTRUTURA (o jeito do Optmize Lite) ====================
+//
+//   Projeto "Padaria Sol"
+//   └─ Subprojeto "Camisa"            (as abas)
+//      ├─ Categoria "P"  × 10         (a quantidade pedida daquele tamanho)
+//      │  ├─ Peça "Frente"  1 por item  → arte
+//      │  └─ Peça "Manga"   2 por item  → arte
+//      └─ Categoria "G"  × 4
+//
+// Levar ao Encaixe é multiplicar: cada peça sai `quantidade da categoria ×
+// por item` vezes. A estrutura vai inteira numa coluna JSON; as linhas de
+// `projeto_pecas` são refeitas a partir dela a cada gravação, uma por peça com
+// arte — é por elas que a lista de clientes conta as peças, que o Complementar
+// do Encaixe acha as artes guardadas e que a limpeza do disco sabe o que ainda
+// está em uso. Assim nada disso precisou mudar.
+
+const idSimples = (v, prefixo) => {
+  const s = texto(v, 40);
+  return /^[A-Za-z0-9_-]+$/.test(s) ? s : `${prefixo}-${Math.random().toString(36).slice(2, 10)}`;
+};
+const inteiro = (v, min, max) => Math.max(min, Math.min(max, Math.floor(Number(v)) || min));
+
+/**
+ * A estrutura guardada, ou — num projeto de antes dela — a montada das peças:
+ * um subprojeto com o nome do projeto e uma categoria só, "Único" × 1, com
+ * cada peça antiga levando a quantidade dela como "por item". Levar ao
+ * Encaixe dá exatamente as mesmas peças de antes.
+ */
+function estruturaDoProjeto(projeto, pecas) {
+  if (projeto.estrutura) {
+    try { return JSON.parse(projeto.estrutura); } catch { /* cai na montada */ }
+  }
+  // Projeto novo, sem peça nenhuma: começa vazio, como no lite, e a tela
+  // convida a criar o primeiro subprojeto.
+  if (pecas.length === 0) return { subprojetos: [] };
+  return {
+    subprojetos: [{
+      id: "sp-1",
+      nome: projeto.nome,
+      categorias: [{
+        id: "ct-1",
+        rotulo: "Único",
+        quantidade: 1,
+        pecas: pecas.map((p, i) => ({
+          id: `pc-${p.id}`,
+          nome: p.nome,
+          porItem: p.quantidade,
+          cor: i,
+          arte: {
+            arquivo: p.arquivo, nome: p.arquivo, miniatura: p.miniatura,
+            largura: p.largura, altura: p.altura,
+          },
+        })),
+      }],
+    }],
+  };
+}
+
+/** Limpa o que a tela mandou: só o que a estrutura tem, nos tipos certos. */
+function limparEstrutura(bruta) {
+  const lista = (v, max) => (Array.isArray(v) ? v.slice(0, max) : []);
+  return {
+    subprojetos: lista(bruta && bruta.subprojetos, 200).map((sp) => ({
+      id: idSimples(sp && sp.id, "sp"),
+      nome: texto(sp && sp.nome) || "Subprojeto",
+      categorias: lista(sp && sp.categorias, 100).map((ct) => ({
+        id: idSimples(ct && ct.id, "ct"),
+        rotulo: texto(ct && ct.rotulo, 40) || "?",
+        quantidade: inteiro(ct && ct.quantidade, 0, 99999),
+        pecas: lista(ct && ct.pecas, 200).map((pc) => {
+          const a = pc && pc.arte;
+          const arte = a && nomeDeImagemValido(a.arquivo) && numero(a.largura) && numero(a.altura)
+            ? {
+              arquivo: a.arquivo,
+              nome: texto(a.nome, 200) || a.arquivo,
+              // O mesmo teto da coluna `miniatura`: barra a arte inteira em
+              // base64 entrando no banco por engano.
+              miniatura: typeof a.miniatura === "string" && a.miniatura.startsWith("data:image/")
+                && a.miniatura.length < 200000 ? a.miniatura : null,
+              largura: numero(a.largura),
+              altura: numero(a.altura),
+            }
+            : null;
+          return {
+            id: idSimples(pc && pc.id, "pc"),
+            nome: texto(pc && pc.nome) || "Peça",
+            porItem: inteiro(pc && pc.porItem, 1, 9999),
+            cor: inteiro(pc && pc.cor, 0, 9999),
+            arte,
+          };
+        }),
+      })),
+    })),
+  };
+}
+
+/**
+ * Grava o nome e a estrutura inteira, e refaz as `projeto_pecas` dela.
+ *
+ * Os ajustes do encaixe (largura, bancada, giro, folga) não passam por aqui:
+ * saíram da tela, e o que o projeto já tinha fica como estava.
+ */
+router.put("/:id/estrutura", (req, res) => {
+  const projeto = db.prepare("SELECT * FROM projetos WHERE id = ?").get(req.params.id);
+  if (!projeto) return res.status(404).json({ error: "Projeto não encontrado." });
+  const nome = texto(req.body && req.body.nome);
+  if (!nome) return res.status(400).json({ error: "Dê um nome ao projeto." });
+
+  const estrutura = limparEstrutura(req.body.estrutura);
+  const linhas = [];
+  estrutura.subprojetos.forEach((sp) => sp.categorias.forEach((ct) => ct.pecas.forEach((pc) => {
+    if (!pc.arte) return;
+    linhas.push({
+      nome: `${pc.nome} ${ct.rotulo}`.slice(0, 120),
+      arquivo: pc.arte.arquivo,
+      largura: pc.arte.largura,
+      altura: pc.arte.altura,
+      quantidade: Math.max(1, ct.quantidade * pc.porItem),
+      miniatura: pc.arte.miniatura,
+      ordem: linhas.length,
+    });
+  })));
+
+  const antigos = db.prepare("SELECT arquivo FROM projeto_pecas WHERE projeto_id = ?")
+    .all(projeto.id).map((r) => r.arquivo);
+
+  db.transaction(() => {
+    db.prepare("UPDATE projetos SET nome = ?, estrutura = ?, atualizado_em = ? WHERE id = ?")
+      .run(nome, JSON.stringify(estrutura), agora(), projeto.id);
+    db.prepare("DELETE FROM projeto_pecas WHERE projeto_id = ?").run(projeto.id);
+    const inserir = db.prepare(`
+      INSERT INTO projeto_pecas
+        (projeto_id, nome, arquivo, largura, altura, quantidade, ordem, miniatura)
+      VALUES (@projeto_id, @nome, @arquivo, @largura, @altura, @quantidade, @ordem, @miniatura)
+    `);
+    linhas.forEach((l) => inserir.run({ ...l, projeto_id: projeto.id }));
+  })();
+
+  limparArtesDeProjeto(antigos);
+  res.json({ ok: true, pecas: linhas.length });
 });
 
 router.post("/", (req, res) => {

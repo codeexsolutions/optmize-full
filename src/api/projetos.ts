@@ -51,6 +51,53 @@ export interface PecaDoProjeto {
   quantidade: number;
 }
 
+/*
+ * A ESTRUTURA DO PROJETO, no jeito do Optmize Lite:
+ *
+ *   subprojeto (as abas: Camisa, Bandeira)
+ *   └─ categoria (PP × 2, M × 5 — a quantidade pedida)
+ *      └─ peça (Frente, Manga — quantas por item, e a arte)
+ *
+ * Levar ao Encaixe multiplica: cada peça sai `quantidade × porItem` vezes.
+ */
+
+/** A arte de uma peça, já no servidor, com a medida real em centímetros. */
+export interface ArteDaPeca {
+  /** O nome no disco, em `/uploads/projetos/`. */
+  arquivo: string;
+  /** O nome do arquivo como a pessoa o mandou. */
+  nome: string;
+  miniatura: string | null;
+  largura: number;
+  altura: number;
+}
+
+export interface PecaDaCategoria {
+  id: string;
+  nome: string;
+  porItem: number;
+  /** Índice da cor da bolinha (`--peca-1` a `--peca-10`). */
+  cor: number;
+  arte: ArteDaPeca | null;
+}
+
+export interface CategoriaDoSubprojeto {
+  id: string;
+  rotulo: string;
+  quantidade: number;
+  pecas: PecaDaCategoria[];
+}
+
+export interface Subprojeto {
+  id: string;
+  nome: string;
+  categorias: CategoriaDoSubprojeto[];
+}
+
+export interface EstruturaDoProjeto {
+  subprojetos: Subprojeto[];
+}
+
 /** O projeto aberto, inteiro. */
 export interface Projeto {
   id: number;
@@ -62,6 +109,8 @@ export interface Projeto {
   giro: string | null;
   cliente: { id: number; nome: string } | null;
   pecas: PecaDoProjeto[];
+  /** Sempre vem: num projeto de antes dela, o servidor a monta das peças. */
+  estrutura: EstruturaDoProjeto;
 }
 
 /** O corpo do `PUT`: o projeto inteiro, como a tela o edita. */
@@ -98,6 +147,9 @@ export const projetosApi = {
   criar: (clienteId: number, nome: string) => api.post<{ id: number }>("/projetos", { clienteId, nome }),
   gravar: (id: number, corpo: ProjetoParaGravar) => api.put(`/projetos/${id}`, corpo),
   apagar: (id: number) => api.apagar(`/projetos/${id}`),
+  /** Grava o nome e a estrutura inteira; as peças do projeto saem dela. */
+  gravarEstrutura: (id: number, nome: string, estrutura: EstruturaDoProjeto) =>
+    api.put(`/projetos/${id}/estrutura`, { nome, estrutura }),
 
   /**
    * As prévias feitas na hora, para a próxima abertura ser instantânea.

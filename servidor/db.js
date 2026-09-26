@@ -233,6 +233,38 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_projeto_pecas_projeto ON projeto_pecas(projeto_id);
 
+  -- ==================== OS ARQUIVOS DA GALERIA ====================
+  --
+  -- A outra metade da Galeria: um "drive" da fábrica. Pastas dentro de pastas,
+  -- e dentro delas imagens e PDFs — o fardamento, a foto da peça pronta, o
+  -- PDF do pedido. Nada aqui vai ao encaixe; é só o lugar de guardar e achar.
+  --
+  -- pai_id nulo é a raiz. Apagar uma pasta leva as de dentro (CASCADE), e os
+  -- arquivos delas junto; quem tira os bytes do disco é a API, antes.
+  CREATE TABLE IF NOT EXISTS galeria_pastas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pai_id INTEGER REFERENCES galeria_pastas(id) ON DELETE CASCADE,
+    nome TEXT NOT NULL,
+    criado_em TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_galeria_pastas_pai ON galeria_pastas(pai_id);
+
+  -- arquivo é o nome no disco (sempre .arq, para o /uploads nunca servir
+  -- um HTML guardado como se fosse página); nome é o que a pessoa vê.
+  CREATE TABLE IF NOT EXISTS galeria_arquivos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pasta_id INTEGER REFERENCES galeria_pastas(id) ON DELETE CASCADE,
+    nome TEXT NOT NULL,
+    arquivo TEXT NOT NULL,
+    tipo TEXT,
+    bytes INTEGER NOT NULL DEFAULT 0,
+    miniatura TEXT,
+    criado_em TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_galeria_arquivos_pasta ON galeria_arquivos(pasta_id);
+
   CREATE TABLE IF NOT EXISTS encaixe_historico (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assinatura TEXT NOT NULL,
@@ -428,6 +460,11 @@ function removerColuna(tabela, coluna) {
 
 garantirColuna("projeto_pecas", "miniatura", "TEXT");
 garantirColuna("projetos", "comprimento_bancada", "REAL");
+// A estrutura do projeto, no jeito do Optmize Lite: subprojetos, categorias
+// (PP ×2, M ×5) e as peças de cada uma, com a arte. JSON, inteiro — a tela
+// edita tudo junto e grava de uma vez. As `projeto_pecas` passam a ser
+// derivadas dela a cada gravação (ver `projetos-api.js`).
+garantirColuna("projetos", "estrutura", "TEXT");
 garantirColuna("encaixe_guardados", "comprimento_bancada", "REAL");
 removerColuna("projetos", "margem");
 removerColuna("encaixe_guardados", "margem");

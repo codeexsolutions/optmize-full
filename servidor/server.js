@@ -37,6 +37,7 @@ const encaixeResolverRouter = require("./encaixe-resolver");
 const riscoPdfRouter = require("./risco-pdf");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
+const galeriaArquivosRouter = require("./galeria-arquivos-api");
 const pontoRouter = require("./ponto-api");
 const vozRouter = require("./voz-api");
 const corRouter = require("./cor-api");
@@ -179,6 +180,7 @@ app.use("/api/sessao", require("./sessao").rotas);
 app.use("/api/macros", macrosRouter);
 app.use("/api/moldes", moldesRouter);
 app.use("/api/projetos", projetosRouter);
+app.use("/api/galeria", galeriaArquivosRouter);
 app.use("/api/ponto", pontoRouter);
 app.use("/api/voz", vozRouter);
 // As impressoras da produção: varredura da rede, histórico, ordens de
