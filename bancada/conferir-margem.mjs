@@ -89,4 +89,21 @@ assert.deepEqual(margemDeCostura(quadrado, 0), quadrado);
   assert.ok(perto(c.maxX, 11));
 }
 
+// 9. Dobrinha do traço da foto (um vinco de décimos de milímetro, muito mais
+//    estreito que a margem) não pode recusar a margem da peça inteira: some
+//    no corte, que é o que o offset de verdade faria com ela.
+{
+  const comDobrinha = [
+    { x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 40 },
+    { x: 15.04, y: 40 }, { x: 15.02, y: 39.97 }, { x: 15, y: 39.96 }, { x: 14.98, y: 39.97 }, { x: 14.96, y: 40 },
+    { x: 0, y: 40 },
+  ];
+  for (const volta of [comDobrinha, [...comDobrinha].reverse()]) {
+    const r = margemDeCostura(volta, 1);
+    assert.ok(r, "a dobrinha não pode dar null");
+    const c = caixa(r);
+    assert.ok(Math.abs(c.maxY - 41) < 0.01 && Math.abs(c.minX + 1) < 0.01, JSON.stringify(c));
+  }
+}
+
 console.log("OK — a margem de costura confere.");

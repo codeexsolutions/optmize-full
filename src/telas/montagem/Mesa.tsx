@@ -33,7 +33,7 @@ import type { PecaEmMontagem } from "./useMoldeEmMontagem";
 
 export type Ferramenta = "nos" | "pique" | "ponto" | "fio";
 
-/** Pixels de canvas por centímetro, antes do zoom. */
+/** Pixels de canvas por centímetro enquanto a largura da mesa não é conhecida. */
 const PX_POR_CM = 24;
 const LADO_MAXIMO_PX = 4096;
 /** Raio de pega, em pixels da tela. */
@@ -94,6 +94,7 @@ export function Mesa(props: Props) {
   const tela = useRef<HTMLCanvasElement>(null);
   const moldura = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
+  const [larguraDaMoldura, setLarguraDaMoldura] = useState(0);
   const arrasto = useRef<Arrasto | null>(null);
   const vistaCongelada = useRef<Vista | null>(null);
   const [, repintar] = useState(0);
@@ -121,7 +122,13 @@ export function Mesa(props: Props) {
     return { minX: c.minX - folga, minY: c.minY - folga, largura: c.largura + 2 * folga, altura: c.altura + 2 * folga };
   }, [verTodas, todas, corte, risco]);
   const vista = vistaCongelada.current ?? vistaCalculada;
-  const escala = Math.min(PX_POR_CM, LADO_MAXIMO_PX / Math.max(vista.largura, vista.altura, 1));
+  // Um pixel do canvas = um pixel da tela. Com px/cm fixo, peça pequena saía
+  // esticada (borrada, traço grosso) e peça grande espremida (nó e texto
+  // minúsculos) — o CSS é que acertava a largura.
+  const escala = Math.min(
+    larguraDaMoldura > 0 ? (larguraDaMoldura * zoom) / Math.max(vista.largura, 1) : PX_POR_CM,
+    LADO_MAXIMO_PX / Math.max(vista.largura, vista.altura, 1),
+  );
 
   // `noAtivo` chega do pai, e pode estar velho: um desfazer troca `peca.nos`
   // inteiro e não necessariamente encolhe até esbarrar no índice marcado, mas
@@ -213,10 +220,14 @@ export function Mesa(props: Props) {
     // Como no PDF: corte contínuo, costura (o risco, quando há margem) tracejada.
     pintarDesenho(desenho, 0, 0, corDaPeca(indice), true);
     if ((peca.marcacoes.margem > 0 && !corte) || comErro === indice) {
+      // O canvas é esticado/encolhido pelo CSS; o texto segue a proporção
+      // para sair com 14px na tela, e não com 14px do canvas.
+      const naTela = canvas.getBoundingClientRect().width;
+      const fator = naTela > 0 ? canvas.width / naTela : 1;
       ctx.fillStyle = "#ff4d4d";
-      ctx.font = "bold 14px ui-sans-serif, system-ui, sans-serif";
+      ctx.font = `bold ${Math.round(14 * fator)}px ui-sans-serif, system-ui, sans-serif`;
       ctx.textAlign = "left";
-      ctx.fillText("A margem fecha a peça sobre ela mesma: diminua a margem.", 12, 22);
+      ctx.fillText("A margem fecha a peça sobre ela mesma: diminua a margem.", 12 * fator, 22 * fator);
     }
     if (ferramenta === "nos") desenharNos(ctx, peca.nos, noAtivoValido, emTela);
   }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro]);
@@ -336,6 +347,17 @@ export function Mesa(props: Props) {
     props.aoMudar((p) => inserirNoNaPeca(p, traco.no, traco.t), true);
     props.aoMarcarNo(traco.no + 1);
   };
+
+  // A largura da mesa, para o canvas nascer do tamanho em que aparece.
+  useEffect(() => {
+    const caixa = moldura.current;
+    if (!caixa) return;
+    const medir = () => setLarguraDaMoldura(caixa.clientWidth);
+    medir();
+    const observador = new ResizeObserver(medir);
+    observador.observe(caixa);
+    return () => observador.disconnect();
+  }, []);
 
   // Zoom pela roda, ancorado no ponteiro — o mesmo do Digitalizar.
   useEffect(() => {

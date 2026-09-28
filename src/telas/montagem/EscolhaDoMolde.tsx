@@ -46,6 +46,7 @@ export function EscolhaDoMolde({ aoEscolher, sumiu }: Props) {
       <input
         type="search" value={busca} placeholder="Procurar pelo nome"
         onChange={(e) => setBusca(e.target.value)} aria-label="Procurar molde"
+        className="w-full rounded-[9px] border border-linha bg-painel px-3 py-1.5 text-[0.82rem] text-tinta outline-none placeholder:text-tinta-apagada focus:border-[var(--accent-line)]"
       />
       {moldes === null && <p className="text-[0.85rem] text-tinta-apagada">Abrindo a estante…</p>}
       {moldes !== null && lista.length === 0 && (

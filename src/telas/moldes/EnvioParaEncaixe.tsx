@@ -535,7 +535,8 @@ function ParteComArte({ peca, arte, aoMandarArte, aoMexer, aoTirar }: {
       </div>
 
       <div className="parte-arte-lado">
-        <span className="peca-nome">{peca.papel}</span>
+        {/* O nome, quando há: é ele que separa a peça "outro" das outras e a metade "(espelhada)" da normal. */}
+        <span className="peca-nome">{peca.nome || peca.papel}</span>
         <span className="hint">
           {emCm(peca.largura)} × {emCm(peca.altura)} cm · {peca.quantidade} por peça pronta
         </span>

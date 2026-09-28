@@ -67,7 +67,7 @@ export function PainelDaPeca({ peca, aoMudar }: Props) {
             ? "Isso não é um número."
             : margemLida === 0
               ? "0 = o risco já é o corte (o normal em molde de papel fotografado)."
-              : "O risco vira a costura; o corte é a linha tracejada em volta."}
+              : "O risco vira a costura (tracejada); o corte é a linha contínua em volta."}
         </span>
       </label>
       <div className="rounded-[8px] border border-linha p-2">

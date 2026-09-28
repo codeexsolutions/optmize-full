@@ -88,11 +88,48 @@ export function seCruza(pontos) {
   return false;
 }
 
+/** Distância do ponto à reta que liga os dois vizinhos dele. */
+function desvioDoNo(p, i) {
+  const n = p.length;
+  const a = p[(i - 1 + n) % n];
+  const b = p[(i + 1) % n];
+  const comprimento = Math.hypot(b.x - a.x, b.y - a.y);
+  if (comprimento < EPS) return Math.hypot(p[i].x - a.x, p[i].y - a.y);
+  return Math.abs(orientacao(a, b, p[i])) / comprimento;
+}
+
+/*
+ * O traço que sai da foto tem DOBRINHAS: vincos de décimos de milímetro onde
+ * o lápis ou a sombra entortou a beira. Qualquer côncavo mais estreito que a
+ * margem vira do avesso na conta de cima — e o offset de verdade simplesmente
+ * o enche. Então, quando um lado sai do avesso, o nó daquele lado que menos
+ * se afasta da reta dos vizinhos sai do risco (só para a conta do corte) e a
+ * conta recomeça. Só sai nó a até MEIA margem da reta: a dobrinha some, mas
+ * a fenda de verdade (a do caso 4 da bancada) continua dando null.
+ */
 export function margemDeCostura(pontos, margem) {
-  const p = semRepetidos(pontos);
+  let p = semRepetidos(pontos);
   if (p.length < 3) return null;
   if (!(margem > 0)) return p;
 
+  for (;;) {
+    const r = afastar(p, margem);
+    if (r === null) return null;
+    if (!("avesso" in r)) return seCruza(r.pontos) ? null : r.pontos;
+    if (p.length <= 3) return null;
+    const i = r.avesso;
+    const j = (i + 1) % p.length;
+    const qual = desvioDoNo(p, i) <= desvioDoNo(p, j) ? i : j;
+    if (desvioDoNo(p, qual) > margem / 2) return null;
+    p = p.filter((_, k) => k !== qual);
+  }
+}
+
+/**
+ * Um passo da conta: `{ pontos }` quando deu certo, `{ avesso: i }` quando o
+ * lado `i` saiu do avesso, `null` quando não há resposta nenhuma.
+ */
+function afastar(p, margem) {
   const sinal = areaComSinalDe(p) >= 0 ? 1 : -1;
   const n = p.length;
   const normal = (a, b) => {
@@ -134,9 +171,8 @@ export function margemDeCostura(pontos, margem) {
     const b = p[(i + 1) % n];
     const de = porNo[i][porNo[i].length - 1];
     const ate = porNo[(i + 1) % n][0];
-    if ((b.x - a.x) * (ate.x - de.x) + (b.y - a.y) * (ate.y - de.y) <= 0) return null;
+    if ((b.x - a.x) * (ate.x - de.x) + (b.y - a.y) * (ate.y - de.y) <= 0) return { avesso: i };
   }
 
-  const saida = porNo.flat();
-  return seCruza(saida) ? null : saida;
+  return { pontos: porNo.flat() };
 }
