@@ -6,7 +6,7 @@
  * É a tela de projeto do painel web (`optmize-lite/src/features/projects/
  * ProjectEditor.tsx` e `SubprojectPanel.tsx`), com a mesma estrutura:
  *
- *   ┌ ← Nome do projeto ✎ ·········· [ Levar pro Encaixe ] │ 🗑 ┐
+ *   ┌ ← Nome do projeto ✎ ································· [🗑] ┐
  *   │ [Camisa 12] [Bandeira 4] [+ Subprojeto]              🗑 │  as abas
  *   │ Camisa ✎   3 categoria(s) · 12 peça(s)                  │
  *   │ ┌ CATEGORIA ──────────────────────────────────────────┐ │
@@ -15,7 +15,7 @@
  *   │ ┌ M · 2 peça(s) × 5 unidade(s) ───────────────────────┐ │
  *   │ │ [arte] [arte] [+ anexar]     nova peça… [Peça]      │ │
  *   │ └─────────────────────────────────────────────────────┘ │
- *   └ SUBPROJETOS 2 · CATEGORIAS 3 · PEÇAS 12 ······· salvo ┘
+ *   └ SUBPROJETOS 2 · CATEGORIAS 3 · PEÇAS 12 · [Levar para o Encaixe] ┘
  *
  * O que muda em relação ao lite é só o que a casa pede: os ícones saem do
  * sprite, os componentes são os daqui (`Botao`, o `Dialogo` para confirmar),
@@ -23,7 +23,7 @@
  * guardada em centímetros junto da peça — o Encaixe precisa dela, e o dpi do
  * arquivo nem sempre está certo, então dá para corrigir no cartão.
  *
- * TUDO SALVA SOZINHO, meio segundo depois da última mudança. "Levar pro
+ * TUDO SALVA SOZINHO, meio segundo depois da última mudança. "Levar para o
  * Encaixe" é a super cópia do lite: multiplica tudo (quantidade da categoria
  * × por item) e entrega as peças prontas. Os ajustes do Encaixe (tecido,
  * bancada, giro, folga) não saem daqui — são do confere do Optmizar.
@@ -303,31 +303,19 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
         />
 
         {/*
-          Canto superior direito: a ação que conclui o trabalho e, separada
-          dela, a que o destrói. Esta é a barra do projeto, então aqui se apaga
-          o projeto.
+          Canto superior direito: a ação que destrói o projeto. A que conclui
+          o trabalho (Levar para o Encaixe) fica lá embaixo, longe desta.
         */}
         <div className="ml-auto flex items-center gap-2">
           <Botao
             tamanho="pequeno"
-            jeito="primario"
-            disabled={totalDePecas === 0 || subindo > 0}
-            onClick={() => void levarProEncaixe()}
-            icone={<Icone referencia="icones.svg#blocks" className="size-3.5" />}
-            title="Multiplica tudo e leva as peças para o Encaixe, prontas para encaixar"
-          >
-            Levar pro Encaixe
-          </Botao>
-          <span className="h-5 w-px shrink-0 bg-[var(--border)]" />
-          <button
-            type="button"
+            jeito="perigo"
             onClick={() => void excluirProjeto()}
             aria-label={`Apagar o projeto ${nome}`}
             title="Apagar este projeto"
-            className="grid size-7 shrink-0 place-items-center rounded-lg text-tinta-apagada transition-colors hover:bg-[color-mix(in_srgb,var(--danger)_20%,transparent)] hover:text-[var(--danger)]"
-          >
-            <Icone referencia="icones.svg#trash-2" className="size-3.5" />
-          </button>
+            className="w-8 px-0"
+            icone={<Icone referencia="icones.svg#trash-2" className="size-4" />}
+          />
         </div>
       </div>
 
@@ -454,7 +442,7 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
       )}
 
       {/* Barra de status — os números do pedido e o estado da gravação. */}
-      <div className="galeria-vidro flex shrink-0 items-center gap-4 border-x-0 border-b-0 px-3 py-1.5">
+      <div className="galeria-vidro flex shrink-0 items-center gap-4 border-x-0 border-b-0 px-3 py-2">
         <Status rotulo="Subprojetos" valor={String(estrutura.subprojetos.length)} />
         <Status rotulo="Categorias" valor={String(estrutura.subprojetos.reduce((n, s) => n + s.categorias.length, 0))} />
         <Status rotulo="Peças" valor={totalDePecas.toLocaleString("pt-BR")} destaque />
@@ -476,12 +464,18 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
             </button>
           ) : gravacao === "salvando" ? (
             <span className="font-mono text-[11px] text-tinta-apagada">salvando…</span>
-          ) : (
-            <span className="font-mono text-[11px] text-tinta-apagada" title="O projeto e as artes ficam guardados nesta máquina.">
-              salvo
-            </span>
-          )}
+          ) : null}
         </span>
+        <Botao
+          tamanho="pequeno"
+          jeito="primario"
+          disabled={totalDePecas === 0 || subindo > 0}
+          onClick={() => void levarProEncaixe()}
+          icone={<Icone referencia="icones.svg#blocks" className="size-3.5" />}
+          title="Multiplica tudo e leva as peças para o Encaixe, prontas para encaixar"
+        >
+          Levar para o Encaixe
+        </Botao>
       </div>
 
       <input

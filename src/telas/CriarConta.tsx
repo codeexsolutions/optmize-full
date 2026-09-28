@@ -30,7 +30,7 @@
  * O PLANO VEM PRIMEIRO, e não por gosto de assistente: ele muda o que
  * acontece no fim. O Padrão entra valendo na hora; o pago fica esperando o
  * acerto. Escolher depois de preencher faria alguém digitar CNPJ e senha para
- * só então descobrir que o caminho que queria custa R$ 3.500,00.
+ * só então descobrir que o caminho que queria custa R$ 3.499,90.
  *
  * Cada passo cabe na tela, e o de cima diz onde a pessoa está. O que a pessoa
  * já escolheu viaja com ela para o segundo passo, num resumo de uma linha com
@@ -95,7 +95,7 @@ function metragemDoPlano(plano: Plano): string {
   return `${plano.metrosPorPeriodo.toLocaleString("pt-BR")} metros ${quando}`;
 }
 
-/** Centavos como se lê em português: R$ 3.500,00. */
+/** Centavos como se lê em português: R$ 3.499,90. */
 function emReais(centavos: number, moeda: string): string {
   return (centavos / 100).toLocaleString("pt-BR", {
     style: "currency",
@@ -112,7 +112,7 @@ function nomeCurto(plano: Plano): string {
 /**
  * O preço em DUAS PARTES: o número e a periodicidade.
  *
- * Numa linha só — "R$ 3.500,00 por ano" — o olho lê a frase inteira para
+ * Numa linha só — "R$ 3.499,90 por ano" — o olho lê a frase inteira para
  * achar o valor, e a comparação entre três planos vira leitura de três
  * frases. Separados, os três números ficam alinhados na mesma coluna, no
  * mesmo tamanho, e a escolha se faz de relance.
@@ -131,7 +131,7 @@ function precoDoPlano(plano: Plano): { valor: string; periodo: string } {
  * Quanto a licença anual economiza contra doze meses da mensal.
  *
  * CALCULADO A PARTIR DOS DOIS PREÇOS QUE O SERVIDOR MANDOU, e não escrito à
- * mão: "42% a menos" é verdade hoje, com R$ 499,90 e R$ 3.500,00. No dia em
+ * mão: "27% a menos" é verdade hoje, com R$ 399,90 e R$ 3.499,90. No dia em
  * que o painel mudar um dos dois, um número fixo aqui viraria propaganda
  * enganosa numa tela de cadastro — e ninguém lembraria de vir corrigir.
  *

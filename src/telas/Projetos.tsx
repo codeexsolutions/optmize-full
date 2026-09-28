@@ -242,10 +242,10 @@ function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
   const projetosDoMiolo = clienteAberto ? projetosPorCliente[clienteAberto.id] : undefined;
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden">
       {/* ---------------------------------------------- a árvore, à esquerda */}
       <LateralDaGaleria nav={nav}>
-        <div className="ml-4 border-l border-linha py-0.5 pl-1.5">
+        <div className="py-0.5">
           {/*
             Falha de carga tem lugar próprio, acima da lista. Sem isto, um erro
             de rede aparecia como "nenhum cliente ainda" — a mensagem mais cara
