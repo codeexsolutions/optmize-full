@@ -96,7 +96,7 @@ import { Icone } from "./Icone";
 import { useDialogo } from "./Dialogo";
 import { iniciais, type Usuario } from "./usuario";
 import { GRUPOS, telasDoGrupo, type Tela } from "../rotas";
-import { useForaDoPlano } from "./Escopos";
+import { useEscopos, useForaDoPlano } from "./Escopos";
 
 interface Props {
   aberto: boolean;
@@ -254,6 +254,16 @@ const PE_ICONE = "size-4 shrink-0";
 
 export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
   const dialogo = useDialogo();
+  /*
+    O QUE NÃO ESTÁ NO PLANO NEM APARECE. Antes a tela ficava na barra com
+    cadeado; agora some, e o grupo que ficar vazio some junto. Sem resposta
+    sobre o plano (`null`, primeira abertura sem internet), tudo aparece — a
+    mesma escolha de `casca/Escopos.tsx`: não esconder o programa de quem
+    pagou. A rota continua existindo, e quem chegar nela por endereço vê o
+    aviso de fora do plano.
+  */
+  const escopos = useEscopos();
+  const noPlano = (tela: Tela) => !tela.escopo || escopos === null || escopos.includes(tela.escopo);
 
   /*
     A PERGUNTA MORA AQUI, e não na casca, por uma razão mecânica: `useDialogo`
@@ -416,7 +426,7 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
         */}
         <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto overscroll-contain px-1 curta:gap-4">
           {GRUPOS.map((grupo) => {
-            const telas = telasDoGrupo(grupo.nome);
+            const telas = telasDoGrupo(grupo.nome).filter(noPlano);
             if (!telas.length) return null;
 
             return (
@@ -652,10 +662,9 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
  * pergunta de hook (`useForaDoPlano`), e hook não se chama dentro de um
  * `map`. O desenho é o mesmo de antes.
  *
- * DUAS RAZÕES PARA O CADEADO, e a linha não distingue: `trancada` é decisão
- * nossa e vale para todo mundo; fora do plano é decisão do plano da conta. O
- * que muda entre as duas é o que a pessoa vê ao clicar — e aí aí ela já está
- * na tela, que explica qual dos dois é.
+ * O CADEADO: `trancada` é decisão nossa e vale para todo mundo. A tela fora
+ * do plano da conta nem chega aqui — o `Menu` a tira da lista —, mas a
+ * checagem fica para o intervalo em que os escopos mudam com o menu aberto.
  */
 function ItemDoMenu({ tela, aoFechar }: { tela: Tela; aoFechar: () => void }) {
   const foraDoPlano = useForaDoPlano(tela);
