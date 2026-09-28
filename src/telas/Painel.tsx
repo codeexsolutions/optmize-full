@@ -27,6 +27,7 @@ import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { useDialogo } from "../casca/Dialogo";
 import { iniciais, useSessao } from "../casca/usuario";
+import { LojaDeAcessos } from "./LojaDeAcessos";
 
 interface Membro {
   id: string;
@@ -41,6 +42,8 @@ interface Equipe {
   organization: { id: string; name: string };
   plan: { name: string; seats: number; team: boolean };
   isOwner: boolean;
+  /** Acessos comprados além do plano; `seats` já os inclui. */
+  extraSeats?: number;
   seats: number;
   used: number;
   members: Membro[];
@@ -193,6 +196,22 @@ export function Painel() {
           </p>
         ) : (
           <form onSubmit={criar} className="grid gap-3 sm:grid-cols-3">
+            {/*
+              A EMPRESA DO ACESSO, à vista no cadastro. O acesso nasce preso a
+              ela — usa a assinatura e a metragem dela, e entra com o CNPJ
+              dela —, e quem cadastra precisa ver de qual empresa está dando
+              a chave antes de dar.
+            */}
+            <label className="flex flex-col gap-1 sm:col-span-3">
+              <span className={ROTULO}>Empresa</span>
+              <input
+                className={`${CAMPO} cursor-default text-tinta-fraca`}
+                value={equipe?.organization.name ?? "Carregando…"}
+                readOnly
+                tabIndex={-1}
+                title="O acesso fica vinculado a esta empresa"
+              />
+            </label>
             <label className="flex flex-col gap-1">
               <span className={ROTULO}>Nome</span>
               <input
@@ -237,6 +256,7 @@ export function Painel() {
               {equipe && (
                 <span className="font-mono text-[11px] tracking-[0.06em] text-tinta-apagada uppercase">
                   {equipe.used} de {equipe.seats} acessos em uso
+                  {(equipe.extraSeats ?? 0) > 0 && ` · ${equipe.extraSeats} extra`}
                 </span>
               )}
               {erroDoFormulario && (
@@ -244,12 +264,13 @@ export function Painel() {
               )}
               {semVaga && !erroDoFormulario && (
                 <span className="text-[13px] text-tinta-fraca">
-                  Todas as vagas do plano estão em uso. Exclua um acesso para criar outro.
+                  Todas as vagas estão em uso. Compre mais um acesso abaixo, ou exclua um.
                 </span>
               )}
             </div>
           </form>
         )}
+        {semVaga && !semEquipe && equipe?.isOwner && <LojaDeAcessos aoLiberar={carregar} />}
       </Cartao>
 
       <Cartao
