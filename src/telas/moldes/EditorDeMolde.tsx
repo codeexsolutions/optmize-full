@@ -97,6 +97,9 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
         papelEscrito: PAPEIS_DE_PECA.includes(peca.papel) ? "" : peca.papel,
         quantidade: peca.quantidade,
         nome: peca.nome,
+        // Molde salvo antes por aqui tem o papel no lugar do nome ("frente"),
+        // ou "peça" na "outro": isso era preenchimento, não nome.
+        nomeGuardado: !peca.nome || peca.nome === peca.papel || peca.nome === "peça" ? "" : peca.nome,
         largura: peca.largura,
         altura: peca.altura,
         contorno: peca.contorno,
@@ -202,6 +205,7 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
     return {
       ...parte,
       nome: doNome.nome,
+      nomeGuardado: "",
       largura: Math.round(desenho.largura * 10) / 10,
       altura: Math.round(desenho.altura * 10) / 10,
       contorno: desenho.contorno,
@@ -365,7 +369,9 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
       pecas: todas.map((p, ordem) => ({
         tamanho: p.tamanho,
         papel: nomeDaParte(p),
-        nome: nomeDaParte(p) === "outro" ? (p.nome || "peça") : nomeDaParte(p),
+        // O nome da Montagem fica. Sem ele, só a "outro" leva o nome do
+        // arquivo; as demais ficam sem nome e são chamadas pelo papel.
+        nome: p.nomeGuardado || (nomeDaParte(p) === "outro" ? p.nome || "" : ""),
         quantidade: p.quantidade,
         largura: p.largura,
         altura: p.altura,

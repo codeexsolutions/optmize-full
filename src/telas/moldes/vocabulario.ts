@@ -19,7 +19,14 @@ export interface ParteEmEdicao {
   /** O que a pessoa escreveu quando o papel é "outro". */
   papelEscrito: string;
   quantidade: number;
+  /** O nome que veio no arquivo ("frente 5x.dxf" → "frente"). */
   nome: string | null;
+  /**
+   * O nome que a peça já tinha no molde guardado — o que a Montagem deu.
+   * O passo a passo não o edita, só o devolve ao regravar; trocar o arquivo
+   * o descarta junto com `nos` e `marcacoes`.
+   */
+  nomeGuardado?: string;
   largura: number;
   altura: number;
   contorno: { x: number; y: number }[] | null;
