@@ -12,7 +12,8 @@ const compilado = buildSync({
       export { Projetos } from './src/telas/Projetos';
       export { Funcionarios } from './src/telas/Funcionarios';
       export { Moldes } from './src/telas/Moldes';
-      export { duracao } from './src/utils/formato';`,
+      export { duracao } from './src/utils/formato';
+      export { MemoryRouter } from 'react-router-dom';`,
     resolveDir: raiz,
   },
   bundle: true, write: false, platform: 'node', format: 'cjs',
@@ -27,7 +28,7 @@ for (const nome of ['window', 'document', 'HTMLElement', 'Node', 'Event', 'Mouse
 global.IS_REACT_ACT_ENVIRONMENT = true;
 dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 mod._compile(compilado, mod.filename);
-const { useDados, ProvedorDeDialogo, useDialogo, Projetos, Funcionarios, Moldes, duracao } = mod.exports;
+const { useDados, ProvedorDeDialogo, useDialogo, Projetos, Funcionarios, Moldes, duracao, MemoryRouter } = mod.exports;
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
@@ -147,10 +148,13 @@ async function conferirProjetos() {
   await clicar([...document.querySelectorAll('button')].find(x => x.textContent.includes('Cliente')));
   await clicar(botao('Projeto A'));
   await clicar(botao('Projeto B'));
-  const projeto = (id, nome) => Response.json({ id, nome, pecas: [], cliente: { id: 1, nome: 'Cliente' } });
+  // O servidor sempre manda a `estrutura` (ver `estruturaDoProjeto` em
+  // servidor/projetos-api.js) desde que os Projetos se refizeram na Galeria.
+  const projeto = (id, nome) => Response.json({ id, nome, pecas: [], estrutura: { subprojetos: [] }, cliente: { id: 1, nome: 'Cliente' } });
   await act(async () => aberturas[1].resolve(projeto(2, 'Projeto B')));
   await act(async () => aberturas[0].resolve(projeto(1, 'Projeto A')));
-  assert.equal(document.querySelector('[aria-label="Nome do projeto"]').value, 'Projeto B',
+  // O nome é um texto que vira campo ao clicar (`TextoEditavel`).
+  assert.equal(document.querySelector('button[title="Clique para renomear"]').textContent, 'Projeto B',
     'o último projeto escolhido prevalece mesmo com respostas fora de ordem');
   await clicar(botao('Projeto A'));
   await clicar(botao('Projeto B'));
@@ -202,7 +206,7 @@ async function conferirMoldes() {
     }
     throw new Error('Requisição inesperada: ' + url);
   };
-  const root = await montar(elemento(ProvedorDeDialogo, null, elemento(Moldes)));
+  const root = await montar(elemento(MemoryRouter, null, elemento(ProvedorDeDialogo, null, elemento(Moldes))));
   const encaixar = indice => [...document.querySelectorAll('.molde-linha')][indice]
     .querySelector('button');
   await clicar(encaixar(0));
@@ -214,7 +218,7 @@ async function conferirMoldes() {
     'resposta de molde anterior não substitui o último escolhido');
   await act(async () => root.unmount());
 
-  const novoRoot = await montar(elemento(ProvedorDeDialogo, null, elemento(Moldes)));
+  const novoRoot = await montar(elemento(MemoryRouter, null, elemento(ProvedorDeDialogo, null, elemento(Moldes))));
   await clicar(encaixar(0));
   await clicar([...document.querySelectorAll('button')].find(x => x.textContent.includes('Adicionar molde')));
   await act(async () => aberturas[2].resolve(molde(1, 'Molde A')));
