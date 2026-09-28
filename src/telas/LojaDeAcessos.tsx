@@ -13,7 +13,7 @@
  *     vaga e manda a cobrança pelo WhatsApp.
  *
  * O PREÇO VEM PRONTO DO BACKEND (`domain/acessos.ts`): o do plano dividido
- * pelos acessos que ele traz, proporcional até a renovação. Esta tela não
+ * pelos acessos que ele traz. É uma compra, pelo valor cheio. Esta tela não
  * calcula dinheiro nenhum.
  */
 
@@ -24,9 +24,8 @@ import { Icone } from "../casca/Icone";
 interface Loja {
   acessosDoPlano: number;
   acessosExtras: number;
+  /** O preço de um acesso: o do plano dividido pelos acessos dele. */
   precoCheioCents: number;
-  precoAgoraCents: number;
-  proporcionalAte: string | null;
   pixDisponivel: boolean;
   pedidoPendente: { id: string; criadoEm: string } | null;
 }
@@ -140,13 +139,11 @@ export function LojaDeAcessos({ aoLiberar }: { aoLiberar: () => void }) {
           </p>
           <p className="mt-1 mb-0 text-[12px] leading-relaxed text-tinta-fraca">
             {loja.acessosDoPlano} acessos vêm no plano
-            {loja.acessosExtras > 0 && ` e ${loja.acessosExtras} já foram comprados à parte`}.{" "}
-            {loja.proporcionalAte
-              ? `Agora sai proporcional até a renovação (${data(loja.proporcionalAte)}); depois entra na fatura por ${reais(loja.precoCheioCents)}.`
-              : `Cada acesso extra custa ${reais(loja.precoCheioCents)} por período do plano.`}
+            {loja.acessosExtras > 0 && ` e ${loja.acessosExtras} já foram comprados à parte`}. Compre
+            mais um e ele entra na hora para a sua equipe.
           </p>
         </div>
-        <p className="m-0 shrink-0 font-titulo text-2xl font-semibold text-ambar">{reais(loja.precoAgoraCents)}</p>
+        <p className="m-0 shrink-0 font-titulo text-2xl font-semibold text-ambar">{reais(loja.precoCheioCents)}</p>
       </div>
 
       {cobranca ? (
