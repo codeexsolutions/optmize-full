@@ -45,6 +45,17 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="particoes.csv"
 CONFIG_FREERTOS_HZ=1000
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
+# --- A memoria do LVGL ---
+# O padrao e uma reserva FIXA de 64 KB, e numa tela de 1024x600 ela acaba: a de
+# Ajustes, com a lista de redes, o teclado e o cartao que sobe, enchia a reserva
+# e o LVGL nao da erro quando isso acontece -- ele tenta alocar a camada de
+# novo, para sempre, e a tela congela com o watchdog reclamando de `taskLVGL`
+# (visto em 2026-09-25, preso em `draw_buf_flush` / `lv_draw_buf_create_ex`).
+# Com o `malloc` do sistema, o que passa de 16 KB vai para os 32 MB de PSRAM
+# (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL`).
+# CONFIG_LV_USE_BUILTIN_MALLOC is not set
+CONFIG_LV_USE_CLIB_MALLOC=y
+
 # --- Fontes do LVGL ---
 # So entram no binario as que forem marcadas aqui. Elas cobrem ASCII e mais
 # nada: acento nao desenha. Por isso os textos DA TELA sao sem acento -- os

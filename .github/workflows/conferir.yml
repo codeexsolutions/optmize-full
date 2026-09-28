@@ -88,3 +88,9 @@ jobs:
 
       - name: Complemento
         run: npm run bancada:complemento
+
+      - name: Folga real
+        run: npm run bancada:folga
+
+      - name: Conferência pela arte
+        run: npm run bancada:conferencia
