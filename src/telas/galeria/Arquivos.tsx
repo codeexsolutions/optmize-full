@@ -367,7 +367,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
   const pastasNaTela: (PastaDaGaleria & { onde?: string })[] = buscando ? achados.pastas : conteudo?.pastas || [];
   const arquivosNaTela: (ArquivoDaGaleria & { onde?: string })[] = buscando ? achados.arquivos : conteudo?.arquivos || [];
   const vazia = !buscando && conteudo !== null && conteudo.pastas.length === 0 && conteudo.arquivos.length === 0;
-  const nomeDaAberta = conteudo?.caminho.at(-1)?.nome ?? "Meus arquivos";
+  const nomeDaAberta = conteudo?.caminho.at(-1)?.nome ?? "Galeria";
   const bytesNaPasta = (conteudo?.arquivos || []).reduce((s, a) => s + a.bytes, 0);
   const recentes = aberta === null && !buscando ? (resumo?.recentes || []) : [];
 
@@ -441,13 +441,13 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
   };
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden">
       <LateralDaGaleria nav={nav}>
         <div
           {...alvoDeSoltura("raiz", null)}
           className={`rounded-lg transition-colors ${alvo === "raiz" ? "bg-[var(--accent-line)]" : ""}`}
         >
-          <div className="ml-4 border-l border-linha py-0.5 pl-1.5">
+          <div className="py-0.5">
             {(filhos.get(null) || []).length === 0
               ? <p className="m-0 px-2 py-1.5 text-[11px] text-tinta-apagada">nenhuma pasta ainda</p>
               : (filhos.get(null) || []).map(ramo)}
@@ -499,7 +499,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
               ) : (
                 <>
                   <button type="button" onClick={() => void abrir(null)} className="rounded-md px-1 py-0.5 hover:bg-[var(--surface-hover)] hover:text-ambar">
-                    Meus arquivos
+                    Galeria
                   </button>
                   {(conteudo?.caminho || []).slice(0, -1).map((c) => (
                     <span key={c.id} className="flex items-center gap-1">

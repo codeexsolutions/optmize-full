@@ -562,6 +562,23 @@ rotas.delete("/equipe/:id", (req, res) =>
   repassar(res, `/team/members/${encodeURIComponent(req.params.id)}`, { method: "DELETE" }));
 
 /*
+ * A LOJA DE ACESSOS — mais um acesso além do plano.
+ *
+ * Preço, Pix e pedido à CodeEx: tudo decidido no backend
+ * (`services/acesso.service.ts`). Aqui só o caminho muda.
+ */
+rotas.get("/equipe/acessos", (_req, res) => repassar(res, "/team/acessos"));
+
+rotas.post("/equipe/acessos/compra", (_req, res) =>
+  repassar(res, "/team/acessos/compra", { method: "POST" }));
+
+rotas.get("/equipe/acessos/compra/:id", (req, res) =>
+  repassar(res, `/team/acessos/compra/${encodeURIComponent(req.params.id)}`));
+
+rotas.post("/equipe/acessos/pedido", (_req, res) =>
+  repassar(res, "/team/acessos/pedido", { method: "POST" }));
+
+/*
  * ===========================================================================
  * O PAGAMENTO NA HORA DA COMPRA
  * ===========================================================================

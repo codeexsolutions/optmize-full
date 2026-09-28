@@ -579,6 +579,27 @@ fn main() {
                 // a página — do mesmo jeito que no navegador.
                 .disable_drag_drop_handler()
                 /*
+                 * AS ANIMAÇÕES NÃO DEPENDEM DE UMA CAIXA DO WINDOWS.
+                 *
+                 * O WebView2 responde `prefers-reduced-motion: reduce` sempre
+                 * que "Mostrar animações no Windows" está desligado — e no
+                 * Windows 10 isso vem desligado em muita máquina que ninguém
+                 * escolheu: "Ajustar para obter o melhor desempenho", acesso
+                 * remoto, PC de fábrica configurado pelo técnico. O CSS do
+                 * programa obedece esse pedido, então nessas máquinas o
+                 * programa inteiro ficava parado: sem entrada de lista, sem
+                 * seletor deslizando, sem o poço do encaixe caindo.
+                 *
+                 * `--force-prefers-no-reduced-motion` faz a página ver
+                 * "sem preferência". As três primeiras opções são as que o
+                 * wry já passa por conta própria — definir a lista aqui
+                 * substitui a dele, então elas têm de vir junto.
+                 */
+                .additional_browser_args(
+                    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+                     --force-prefers-no-reduced-motion",
+                )
+                /*
                  * Mostrar a janela quando a página termina de carregar, e não
                  * antes. Vale para a tela de abertura (é a primeira a carregar)
                  * e é inofensivo nas seguintes: mostrar o que já está visível
