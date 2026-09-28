@@ -28,6 +28,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDialogo } from "../../casca/Dialogo";
 import { moldesApi, type AjusteDaArte, type Estampa, type Molde, type PecaDoMolde } from "../../api/moldes";
+import { pecasParaOEncaixe } from "../../motores/montagem";
 import {
   AJUSTE_PADRAO, MODOS_DE_ARTE, TIPOS_DE_ARTE, ajusteNovo, desenharArteNoMolde, ppcmDaArte, tamanhoDoRapport,
 } from "../../motores/arteMolde";
@@ -95,7 +96,13 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
   }, [aoFechar]);
 
   const estampas = molde.artes || [];
-  const pecas = molde.pecas.filter((p) => p.tamanho === tamanho);
+  // A peça marcada "espelhar" na Montagem vira duas — uma do avesso. Ver
+  // `pecasParaOEncaixe`: o espelho é no contorno, então a arte entra nele
+  // como em qualquer outro.
+  const pecas = useMemo(
+    () => pecasParaOEncaixe(molde.pecas.filter((p) => p.tamanho === tamanho)) as PecaDoMolde[],
+    [molde, tamanho],
+  );
 
   // ==================== AS ESTAMPAS GUARDADAS ====================
 
@@ -457,9 +464,12 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
           <div className="partes-arte">
             {pecas.length === 0
               ? <p className="hint">Esse tamanho não tem peça nenhuma.</p>
-              : pecas.map((peca) => (
+              : pecas.map((peca, i) => (
                 <ParteComArte
-                  key={`${peca.tamanho}-${peca.papel}-${peca.id ?? peca.ordem}`}
+                  // A metade espelhada de `pecasParaOEncaixe` repete o mesmo
+                  // `id`/`ordem` da peça original (mesmo papel, só o contorno
+                  // vira) — sem o índice aqui as duas cairiam na mesma chave.
+                  key={`${peca.tamanho}-${peca.papel}-${peca.id ?? peca.ordem}-${i}`}
                   peca={peca}
                   arte={artes[peca.papel]}
                   aoMandarArte={(arquivo) => void mandarArteParaPapel(peca.papel, arquivo)}
@@ -525,7 +535,8 @@ function ParteComArte({ peca, arte, aoMandarArte, aoMexer, aoTirar }: {
       </div>
 
       <div className="parte-arte-lado">
-        <span className="peca-nome">{peca.papel}</span>
+        {/* O nome, quando há: é ele que separa a peça "outro" das outras e a metade "(espelhada)" da normal. */}
+        <span className="peca-nome">{peca.nome || peca.papel}</span>
         <span className="hint">
           {emCm(peca.largura)} × {emCm(peca.altura)} cm · {peca.quantidade} por peça pronta
         </span>

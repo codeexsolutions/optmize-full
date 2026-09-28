@@ -57,33 +57,39 @@
  * A SAÍDA
  * ---------------------------------------------------------------------------
  *
- * PDF em tamanho real, para imprimir e usar de gabarito, e SVG para abrir no
- * CorelDRAW ou no Illustrator — este com as curvas como curvas (`C`), então
- * quem abrir recebe os mesmos poucos nós que viu aqui. Esta tela não manda
- * nada para o Encaixe: o que sai daqui é arquivo.
+ * Esta tela não baixa arquivo. O risco medido vira um molde-RASCUNHO na
+ * estante e a Montagem abre em cima dele (`telas/Montagem.tsx`): é lá que a
+ * peça ganha papel, pique e margem, e é de lá que saem o PDF, o SVG e o
+ * Encaixe. Baixar daqui entregava um risco sem nome nem pique, que alguém
+ * tinha de marcar à mão no Corel e mandar de volta pela estante.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { carregarImagem, lerComoDataURL } from "../utils/arquivoDeImagem";
 import { formatarCm } from "../utils/numero";
 import { aliviarContorno, contornosDasManchas } from "../motores/moldes";
 import { achatarCurvas } from "../motores/ajusteDeCurvas";
-import { riscoApi } from "../api/risco";
+import { moldesApi } from "../api/moldes";
+import { marcacoesPadrao, pecaParaGravar } from "../motores/montagem";
 import {
   CELULAS_NO_LADO_MAIOR, ERRO_DE_CURVA_PADRAO, FORMATOS_DE_IMAGEM, areaDo, caixaDo,
-  ehImagemDeMolde, riscosDosPixels, riscosEmCm, svgDosRiscos,
+  ehImagemDeMolde, riscosDosPixels, riscosEmCm,
 } from "../motores/moldeDaImagem";
 import { useErroEmAlerta } from "../casca/Alerta";
+import {
+  alternarLado as alternarLadoDosNos, apagarNo as apagarNoDosNos, clonarNos, inserirNoNoTraco,
+  moverPega, pegaSob, tracoSob,
+} from "../motores/edicaoDeNos";
+import { desenharNos, tracarCaminho } from "./risco/desenhoDeNos";
 
 type Lado = "largura" | "altura";
 type Ponto = { x: number; y: number };
 type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean };
 /** O que o ponteiro pegou: um nó, ou uma das alças dele. */
 type Pega = { peca: number; no: number; parte: "no" | "entrada" | "saida" };
-/** Onde o ponteiro caiu em cima do traço: que trecho, e em que ponto dele. */
-type NoTraco = { peca: number; no: number; t: number };
 
 /** As cores dos riscos na prévia, para dar para falar "a peça verde". */
 const CORES = ["#ff7a1a", "#25c2a0", "#4d9dff", "#f45d9c", "#f5c518", "#9d7bff"];
@@ -98,38 +104,8 @@ const PEGA = 10;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 12;
 
-/** Um ponto da cúbica em `t`. */
-function naCurva(p0: Ponto, p1: Ponto, p2: Ponto, p3: Ponto, t: number): Ponto {
-  const u = 1 - t;
-  const a = u * u * u;
-  const b = 3 * u * u * t;
-  const c = 3 * u * t * t;
-  const d = t * t * t;
-  return {
-    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
-    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
-  };
-}
-
-/**
- * Parte a cúbica em duas, em `t`, sem mudar o desenho (de Casteljau).
- *
- * É o que deixa "pôr um nó no meio da curva" ser inofensivo: o traço fica
- * exatamente onde estava, só passa a ter mais um nó para pegar. Se o nó novo
- * fosse simplesmente enfiado na lista, a curva mudaria de forma no ato.
- */
-function dividirCurva(p0: Ponto, p1: Ponto, p2: Ponto, p3: Ponto, t: number) {
-  const meio = (a: Ponto, b: Ponto): Ponto => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-  const a1 = meio(p0, p1);
-  const a2 = meio(p1, p2);
-  const a3 = meio(p2, p3);
-  const b1 = meio(a1, a2);
-  const b2 = meio(a2, a3);
-  const centro = meio(b1, b2);
-  return { saidaDoAnterior: a1, entradaDoNovo: b1, no: centro, saidaDoNovo: b2, entradaDoSeguinte: a3 };
-}
-
 export function Digitalizar() {
+  const navegar = useNavigate();
   const [nome, setNome] = useState("");
   const [imagem, setImagem] = useState<HTMLImageElement | null>(null);
   const [achado, setAchado] = useState<any>(null);
@@ -147,7 +123,7 @@ export function Digitalizar() {
   /** O nó cujas alças estão à mostra. */
   const [noAtivo, setNoAtivo] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const [criando, setCriando] = useState(false);
   /** Um arquivo sendo arrastado por cima do cartão. */
   const [arquivoEmCima, setArquivoEmCima] = useState(false);
 
@@ -170,10 +146,7 @@ export function Digitalizar() {
   const cm = Number(String(medida).replace(",", "."));
   const emCm = pecas.length > 0 && cm > 0 ? riscosEmCm(pecas, qual, lado, cm) : null;
 
-  const clonar = (fonte: No[][]): No[][] => fonte.map((nos) => nos.map((n) => ({
-    x: n.x, y: n.y, entrada: { ...n.entrada }, saida: { ...n.saida },
-    canto: n.canto, retaDepois: n.retaDepois,
-  })));
+  const clonar = (fonte: No[][]): No[][] => fonte.map(clonarNos);
 
   /** Guarda o estado atual na pilha do desfazer, antes de mexer. */
   const lembrar = useCallback(() => {
@@ -313,59 +286,31 @@ export function Digitalizar() {
     return caixa.width > 0 ? achado.cols / caixa.width : 1;
   };
 
-  /** O que está debaixo do ponteiro: alça do nó ativo, nó, ou nada. */
+  /** O que está debaixo do ponteiro: alça do nó ativo, nó de qualquer peça, ou nada. */
   const oQueEstaSob = (alvo: Ponto): Pega | null => {
     const raio = PEGA * gradePorPixel();
-
-    // As alças primeiro: elas ficam por cima e costumam estar perto do nó.
-    const contorno = edicao[qual];
-    if (contorno && noAtivo !== null && contorno[noAtivo]) {
-      const n = contorno[noAtivo]!;
-      const anterior = contorno[(noAtivo - 1 + contorno.length) % contorno.length]!;
-      for (const parte of ["entrada", "saida"] as const) {
-        // Lado reto não tem alça para pegar: ela está em cima do nó, e deixar
-        // pegá-la roubaria o clique do próprio nó.
-        if (parte === "saida" && n.retaDepois) continue;
-        if (parte === "entrada" && anterior.retaDepois) continue;
-        const a = n[parte];
-        if (Math.hypot(a.x - alvo.x, a.y - alvo.y) < raio) return { peca: qual, no: noAtivo, parte };
+    let melhor: (Pega & { distancia: number }) | null = null;
+    edicao.forEach((nos, p) => {
+      const sob = pegaSob(nos, alvo, raio, p === qual ? noAtivo : null);
+      if (!sob) return;
+      // Alça ganha sempre (ver o motor); entre nós, o mais perto.
+      if (sob.parte !== "no") {
+        melhor = { peca: p, no: sob.no, parte: sob.parte as Pega["parte"], distancia: -1 };
+        return;
       }
-    }
-
-    let achadoNo: Pega | null = null;
-    let menor = raio;
-    for (let p = 0; p < edicao.length; p++) {
-      const nos = edicao[p]!;
-      for (let i = 0; i < nos.length; i++) {
-        const n = nos[i]!;
-        const d = Math.hypot(n.x - alvo.x, n.y - alvo.y);
-        if (d < menor) { menor = d; achadoNo = { peca: p, no: i, parte: "no" }; }
-      }
-    }
-    return achadoNo;
+      if (!melhor || sob.distancia < melhor.distancia) melhor = { peca: p, no: sob.no, parte: "no", distancia: sob.distancia };
+    });
+    return melhor;
   };
 
   /** Em que trecho de curva o ponteiro caiu, e em que `t`. */
-  const noTracoSob = (alvo: Ponto): NoTraco | null => {
+  const noTracoSob = (alvo: Ponto): { peca: number; no: number; t: number } | null => {
     const raio = PEGA * gradePorPixel();
-    let melhor: NoTraco | null = null;
-    let menor = raio;
-    for (let p = 0; p < edicao.length; p++) {
-      const nos = edicao[p]!;
-      for (let i = 0; i < nos.length; i++) {
-        const a = nos[i]!;
-        const b = nos[(i + 1) % nos.length]!;
-        const passos = 16;
-        for (let k = 0; k <= passos; k++) {
-          const t = k / passos;
-          const q = a.retaDepois
-            ? { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
-            : naCurva(a, a.saida, b.entrada, b, t);
-          const d = Math.hypot(q.x - alvo.x, q.y - alvo.y);
-          if (d < menor) { menor = d; melhor = { peca: p, no: i, t }; }
-        }
-      }
-    }
+    let melhor: { peca: number; no: number; t: number; distancia: number } | null = null;
+    edicao.forEach((nos, p) => {
+      const sob = tracoSob(nos, alvo, raio);
+      if (sob && (!melhor || sob.distancia < melhor.distancia)) melhor = { peca: p, ...sob };
+    });
     return melhor;
   };
 
@@ -394,33 +339,7 @@ export function Digitalizar() {
     if (!pega) return;
     const alvo = naGrade(e);
     if (!alvo) return;
-    setEdicao((antes) => antes.map((nos, p) => {
-      if (p !== pega.peca) return nos;
-      return nos.map((n, i) => {
-        if (i !== pega.no) return n;
-        if (pega.parte === "no") {
-          // O nó leva as alças junto: sem isso, mover um nó deformaria as duas
-          // curvas vizinhas em vez de arrastar o trecho inteiro.
-          const dx = alvo.x - n.x;
-          const dy = alvo.y - n.y;
-          return {
-            ...n,
-            x: alvo.x,
-            y: alvo.y,
-            entrada: { x: n.entrada.x + dx, y: n.entrada.y + dy },
-            saida: { x: n.saida.x + dx, y: n.saida.y + dy },
-          };
-        }
-        if (pega.parte === "entrada") {
-          // Nó de curva mantém as duas alças alinhadas (a curva passa lisa por
-          // ele); nó de CANTO não, senão o bico se perderia ao mexer num lado.
-          const saida = n.canto ? n.saida : { x: 2 * n.x - alvo.x, y: 2 * n.y - alvo.y };
-          return { ...n, entrada: { x: alvo.x, y: alvo.y }, saida };
-        }
-        const entradaNova = n.canto ? n.entrada : { x: 2 * n.x - alvo.x, y: 2 * n.y - alvo.y };
-        return { ...n, saida: { x: alvo.x, y: alvo.y }, entrada: entradaNova };
-      });
-    }));
+    setEdicao((antes) => antes.map((nos, p) => (p === pega.peca ? moverPega(nos, pega, alvo) : nos)));
   };
 
   const aoSoltar = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -439,13 +358,14 @@ export function Digitalizar() {
    */
   const apagarNo = useCallback((peca: number, no: number) => {
     const contorno = edicao[peca];
-    if (!contorno || contorno.length <= 3) {
+    const novo = contorno ? apagarNoDosNos(contorno, no) : null;
+    if (!novo) {
       setErro("A peça ficaria com menos de três nós; não dá para apagar mais.");
       return;
     }
     lembrar();
     setNoAtivo(null);
-    setEdicao((antes) => antes.map((c, p) => (p === peca ? c.filter((_, i) => i !== no) : c)));
+    setEdicao((antes) => antes.map((c, p) => (p === peca ? novo : c)));
   }, [edicao, lembrar]);
 
   /**
@@ -461,35 +381,13 @@ export function Digitalizar() {
    * arrasta. Virando reta, as alças desabam em cima dos nós.
    */
   const alternarLado = useCallback((peca: number, no: number, lado: "antes" | "depois") => {
-    const contorno = edicao[peca];
-    if (!contorno || contorno.length < 2) return;
-    const inicio = lado === "depois" ? no : (no - 1 + contorno.length) % contorno.length;
-    const fim = (inicio + 1) % contorno.length;
     lembrar();
-    setEdicao((antes) => antes.map((c, pp) => {
-      if (pp !== peca) return c;
-      const a = c[inicio]!;
-      const b = c[fim]!;
-      const viraReta = !a.retaDepois;
-      const saida = c.slice();
-      if (viraReta) {
-        saida[inicio] = { ...a, retaDepois: true, saida: { x: a.x, y: a.y } };
-        saida[fim] = { ...b, entrada: { x: b.x, y: b.y } };
-      } else {
-        const terco = (de: Ponto, para: Ponto): Ponto => ({
-          x: de.x + (para.x - de.x) / 3,
-          y: de.y + (para.y - de.y) / 3,
-        });
-        saida[inicio] = { ...a, retaDepois: false, saida: terco(a, b) };
-        saida[fim] = { ...b, entrada: terco(b, a) };
-      }
-      return saida;
-    }));
-  }, [edicao, lembrar]);
+    setEdicao((antes) => antes.map((c, pp) => (pp === peca ? alternarLadoDosNos(c, no, lado) : c)));
+  }, [lembrar]);
 
   /**
    * Dois cliques: em cima de um nó, apaga; em cima do traço, põe um nó novo
-   * ali, sem mudar o desenho (ver `dividirCurva`).
+   * ali, sem mudar o desenho (ver `inserirNoNoTraco`, no motor).
    */
   const aoDobrarClique = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const alvo = naGrade(e);
@@ -502,35 +400,7 @@ export function Digitalizar() {
     const noTraco = noTracoSob(alvo);
     if (!noTraco) return;
     lembrar();
-    setEdicao((antes) => antes.map((nos, p) => {
-      if (p !== noTraco.peca) return nos;
-      const a = nos[noTraco.no]!;
-      const b = nos[(noTraco.no + 1) % nos.length]!;
-      const saida = nos.slice();
-      const seguinte = (noTraco.no + 1) % nos.length;
-
-      if (a.retaDepois) {
-        // Numa reta o nó novo entra em cima dela, e as DUAS metades continuam
-        // retas: partir uma reta não pode inventar curvatura.
-        const meio = { x: a.x + (b.x - a.x) * noTraco.t, y: a.y + (b.y - a.y) * noTraco.t };
-        saida.splice(noTraco.no + 1, 0, {
-          x: meio.x, y: meio.y,
-          entrada: { ...meio }, saida: { ...meio },
-          canto: false, retaDepois: true,
-        });
-        return saida;
-      }
-
-      const corte = dividirCurva(a, a.saida, b.entrada, b, noTraco.t);
-      saida[noTraco.no] = { ...a, saida: corte.saidaDoAnterior };
-      saida[seguinte] = { ...b, entrada: corte.entradaDoSeguinte };
-      saida.splice(noTraco.no + 1, 0, {
-        x: corte.no.x, y: corte.no.y,
-        entrada: corte.entradaDoNovo, saida: corte.saidaDoNovo,
-        canto: false, retaDepois: false,
-      });
-      return saida;
-    }));
+    setEdicao((antes) => antes.map((nos, p) => (p === noTraco.peca ? inserirNoNoTraco(nos, noTraco.no, noTraco.t) : nos)));
     setNoAtivo(noTraco.no + 1);
   };
 
@@ -627,22 +497,7 @@ export function Digitalizar() {
     ctx.lineJoin = "round";
 
     edicao.forEach((nos, i) => {
-      ctx.beginPath();
-      const zero = emTela(nos[0]!);
-      ctx.moveTo(zero.x, zero.y);
-      for (let k = 0; k < nos.length; k++) {
-        const a = nos[k]!;
-        const b = nos[(k + 1) % nos.length]!;
-        const fim = emTela(b);
-        if (a.retaDepois) {
-          ctx.lineTo(fim.x, fim.y);
-          continue;
-        }
-        const c1 = emTela(a.saida);
-        const c2 = emTela(b.entrada);
-        ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, fim.x, fim.y);
-      }
-      ctx.closePath();
+      tracarCaminho(ctx, nos, emTela);
       // Duas passadas: uma grossa e escura por baixo, uma fina e colorida por
       // cima. O risco precisa aparecer tanto sobre papel claro quanto sobre a
       // esteira escura, e uma cor só some numa das duas.
@@ -670,93 +525,39 @@ export function Digitalizar() {
     const escolhida = edicao[qual];
     if (!escolhida) return;
 
-    // As alças, só do nó ativo, e por baixo dos nós.
-    if (noAtivo !== null && escolhida[noAtivo]) {
-      const n = escolhida[noAtivo]!;
-      const anterior = escolhida[(noAtivo - 1 + escolhida.length) % escolhida.length]!;
-      const centro = emTela(n);
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.lineWidth = 1.5;
-      for (const parte of ["entrada", "saida"] as const) {
-        // Lado reto não tem alça: desenhar uma em cima do nó só esconderia o nó
-        // e daria a entender que há curvatura ali.
-        if (parte === "saida" && n.retaDepois) continue;
-        if (parte === "entrada" && anterior.retaDepois) continue;
-        const a = emTela(n[parte]);
-        ctx.beginPath();
-        ctx.moveTo(centro.x, centro.y);
-        ctx.lineTo(a.x, a.y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(a.x, a.y, 4.5, 0, Math.PI * 2);
-        ctx.fillStyle = "#4d9dff";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(10, 14, 16, 0.9)";
-        ctx.stroke();
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-      }
-    }
-
-    escolhida.forEach((n, i) => {
-      const c = emTela(n);
-      const marcado = i === noAtivo;
-      // O nó marcado cresce, muda de cor e ganha um halo. Três sinais em vez de
-      // um porque ele é quem o Delete apaga: dá para ver o que vai embora antes
-      // de apertar a tecla.
-      if (marcado) {
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, 9, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255, 122, 26, 0.25)";
-        ctx.fill();
-      }
-      const raio = marcado ? 5.2 : 3.6;
-      ctx.fillStyle = marcado ? "#ff7a1a" : "#ffffff";
-      ctx.strokeStyle = marcado ? "#ffffff" : "rgba(10, 14, 16, 0.95)";
-      ctx.lineWidth = marcado ? 2 : 1.5;
-      if (n.canto) {
-        // Canto é quadrado, curva é redondo. Ver o cabeçalho: canto é ponto de
-        // costura, e tem que dar para reconhecer sem clicar.
-        ctx.beginPath();
-        ctx.rect(c.x - raio, c.y - raio, raio * 2, raio * 2);
-      } else {
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, raio, 0, Math.PI * 2);
-      }
-      ctx.fill();
-      ctx.stroke();
-    });
+    desenharNos(ctx, escolhida, noAtivo, emTela);
   }, [imagem, achado, edicao, qual, noAtivo]);
 
-  /** Grava um blob com o nome pedido. */
-  const gravar = (blob: Blob, extensao: string) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${nome || "molde"}-risco.${extensao}`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-  };
-
-  const baixarSvg = () => {
-    if (!emCm) return;
-    gravar(new Blob([svgDosRiscos(emCm, nome)], { type: "image/svg+xml" }), "svg");
-  };
-
   /*
-   * O PDF sai do servidor, com o `pdfkit` que já gera o do encaixe — ver o
-   * cabeçalho de `servidor/risco-pdf.js`. Ele vem em TAMANHO REAL, para servir
-   * de gabarito: uma página do tamanho do desenho, sem margem e sem ajuste.
+   * O risco vira um molde-RASCUNHO na estante, e a tela passa para a
+   * Montagem em cima dele. Rascunho porque as peças ainda não sabem o que são
+   * — "outro", sem nome — e é lá que ganham papel, pique e margem. Ver
+   * docs/superpowers/specs/2026-09-26-montagem-de-moldes-design.md.
    */
-  const baixarPdf = async () => {
+  const continuar = async () => {
     if (!emCm) return;
-    setGerandoPdf(true);
+    setCriando(true);
     setErro("");
     try {
-      gravar(await riscoApi.pdf(nome, emCm.pecas), "pdf");
+      const pecasProntas = emCm.pecas.map((p: any, i: number) => {
+        const g = pecaParaGravar({
+          tamanho: "base", papel: "outro", nome: null, quantidade: 1, furos: [], origem: "Digitalizar",
+          largura: 0, altura: 0, contorno: [], nos: p.nos, marcacoes: marcacoesPadrao(p.nos),
+        });
+        if (!g.peca) throw new Error(`A peça ${i + 1}: ${g.erro}.`);
+        return g.peca;
+      });
+      const { id } = await moldesApi.criar({
+        nome: nome.trim() || "Molde digitalizado",
+        observacoes: "Digitalizado de uma foto.",
+        situacao: "rascunho",
+        pecas: pecasProntas,
+      });
+      navegar(`/montagem?molde=${id}`);
     } catch (e: any) {
-      setErro(e?.message || "Não consegui gerar o PDF.");
+      setErro(e?.message || "Não consegui criar o molde.");
     } finally {
-      setGerandoPdf(false);
+      setCriando(false);
     }
   };
 
@@ -997,22 +798,21 @@ export function Digitalizar() {
                   )}
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" className="btn primary" onClick={baixarPdf} disabled={!emCm || gerandoPdf}>
-                    <Icone referencia="icones.svg#download" className="size-4" />
-                    {gerandoPdf ? "Gerando o PDF..." : "Baixar em PDF"}
-                  </button>
-                  <button type="button" className="btn secondary" onClick={baixarSvg} disabled={!emCm}>
-                    <Icone referencia="icones.svg#download" className="size-4" />
-                    Baixar em SVG
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2 text-[0.85rem]">
+                    <span className="shrink-0">Nome do molde</span>
+                    <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className="w-[240px]!" />
+                  </label>
+                  <button type="button" className="btn primary" onClick={() => void continuar()} disabled={!emCm || criando}>
+                    <Icone referencia="icones.svg#arrow-right" className="size-4" />
+                    {criando ? "Criando o molde…" : "Continuar para a montagem"}
                   </button>
                 </div>
 
                 <p className="m-0 text-[0.8rem] text-tinta-fraca">
-                  Os dois saem medidos em centímetros, com uma peça por contorno e as curvas como
-                  curvas. O <strong>PDF</strong> vem em tamanho real, para imprimir e usar de
-                  gabarito — mande em 100% no diálogo de impressão, senão o visualizador reduz para
-                  caber na folha. O <strong>SVG</strong> é para abrir no CorelDRAW ou no Illustrator.
+                  O molde vai para a estante como <strong>rascunho</strong>, e a Montagem abre em cima
+                  dele: lá cada peça ganha nome, pique, fio e margem, e de lá saem o PDF, o SVG e o
+                  Encaixe.
                 </p>
               </>
             )}

@@ -18,52 +18,13 @@ const db = require("./db");
 const {
   extensaoDaImagem, nomeDeArquivo, nomeDeImagemValido, limparImagensSoltas, pastaDeUploads,
 } = require("./uploads-arquivos");
+const { PAPEIS, arrumarPeca, lerSituacao, pecaDoBanco } = require("./moldes-pecas");
 
 const router = express.Router();
 const agora = () => new Date().toISOString();
 
-/** Papéis conhecidos. "outro" aceita qualquer nome escrito à mão. */
-const PAPEIS = [
-  "frente", "costas", "manga direita", "manga esquerda", "manga",
-  "gola", "punho", "cós", "bolso", "vista", "forro", "outro",
-];
-
 function pecasDoMolde(moldeId) {
-  return db.prepare("SELECT * FROM molde_pecas WHERE molde_id = ? ORDER BY ordem, id").all(moldeId)
-    .map((p) => ({
-      ...p,
-      contorno: JSON.parse(p.contorno),
-      furos: p.furos ? JSON.parse(p.furos) : [],
-    }));
-}
-
-/** Confere e limpa uma peça que chegou da tela. */
-function arrumarPeca(bruta, ordem) {
-  const contorno = Array.isArray(bruta && bruta.contorno) ? bruta.contorno : null;
-  if (!contorno || contorno.length < 3) return null;
-
-  const pontos = contorno
-    .map((p) => ({ x: Number(p.x), y: Number(p.y) }))
-    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
-  if (pontos.length < 3) return null;
-
-  const furos = (Array.isArray(bruta.furos) ? bruta.furos : [])
-    .map((f) => (Array.isArray(f) ? f.map((p) => ({ x: Number(p.x), y: Number(p.y) })) : []))
-    .filter((f) => f.length >= 3);
-
-  const papel = String(bruta.papel || "outro").trim().toLowerCase();
-  return {
-    tamanho: String(bruta.tamanho || "único").trim() || "único",
-    papel: papel || "outro",
-    nome: String(bruta.nome || "").trim() || null,
-    quantidade: Math.max(1, Math.floor(Number(bruta.quantidade) || 1)),
-    largura: Number(bruta.largura) || 0,
-    altura: Number(bruta.altura) || 0,
-    contorno: JSON.stringify(pontos),
-    furos: furos.length > 0 ? JSON.stringify(furos) : null,
-    origem: String(bruta.origem || "").trim() || null,
-    ordem,
-  };
+  return db.prepare("SELECT * FROM molde_pecas WHERE molde_id = ? ORDER BY ordem, id").all(moldeId).map(pecaDoBanco);
 }
 
 router.get("/papeis", (req, res) => res.json({ papeis: PAPEIS }));
@@ -95,7 +56,7 @@ router.get("/:id", (req, res) => {
 });
 
 router.post("/", (req, res) => {
-  const { nome, observacoes, pecas } = req.body || {};
+  const { nome, observacoes, pecas, situacao } = req.body || {};
   if (!nome || !String(nome).trim()) {
     return res.status(400).json({ error: "O molde precisa de um nome." });
   }
@@ -106,12 +67,12 @@ router.post("/", (req, res) => {
 
   const salvar = db.transaction(() => {
     const info = db.prepare(
-      "INSERT INTO moldes (nome, observacoes, criado_em) VALUES (?, ?, ?)")
-      .run(String(nome).trim(), String(observacoes || "").trim() || null, agora());
+      "INSERT INTO moldes (nome, observacoes, situacao, criado_em) VALUES (?, ?, ?, ?)")
+      .run(String(nome).trim(), String(observacoes || "").trim() || null, lerSituacao(situacao) || "pronto", agora());
     const inserir = db.prepare(`
       INSERT INTO molde_pecas
-        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, ordem)
-      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @ordem)
+        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem)
+      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem)
     `);
     arrumadas.forEach((p) => inserir.run({ ...p, molde_id: info.lastInsertRowid }));
     return info.lastInsertRowid;
@@ -126,20 +87,21 @@ router.put("/:id", (req, res) => {
   const molde = db.prepare("SELECT * FROM moldes WHERE id = ?").get(req.params.id);
   if (!molde) return res.status(404).json({ error: "Molde não encontrado." });
 
-  const { nome, observacoes, pecas } = req.body || {};
+  const { nome, observacoes, pecas, situacao } = req.body || {};
   const arrumadas = (Array.isArray(pecas) ? pecas : []).map(arrumarPeca).filter(Boolean);
   if (arrumadas.length === 0) {
     return res.status(400).json({ error: "Nenhuma peça válida veio no molde." });
   }
 
   const salvar = db.transaction(() => {
-    db.prepare("UPDATE moldes SET nome = ?, observacoes = ?, atualizado_em = ? WHERE id = ?")
-      .run(String(nome || molde.nome).trim(), String(observacoes || "").trim() || null, agora(), molde.id);
+    db.prepare("UPDATE moldes SET nome = ?, observacoes = ?, situacao = ?, atualizado_em = ? WHERE id = ?")
+      .run(String(nome || molde.nome).trim(), String(observacoes || "").trim() || null,
+        lerSituacao(situacao) || molde.situacao, agora(), molde.id);
     db.prepare("DELETE FROM molde_pecas WHERE molde_id = ?").run(molde.id);
     const inserir = db.prepare(`
       INSERT INTO molde_pecas
-        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, ordem)
-      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @ordem)
+        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem)
+      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem)
     `);
     arrumadas.forEach((p) => inserir.run({ ...p, molde_id: molde.id }));
   });

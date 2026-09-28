@@ -71,6 +71,7 @@ import { TelaTrancada } from "./casca/TelaTrancada";
 const Moldes = lazy(() => import("./telas/Moldes").then((m) => ({ default: m.Moldes })));
 const Projetos = lazy(() => import("./telas/Projetos").then((m) => ({ default: m.Projetos })));
 const Digitalizar = lazy(() => import("./telas/Digitalizar").then((m) => ({ default: m.Digitalizar })));
+const Montagem = lazy(() => import("./telas/Montagem").then((m) => ({ default: m.Montagem })));
 const Impressoras = lazy(() => import("./telas/Impressoras").then((m) => ({ default: m.Impressoras })));
 const Pedidos = lazy(() => import("./telas/Pedidos").then((m) => ({ default: m.Pedidos })));
 const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m.Maquinas })));
@@ -84,7 +85,7 @@ const Conta = lazy(() => import("./telas/Conta").then((m) => ({ default: m.Conta
 const Painel = lazy(() => import("./telas/Painel").then((m) => ({ default: m.Painel })));
 
 export type NomeDeTela =
-  | "moldes" | "projetos" | "encaixe" | "digitalizar" | "macros"
+  | "moldes" | "projetos" | "encaixe" | "digitalizar" | "montagem" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
   | "historico" | "reposicao" | "ponto" | "funcionarios"
   // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
@@ -162,7 +163,7 @@ export interface Tela {
    * não precisa saber que existe plano.
    *
    * Desde 2026-09-28 o Mensal é só o Encaixe e a Galeria (que não têm
-   * escopo): `moldes` tranca Moldes e Digitalizar, `relatorios` as telas de
+   * escopo): `moldes` tranca Moldes, Digitalizar e Montagem, `relatorios` as telas de
    * Relatórios, `macro` as Macros. Os nomes são os do servidor
    * (`ALL_SCOPES`, em optmize-backend/src/domain/plans.ts).
    */
@@ -201,6 +202,25 @@ export const TELAS: readonly Tela[] = [
     // Digitalizar é o jeito de CRIAR molde: vai junto da biblioteca.
     escopo: "moldes",
     Componente: Digitalizar,
+  },
+  {
+    /*
+     * Logo depois de Digitalizar, porque é para onde ele leva: a foto vira
+     * risco lá, e o risco vira MOLDE aqui — peça com nome, pique, fio e
+     * margem, pronto para a estante e para o Encaixe. Fica no menu (e não
+     * como porta, feito Máquinas) porque é lugar de trabalho: qualquer molde
+     * da estante, inclusive de DXF, é montado aqui, e a graduação (parte 2)
+     * vai morar aqui também.
+     */
+    nome: "montagem",
+    grupo: "producao",
+    rotulo: "Montagem",
+    apoioMenu: "Peças, marcações e tamanhos",
+    apoioTopo: "Dê nome às peças, marque piques, fio e margem, e mande o molde ao Encaixe.",
+    icone: "icones.svg#layers",
+    // Mexe nos moldes da estante: mesma tranca de Moldes e Digitalizar.
+    escopo: "moldes",
+    Componente: Montagem,
   },
   {
     nome: "projetos",
