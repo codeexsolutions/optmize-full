@@ -160,10 +160,18 @@ export interface Tela {
    *
    * Quem confere é `casca/Escopos.tsx`, entre a rota e o componente — a tela
    * não precisa saber que existe plano.
+   *
+   * Desde 2026-09-28 o Mensal é só o Encaixe e a Galeria (que não têm
+   * escopo): `moldes` tranca Moldes e Digitalizar, `relatorios` as telas de
+   * Relatórios, `macro` as Macros. Os nomes são os do servidor
+   * (`ALL_SCOPES`, em optmize-backend/src/domain/plans.ts).
    */
-  escopo?: "impressoras";
+  escopo?: Escopo;
   Componente: ComponentType;
 }
+
+/** Os escopos que trancam tela — o nome é o do servidor. */
+export type Escopo = "impressoras" | "moldes" | "relatorios" | "macro";
 
 export const TELAS: readonly Tela[] = [
   // ------------------------------------------------------------- Produção
@@ -174,6 +182,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Modelagem da produção",
     apoioTopo: "Centralize moldes, tamanhos e estampas da produção.",
     icone: "icones.svg#shapes",
+    escopo: "moldes",
     Componente: Moldes,
   },
   {
@@ -189,6 +198,8 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Molde a partir da foto",
     apoioTopo: "Mande a imagem do molde e tire o risco dele, na medida que você informar.",
     icone: "icones.svg#scan-line",
+    // Digitalizar é o jeito de CRIAR molde: vai junto da biblioteca.
+    escopo: "moldes",
     Componente: Digitalizar,
   },
   {
@@ -226,6 +237,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Ferramentas no CorelDRAW",
     apoioTopo: "Baixe e instale as macros que rodam dentro do Corel e falam com este sistema.",
     icone: "icones.svg#puzzle",
+    escopo: "macro",
     trancada: true,
     Componente: TelaTrancada,
   },
@@ -284,6 +296,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Tudo que já foi impresso",
     apoioTopo: "Consulte, filtre e mande para a folha de produção o que já saiu.",
     icone: "icones.svg#history",
+    escopo: "relatorios",
     Componente: Historico,
   },
   {
@@ -300,6 +313,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Quem bateu, e quando",
     apoioTopo: "As batidas que vieram do terminal, em grade — o que está faltando aparece como traço.",
     icone: "icones.svg#clock",
+    escopo: "relatorios",
     Componente: Ponto,
   },
   {
@@ -310,6 +324,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Quem é quem, e quais rostos",
     apoioTopo: "Cadastre as pessoas e os rostos que o terminal precisa reconhecer.",
     icone: "icones.svg#users",
+    escopo: "relatorios",
     Componente: Funcionarios,
   },
   {
@@ -320,6 +335,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Quanto foi refeito",
     apoioTopo: "Acompanhe semana a semana quanto tecido foi gasto refazendo trabalho.",
     icone: "icones.svg#rotate-ccw",
+    escopo: "relatorios",
     Componente: Reposicao,
   },
 

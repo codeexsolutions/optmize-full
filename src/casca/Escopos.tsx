@@ -79,8 +79,16 @@ export function useForaDoPlano(tela: Pick<Tela, "escopo">): boolean {
 export function ComEscopo({ tela, children }: { tela: Tela; children: ReactNode }) {
   const fora = useForaDoPlano(tela);
   if (!fora) return <>{children}</>;
-  return <ForaDoPlano rotulo={tela.rotulo} />;
+  return <ForaDoPlano rotulo={tela.rotulo} escopo={tela.escopo} />;
 }
+
+/** O que cada escopo é, em uma frase — é o que o aviso diz que falta. */
+const O_QUE_E: Record<NonNullable<Tela["escopo"]>, string> = {
+  impressoras: "A central das impressoras acompanha a produção das máquinas da gráfica.",
+  moldes: "A biblioteca de moldes e o Digitalizar guardam e criam a modelagem da produção.",
+  relatorios: "Os relatórios mostram o histórico, o ponto, os funcionários e a reposição.",
+  macro: "As macros ligam o CorelDRAW a este sistema.",
+};
 
 /**
  * O aviso. Diz o que falta e o que fazer — e não "acesso negado".
@@ -88,7 +96,7 @@ export function ComEscopo({ tela, children }: { tela: Tela; children: ReactNode 
  * Quem chega aqui não errou nada: escolheu um plano que não inclui esta
  * parte. A frase que resolve é qual plano inclui, e com quem falar.
  */
-function ForaDoPlano({ rotulo }: { rotulo: string }) {
+function ForaDoPlano({ rotulo, escopo }: { rotulo: string; escopo: Tela["escopo"] }) {
   return (
     <div className="flex min-h-[50vh] items-center justify-center px-4">
       <div className="flex max-w-[440px] flex-col items-center gap-3 text-center">
@@ -99,9 +107,9 @@ function ForaDoPlano({ rotulo }: { rotulo: string }) {
           {rotulo} não está no seu plano
         </p>
         <p className="m-0 text-[0.85rem] leading-relaxed text-tinta-fraca">
-          A central das impressoras acompanha a produção das máquinas da
-          gráfica — ela vem no plano mensal e na licença anual. O seu plano
-          encaixa, otimiza e exporta à vontade.
+          {escopo ? `${O_QUE_E[escopo]} ` : ""}
+          Isso vem na Licença anual. O seu plano tem o Encaixe e a Galeria
+          inteiros: encaixa, otimiza e exporta à vontade.
         </p>
         <p className="m-0 text-[0.8rem] text-tinta-apagada">
           Para mudar de plano, fale com a CodeEx Solutions pelo{" "}
