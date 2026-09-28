@@ -26,6 +26,13 @@ export interface ParteEmEdicao {
   furos: { x: number; y: number }[][];
   /** "DXF · milímetro", para a linha dizer de onde a medida saiu. */
   origem: string | null;
+  /**
+   * O risco e as marcações da Montagem, quando a peça passou por lá. O passo
+   * a passo não mexe neles: só os devolve intactos ao regravar. Trocar o
+   * arquivo da peça os descarta, porque o risco antigo não é mais aquela peça.
+   */
+  nos: import("../../api/risco").NoDoRisco[] | null;
+  marcacoes: import("../../api/moldes").Marcacoes | null;
 }
 
 /**
@@ -59,6 +66,7 @@ export function parteVazia(papel?: string): ParteEmEdicao {
     papelEscrito: "",
     quantidade: 1,
     nome: null, largura: 0, altura: 0, contorno: null, furos: [], origem: null,
+    nos: null, marcacoes: null,
   };
 }
 

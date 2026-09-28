@@ -17,6 +17,7 @@ servidor, o `dados.db` e a casca da tela, e mais nada: nenhuma função de uma
 | Tela | O que faz | Arquivos |
 |---|---|---|
 | **Moldes** | Guarda o **contorno** da peça em centímetros. A estampa é aplicada nele depois, em qualquer tamanho. | `moldes.js` (leitores de arquivo), `moldes-tela.js` (a tela), `arte-molde.js` (a arte dentro do contorno), `moldes-api.js` (servidor) |
+| **Montagem** | O molde digitalizado (ou qualquer um da estante) vira molde de verdade: papel, quantidade, piques, pontos, fio e margem de costura; sai em PDF/SVG e vai ao Encaixe. | `src/telas/Montagem.tsx` + `src/telas/montagem/`, `src/motores/montagem.js`, `src/motores/margemDeCostura.js`, `src/motores/edicaoDeNos.js`, `servidor/moldes-pecas.js` |
 | **Projetos** | Guarda a **arte já aplicada** — a estampa na camisa, na bandeira. Vai direto para o encaixe. | `projetos.js`, `projetos-api.js` |
 | **Encaixe** | Põe as peças no tecido gastando o mínimo. | `encaixe.js` (tela), `encaixe-motor.js` (o cálculo), + os módulos de apoio abaixo |
 | **Vetor** | Transforma imagem em desenho vetorial (SVG). | `vetor.js` (a conta), `vetor-tela.js` (a tela) |

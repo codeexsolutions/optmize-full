@@ -102,6 +102,8 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
         contorno: peca.contorno,
         furos: peca.furos || [],
         origem: peca.origem || "guardado",
+        nos: peca.nos ?? null,
+        marcacoes: peca.marcacoes ?? null,
       });
     }
     const tamanhos = Object.keys(mapa);
@@ -205,6 +207,8 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
       contorno: desenho.contorno,
       furos: desenho.furos || [],
       origem: `${formato} · ${unidadeLida}`,
+      nos: null,
+      marcacoes: null,
       quantidade: doNome.qtd > 1 ? doNome.qtd : parte.quantidade,
       // Só palpita no papel se a pessoa ainda não tinha dito o que era.
       papel: palpite && palpite !== "outro" ? palpite : parte.papel,
@@ -368,6 +372,8 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
         contorno: p.contorno!,
         furos: p.furos,
         origem: p.origem,
+        nos: p.nos,
+        marcacoes: p.marcacoes,
         ordem,
       })),
     };

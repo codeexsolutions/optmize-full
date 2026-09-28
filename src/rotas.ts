@@ -71,6 +71,7 @@ import { TelaTrancada } from "./casca/TelaTrancada";
 const Moldes = lazy(() => import("./telas/Moldes").then((m) => ({ default: m.Moldes })));
 const Projetos = lazy(() => import("./telas/Projetos").then((m) => ({ default: m.Projetos })));
 const Digitalizar = lazy(() => import("./telas/Digitalizar").then((m) => ({ default: m.Digitalizar })));
+const Montagem = lazy(() => import("./telas/Montagem").then((m) => ({ default: m.Montagem })));
 const Impressoras = lazy(() => import("./telas/Impressoras").then((m) => ({ default: m.Impressoras })));
 const Pedidos = lazy(() => import("./telas/Pedidos").then((m) => ({ default: m.Pedidos })));
 const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m.Maquinas })));
@@ -84,7 +85,7 @@ const Conta = lazy(() => import("./telas/Conta").then((m) => ({ default: m.Conta
 const Painel = lazy(() => import("./telas/Painel").then((m) => ({ default: m.Painel })));
 
 export type NomeDeTela =
-  | "moldes" | "projetos" | "encaixe" | "digitalizar" | "macros"
+  | "moldes" | "projetos" | "encaixe" | "digitalizar" | "montagem" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
   | "historico" | "reposicao" | "ponto" | "funcionarios"
   // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
@@ -190,6 +191,23 @@ export const TELAS: readonly Tela[] = [
     apoioTopo: "Mande a imagem do molde e tire o risco dele, na medida que você informar.",
     icone: "icones.svg#scan-line",
     Componente: Digitalizar,
+  },
+  {
+    /*
+     * Logo depois de Digitalizar, porque é para onde ele leva: a foto vira
+     * risco lá, e o risco vira MOLDE aqui — peça com nome, pique, fio e
+     * margem, pronto para a estante e para o Encaixe. Fica no menu (e não
+     * como porta, feito Máquinas) porque é lugar de trabalho: qualquer molde
+     * da estante, inclusive de DXF, é montado aqui, e a graduação (parte 2)
+     * vai morar aqui também.
+     */
+    nome: "montagem",
+    grupo: "producao",
+    rotulo: "Montagem",
+    apoioMenu: "Peças, marcações e tamanhos",
+    apoioTopo: "Dê nome às peças, marque piques, fio e margem, e mande o molde ao Encaixe.",
+    icone: "icones.svg#layers",
+    Componente: Montagem,
   },
   {
     nome: "projetos",

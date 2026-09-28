@@ -9,6 +9,9 @@
  * Estoura em vez de devolver `null`, ao contrário da memória do encaixe: aqui
  * a pessoa PEDIU um arquivo, e não receber é uma resposta que ela precisa ver.
  * É a mesma regra do PDF do encaixe (ver `api/encaixe.ts`).
+ *
+ * A Montagem manda o desenho de `motores/montagem.js` (`desenhoDaPeca` +
+ * `arranjar`); o Digitalizar mandava `PecaDoRisco`. O servidor aceita os dois.
  */
 
 /** Um nó do contorno, com as alças da curva que entra e da que sai. */
@@ -32,7 +35,7 @@ export interface PecaDoRisco {
 
 export const riscoApi = {
   /** O PDF do risco, em tamanho real, como blob pronto para gravar. */
-  async pdf(nome: string, pecas: PecaDoRisco[]): Promise<Blob> {
+  async pdf(nome: string, pecas: unknown[]): Promise<Blob> {
     const resposta = await fetch("/api/risco/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
