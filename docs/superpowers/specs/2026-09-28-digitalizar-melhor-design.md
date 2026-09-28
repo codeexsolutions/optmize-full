@@ -159,7 +159,8 @@ seleção passa de `noAtivo: number | null` para **um conjunto de índices**.
 - Gira em volta do centro da caixa da peça: nós e alças, **pontos** (pence,
   bolso) e o **fio** (posição e ângulo) vão juntos; piques acompanham sozinhos
   porque são presos a trecho (`no`, `t`). Depois do giro a peça é
-  reposicionada para as coordenadas voltarem a começar em 0.
+  deslocada para o canto de cima à esquerda da caixa ficar onde estava — a
+  peça não pula na tela, e girar 4× 90° devolve a original exata.
 - Corte e margem são recalculados como em qualquer mexida; um passo no
   Desfazer.
 - Fora do escopo: girar só a seleção, alinhar e distribuir nós, copiar e colar
@@ -185,10 +186,18 @@ seleção passa de `noAtivo: number | null` para **um conjunto de índices**.
   - nós por peça ≤ **1,5×** o gabarito;
   - cada lado reto do gabarito sai como **uma reta só**;
   - cada canto do gabarito sai como canto a menos de **3 mm**;
-  - desvio do traço à borda do gabarito ≤ **1 mm** (medido na foto original,
-    convertido pela medida da peça no gabarito).
+  - desvio do traço à borda do gabarito: **médio ≤ 1 mm** e **95% dos pontos
+    ≤ 2 mm** (um máximo absoluto de 1 mm não é mensurável: a célula da grade
+    vale ~1,6 mm e o próprio gabarito tem essa incerteza; hoje o motor fica em
+    0,4–0,8 mm de média com pior caso de 3,5–4,7 mm). A conversão usa
+    `mmPorCelula` do gabarito (1,6 nas fotos da mesa do laser).
 
 ### Casos sintéticos (rodam no CI)
+
+Hoje o CI (`.github/workflows/conferir.yml`) não roda nenhuma bancada da
+Montagem (`nos`, `margem`, `montagem`). Esta parte acrescenta um passo que
+roda essas três e a sintética nova.
+
 
 - A1: imagem gerada com mesa texturizada + peça clara + faixa preta no topo.
 - A2: faixa clara colada à borda direita some; peça cortada pela borda de
