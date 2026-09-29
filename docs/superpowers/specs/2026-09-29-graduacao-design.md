@@ -58,10 +58,11 @@ tamanho que é o base daquela graduação — a linha diz qual é o base pelo pr
   quanto o ponto anda subindo um tamanho) e converte: G = (M→G), GG = (M→G) +
   (G→GG), P = −(P→M). Mudar o salto M→G move o G e tudo acima dele.
 - Trocar **por tamanho → salto igual** com saltos diferentes pergunta antes, e
-  fica o salto do base para o tamanho seguinte. **Salto igual → por tamanho**
+  fica o salto do base para o tamanho de cima (ou, se o base é o maior, o do
+  tamanho de baixo para o base). **Salto igual → por tamanho**
   preenche os saltos com o passo.
 - **Porcentagem**: o tamanho a *k* saltos fica com escala `1 + k × % / 100` em
-  largura e altura, a partir do centro da caixa da peça.
+  largura e altura, a partir do centro da caixa do risco da peça.
 - Não há "tabela de regras salva" para reaproveitar em outro molde, nem regra
   em ângulo (andar ao longo de uma linha).
 
@@ -168,7 +169,7 @@ Quinta ferramenta, ao lado de Nós, Pique, Ponto e Fio.
 
 - `servidor/moldes-pecas.js` confere a `graduacao` como confere as marcações:
   jeito conhecido; porcentagem entre −50 e 50; regras com `no` dentro dos nós
-  da peça, `modo` conhecido, números finitos até 100 cm; nome de tamanho até 20
+  da peça, `modo` conhecido, números finitos de até 100 cm em módulo; nome de tamanho até 20
   caracteres. O que não confere é descartado, não gravado torto. Peça sem nós
   não guarda graduação.
 - **Os nós do base mudaram depois de graduar:** inserir um nó (`inserirNoNaPeca`)
