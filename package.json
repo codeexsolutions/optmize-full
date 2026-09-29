@@ -43,6 +43,7 @@
     "bancada:montagem": "node bancada/conferir-montagem.mjs",
     "bancada:moldes-pecas": "node bancada/conferir-moldes-pecas.cjs",
     "bancada:risco-pdf": "node bancada/conferir-risco-pdf.js",
+    "bancada:tamanhos": "node bancada/conferir-tamanhos.mjs",
     "tipos": "tsc --noEmit",
     "app": "npm run front && tauri dev",
     "build:app": "npm run front && node empacotar/instalador.js",

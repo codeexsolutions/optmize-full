@@ -94,3 +94,6 @@ jobs:
 
       - name: Conferência pela arte
         run: npm run bancada:conferencia
+
+      - name: Moldes e tamanhos
+        run: npm run bancada:tamanhos && npm run bancada:moldes-pecas && npm run bancada:montagem
