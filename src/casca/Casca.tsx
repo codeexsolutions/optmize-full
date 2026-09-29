@@ -59,7 +59,8 @@ export function Casca() {
    * de trabalho do outro, as duas medindo-se pela janela:
    *
    *   ENCAIXE    a lista de peças e a mesa do risco;
-   *   PROJETOS   a árvore de clientes e o projeto aberto.
+   *   PROJETOS   a árvore de clientes e o projeto aberto;
+   *   MONTAGEM   a lista das peças, a mesa e o painel da peça.
    *
    * Num arranjo desses o cabeçalho cobra 57px de altura para repetir a palavra
    * que o menu já mostra acesa, e a folga em volta rouba mais 30 de cada lado
@@ -121,7 +122,7 @@ export function Casca() {
   }
 
   const bancada = tela.nome === "encaixe" || tela.nome === "projetos"
-    || tela.nome === "moldes" || tela.nome === "reposicao";
+    || tela.nome === "moldes" || tela.nome === "montagem" || tela.nome === "reposicao";
 
   /* Bancada ou tela que pediu (ver `useSemCabecalho`): as duas trocam o
      cabeçalho pelo botão flutuante da gaveta. */

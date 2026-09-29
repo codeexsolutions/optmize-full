@@ -57,6 +57,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDialogo } from "../casca/Dialogo";
 import { moldesApi, type Molde, type MoldeNaEstante } from "../api/moldes";
 import { EditorDeMolde } from "./moldes/EditorDeMolde";
@@ -71,6 +72,7 @@ type Aberto =
 
 export function Moldes() {
   const dialogo = useDialogo();
+  const navegar = useNavigate();
   const [moldes, setMoldes] = useState<MoldeNaEstante[]>([]);
   const [aberto, setAberto] = useState<Aberto>(null);
   const ultimaAbertura = useRef(0);
@@ -206,6 +208,9 @@ export function Moldes() {
               <article className="molde-linha" key={molde.id}>
                 <div className="molde-identidade">
                   <h3 className="molde-nome">{molde.nome}</h3>
+                  {molde.situacao === "rascunho" && (
+                    <span className="etiqueta-tamanho" title="Saiu do Digitalizar e ainda não foi concluído na Montagem">rascunho</span>
+                  )}
                   {molde.observacoes && <p className="molde-obs">{molde.observacoes}</p>}
                   <div className="molde-tamanhos">
                     {molde.tamanhos.length === 0 ? (
@@ -234,14 +239,32 @@ export function Moldes() {
                 </dl>
 
                 <div className="molde-acoes">
-                  <button
-                    type="button"
-                    className="btn primary btn-sm"
-                    title="Escolher a arte e mandar as peças deste molde para o tecido"
-                    onClick={() => void abrirMolde(molde.id, "envio")}
-                  >
-                    Encaixar
-                  </button>
+                  {molde.situacao === "rascunho" ? (
+                    <button
+                      type="button" className="btn primary btn-sm"
+                      title="Terminar de identificar as peças e concluir o molde"
+                      onClick={() => navegar(`/montagem?molde=${molde.id}`)}
+                    >
+                      Continuar montagem
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button" className="btn primary btn-sm"
+                        title="Escolher a arte e mandar as peças deste molde para o tecido"
+                        onClick={() => void abrirMolde(molde.id, "envio")}
+                      >
+                        Encaixar
+                      </button>
+                      <button
+                        type="button" className="btn secondary btn-sm"
+                        title="Marcar piques, fio e margem, e baixar o molde em PDF ou SVG"
+                        onClick={() => navegar(`/montagem?molde=${molde.id}`)}
+                      >
+                        Montagem
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     className="btn secondary btn-sm"

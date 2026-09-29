@@ -506,6 +506,14 @@ db.exec(`
   );
 `);
 
+// A Montagem (docs/superpowers/specs/2026-09-26-montagem-de-moldes-design.md):
+// o molde que o Digitalizar acabou de criar é RASCUNHO até alguém concluir,
+// e a peça guarda o risco em nós com alça e as marcações, além do contorno
+// de corte de sempre. Os moldes que já existiam nascem prontos.
+garantirColuna("moldes", "situacao", "TEXT NOT NULL DEFAULT 'pronto'");
+garantirColuna("molde_pecas", "nos", "TEXT");
+garantirColuna("molde_pecas", "marcacoes", "TEXT");
+
 db.pragma("optimize");
 
 module.exports = db;

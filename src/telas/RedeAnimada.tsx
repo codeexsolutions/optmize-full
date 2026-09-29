@@ -26,6 +26,15 @@
  *   rede, sem movimento contínuo para quem pediu menos movimento.
  * - A animação congela com a janela escondida: `requestAnimationFrame`
  *   rodando atrás é bateria da máquina da gráfica queimada à toa.
+ * - E congela também com a janela SEM FOCO e depois de `PARADA_APOS_MS` sem
+ *   mouse nem teclado; volta no primeiro movimento. Desde que o app força
+ *   "sem preferência" de movimento no WebView2 (`src-tauri/src/main.rs`),
+ *   esta rede roda até nos PCs que pediram ao Windows para não animar — e,
+ *   medida com a CPU 4x mais lenta, ela sozinha segurava ~22% de CPU com o
+ *   programa parado, justo nas máquinas mais fracas.
+ * - No máximo `QUADROS_POR_SEGUNDO`. Os pontos andam pelo tempo que passou,
+ *   e não por quadro: a velocidade na tela é a mesma de antes, só com menos
+ *   desenhos.
  * - O ponteiro só é seguido onde há mouse. No toque não há hover, e o ouvinte
  *   seria peso morto.
  */
@@ -37,6 +46,12 @@ type Pulso = { i: number; j: number; t: number; velocidade: number };
 
 /** A partir de quantos pixels dois pontos param de se enxergar. */
 const DISTANCIA_LIGACAO = 132;
+/** Teto de desenhos por segundo. Fundo decorativo não precisa de 60. */
+const QUADROS_POR_SEGUNDO = 20;
+/** Sem mouse nem teclado por este tempo, a rede para até o próximo movimento. */
+const PARADA_APOS_MS = 8000;
+/** A velocidade dos pontos foi escrita para um quadro de 60 por segundo. */
+const QUADRO_DE_REFERENCIA_MS = 1000 / 60;
 
 /**
  * `className` existe porque a rede pode cobrir a janela (`fixed`) ou ficar
@@ -122,12 +137,13 @@ export function RedeAnimada({
       }));
     };
 
-    const desenhar = () => {
+    /** `passo` = quantos quadros de 60/s se passaram desde o último desenho. */
+    const desenhar = (passo = 1) => {
       ctx.clearRect(0, 0, largura, altura);
 
       for (const p of pontos) {
-        p.x += p.vx;
-        p.y += p.vy;
+        p.x += p.vx * passo;
+        p.y += p.vy * passo;
 
         // Atravessa a borda e reaparece do outro lado.
         if (p.x < -30) p.x = largura + 30;
@@ -174,7 +190,7 @@ export function RedeAnimada({
             vira pisca-pisca; sem teto, uma janela grande com muitos raios
             acenderia dezenas juntos e a coluna viraria festa.
           */
-          if (!reduzir && pulsos.length < 9 && Math.random() < 0.0011) {
+          if (!reduzir && pulsos.length < 9 && Math.random() < 0.0011 * passo) {
             pulsos.push({ i, j, t: 0, velocidade: 0.012 + Math.random() * 0.01 });
           }
         }
@@ -189,7 +205,7 @@ export function RedeAnimada({
 
       for (let k = pulsos.length - 1; k >= 0; k--) {
         const pulso = pulsos[k]!;
-        pulso.t += pulso.velocidade;
+        pulso.t += pulso.velocidade * passo;
 
         const a = pontos[pulso.i];
         const c = pontos[pulso.j];
@@ -218,15 +234,40 @@ export function RedeAnimada({
     };
 
     let quadro = 0;
-    const laco = () => {
-      desenhar();
+    let rodando = false;
+    let ultimoDesenho = 0;
+    let ultimaAtividade = performance.now();
+    const intervalo = 1000 / QUADROS_POR_SEGUNDO;
+
+    const podeRodar = () => !document.hidden && document.hasFocus()
+      && performance.now() - ultimaAtividade < PARADA_APOS_MS;
+
+    const laco = (agora: number) => {
+      if (!podeRodar()) { rodando = false; return; }
+      const passou = agora - ultimoDesenho;
+      if (passou >= intervalo) {
+        // Depois de uma pausa longa, um passo só: os pontos não saltam.
+        desenhar(Math.min(passou, intervalo * 3) / QUADRO_DE_REFERENCIA_MS);
+        ultimoDesenho = agora;
+      }
       quadro = requestAnimationFrame(laco);
     };
+
+    /** Liga o laço se ele estiver parado e puder rodar. */
+    const acordar = () => {
+      ultimaAtividade = performance.now();
+      if (rodando || reduzir || !podeRodar()) return;
+      rodando = true;
+      ultimoDesenho = performance.now();
+      quadro = requestAnimationFrame(laco);
+    };
+    const adormecer = () => { cancelAnimationFrame(quadro); rodando = false; };
 
     redimensionar();
     window.addEventListener("resize", redimensionar);
 
     const aoMover = (e: PointerEvent) => {
+      acordar();
       /*
         `clientX/Y` é coordenada da JANELA, e a rede está presa a uma coluna:
         sem descontar o retângulo dela, os raios acendem deslocados do cursor.
@@ -246,19 +287,24 @@ export function RedeAnimada({
     }
 
     const aoEsconder = () => {
-      if (document.hidden) cancelAnimationFrame(quadro);
-      else quadro = requestAnimationFrame(laco);
+      if (document.hidden) adormecer();
+      else acordar();
     };
+    // Qualquer sinal de gente na frente do programa acorda a rede.
+    const sinaisDeUso = ["pointermove", "pointerdown", "keydown", "wheel", "focus"] as const;
 
-    if (reduzir) {
-      desenhar();
-    } else {
+    desenhar();
+    if (!reduzir) {
       document.addEventListener("visibilitychange", aoEsconder);
-      laco();
+      window.addEventListener("blur", adormecer);
+      for (const sinal of sinaisDeUso) window.addEventListener(sinal, acordar, { passive: true });
+      acordar();
     }
 
     return () => {
-      cancelAnimationFrame(quadro);
+      adormecer();
+      window.removeEventListener("blur", adormecer);
+      for (const sinal of sinaisDeUso) window.removeEventListener(sinal, acordar);
       window.removeEventListener("resize", redimensionar);
       window.removeEventListener("pointermove", aoMover);
       window.removeEventListener("pointerleave", aoSair);

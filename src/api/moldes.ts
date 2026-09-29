@@ -17,9 +17,25 @@
  */
 
 import { api } from "./cliente";
+import type { NoDoRisco } from "./risco";
 
 /** Um ponto do contorno, em centímetros. */
 export type Ponto = { x: number; y: number };
+
+/** Rascunho: acabou de sair do Digitalizar e ainda não vai ao Encaixe. */
+export type SituacaoDoMolde = "rascunho" | "pronto";
+
+/** As marcações da Montagem. Ver `motores/montagem.js`. */
+export interface Marcacoes {
+  /** Margem de costura em cm. 0 = o risco já é o corte. */
+  margem: number;
+  espelhar: boolean;
+  /** Centro, ângulo em graus (0 = vertical) e comprimento, em cm. */
+  fio: { x: number; y: number; angulo: number; comprimento: number };
+  /** Presos ao traço: trecho que começa no nó `no`, em `t` (0..1). */
+  piques: { no: number; t: number; profundidade: number }[];
+  pontos: Ponto[];
+}
 
 /** Uma peça do molde: o contorno de UMA parte, num tamanho. */
 export interface PecaDoMolde {
@@ -34,6 +50,8 @@ export interface PecaDoMolde {
   contorno: Ponto[];
   furos: Ponto[][];
   origem: string | null;
+  nos?: NoDoRisco[] | null;
+  marcacoes?: Marcacoes | null;
   ordem?: number;
 }
 
@@ -67,6 +85,7 @@ export interface MoldeNaEstante {
   id: number;
   nome: string;
   observacoes: string | null;
+  situacao: SituacaoDoMolde;
   tamanhos: string[];
   totalPecas: number;
   /** Quantas peças de tecido saem de UMA peça pronta, num tamanho só. */
@@ -78,6 +97,7 @@ export interface Molde {
   id: number;
   nome: string;
   observacoes: string | null;
+  situacao: SituacaoDoMolde;
   pecas: PecaDoMolde[];
   artes: Estampa[];
 }
@@ -85,6 +105,7 @@ export interface Molde {
 export interface MoldeParaGravar {
   nome: string;
   observacoes: string;
+  situacao?: SituacaoDoMolde;
   pecas: Omit<PecaDoMolde, "id">[];
 }
 
