@@ -45,6 +45,7 @@
     "bancada:risco-pdf": "node bancada/conferir-risco-pdf.js",
     "bancada:tamanhos": "node bancada/conferir-tamanhos.mjs",
     "bancada:audaces": "node bancada/conferir-audaces.mjs",
+    "bancada:graduacao": "node bancada/conferir-graduacao.mjs",
     "tipos": "tsc --noEmit",
     "app": "npm run front && tauri dev",
     "build:app": "npm run front && node empacotar/instalador.js",
