@@ -61,12 +61,40 @@ no pijama G) — **não decifrado**.
 | Pijama M | M `#ff0000` |
 | Pijama G | G `#ff0000` (na saia o G é ciano: a cor é escolhida por arquivo) |
 
+## Linhas do contorno (B-spline cúbica) — em andamento
+
+Cada linha da peça é uma **B-spline cúbica** guardada assim:
+
+| Deslocamento | Tipo | O que é |
+|---|---|---|
+| −16 | `u32` | `0x40` |
+| −12 | 2 × `u16` | `3, 3` (provável: grau 3) |
+| −8 | `double` | `0.025` (não decifrado; provável tolerância) |
+| 0 | `u16` n | número de pontos de controle |
+| 2 | `u16` k | número de nós do molde por onde a linha passa |
+| 4 | n × (`double` x, `double` y) | pontos de controle, em cm |
+| em seguida | (n − 4) × `double` | nós internos do vetor de nós (o vetor inteiro é `0,0,0,0, internos…, 1,1,1,1`) |
+| em seguida | k × `double` | o parâmetro de cada nó do molde (0 … 1) |
+
+Duas formas aparecem: spline de interpolação (`k = n − 2`, nós internos
+espaçados: 0,333 0,667) e sequência de Bézier (`n = 3(k − 1) + 1`, nós
+internos triplos: 0,25 0,25 0,25 0,5 0,5 0,5 …).
+
+**Conferido (2026-09-29):** na saia, as linhas de cada peça se encadeiam (o
+fim de uma é o começo da seguinte) e fecham em 3 voltas de 5 linhas (FRENTE,
+FORRO, COSTA). Avaliando a FRENTE por de Boor, três lados batem com a **caixa
+da peça menos 2 cm** a 0,001 cm — a caixa gravada tem 2 cm de folga (provável:
+a margem de costura). O quarto lado (a linha de 8 pontos, `n=8 k=6`) sai
+1,46 cm além da caixa: **não explicado**. A BARRA da saia e a maior parte das
+linhas do short e dos pijamas não aparecem na varredura com `k ≤ 40` e pontos
+plausíveis — há linhas guardadas de outro jeito (retas? outra ordem?).
+
 ## Não decifrado ainda
 
 - O desenho de cada tamanho (contorno por tamanho, ou regra por ponto).
-- Os trechos retos do contorno (os curvos já saem: `u16 tipo, u16 n, n pares
-  de double`, conferidos contra a miniatura da saia) e a peça retangular
-  (BARRA da saia).
+- A linha de 8 pontos que sai da caixa, as linhas que a varredura não acha
+  (a BARRA da saia, a maior parte do short e dos pijamas) e a margem de
+  costura (a folga de 2 cm da caixa).
 - Piques e fio.
 - Qual tamanho é o base.
 - Os 6 bytes depois do nome, os 8 bytes do fim de cada registro de tamanho e o
