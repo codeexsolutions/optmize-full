@@ -102,4 +102,129 @@ assert.equal(g.saltosDoTamanho(grade, "M", "XG"), null);
   assert.deepEqual(Object.keys(g.graduacaoTirarTamanho(gr, "P").regras[0].deslocamentos), ["G"]);
 }
 
+// --- Gerar um tamanho ---
+const reto = (x, y) => ({ x, y, entrada: { x, y }, saida: { x, y }, canto: true, retaDepois: true });
+const nosBase = [reto(0, 0), reto(10, 0), reto(10, 5), reto(10, 10), reto(0, 10)];
+const pecaBase = (graduacao) => ({
+  id: 7, tamanho: "M", grupo: 0, papel: "frente", nome: "", quantidade: 2, origem: "Digitalizar",
+  nos: nosBase, graduacao,
+  marcacoes: { margem: 0, espelhar: false, fio: { x: 5, y: 5, angulo: 0, comprimento: 6 },
+    piques: [{ no: 0, t: 0.5, profundidade: 0.5 }], pontos: [{ x: 10, y: 5 }] },
+});
+const regrasDoOmbro = [
+  { no: 1, modo: "igual", passo: { dx: 1, dy: 0 } },
+  { no: 3, modo: "porTamanho", deslocamentos: { G: { dx: 3, dy: 0 }, GG: { dx: 6, dy: 0 } } },
+];
+const base = pecaBase({ jeito: "pontos", porcentagem: 0, regras: regrasDoOmbro });
+
+// 10. No próprio base nada anda.
+assert.ok(g.deslocamentosDoTamanho(base, grade, "M").every((d) => d.dx === 0 && d.dy === 0));
+
+// 11. O G: os nós com regra andam o pedido; os sem regra, a mistura dos vizinhos pelo comprimento da linha.
+{
+  const r = g.gerarTamanho(base, grade, "G");
+  assert.ok(r.peca, r.erro);
+  const n = r.peca.nos;
+  assert.equal(n[1].x, 11, "nó 1: salto igual de 1");
+  assert.equal(n[3].x, 13, "nó 3: 3 no G");
+  assert.ok(Math.abs(n[2].x - 12) < 1e-9, `nó 2, no meio, anda a média: ${n[2].x}`);
+  assert.ok(Math.abs(n[4].x - (3 - 2 / 3)) < 1e-6, `nó 4 anda pela volta: ${n[4].x}`);
+  assert.equal(r.peca.tamanho, "G");
+  assert.equal(r.peca.grupo, 0);
+  assert.equal(r.peca.origem, g.ORIGEM_GERADA);
+  assert.equal(r.peca.graduacao, null);
+  assert.equal(r.peca.id, undefined, "peça nova, sem id");
+  assert.equal(r.peca.quantidade, 2, "os campos comuns vêm do base");
+  assert.deepEqual(r.peca.marcacoes.piques, base.marcacoes.piques, "o pique fica no mesmo trecho");
+  assert.ok(Math.abs(r.peca.marcacoes.pontos[0].x - n[2].x) < 1e-9, "o ponto em cima do nó 2 anda como ele");
+  assert.equal(r.peca.marcacoes.fio.angulo, 0);
+  assert.equal(r.peca.marcacoes.fio.comprimento, 6);
+  assert.ok(r.peca.marcacoes.fio.x > 5, "o fio anda com a peça");
+  assert.equal(base.nos[1].x, 10, "não mexe no base");
+}
+
+// 12. O P fica abaixo do base: o salto igual volta, e o "por tamanho" sem P conta 0.
+{
+  const r = g.gerarTamanho(base, grade, "P");
+  assert.equal(r.peca.nos[1].x, 9);
+  assert.equal(r.peca.nos[3].x, 10, "o nó 3 não tem valor para o P: fica");
+}
+
+// 13. Salto igual e por tamanho com os mesmos valores dão o mesmo desenho.
+{
+  const igual = pecaBase({ jeito: "pontos", porcentagem: 0, regras: [
+    { no: 1, modo: "igual", passo: { dx: 1, dy: 0 } }, { no: 3, modo: "igual", passo: { dx: 2, dy: 1 } }] });
+  const porTamanho = pecaBase({ jeito: "pontos", porcentagem: 0, regras: [
+    g.trocarModo(igual.graduacao.regras[0], grade, "M", "porTamanho").regra,
+    g.trocarModo(igual.graduacao.regras[1], grade, "M", "porTamanho").regra] });
+  for (const t of ["PP", "P", "G", "GG"]) {
+    assert.deepEqual(g.gerarTamanho(porTamanho, grade, t).peca.nos, g.gerarTamanho(igual, grade, t).peca.nos, t);
+  }
+}
+
+// 14. Porcentagem: 0 não gera; 4% no P (k = −1) escala 0,96 a partir do centro; a que some dá erro.
+{
+  assert.ok(g.gerarTamanho(pecaBase({ jeito: "porcentagem", porcentagem: 0, regras: [] }), grade, "G").erro);
+  const p4 = g.gerarTamanho(pecaBase({ jeito: "porcentagem", porcentagem: 4, regras: [] }), grade, "P").peca;
+  const xs = p4.nos.map((q) => q.x);
+  assert.ok(Math.abs(Math.max(...xs) - Math.min(...xs) - 9.6) < 1e-9, "largura 10 vira 9,6");
+  assert.ok(Math.abs((Math.max(...xs) + Math.min(...xs)) / 2 - 5) < 1e-9, "o centro fica");
+  assert.ok(Math.abs(p4.marcacoes.fio.comprimento - 5.76) < 1e-9, "o fio escala junto");
+  assert.ok(g.gerarTamanho(pecaBase({ jeito: "porcentagem", porcentagem: 50, regras: [] }), grade, "PP").erro,
+    "50% por tamanho no PP (k = −2) some");
+}
+
+// 15. Um ponto só: gera e avisa; nenhum (ou só nó fora da peça): não gera.
+{
+  const um = g.gerarTamanho(pecaBase({ jeito: "pontos", porcentagem: 0, regras: [
+    { no: 1, modo: "igual", passo: { dx: 1, dy: 0 } }] }), grade, "G");
+  assert.ok(um.peca && um.avisos.length === 1);
+  assert.ok(um.peca.nos.every((q, i) => q.x === nosBase[i].x + 1), "a peça inteira só se desloca");
+  assert.ok(g.gerarTamanho(pecaBase({ jeito: "pontos", porcentagem: 0, regras: [] }), grade, "G").erro);
+  assert.ok(g.gerarTamanho(pecaBase({ jeito: "pontos", porcentagem: 0, regras: [
+    { no: 99, modo: "igual", passo: { dx: 1, dy: 0 } }] }), grade, "G").erro, "regra de nó que não existe não conta");
+}
+
+// 16. Os avisos da graduação.
+{
+  const av = g.avisosDaGraduacao(pecaBase({ jeito: "pontos", porcentagem: 0, perdidos: 2, regras: regrasDoOmbro }), grade);
+  assert.ok(av.some((a) => /perdeu 2/.test(a)), av.join(" | "));
+  assert.ok(av.some((a) => /ponto 4 não tem valor para PP, P/.test(a)), av.join(" | "));
+}
+
+// 17. A camada no lugar certo: com graduação, pela regra (exato); sem, pelos centros.
+{
+  const gerado = g.gerarTamanho(base, grade, "G").peca;
+  const encostado = { ...gerado, nos: g.transladarNos(gerado.nos, { dx: 2, dy: 3 }) };
+  const d = g.alinhamentoDaCamada(base, encostado, base, grade);
+  assert.ok(Math.abs(d.dx + 2) < 1e-9 && Math.abs(d.dy + 3) < 1e-9, JSON.stringify(d));
+  const volta = g.alinhamentoDaCamada(encostado, base, base, grade);
+  assert.ok(Math.abs(volta.dx - 2) < 1e-9 && Math.abs(volta.dy - 3) < 1e-9, "vendo o G, o M vem para o lugar");
+  const outra = { tamanho: "G", nos: [reto(0, 0), reto(4, 0), reto(4, 4), reto(0, 4)] };
+  const c = g.alinhamentoDaCamada(base, outra, base, grade);
+  assert.ok(Math.abs(c.dx - 3) < 1e-9 && Math.abs(c.dy - 3) < 1e-9, "número de nós diferente: pelos centros");
+}
+
+// 18. Planejar e aplicar: cria o que falta, refaz o gerado, pergunta pelo desenho próprio; o que não fecha fica de fora.
+{
+  const pecas = [
+    base,
+    { ...base, id: 8, tamanho: "G", graduacao: null, origem: "Audaces" },
+    { ...base, id: 9, tamanho: "P", graduacao: null, origem: g.ORIGEM_GERADA },
+    { ...base, id: 10, grupo: 1, graduacao: null, nome: "COSTAS" },
+  ];
+  const alvos = g.planejarGeracao(pecas, grade, null);
+  assert.deepEqual(alvos.map((a) => `${a.tamanho}:${a.acao}`), ["PP:criar", "P:refazer", "G:perguntar", "GG:criar"]);
+  assert.equal(alvos[2].origem, "Audaces");
+  const conferir = (p) => (p.tamanho === "PP" ? { erro: "a margem fecha a peça" } : { peca: p });
+  const r = g.aplicarGeracao(pecas, grade, alvos.filter((a) => a.acao !== "perguntar"), conferir);
+  assert.deepEqual(r.gerados.map((a) => a.tamanho), ["P", "GG"]);
+  assert.deepEqual(r.naoGerados.map((a) => `${a.tamanho}: ${a.motivo}`), ["PP: a margem fecha a peça"]);
+  assert.equal(r.pecas.length, 5, "o GG entrou; o PP não");
+  assert.equal(r.pecas[2].origem, g.ORIGEM_GERADA);
+  assert.equal(r.pecas[2].nos[1].x, 9, "o P foi refeito no mesmo lugar da lista");
+  assert.equal(r.pecas[1].origem, "Audaces", "o G da Audaces ficou");
+  assert.equal(g.planejarGeracao(pecas, grade, 1).length, 0, "o grupo 1 não tem graduação");
+}
+
 console.log("OK — a graduação confere.");

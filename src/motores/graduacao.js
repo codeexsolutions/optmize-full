@@ -18,6 +18,9 @@
  * devolve objetos novos. Ver docs/superpowers/specs/2026-09-29-graduacao-design.md.
  */
 
+import { achatarCurvas } from "./ajusteDeCurvas";
+import { pontoNoTrecho } from "./edicaoDeNos";
+
 /** A origem que marca um tamanho feito pela graduação: esse é refeito sem perguntar. */
 export const ORIGEM_GERADA = "graduação";
 /** Um tamanho gerado que alguém ajustou à mão: gerar de novo pergunta antes. */
@@ -184,4 +187,238 @@ export function graduacaoTirarTamanho(graduacao, nome) {
       return { ...r, deslocamentos: resto };
     }),
   };
+}
+
+// ---------------------------------------------------------------------------
+// GERAR UM TAMANHO
+// ---------------------------------------------------------------------------
+
+/** O centro da caixa do risco. */
+function centroDoRisco(nos) {
+  let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+  for (const p of achatarCurvas(nos)) {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  }
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+}
+
+const anda = (p, d) => ({ x: p.x + d.dx, y: p.y + d.dy });
+
+/** Os nós andando `d`, com as alças. */
+export function transladarNos(nos, d) {
+  return nos.map((n) => ({ ...n, ...anda(n, d), entrada: anda(n.entrada, d), saida: anda(n.saida, d) }));
+}
+
+/** Onde cada nó começa ao longo da volta, em cm, e o comprimento da volta. */
+function posicoesNaVolta(nos) {
+  const posicao = [];
+  let total = 0;
+  for (let i = 0; i < nos.length; i++) {
+    posicao.push(total);
+    let antes = pontoNoTrecho(nos, i, 0);
+    for (let k = 1; k <= 16; k++) {
+      const q = pontoNoTrecho(nos, i, k / 16);
+      total += Math.hypot(q.x - antes.x, q.y - antes.y);
+      antes = q;
+    }
+  }
+  return { posicao, total };
+}
+
+/**
+ * Quanto cada nó anda no tamanho. O nó com regra anda a regra; o sem regra, a
+ * mistura dos dois nós com regra mais perto (antes e depois dele na volta), na
+ * proporção do comprimento da linha até cada um — um nó no meio da cava anda a
+ * média do ombro e da axila. Com uma regra só, todos andam como ela.
+ */
+export function deslocamentosDosNos(nos, regras, grade, base, tamanho) {
+  const n = nos.length;
+  const comRegraNo = new Map();
+  for (const r of regras) {
+    if (r.no >= 0 && r.no < n) comRegraNo.set(r.no, deslocamentoDaRegra(r, grade, base, tamanho));
+  }
+  if (comRegraNo.size === 0) return nos.map(() => ({ ...ZERO }));
+  if (comRegraNo.size === 1) {
+    const [unico] = comRegraNo.values();
+    return nos.map(() => ({ ...unico }));
+  }
+  const { posicao, total } = posicoesNaVolta(nos);
+  if (!(total > 0)) return nos.map(() => ({ ...ZERO }));
+  const aFrente = (a, b) => (((posicao[b] - posicao[a]) % total) + total) % total;
+  return nos.map((_, j) => {
+    if (comRegraNo.has(j)) return { ...comRegraNo.get(j) };
+    let a = j;
+    do { a = (a - 1 + n) % n; } while (!comRegraNo.has(a));
+    let b = j;
+    do { b = (b + 1) % n; } while (!comRegraNo.has(b));
+    const s = aFrente(a, j) / (aFrente(a, b) || 1);
+    const da = comRegraNo.get(a);
+    const db = comRegraNo.get(b);
+    return { dx: da.dx + (db.dx - da.dx) * s, dy: da.dy + (db.dy - da.dy) * s };
+  });
+}
+
+/** Quanto cada nó do base anda no tamanho, pelo jeito da graduação. `null` para tamanho fora da grade. */
+export function deslocamentosDoTamanho(base, grade, tamanho) {
+  const g = base.graduacao;
+  if (!g || tamanho === base.tamanho) return base.nos.map(() => ({ ...ZERO }));
+  const k = saltosDoTamanho(grade, base.tamanho, tamanho);
+  if (k === null) return null;
+  if (g.jeito === "porcentagem") {
+    const s = 1 + (k * (Number(g.porcentagem) || 0)) / 100;
+    const c = centroDoRisco(base.nos);
+    return base.nos.map((q) => ({ dx: (q.x - c.x) * (s - 1), dy: (q.y - c.y) * (s - 1) }));
+  }
+  return deslocamentosDosNos(base.nos, g.regras || [], grade, base.tamanho, tamanho);
+}
+
+/** O quanto um ponto de dentro (pence, bolso, o fio) anda: a média dos nós, pesada pela proximidade. */
+function mediaPelaDistancia(p, nos, deslocamentos) {
+  let sx = 0; let sy = 0; let sw = 0;
+  for (let i = 0; i < nos.length; i++) {
+    const d2 = (nos[i].x - p.x) ** 2 + (nos[i].y - p.y) ** 2;
+    if (d2 < 1e-12) return { ...deslocamentos[i] };
+    const w = 1 / d2;
+    sx += w * deslocamentos[i].dx;
+    sy += w * deslocamentos[i].dy;
+    sw += w;
+  }
+  return sw > 0 ? { dx: sx / sw, dy: sy / sw } : { ...ZERO };
+}
+
+/**
+ * O tamanho `tamanho` da peça, a partir do base. A peça gerada é a do base
+ * com o tamanho novo, a origem da graduação, sem `graduacao` e sem `id`; os
+ * piques ficam (os nós são os mesmos), os pontos e o fio andam junto.
+ */
+export function gerarTamanho(base, grade, tamanho) {
+  const g = base.graduacao;
+  if (!g) return { erro: "a peça não tem graduação" };
+  const k = saltosDoTamanho(grade, base.tamanho, tamanho);
+  if (k === null) return { erro: `o tamanho ${tamanho} não está na grade` };
+  if (k === 0) return { erro: `${tamanho} é o próprio base` };
+  const mc = base.marcacoes;
+  const avisos = [];
+  let nos; let pontos; let fio;
+  if (g.jeito === "porcentagem") {
+    const p = Number(g.porcentagem) || 0;
+    if (p === 0) return { erro: "porcentagem 0 não muda nada" };
+    const s = 1 + (k * p) / 100;
+    if (s < 0.05) return { erro: `com ${String(p).replace(".", ",")}% por tamanho, o ${tamanho} some` };
+    const c = centroDoRisco(base.nos);
+    const escala = (q) => ({ x: c.x + (q.x - c.x) * s, y: c.y + (q.y - c.y) * s });
+    nos = base.nos.map((n) => ({ ...n, ...escala(n), entrada: escala(n.entrada), saida: escala(n.saida) }));
+    pontos = mc.pontos.map((q) => ({ ...q, ...escala(q) }));
+    fio = { ...mc.fio, ...escala(mc.fio), comprimento: mc.fio.comprimento * s };
+  } else {
+    const regras = (g.regras || []).filter((r) => r.no >= 0 && r.no < base.nos.length);
+    if (regras.length === 0) return { erro: "marque pelo menos um ponto com regra" };
+    if (regras.length === 1) avisos.push("com um ponto só, a peça inteira só se desloca: marque pelo menos dois pontos");
+    const d = deslocamentosDosNos(base.nos, regras, grade, base.tamanho, tamanho);
+    nos = base.nos.map((n, i) => ({ ...n, ...anda(n, d[i]), entrada: anda(n.entrada, d[i]), saida: anda(n.saida, d[i]) }));
+    pontos = mc.pontos.map((q) => ({ ...q, ...anda(q, mediaPelaDistancia(q, base.nos, d)) }));
+    fio = { ...mc.fio, ...anda(mc.fio, mediaPelaDistancia(mc.fio, base.nos, d)) };
+  }
+  const { id: _id, ...resto } = base;
+  return {
+    peca: { ...resto, tamanho, origem: ORIGEM_GERADA, graduacao: null, nos, marcacoes: { ...mc, pontos, fio } },
+    avisos,
+  };
+}
+
+/** O que o bloco da graduação avisa sobre a peça (base). */
+export function avisosDaGraduacao(base, grade) {
+  const g = base?.graduacao;
+  if (!g) return [];
+  const avisos = [];
+  if (g.perdidos > 0) avisos.push(`A graduação perdeu ${g.perdidos} ponto(s) quando nós foram apagados.`);
+  if (g.jeito === "porcentagem") {
+    if (!Number(g.porcentagem)) avisos.push("Porcentagem 0 não muda nada.");
+    return avisos;
+  }
+  const regras = (g.regras || []).filter((r) => r.no >= 0 && r.no < base.nos.length);
+  if (regras.length === 0) avisos.push("Marque pelo menos um ponto com regra (clique num nó).");
+  else if (regras.length === 1) avisos.push("Com um ponto só, a peça inteira só se desloca: marque pelo menos dois pontos.");
+  for (const r of regras) {
+    const sem = faltando(r, grade, base.tamanho);
+    if (sem.length > 0) avisos.push(`O ponto ${r.no + 1} não tem valor para ${sem.join(", ")}: conta como o tamanho vizinho.`);
+  }
+  return avisos;
+}
+
+// ---------------------------------------------------------------------------
+// GERAR OS TAMANHOS DO MOLDE
+// ---------------------------------------------------------------------------
+
+/**
+ * O que gerar: cada grupo com graduação (ou só o `grupo` pedido), cada
+ * tamanho da grade menos o base. Sem desenho: criar. Gerado pela graduação:
+ * refazer. Com desenho próprio (Audaces, "juntar", ajustado à mão): perguntar.
+ */
+export function planejarGeracao(pecas, grade, grupo = null) {
+  const alvos = [];
+  const nomes = nomesEmOrdem(grade);
+  pecas.forEach((base, iBase) => {
+    if (!base.graduacao || (grupo !== null && base.grupo !== grupo)) return;
+    for (const tamanho of nomes) {
+      if (tamanho === base.tamanho) continue;
+      const iExistente = pecas.findIndex((q) => q.grupo === base.grupo && q.tamanho === tamanho);
+      const existente = iExistente >= 0 ? pecas[iExistente] : null;
+      const acao = !existente ? "criar" : existente.origem === ORIGEM_GERADA ? "refazer" : "perguntar";
+      alvos.push({ grupo: base.grupo, tamanho, iBase, iExistente, acao, origem: existente?.origem ?? null, nome: base.nome || base.papel });
+    }
+  });
+  return alvos;
+}
+
+/**
+ * Gera os alvos. O que o `conferir` recusa (a margem fecha a peça no P
+ * pequeno) fica de fora, com o motivo: gerá-lo seguraria a gravação do molde
+ * inteiro. O refeito fica no mesmo lugar da lista; o criado vai para o fim.
+ */
+export function aplicarGeracao(pecas, grade, alvos, conferir) {
+  const novas = [...pecas];
+  const gerados = [];
+  const naoGerados = [];
+  const avisos = new Set();
+  for (const alvo of alvos) {
+    const r = gerarTamanho(pecas[alvo.iBase], grade, alvo.tamanho);
+    if (r.erro) { naoGerados.push({ ...alvo, motivo: r.erro }); continue; }
+    for (const a of r.avisos) avisos.add(`${alvo.nome}: ${a}`);
+    const conferida = conferir(r.peca);
+    if (!conferida.peca) { naoGerados.push({ ...alvo, motivo: conferida.erro }); continue; }
+    if (alvo.iExistente >= 0) novas[alvo.iExistente] = r.peca;
+    else novas.push(r.peca);
+    gerados.push(alvo);
+  }
+  return { pecas: novas, gerados, naoGerados, avisos: [...avisos] };
+}
+
+// ---------------------------------------------------------------------------
+// SOBREPOR OS TAMANHOS
+// ---------------------------------------------------------------------------
+
+/**
+ * Quanto a `camada` (outro tamanho da mesma peça) anda para ficar no lugar
+ * certo em relação à `atual`. O `pecaParaGravar` encosta cada tamanho no
+ * canto do próprio corte ao gravar, então depois de um F5 cada um está no seu
+ * canto. Com graduação e os mesmos nós: pela regra, exato. Sem: pelos centros.
+ */
+export function alinhamentoDaCamada(atual, camada, base, grade) {
+  if (base?.graduacao && camada.nos.length === base.nos.length && atual.nos.length === base.nos.length) {
+    const dAtual = deslocamentosDoTamanho(base, grade, atual.tamanho);
+    const dCamada = deslocamentosDoTamanho(base, grade, camada.tamanho);
+    if (dAtual && dCamada) {
+      let sx = 0; let sy = 0;
+      for (let i = 0; i < camada.nos.length; i++) {
+        sx += atual.nos[i].x + (dCamada[i].dx - dAtual[i].dx) - camada.nos[i].x;
+        sy += atual.nos[i].y + (dCamada[i].dy - dAtual[i].dy) - camada.nos[i].y;
+      }
+      return { dx: sx / camada.nos.length, dy: sy / camada.nos.length };
+    }
+  }
+  const ca = centroDoRisco(atual.nos);
+  const cc = centroDoRisco(camada.nos);
+  return { dx: ca.x - cc.x, dy: ca.y - cc.y };
 }
