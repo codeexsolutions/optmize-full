@@ -92,7 +92,33 @@ function arrumarPeca(bruta, ordem) {
     nos: nos ? JSON.stringify(nos) : null,
     marcacoes: marcacoes ? JSON.stringify(marcacoes) : null,
     ordem,
+    // As linhas com o mesmo grupo são a mesma peça em tamanhos diferentes.
+    grupo: bruta.grupo !== null && bruta.grupo !== "" && Number.isInteger(Number(bruta.grupo)) && Number(bruta.grupo) >= 0
+      ? Number(bruta.grupo) : null,
   };
+}
+
+/**
+ * A grade de tamanhos que chegou da tela. `null` quando não veio nada — é o
+ * sinal para o PUT MANTER a grade guardada: o passo a passo antigo regrava as
+ * peças sem saber de tamanhos com cor, e não pode apagá-los.
+ */
+function arrumarTamanhos(brutos) {
+  if (!Array.isArray(brutos)) return null;
+  const vistos = new Set();
+  let temBase = false;
+  const saida = [];
+  for (const b of brutos) {
+    const nome = String((b && b.nome) || "").trim();
+    if (!nome || vistos.has(nome)) continue;
+    vistos.add(nome);
+    const cru = String((b && b.cor) || "").trim().toLowerCase();
+    const hex = cru.startsWith("#") ? cru : `#${cru}`;
+    const base = !!(b && b.base) && !temBase;
+    if (base) temBase = true;
+    saida.push({ nome, cor: /^#[0-9a-f]{6}$/.test(hex) ? hex : null, ordem: saida.length, base });
+  }
+  return saida;
 }
 
 function lerSituacao(valor) {
@@ -110,4 +136,4 @@ function pecaDoBanco(linha) {
   };
 }
 
-module.exports = { PAPEIS, arrumarPeca, lerSituacao, pecaDoBanco };
+module.exports = { PAPEIS, arrumarPeca, arrumarTamanhos, lerSituacao, pecaDoBanco };

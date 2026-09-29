@@ -54,4 +54,30 @@ assert.equal(lerSituacao("rascunho"), "rascunho");
 assert.equal(lerSituacao("pronto"), "pronto");
 assert.equal(lerSituacao("x"), null);
 
+// 6. Tamanhos: nome limpo, cor #rrggbb minúscula, um base só, sem repetir.
+{
+  const { arrumarTamanhos } = require("../servidor/moldes-pecas");
+  const t = arrumarTamanhos([
+    { nome: " P ", cor: "#FF0000", base: false },
+    { nome: "M", cor: "00ffff", base: true },
+    { nome: "M", cor: "#123456" },
+    { nome: "G", cor: "laranja", base: true },
+    { nome: "", cor: "#000000" },
+  ]);
+  assert.deepEqual(t.map((x) => x.nome), ["P", "M", "G"]);
+  assert.equal(t[0].cor, "#ff0000");
+  assert.equal(t[1].cor, "#00ffff");
+  assert.equal(t[2].cor, null, "cor que não é #rrggbb vira null (a tela usa a paleta)");
+  assert.deepEqual(t.map((x) => x.base), [false, true, false], "só o primeiro base vale");
+  assert.deepEqual(t.map((x) => x.ordem), [0, 1, 2]);
+  assert.equal(arrumarTamanhos(undefined), null, "sem o campo: o PUT mantém os guardados");
+}
+
+// 7. Grupo: inteiro ≥ 0 ou null.
+{
+  assert.equal(arrumarPeca({ contorno: quadrado, grupo: 3 }, 0).grupo, 3);
+  assert.equal(arrumarPeca({ contorno: quadrado, grupo: "x" }, 0).grupo, null);
+  assert.equal(arrumarPeca({ contorno: quadrado }, 0).grupo, null);
+}
+
 console.log("OK — o servidor guarda nós e marcações sem inventar nem perder.");
