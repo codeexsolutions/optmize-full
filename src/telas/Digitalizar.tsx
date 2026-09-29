@@ -5,8 +5,9 @@
  *
  * Larga-se a foto dos moldes na mesa (PNG, BMP, JPG), o sistema acha a volta
  * por fora de CADA peça e desenha os riscos em cima da foto. A pessoa corrige
- * o que quiser — arrastando nós e alças de curva —, mede UMA peça com a fita e
- * diz quanto deu; aí todas ganham centímetro.
+ * o que quiser — arrastando nós e alças de curva —, mede as peças com a fita e
+ * diz quanto deu cada uma. Cada peça medida fica com a sua medida; a que ficar
+ * sem medida segue a média das medidas, então medir uma só ainda basta.
  *
  * Aqui só tem tela. Quem acha os contornos é `motores/moldeDaImagem.js` e quem
  * os transforma em curva é `motores/ajusteDeCurvas.js`, do mesmo jeito que a
@@ -86,6 +87,15 @@ import {
 import { desenharNos, tracarCaminho } from "./risco/desenhoDeNos";
 
 type Lado = "largura" | "altura";
+/** A medida de uma peça como a pessoa digitou: o lado e o texto do campo. */
+type MedidaDaPeca = { lado: Lado; texto: string };
+const MEDIDA_VAZIA: MedidaDaPeca = { lado: "altura", texto: "" };
+
+/** O número do campo de medida (vírgula vale ponto); `null` se não é uma medida. */
+function lerCm(texto: string): number | null {
+  const n = Number(texto.trim().replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 type Ponto = { x: number; y: number };
 type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean };
 /** O que o ponteiro pegou: um nó, ou uma das alças dele. */
@@ -117,8 +127,9 @@ export function Digitalizar() {
   const [edicao, setEdicao] = useState<No[][]>([]);
   const [desfazer, setDesfazer] = useState<No[][][]>([]);
 
-  const [medida, setMedida] = useState("");
-  const [lado, setLado] = useState<Lado>("altura");
+  /** A medida de cada peça, na ordem de `edicao`. Peça sem entrada = sem medida. */
+  const [medidas, setMedidas] = useState<MedidaDaPeca[]>([]);
+  /** A peça escolhida: destacada na foto, com os nós à mostra. */
   const [qual, setQual] = useState(0);
   /** O nó cujas alças estão à mostra. */
   const [noAtivo, setNoAtivo] = useState<number | null>(null);
@@ -143,8 +154,16 @@ export function Digitalizar() {
     [edicao],
   );
 
-  const cm = Number(String(medida).replace(",", "."));
-  const emCm = pecas.length > 0 && cm > 0 ? riscosEmCm(pecas, qual, lado, cm) : null;
+  const emCm = pecas.length > 0
+    ? riscosEmCm(pecas, pecas.map((_, i) => {
+      const m = medidas[i];
+      const cm = m ? lerCm(m.texto) : null;
+      return m && cm !== null ? { lado: m.lado, cm } : null;
+    }))
+    : null;
+
+  const mudarMedida = (i: number, parcial: Partial<MedidaDaPeca>) =>
+    setMedidas((antes) => edicao.map((_, k) => (k === i ? { ...(antes[k] ?? MEDIDA_VAZIA), ...parcial } : antes[k] ?? MEDIDA_VAZIA)));
 
   const clonar = (fonte: No[][]): No[][] => fonte.map(clonarNos);
 
@@ -202,6 +221,9 @@ export function Digitalizar() {
           setAchado({ ...saida, cols, rows });
           setEdicao(clonar(saida.riscos.map((r: any) => r.nos)));
           setDesfazer([]);
+          // O Refazer acha as mesmas peças, na mesma ordem: as medidas ficam. Se
+          // o número de peças mudou, elas não valem mais para peça nenhuma.
+          setMedidas((antes) => (antes.length === saida.riscos.length ? antes : []));
           setQual(0);
           setNoAtivo(null);
         }
@@ -225,7 +247,7 @@ export function Digitalizar() {
     setAchado(null);
     setEdicao([]);
     setDesfazer([]);
-    setMedida("");
+    setMedidas([]);
     setZoom(1);
     setNome(file.name.replace(/\.[^.]+$/, ""));
     try {
@@ -739,61 +761,75 @@ export function Digitalizar() {
                   </span>
                 </label>
 
-                {/* ------------------------------------------------ a medida */}
+                {/* ------------------------------------------------ as medidas */}
                 <div className="rounded-[10px] border border-linha bg-painel-suave p-3">
                   <p className="mt-0 mb-1 text-[0.85rem] font-semibold">
-                    Meça UMA peça com a fita e diga quanto deu
+                    Meça as peças com a fita e diga quanto deu cada uma
                   </p>
                   <p className="mt-0 mb-2 text-[0.8rem] text-tinta-fraca">
-                    A foto inteira tem uma escala só, então uma medida basta: as outras peças saem
-                    junto. Convém medir a maior — erro de meio centímetro pesa menos nela.
+                    Cada peça medida fica com a sua medida. A que ficar sem medida segue a média das
+                    medidas — numa foto tirada reta de cima, medir uma já basta.
                   </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={qual}
-                      onChange={(e) => { setQual(Number(e.target.value)); setNoAtivo(null); }}
-                      className="w-auto!"
-                      aria-label="Qual peça você mediu"
-                    >
-                      {edicao.map((_, i) => (
-                        <option key={i} value={i}>Peça {i + 1}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={lado}
-                      onChange={(e) => setLado(e.target.value as Lado)}
-                      className="w-auto!"
-                      aria-label="Qual lado você mediu"
-                    >
-                      <option value="altura">altura</option>
-                      <option value="largura">largura</option>
-                    </select>
-                    <input
-                      type="text" inputMode="decimal" value={medida} placeholder="0,0"
-                      onChange={(e) => setMedida(e.target.value)}
-                      className="w-24!" aria-label="Medida em centímetros"
-                    />
-                    <span className="text-[0.85rem] text-tinta-fraca">cm</span>
-                  </div>
-
-                  {emCm ? (
-                    <ul className="mt-2.5 mb-0 grid list-none gap-1 p-0 text-[0.82rem] sm:grid-cols-2">
-                      {emCm.pecas.map((p: any, i: number) => (
-                        <li key={i} className="flex items-center gap-2">
-                          <span
-                            className="size-2.5 shrink-0 rounded-full"
-                            style={{ background: corDa(i) }}
+                  <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[0.82rem]">
+                    {edicao.map((_, i) => {
+                      const m = medidas[i] ?? MEDIDA_VAZIA;
+                      const p = emCm?.pecas[i];
+                      const escolher = () => { setQual(i); setNoAtivo(null); };
+                      return (
+                        <li
+                          key={i}
+                          className={`flex flex-wrap items-center gap-2 rounded-[8px] px-1.5 py-1 ${i === qual ? "bg-[var(--accent-soft)]" : ""}`}
+                        >
+                          <button type="button" className="flex items-center gap-2" onClick={escolher} title="Ver esta peça na foto">
+                            <span className="size-2.5 shrink-0 rounded-full" style={{ background: corDa(i) }} />
+                            <span className={i === qual ? "font-semibold text-ambar" : ""}>Peça {i + 1}</span>
+                          </button>
+                          <select
+                            value={m.lado}
+                            onChange={(e) => mudarMedida(i, { lado: e.target.value as Lado })}
+                            onFocus={escolher}
+                            className="w-auto!"
+                            aria-label={`Lado medido da peça ${i + 1}`}
+                          >
+                            <option value="altura">altura</option>
+                            <option value="largura">largura</option>
+                          </select>
+                          <input
+                            type="text" inputMode="decimal" value={m.texto} placeholder="0,0"
+                            onChange={(e) => mudarMedida(i, { texto: e.target.value })}
+                            onFocus={escolher}
+                            className="w-20!" aria-label={`Medida da peça ${i + 1} em centímetros`}
+                            aria-invalid={m.texto.trim() !== "" && lerCm(m.texto) === null}
                           />
-                          <span className={i === qual ? "font-semibold text-ambar" : ""}>
-                            Peça {i + 1}: {formatarCm(p.largura)} × {formatarCm(p.altura)}
-                          </span>
+                          <span className="text-tinta-fraca">cm</span>
+                          {p && (
+                            <span className={p.medida ? "" : "text-tinta-fraca"}>
+                              → {formatarCm(p.largura)} × {formatarCm(p.altura)}{p.medida ? "" : " (pela média)"}
+                            </span>
+                          )}
                         </li>
-                      ))}
-                    </ul>
-                  ) : (
+                      );
+                    })}
+                  </ul>
+
+                  {emCm && emCm.discordantes.length > 0 && (() => {
+                    // Numa foto só, as escalas batem: medida que foge é número
+                    // errado, ou altura no lugar da largura. Ver `riscosEmCm`.
+                    const nums = emCm.discordantes.map((i: number) => i + 1);
+                    const medidasContadas = emCm.pecas.filter((p: any) => p.medida).length;
+                    const quais = nums.length === 1
+                      ? `A medida da peça ${nums[0]} não bate com as outras`
+                      : `As medidas das peças ${nums.slice(0, -1).join(", ")} e ${nums[nums.length - 1]} não batem ${nums.length === medidasContadas ? "entre si" : "com as outras"}`;
+                    return (
+                      <p className="mt-2 mb-0 text-[0.82rem] text-ambar" role="status">
+                        {quais} — mais de 10% de diferença na escala. Confira o número e se é altura ou largura.
+                      </p>
+                    );
+                  })()}
+                  {!emCm && (
                     <p className="mt-2.5 mb-0 text-[0.82rem] text-tinta-fraca">
-                      Sem essa medida os riscos não têm tamanho — a foto sozinha não diz se o
-                      molde tem 60 cm ou 6 cm.
+                      Sem medida os riscos não têm tamanho — a foto sozinha não diz se o molde tem 60 cm
+                      ou 6 cm.
                     </p>
                   )}
                 </div>

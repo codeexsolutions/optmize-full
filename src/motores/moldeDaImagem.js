@@ -438,17 +438,37 @@ export function riscosDosPixels(dados, cols, rows, {
 }
 
 /**
- * Os riscos em centímetros, a partir da medida de UMA peça.
+ * Os riscos em centímetros, pela medida de CADA peça.
  *
- * A foto inteira tem uma escala só — é a mesma câmera, na mesma altura, no
- * mesmo instante. Então basta medir uma peça com a fita para todas as outras
- * ganharem tamanho junto, e é isso que `indice` e `lado` dizem: qual peça foi
- * medida, e por qual lado.
+ * A foto não carrega escala: é a fita que dá centímetro ao risco. Cada peça
+ * medida usa a própria escala, e a medida que a pessoa digitou para ela nunca
+ * muda por causa da medida de outra. A peça sem medida usa a MÉDIA das escalas
+ * medidas: numa foto tirada reta de cima a escala é uma só, e medir uma peça
+ * continua bastando para todas.
+ *
+ * `medidas[i]` é `{ lado: "altura" | "largura", cm }`, ou nada. Sem nenhuma
+ * medida válida, `null` — a tela não mostra centímetro inventado (ver o
+ * cabeçalho de `telas/Digitalizar.tsx`).
+ *
+ * `discordantes` são as peças medidas cuja escala fica mais de 10% longe da
+ * mediana das medidas. Numa foto só, isso é número digitado errado ou altura
+ * trocada com largura; com uma medida por peça, o erro ficaria calado naquela
+ * peça até o tecido cortado.
  */
-export function riscosEmCm(riscos, indice, lado, cm) {
-  const base = riscos[indice];
-  if (!base || !(cm > 0)) return null;
-  const porCelula = lado === "largura" ? cm / base.caixa.largura : cm / base.caixa.altura;
+export function riscosEmCm(riscos, medidas) {
+  const escalas = riscos.map((r, i) => {
+    const m = medidas?.[i];
+    if (!m || !(m.cm > 0)) return null;
+    const celulas = m.lado === "largura" ? r.caixa.largura : r.caixa.altura;
+    return celulas > 0 ? m.cm / celulas : null;
+  });
+  const medidas_ = escalas.filter((e) => e !== null);
+  if (medidas_.length === 0) return null;
+  const media = medidas_.reduce((soma, e) => soma + e, 0) / medidas_.length;
+  const ordem = [...medidas_].sort((a, b) => a - b);
+  const meio = Math.floor(ordem.length / 2);
+  const mediana = ordem.length % 2 ? ordem[meio] : (ordem[meio - 1] + ordem[meio]) / 2;
+  const discordantes = escalas.flatMap((e, i) => (e !== null && Math.abs(e / mediana - 1) > 0.1 ? [i] : []));
 
   /*
    * O arranjo encosta na origem.
@@ -461,7 +481,8 @@ export function riscosEmCm(riscos, indice, lado, cm) {
    * O que se desconta é o canto do CONJUNTO, não o de cada peça, e a diferença
    * é o ponto todo: assim as peças continuam na mesma posição relativa em que
    * estavam na mesa — dá para cortar no lugar — e é só a moldura de sobra que
-   * sai fora.
+   * sai fora. A posição vai pela escala média (a da foto); o tamanho, pela de
+   * cada peça.
    */
   let cantoX = Infinity;
   let cantoY = Infinity;
@@ -470,31 +491,36 @@ export function riscosEmCm(riscos, indice, lado, cm) {
     if (r.caixa.minY < cantoY) cantoY = r.caixa.minY;
   }
 
-  // Alça é ponto como outro qualquer: se ela não for escalada junto, a curva
-  // se desmancha quando a peça muda de tamanho.
-  const paraCm = (r) => (p) => ({
-    x: (p.x - r.caixa.minX) * porCelula,
-    y: (p.y - r.caixa.minY) * porCelula,
-  });
-
   return {
-    porCelula,
-    pecas: riscos.map((r) => ({
-      largura: r.caixa.largura * porCelula,
-      altura: r.caixa.altura * porCelula,
-      nos: r.nos.map((n) => ({
-        ...paraCm(r)(n),
-        entrada: paraCm(r)(n.entrada),
-        saida: paraCm(r)(n.saida),
-        canto: !!n.canto,
-        retaDepois: !!n.retaDepois,
-      })),
-      // Onde a peça está no conjunto, já em centímetros — a posição dela na
-      // mesa, com a moldura de sobra da foto descontada (ver acima). É o que
-      // faz a saída manter o arranjo em vez de empilhar tudo na origem.
-      emX: (r.caixa.minX - cantoX) * porCelula,
-      emY: (r.caixa.minY - cantoY) * porCelula,
-    })),
+    porCelula: media,
+    discordantes,
+    pecas: riscos.map((r, i) => {
+      const porCelula = escalas[i] ?? media;
+      // Alça é ponto como outro qualquer: se ela não for escalada junto, a
+      // curva se desmancha quando a peça muda de tamanho.
+      const paraCm = (p) => ({
+        x: (p.x - r.caixa.minX) * porCelula,
+        y: (p.y - r.caixa.minY) * porCelula,
+      });
+      return {
+        medida: escalas[i] !== null,
+        porCelula,
+        largura: r.caixa.largura * porCelula,
+        altura: r.caixa.altura * porCelula,
+        nos: r.nos.map((n) => ({
+          ...paraCm(n),
+          entrada: paraCm(n.entrada),
+          saida: paraCm(n.saida),
+          canto: !!n.canto,
+          retaDepois: !!n.retaDepois,
+        })),
+        // Onde a peça está no conjunto, já em centímetros — a posição dela na
+        // mesa, com a moldura de sobra da foto descontada (ver acima). É o que
+        // faz a saída manter o arranjo em vez de empilhar tudo na origem.
+        emX: (r.caixa.minX - cantoX) * media,
+        emY: (r.caixa.minY - cantoY) * media,
+      };
+    }),
   };
 }
 

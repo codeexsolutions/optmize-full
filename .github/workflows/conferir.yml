@@ -94,3 +94,6 @@ jobs:
 
       - name: Conferência pela arte
         run: npm run bancada:conferencia
+
+      - name: Medida de cada peça no Digitalizar
+        run: npm run bancada:medida
