@@ -51,7 +51,7 @@
  * `problema` diz qual.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { moldesApi, type Marcacoes, type PecaDoMolde, type SituacaoDoMolde, type TamanhoDoMolde } from "../../api/moldes";
 import type { NoDoRisco } from "../../api/risco";
 import { ErroDaApi } from "../../api/cliente";
@@ -305,8 +305,12 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
     };
   }, []);
 
+  // A grade que a tela vê sai das PEÇAS (com as cores guardadas): desfeita uma
+  // junção, o tamanho que sumiu das peças some do chip na hora.
+  const tamanhosDasPecas = useMemo(() => tamanhosDoMolde(pecas, tamanhos) as TamanhoDoMolde[], [pecas, tamanhos]);
+
   return {
-    carregando, naoAchado, erroAoAbrir, nome, situacao, pecas, tamanhos, gravacao, problema,
+    carregando, naoAchado, erroAoAbrir, nome, situacao, pecas, tamanhos: tamanhosDasPecas, gravacao, problema,
     podeDesfazer: pilha.length > 0,
     lembrar, desfazer, mudarPecas, mudarPeca, renomear, mudarTamanhos, gravar, tentarAbrirDeNovo,
   };

@@ -207,7 +207,8 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
       ...parte,
       nome: doNome.nome,
       nomeGuardado: "",
-      grupo: null,
+      // O grupo fica: trocar o arquivo muda o desenho, não qual peça é.
+      grupo: parte.grupo ?? null,
       largura: Math.round(desenho.largura * 10) / 10,
       altura: Math.round(desenho.altura * 10) / 10,
       contorno: desenho.contorno,

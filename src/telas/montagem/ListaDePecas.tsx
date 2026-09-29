@@ -58,7 +58,7 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
   const [nomeDoTamanho, setNomeDoTamanho] = useState("");
   const [corDoTamanho, setCorDoTamanho] = useState("");
   const [casamento, setCasamento] = useState<{
-    tamanho: string; cor: string;
+    tamanho: string; cor: string; tamanhoDeLa: string;
     daqui: { grupo: number; peca: PecaEmMontagem }[];
     dela: PecaEmMontagem[];
     pares: { grupo: number; indiceDela: number | null }[];
@@ -106,7 +106,7 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
           daqui.map((d) => ({ grupo: d.grupo, ...medida(d.peca) })),
           dela.map(medida),
         ) as { grupo: number; indiceDela: number | null }[];
-        setCasamento({ tamanho: tamanhoNovo, cor: corDoTamanho || corLivre(), daqui, dela, pares });
+        setCasamento({ tamanho: tamanhoNovo, cor: corDoTamanho || corLivre(), tamanhoDeLa: deLa ?? "", daqui, dela, pares });
         return;
       }
       const tamanhoDeLa = outro.pecas[0]?.tamanho;
@@ -146,6 +146,7 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
       {casamento && (
         <CasamentoDePecas
           tamanho={casamento.tamanho}
+          tamanhoDeLa={casamento.tamanhoDeLa}
           daqui={casamento.daqui}
           dela={casamento.dela}
           pares={casamento.pares}

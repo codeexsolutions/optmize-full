@@ -83,4 +83,45 @@ assert.equal(t.normalizarNomeDePeca("BERMUDA  MASC. 2X"), "BERMUDA MASC.");
   assert.equal(r[1].id, undefined, "peça nova, sem id do outro molde");
 }
 
+// 7. Molde misto (agrupado, e o editor antigo trocou o arquivo de uma parte:
+//    grupo null): a peça sem grupo pega o grupo que FALTA naquele tamanho,
+//    nunca um que já existe — duas peças no mesmo (grupo, tamanho) viram uma.
+{
+  const r = t.completarGrupos([
+    peca("P", "FRENTE", { grupo: 0 }), peca("P", "COSTAS", { grupo: null }), peca("P", "MANGA", { grupo: 2 }),
+    peca("M", "FRENTE", { grupo: 0 }), peca("M", "COSTAS", { grupo: 1 }), peca("M", "MANGA", { grupo: 2 }),
+  ]);
+  assert.equal(r[1].grupo, 1, "a COSTAS do P volta ao grupo 1, o que falta no P");
+  const g = t.gruposDasPecas(r);
+  assert.deepEqual(g.map((x) => Object.keys(x.porTamanho).sort().join("")), ["MP", "MP", "MP"]);
+}
+
+// 8. Tamanho novo depois de um grupo apagado (grupos 0 e 2): as peças do G
+//    ocupam os grupos que existem, na ordem, e não abrem o grupo 1 sozinho.
+{
+  const r = t.completarGrupos([
+    peca("M", "FRENTE", { grupo: 0 }), peca("M", "MANGA", { grupo: 2 }),
+    peca("G", "FRENTE", { grupo: null }), peca("G", "MANGA", { grupo: null }),
+  ]);
+  assert.deepEqual(r.map((p) => p.grupo), [0, 2, 0, 2]);
+}
+
+// 9. Nenhum (grupo, tamanho) repetido, nunca.
+{
+  const r = t.completarGrupos([
+    peca("P", "A", { grupo: 0 }), peca("P", "B", { grupo: null }), peca("P", "C", { grupo: null }),
+    peca("M", "A", { grupo: 0 }),
+  ]);
+  const chaves = r.map((p) => `${p.grupo}/${p.tamanho}`);
+  assert.equal(new Set(chaves).size, chaves.length, `par repetido: ${chaves.join(" ")}`);
+}
+
+// 10. A grade não guarda tamanho que nenhuma peça tem (desfazer uma junção,
+//     tirar um tamanho pelo editor antigo): nada de chip fantasma.
+{
+  const r = t.tamanhosDoMolde([peca("M", "A")], [{ nome: "M", cor: "#ff0000", ordem: 0, base: true }, { nome: "G", cor: "#00ff00", ordem: 1, base: false }]);
+  assert.deepEqual(r.map((x) => x.nome), ["M"]);
+  assert.equal(r[0].cor, "#ff0000", "a cor guardada do que ficou continua");
+}
+
 console.log("OK — os tamanhos do molde conferem.");

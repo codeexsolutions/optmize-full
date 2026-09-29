@@ -8,6 +8,8 @@ import type { PecaEmMontagem } from "./useMoldeEmMontagem";
 
 interface Props {
   tamanho: string;
+  /** De qual tamanho do outro molde as peças vêm (o base de lá). */
+  tamanhoDeLa: string;
   daqui: { grupo: number; peca: PecaEmMontagem }[];
   dela: PecaEmMontagem[];
   pares: { grupo: number; indiceDela: number | null }[];
@@ -18,7 +20,7 @@ interface Props {
 
 const rotulo = (p: PecaEmMontagem) => p.nome || p.papel;
 
-export function CasamentoDePecas({ tamanho, daqui, dela, pares, aoTrocar, aoConfirmar, aoCancelar }: Props) {
+export function CasamentoDePecas({ tamanho, tamanhoDeLa, daqui, dela, pares, aoTrocar, aoConfirmar, aoCancelar }: Props) {
   const usados = new Set(pares.map((p) => p.indiceDela).filter((i): i is number => i !== null));
   const semPar = pares.filter((p) => p.indiceDela === null).length;
   const sobrando = dela.filter((_, i) => !usados.has(i));
@@ -36,7 +38,7 @@ export function CasamentoDePecas({ tamanho, daqui, dela, pares, aoTrocar, aoConf
           </p>
           <table className="w-full text-[0.85rem]">
             <thead>
-              <tr><th className="text-left">Neste molde</th><th className="text-left">No outro ({tamanho})</th></tr>
+              <tr><th className="text-left">Neste molde</th><th className="text-left">No outro (tamanho {tamanhoDeLa}, entra como {tamanho})</th></tr>
             </thead>
             <tbody>
               {daqui.map(({ grupo, peca }) => {

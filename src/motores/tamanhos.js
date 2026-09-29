@@ -16,8 +16,11 @@ export const PALETA = ["#00ff00", "#ff0000", "#00ffff", "#ff8000", "#ff00ff", "#
 export function tamanhosDoMolde(pecas, guardados = []) {
   const saida = [];
   const vistos = new Set();
+  // Só os tamanhos que alguma peça tem: um tamanho guardado sem peça (desfazer
+  // uma junção, tirar um tamanho pelo passo a passo antigo) seria chip fantasma.
+  const nasPecas = new Set(pecas.map((p) => p.tamanho));
   for (const g of [...guardados].sort((a, b) => a.ordem - b.ordem)) {
-    if (vistos.has(g.nome)) continue;
+    if (vistos.has(g.nome) || !nasPecas.has(g.nome)) continue;
     vistos.add(g.nome);
     saida.push({ nome: g.nome, cor: g.cor || null, base: !!g.base });
   }
@@ -38,15 +41,40 @@ export function tamanhosDoMolde(pecas, guardados = []) {
   }));
 }
 
+/**
+ * Dá grupo a quem não tem, sem nunca repetir um (grupo, tamanho).
+ *
+ * O molde misto é o caso que importa: agrupado pela Montagem, e o passo a
+ * passo antigo trocou o arquivo de uma parte, acrescentou uma parte ou um
+ * tamanho — essas linhas voltam sem grupo. A peça sem grupo pega, na ordem,
+ * os grupos que FALTAM no tamanho dela; acabando, números novos a partir do
+ * maior + 1, na mesma posição em todos os tamanhos. Assim o molde antigo
+ * (ninguém com grupo) sai como sempre: a n-ésima peça de cada tamanho no
+ * grupo n.
+ */
 export function completarGrupos(pecas) {
-  const contagem = new Map();
   const ordenadas = pecas.map((p, i) => ({ p, i })).sort((a, b) => ((a.p.ordem ?? a.i) - (b.p.ordem ?? b.i)) || a.i - b.i);
+  const temGrupo = (p) => Number.isInteger(p.grupo);
+  const existentes = [...new Set(pecas.filter(temGrupo).map((p) => p.grupo))].sort((a, b) => a - b);
+  const novoApartirDe = existentes.length > 0 ? existentes[existentes.length - 1] + 1 : 0;
   const grupoDe = new Map();
+  const porTamanho = new Map();
   for (const { p, i } of ordenadas) {
-    if (Number.isInteger(p.grupo)) { grupoDe.set(i, p.grupo); continue; }
-    const n = contagem.get(p.tamanho) ?? 0;
-    contagem.set(p.tamanho, n + 1);
-    grupoDe.set(i, n);
+    if (!porTamanho.has(p.tamanho)) porTamanho.set(p.tamanho, []);
+    porTamanho.get(p.tamanho).push({ p, i });
+  }
+  for (const lista of porTamanho.values()) {
+    const usados = new Set();
+    for (const { p, i } of lista) {
+      // Um (grupo, tamanho) já ocupado não vale de novo: a segunda peça vira "sem grupo".
+      if (temGrupo(p) && !usados.has(p.grupo)) { usados.add(p.grupo); grupoDe.set(i, p.grupo); }
+    }
+    const faltando = existentes.filter((g) => !usados.has(g));
+    let novos = 0;
+    for (const { i } of lista) {
+      if (grupoDe.has(i)) continue;
+      grupoDe.set(i, faltando.length > 0 ? faltando.shift() : novoApartirDe + novos++);
+    }
   }
   return pecas.map((p, i) => (p.grupo === grupoDe.get(i) ? p : { ...p, grupo: grupoDe.get(i) }));
 }
