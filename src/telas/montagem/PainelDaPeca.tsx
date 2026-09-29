@@ -17,10 +17,13 @@ import type { PecaEmMontagem } from "./useMoldeEmMontagem";
 
 interface Props {
   peca: PecaEmMontagem;
+  /** Só este tamanho: o fio. */
   aoMudar: (mudar: (peca: PecaEmMontagem) => PecaEmMontagem, lembrarAntes: boolean) => void;
+  /** A peça em todos os tamanhos: papel, nome, quantidade, espelhar e margem. */
+  aoMudarGrupo: (mudar: (peca: PecaEmMontagem) => PecaEmMontagem, lembrarAntes: boolean) => void;
 }
 
-export function PainelDaPeca({ peca, aoMudar }: Props) {
+export function PainelDaPeca({ peca, aoMudar, aoMudarGrupo }: Props) {
   const [margemEscrita, setMargemEscrita] = useState(String(peca.marcacoes.margem).replace(".", ","));
   useEffect(() => { setMargemEscrita(String(peca.marcacoes.margem).replace(".", ",")); }, [peca.marcacoes.margem]);
   const margemLida = lerCm(margemEscrita);
@@ -28,12 +31,14 @@ export function PainelDaPeca({ peca, aoMudar }: Props) {
 
   const trocarMarcacao = (parte: Partial<PecaEmMontagem["marcacoes"]>) =>
     aoMudar((p) => ({ ...p, marcacoes: { ...p.marcacoes, ...parte } }), true);
+  const trocarMarcacaoDoGrupo = (parte: Partial<PecaEmMontagem["marcacoes"]>) =>
+    aoMudarGrupo((p) => ({ ...p, marcacoes: { ...p.marcacoes, ...parte } }), true);
 
   return (
     <aside className="flex h-full w-[260px] shrink-0 flex-col gap-3 overflow-auto border-l border-linha p-3 text-[0.85rem]">
       <label className="flex flex-col gap-1">
         <span className="font-semibold">O que é</span>
-        <select value={peca.papel} onChange={(e) => aoMudar((p) => ({ ...p, papel: e.target.value }), true)}>
+        <select value={peca.papel} onChange={(e) => aoMudarGrupo((p) => ({ ...p, papel: e.target.value }), true)}>
           {PAPEIS_DE_PECA.map((papel) => <option key={papel} value={papel}>{papel}</option>)}
         </select>
       </label>
@@ -41,17 +46,17 @@ export function PainelDaPeca({ peca, aoMudar }: Props) {
         <span className="font-semibold">Nome {peca.papel === "outro" ? "(é por ele que a peça é chamada)" : "(opcional)"}</span>
         {/* Sem lembrar a cada tecla: um nome de doze letras encheria doze passos do desfazer. */}
         {/* `nome` é `string` em `PecaDoMolde` (não aceita `null`); vazio já vale como "sem nome" em `nomeDaPeca`. */}
-        <input type="text" value={peca.nome ?? ""} onChange={(e) => aoMudar((p) => ({ ...p, nome: e.target.value }), false)} />
+        <input type="text" value={peca.nome ?? ""} onChange={(e) => aoMudarGrupo((p) => ({ ...p, nome: e.target.value }), false)} />
       </label>
       <label className="flex flex-col gap-1">
         <span className="font-semibold">Quantas cortam por peça pronta</span>
         <input
           type="number" min={1} step={1} value={peca.quantidade}
-          onChange={(e) => aoMudar((p) => ({ ...p, quantidade: Math.max(1, Math.floor(Number(e.target.value) || 1)) }), true)}
+          onChange={(e) => aoMudarGrupo((p) => ({ ...p, quantidade: Math.max(1, Math.floor(Number(e.target.value) || 1)) }), true)}
         />
       </label>
       <label className="flex items-center gap-2">
-        <input type="checkbox" checked={peca.marcacoes.espelhar} onChange={(e) => trocarMarcacao({ espelhar: e.target.checked })} />
+        <input type="checkbox" checked={peca.marcacoes.espelhar} onChange={(e) => trocarMarcacaoDoGrupo({ espelhar: e.target.checked })} />
         <span>Cortar em par espelhado <span className="text-tinta-fraca">(metade vira do avesso)</span></span>
       </label>
       <label className="flex flex-col gap-1">
@@ -59,7 +64,7 @@ export function PainelDaPeca({ peca, aoMudar }: Props) {
         <input
           type="text" inputMode="decimal" value={margemEscrita}
           onChange={(e) => setMargemEscrita(e.target.value)}
-          onBlur={() => { if (margemLida !== null && margemLida !== peca.marcacoes.margem) trocarMarcacao({ margem: margemLida }); }}
+          onBlur={() => { if (margemLida !== null && margemLida !== peca.marcacoes.margem) trocarMarcacaoDoGrupo({ margem: margemLida }); }}
           aria-invalid={margemLida === null}
         />
         <span className="text-[0.78rem] text-tinta-fraca">

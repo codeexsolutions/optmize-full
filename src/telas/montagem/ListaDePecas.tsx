@@ -12,6 +12,8 @@ import { moldesApi, type MoldeNaEstante } from "../../api/moldes";
 import { achatarCurvas } from "../../motores/ajusteDeCurvas";
 import { caixaDe, pecaParaMontar } from "../../motores/montagem";
 import { corDaPeca } from "../../utils/coresDePeca";
+import { gruposDasPecas } from "../../motores/tamanhos";
+import type { GrupoDePecas } from "./useMoldeEmMontagem";
 import { Icone } from "../../casca/Icone";
 import type { MoldeEmMontagem, PecaEmMontagem } from "./useMoldeEmMontagem";
 
@@ -33,11 +35,12 @@ export const nomeDaPeca = (p: PecaEmMontagem, i: number) =>
 interface Props {
   molde: MoldeEmMontagem;
   moldeId: number;
-  indice: number;
-  aoEscolher: (indice: number) => void;
+  /** O grupo marcado: a mesma peça em todos os tamanhos. */
+  grupo: number;
+  aoEscolherGrupo: (grupo: number) => void;
 }
 
-export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
+export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) {
   const [outros, setOutros] = useState<MoldeNaEstante[]>([]);
   const [deQual, setDeQual] = useState("");
   const [juntando, setJuntando] = useState(false);
@@ -50,9 +53,13 @@ export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
     moldesApi.estante().then((l) => setOutros(l.filter((m) => m.id !== moldeId))).catch(() => setOutros([]));
   }, [moldeId]);
 
-  const apagar = (i: number) => {
-    molde.mudarPecas((antes) => antes.filter((_, k) => k !== i));
-    aoEscolher(Math.max(0, Math.min(i, molde.pecas.length - 2)));
+  const grupos = gruposDasPecas(molde.pecas) as GrupoDePecas[];
+  const base = molde.tamanhos.find((t) => t.base)?.nome;
+
+  /** Apaga a peça em TODOS os tamanhos: sobrar o P e o G de uma peça sem o M não é molde. */
+  const apagar = (g: number) => {
+    molde.mudarPecas((antes) => antes.filter((p) => p.grupo !== g));
+    aoEscolherGrupo(grupos.find((x) => x.grupo !== g)?.grupo ?? 0);
   };
 
   const juntar = async () => {
@@ -64,9 +71,11 @@ export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
       const outro = await moldesApi.abrir(id);
       const tamanhoDeLa = outro.pecas[0]?.tamanho;
       const tamanhoDaqui = molde.pecas[0]?.tamanho ?? "base";
+      // Peças NOVAS: grupos novos, acima dos daqui (o grupo de lá colidiria).
+      const proximo = molde.pecas.reduce((m, p) => Math.max(m, p.grupo ?? -1), -1) + 1;
       const vindas = outro.pecas
         .filter((p) => p.tamanho === tamanhoDeLa)
-        .map((p) => ({ ...(pecaParaMontar(p) as PecaEmMontagem), id: undefined, tamanho: tamanhoDaqui }));
+        .map((p, k) => ({ ...(pecaParaMontar(p) as PecaEmMontagem), id: undefined, tamanho: tamanhoDaqui, grupo: proximo + k }));
       molde.mudarPecas((antes) => [...antes, ...vindas]);
       setDeQual("");
     } catch (e) {
@@ -83,15 +92,17 @@ export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
     <aside className="flex h-full w-[220px] shrink-0 flex-col gap-2 overflow-auto border-r border-linha p-3">
       <p className="m-0 text-[0.8rem] font-semibold text-tinta-fraca">Peças</p>
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-        {molde.pecas.map((p, i) => {
-          const comErro = molde.problema?.peca === i;
+        {grupos.map((g, i) => {
+          // A peça que representa o grupo na lista: a do tamanho base, ou a primeira.
+          const p = molde.pecas[g.porTamanho[base ?? ""] ?? Object.values(g.porTamanho)[0]!]!;
+          const comErro = Object.values(g.porTamanho).includes(molde.problema?.peca ?? -1);
           return (
-            <li key={i}>
+            <li key={g.grupo}>
               <button
                 type="button"
-                onClick={() => aoEscolher(i)}
+                onClick={() => aoEscolherGrupo(g.grupo)}
                 className={`flex w-full items-center gap-2 rounded-[8px] border p-1.5 text-left ${
-                  i === indice ? "border-ambar bg-[var(--accent-soft)]" : "border-linha"
+                  g.grupo === grupo ? "border-ambar bg-[var(--accent-soft)]" : "border-linha"
                 } ${comErro ? "outline outline-2 outline-[#ff4d4d]" : ""}`}
               >
                 <Miniatura peca={p} cor={comErro ? "#ff4d4d" : corDaPeca(i)} />
@@ -106,8 +117,8 @@ export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
           );
         })}
       </ul>
-      {molde.pecas.length > 1 && (
-        <button type="button" className="btn ghost-danger btn-sm" onClick={() => apagar(indice)}>
+      {grupos.length > 1 && (
+        <button type="button" className="btn ghost-danger btn-sm" onClick={() => apagar(grupo)}>
           <Icone referencia="icones.svg#trash-2" className="size-4" />
           Apagar a peça marcada
         </button>

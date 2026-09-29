@@ -59,6 +59,8 @@ interface Props {
   aoEscolherPeca: (indice: number) => void;
   aoLembrar: () => void;
   aoMudar: (mudar: (peca: PecaEmMontagem) => PecaEmMontagem, lembrarAntes: boolean) => void;
+  /** Os outros tamanhos da peça ("Ver tamanhos"), desenhados por baixo, cada um na sua cor. */
+  camadas?: { nos: PecaEmMontagem["nos"]; cor: string }[];
 }
 
 /**
@@ -90,6 +92,7 @@ function desenhoParaVer(p: PecaEmMontagem) {
 
 export function Mesa(props: Props) {
   const { pecas, indice, ferramenta, verTodas, noAtivo, comErro } = props;
+  const camadas = useMemo(() => props.camadas ?? [], [props.camadas]);
   const peca = pecas[indice];
   const tela = useRef<HTMLCanvasElement>(null);
   const moldura = useRef<HTMLDivElement>(null);
@@ -117,10 +120,11 @@ export function Mesa(props: Props) {
       for (const d of todas) { maxX = Math.max(maxX, d.emX + d.largura); maxY = Math.max(maxY, d.emY + d.altura); }
       return { minX: -3, minY: -3, largura: maxX + 6, altura: maxY + 6 };
     }
-    const c = caixaDe(corte ?? risco);
+    // As camadas entram na vista: o G é maior que o M e sairia cortado.
+    const c = caixaDe([...(corte ?? risco), ...camadas.flatMap((k) => achatarCurvas(k.nos))]);
     const folga = 3;
     return { minX: c.minX - folga, minY: c.minY - folga, largura: c.largura + 2 * folga, altura: c.altura + 2 * folga };
-  }, [verTodas, todas, corte, risco]);
+  }, [verTodas, todas, corte, risco, camadas]);
   const vista = vistaCongelada.current ?? vistaCalculada;
   // Um pixel do canvas = um pixel da tela. Com px/cm fixo, peça pequena saía
   // esticada (borrada, traço grosso) e peça grande espremida (nó e texto
@@ -211,6 +215,15 @@ export function Mesa(props: Props) {
       return;
     }
     if (!peca) return;
+    // Os outros tamanhos da peça, por baixo, finos, cada um na sua cor.
+    for (const k of camadas) {
+      tracarCaminho(ctx, k.nos, emTela);
+      ctx.strokeStyle = k.cor;
+      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = 1.25;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     // A peça escolhida, na posição em que está sendo editada (sem encostar no canto).
     const desenho = desenhoDaPeca({
       ...peca,
@@ -230,7 +243,7 @@ export function Mesa(props: Props) {
       ctx.fillText("A margem fecha a peça sobre ela mesma: diminua a margem.", 12 * fator, 22 * fator);
     }
     if (ferramenta === "nos") desenharNos(ctx, peca.nos, noAtivoValido, emTela);
-  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro]);
+  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro, camadas]);
 
   // ------------------------------------------------------------ o ponteiro
   const aoApertar = (e: React.PointerEvent<HTMLCanvasElement>) => {

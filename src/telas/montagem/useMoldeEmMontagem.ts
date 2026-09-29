@@ -61,6 +61,9 @@ import { completarGrupos, tamanhosDoMolde } from "../../motores/tamanhos";
 export type PecaEmMontagem = PecaDoMolde & { nos: NoDoRisco[]; marcacoes: Marcacoes };
 export type EstadoDaGravacao = "salvo" | "pendente" | "salvando" | "erro";
 
+/** Uma peça em todos os tamanhos: `porTamanho[t]` é o índice na lista de peças. */
+export interface GrupoDePecas { grupo: number; porTamanho: Record<string, number> }
+
 export interface MoldeEmMontagem {
   carregando: boolean;
   naoAchado: boolean;

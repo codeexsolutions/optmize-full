@@ -4,9 +4,12 @@
  * `useMoldeEmMontagem`; quem mexe na peça são as contas de
  * `motores/montagem.js`. Aqui só se liga uma coisa na outra.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icone } from "../../casca/Icone";
-import { useMoldeEmMontagem } from "./useMoldeEmMontagem";
+import { useMoldeEmMontagem, type PecaEmMontagem } from "./useMoldeEmMontagem";
+import { ChipsDeTamanho } from "./ChipsDeTamanho";
+import { aplicarNoGrupo, comunsDoGrupo, gruposDasPecas } from "../../motores/tamanhos";
+import type { GrupoDePecas } from "./useMoldeEmMontagem";
 import { EscolhaDoMolde } from "./EscolhaDoMolde";
 import { ListaDePecas } from "./ListaDePecas";
 import { Mesa, type Ferramenta } from "./Mesa";
@@ -24,20 +27,42 @@ const FERRAMENTAS: { qual: Ferramenta; rotulo: string; icone: string; dica: stri
 
 export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   const molde = useMoldeEmMontagem(id);
-  const [indice, setIndice] = useState(0);
+  // A peça mostrada é um GRUPO (a mesma peça em todos os tamanhos) num
+  // TAMANHO. Ver `motores/tamanhos.js`.
+  const [grupo, setGrupo] = useState(0);
+  const [tamanhoAtivo, setTamanhoAtivo] = useState("");
+  const [verTamanhos, setVerTamanhos] = useState(false);
   const [ferramenta, setFerramenta] = useState<Ferramenta>("nos");
   const [verTodas, setVerTodas] = useState(false);
   const [noAtivo, setNoAtivo] = useState<number | null>(null);
 
-  // Um só índice clampado, usado em TUDO (peça mostrada, `mudarEsta`, a Mesa e
-  // a Lista) — nunca `indice` cru fora daqui. Duas fontes da verdade (uma
-  // clampada só "para mostrar", outra crua "para mexer") foi exatamente o bug:
-  // a tela mostrava uma peça e a mexida ia para outra. Calculado ANTES dos
-  // hooks abaixo porque o efeito do `noAtivo` depende de `peca`.
-  const atual = Math.min(indice, Math.max(0, molde.pecas.length - 1));
+  const grupos = useMemo(() => gruposDasPecas(molde.pecas) as GrupoDePecas[], [molde.pecas]);
+  const tamanhoValido = molde.tamanhos.some((t) => t.nome === tamanhoAtivo)
+    ? tamanhoAtivo
+    : (molde.tamanhos.find((t) => t.base)?.nome ?? molde.tamanhos[0]?.nome ?? "");
+  const doGrupo = grupos.find((g) => g.grupo === grupo) ?? grupos[0];
+
+  // Um só índice (na lista plana de peças), usado em TUDO (peça mostrada,
+  // `mudarEsta`, a Mesa) — duas fontes da verdade (uma "para mostrar", outra
+  // "para mexer") foi exatamente o bug de antes: a tela mostrava uma peça e a
+  // mexida ia para outra. Se o grupo não tem o tamanho ativo, vale o primeiro
+  // tamanho que ele tem.
+  const atual = doGrupo ? (doGrupo.porTamanho[tamanhoValido] ?? Object.values(doGrupo.porTamanho)[0] ?? 0) : 0;
   const peca = molde.pecas[atual];
 
-  useEffect(() => { setNoAtivo(null); }, [indice, ferramenta]);
+  // As peças do tamanho da peça mostrada: é o que a Mesa desenha e o "ver todas" arranja.
+  const doTamanho = useMemo(
+    () => molde.pecas.map((p, i) => ({ p, i })).filter((x) => peca && x.p.tamanho === peca.tamanho),
+    [molde.pecas, peca],
+  );
+  const naMesa = Math.max(0, doTamanho.findIndex((x) => x.i === atual));
+  const camadas = useMemo(() => (verTamanhos && doGrupo && peca
+    ? Object.entries(doGrupo.porTamanho)
+      .filter(([t]) => t !== peca.tamanho)
+      .map(([t, i]) => ({ nos: molde.pecas[i]!.nos, cor: molde.tamanhos.find((x) => x.nome === t)?.cor ?? "#888888" }))
+    : []), [verTamanhos, doGrupo, peca, molde.pecas, molde.tamanhos]);
+
+  useEffect(() => { setNoAtivo(null); }, [atual, ferramenta]);
 
   // O `indice` pode ficar velho depois de um desfazer ou de apagar peça: a
   // pilha do desfazer não sabe de `indice`, e "apagar a peça 5" também não
@@ -46,8 +71,8 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   // mais, ou é outra peça — e a mexida se perde em silêncio (ver o bug
   // relatado: juntar, escolher a peça 4, desfazer até sobrar 3, editar).
   useEffect(() => {
-    setIndice((i) => Math.min(i, Math.max(0, molde.pecas.length - 1)));
-  }, [molde.pecas.length]);
+    if (grupos.length > 0 && !grupos.some((g) => g.grupo === grupo)) setGrupo(grupos[0]!.grupo);
+  }, [grupos, grupo]);
 
   // O nó marcado também pode ficar velho: um desfazer troca a lista de nós da
   // peça inteira (não só o índice), e um `noAtivo` que apontava para o nó 7
@@ -91,9 +116,26 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   const mudarEsta = (mudar: Parameters<typeof molde.mudarPeca>[1], lembrarAntes: boolean) =>
     molde.mudarPeca(atual, mudar, lembrarAntes);
 
+  /** Nome, papel, quantidade, espelhar e margem: o grupo inteiro, todos os tamanhos. */
+  const mudarGrupo = (mudar: (p: PecaEmMontagem) => PecaEmMontagem, lembrarAntes: boolean) => {
+    if (!peca) return;
+    molde.mudarPecas((antes) => {
+      const modelo = mudar(antes[atual]!);
+      return aplicarNoGrupo(antes, modelo.grupo, (p: PecaEmMontagem) => (p === antes[atual] ? modelo : comunsDoGrupo(modelo)(p)));
+    }, lembrarAntes);
+  };
+
+  /** Leva a tela a uma peça da lista plana (a que deu problema ao gravar). */
+  const irParaPeca = (i: number) => {
+    const p = molde.pecas[i];
+    if (!p) return;
+    setGrupo(p.grupo ?? 0);
+    setTamanhoAtivo(p.tamanho);
+  };
+
   return (
     <div className="flex h-full flex-col">
-      <BarraDaMontagem molde={molde} moldeId={id} aoTrocar={aoTrocar} aoIrParaPeca={setIndice} />
+      <BarraDaMontagem molde={molde} moldeId={id} aoTrocar={aoTrocar} aoIrParaPeca={irParaPeca} tamanhoAtivo={peca?.tamanho ?? tamanhoValido} />
       <div className="flex items-center gap-1 border-b border-linha px-3 py-1.5">
         {FERRAMENTAS.map((f) => (
           <button
@@ -114,23 +156,37 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
           {FERRAMENTAS.find((f) => f.qual === ferramenta)?.dica}. Roda do mouse aproxima.
         </span>
       </div>
+      {molde.tamanhos.length > 1 && (
+        <ChipsDeTamanho
+          tamanhos={molde.tamanhos}
+          ativo={peca?.tamanho ?? tamanhoValido}
+          aoEscolher={setTamanhoAtivo}
+          verTamanhos={verTamanhos}
+          aoVerTamanhos={setVerTamanhos}
+        />
+      )}
       <div className="flex min-h-0 flex-1">
-        <ListaDePecas molde={molde} moldeId={id} indice={atual} aoEscolher={setIndice} />
+        <ListaDePecas molde={molde} moldeId={id} grupo={doGrupo?.grupo ?? 0} aoEscolherGrupo={setGrupo} />
         <div className="min-w-0 flex-1">
           <Mesa
-            pecas={molde.pecas}
-            indice={atual}
+            pecas={doTamanho.map((x) => x.p)}
+            indice={naMesa}
+            camadas={camadas}
             ferramenta={ferramenta}
             verTodas={verTodas}
             noAtivo={noAtivo}
-            comErro={molde.problema?.peca ?? null}
+            comErro={(() => {
+              const i = molde.problema?.peca;
+              const k = i == null ? -1 : doTamanho.findIndex((x) => x.i === i);
+              return k < 0 ? null : k;
+            })()}
             aoMarcarNo={setNoAtivo}
-            aoEscolherPeca={(i) => { setIndice(i); setVerTodas(false); }}
+            aoEscolherPeca={(i) => { setGrupo(doTamanho[i]?.p.grupo ?? 0); setVerTodas(false); }}
             aoLembrar={molde.lembrar}
             aoMudar={mudarEsta}
           />
         </div>
-        {peca && <PainelDaPeca peca={peca} aoMudar={mudarEsta} />}
+        {peca && <PainelDaPeca peca={peca} aoMudar={mudarEsta} aoMudarGrupo={mudarGrupo} />}
       </div>
     </div>
   );
