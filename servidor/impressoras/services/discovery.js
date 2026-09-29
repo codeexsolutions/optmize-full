@@ -3,6 +3,7 @@ const net = require("net");
 const dnsPromises = require("dns").promises;
 const fs = require("fs/promises");
 const { execFile } = require("child_process");
+const { AsyncLocalStorage } = require("async_hooks");
 const iconv = require("iconv-lite");
 
 const SMB_PORT = 445;
@@ -63,10 +64,73 @@ async function statPath(target) {
 }
 
 async function isFile(target) { const s = await statPath(target); return !!(s && s.isFile); }
-async function isDir(target) { const s = await statPath(target); return !!(s && s.isDir); }
+async function isDir(target) {
+  const s = await statPath(target);
+  const existe = !!(s && s.isDir);
+  anotarPasta(target, existe ? "pasta" : "nada", existe ? null : "não existe");
+  return existe;
+}
 
 async function readDir(target) {
-  return withTimeout(fs.readdir(target, { withFileTypes: true }), FS_TIMEOUT_MS, []);
+  const itens = await withTimeout(fs.readdir(target, { withFileTypes: true }), FS_TIMEOUT_MS, []);
+  anotarPasta(target, "pasta", `${itens.length} item(ns)`);
+  // As subpastas listadas também entram: é o que faz a árvore mostrar TODO o
+  // caminho (Program Files → Corel → ...), e não só o que foi testado dentro.
+  for (const item of itens) {
+    if (item.isDirectory()) anotarPasta(sub(target, item.name), "pasta", null);
+  }
+  return itens;
+}
+
+/*
+ * O RASTRO DAS PASTAS — toda pasta que a varredura lê ou testa vira nó da
+ * árvore (ver "A TRILHA", abaixo).
+ *
+ * Em vez de cada detector anotar o que olhou, quem anota são as duas portas
+ * por onde TODA leitura de pasta passa: `isDir` e `readDir`. O contexto (qual
+ * nó é o pai, e a pasta que ele representa) viaja pelo AsyncLocalStorage, e
+ * por isso atravessa os `await` sem ser passado de função em função.
+ *
+ * O pai de cada pasta é a pasta de cima mais próxima que já apareceu — é o
+ * que monta a árvore como o `tree` do Windows: \\PC\Users → PC → Desktop →
+ * PrinterManager. Fora de um contexto (a bancada, os testes), nada é anotado.
+ */
+const rastro = new AsyncLocalStorage();
+const normal = caminho => String(caminho).replace(/\\+$/, "").toLowerCase();
+
+function comRastro(no, pai, base, fn) {
+  const chaveBase = normal(base);
+  return rastro.run({ no, pai, base: chaveBase, vistos: new Map([[chaveBase, pai]]), estados: new Map() }, fn);
+}
+
+function anotarPasta(caminho, estado, detalhe) {
+  const ctx = rastro.getStore();
+  if (!ctx) return;
+  const chave = normal(caminho);
+  if (chave === ctx.base) return; // a própria base é o nó do contexto
+  // Achado não é rebaixado por uma leitura posterior da mesma pasta, e uma
+  // pasta já lida (com "N itens") não perde o detalhe por aparecer de novo
+  // numa listagem.
+  const antes = ctx.estados.get(chave);
+  if (antes === "ok" && estado !== "ok") return;
+  if (antes === "pasta" && estado === "pasta" && !detalhe) return;
+
+  let paiId = ctx.pai;
+  let paiChave = ctx.base;
+  let acima = chave;
+  for (;;) {
+    const corte = acima.lastIndexOf("\\");
+    if (corte <= 1) break;
+    acima = acima.slice(0, corte);
+    if (ctx.vistos.has(acima)) { paiId = ctx.vistos.get(acima); paiChave = acima; break; }
+  }
+
+  const original = String(caminho).replace(/\\+$/, "");
+  const rotulo = chave.startsWith(paiChave + "\\") ? original.slice(paiChave.length + 1) : original;
+  const id = `${ctx.pai}|fs|${chave}`;
+  ctx.vistos.set(chave, id);
+  ctx.estados.set(chave, estado);
+  ctx.no(id, paiId, rotulo, estado, detalhe || null);
 }
 
 // -------------------------------------------------------------- alvos da rede
@@ -374,20 +438,56 @@ async function detectAtRoot(host, share, root, shares) {
     || await detectXml(host, share, root);
 }
 
-async function fingerprintHost(host, shares) {
+/*
+ * A TRILHA — cada passo da varredura como um nó de árvore.
+ *
+ * A tela de Impressoras mostra a varredura "em tree": o que foi olhado, onde,
+ * e o que saiu de cada lugar. Quem registra é a própria busca, pelo `no`
+ * (id, pai, rótulo, estado, detalhe); a rota junta os nós e a tela desenha. É
+ * só leitura do que já acontecia — nenhum passo novo, nenhuma espera a mais.
+ *
+ * `no` é opcional em tudo: quem chama sem ele (a bancada, os testes) segue
+ * igual.
+ */
+const semTrilha = () => {};
+
+async function fingerprintHost(host, shares, no = semTrilha, pai = null) {
+  // Cada compartilhamento é um nó, e as pastas lidas dentro dele penduram-se
+  // nele pelo rastro (ver "O RASTRO DAS PASTAS").
   for (const share of orderShares(shares)) {
-    for (const root of await candidateRoots(host, share)) {
-      const found = await detectAtRoot(host, share, root, shares);
-      if (found) return { ...found, root };
-    }
+    const idShare = `${pai}|${share}`;
+    no(idShare, pai, unc(host, share), "andando");
+    const achado = await comRastro(no, idShare, unc(host, share), async () => {
+      for (const root of await candidateRoots(host, share)) {
+        const found = await detectAtRoot(host, share, root, shares);
+        if (found) {
+          anotarPasta(root, "ok", TYPE_LABEL[found.type] || found.type);
+          return { ...found, root };
+        }
+      }
+      return null;
+    });
+    no(idShare, pai, unc(host, share), achado ? "ok" : "nada");
+    if (achado) return achado;
   }
 
   // Segunda passada, só se nada apareceu: o PrintExp mora fundo e achá-lo
   // custa vários readdir pela rede. Quem já é PrinterManager ou AT não paga.
   for (const share of orderShares(shares)) {
-    for (const root of await printExpRoots(unc(host, share))) {
-      const found = await detectPrintExp(host, share, root);
-      if (found) return { ...found, root };
+    const idShare = `${pai}|${share}`;
+    const achado = await comRastro(no, idShare, unc(host, share), async () => {
+      for (const root of await printExpRoots(unc(host, share))) {
+        const found = await detectPrintExp(host, share, root);
+        if (found) {
+          anotarPasta(root, "ok", TYPE_LABEL[found.type] || found.type);
+          return { ...found, root };
+        }
+      }
+      return null;
+    });
+    if (achado) {
+      no(idShare, pai, unc(host, share), "ok");
+      return achado;
     }
   }
   return null;
@@ -543,20 +643,43 @@ async function buscaFunda(raiz, { onProgress = () => {}, aborted = () => false }
   return achados;
 }
 
-async function fingerprintLocal({ funda = false, onProgress = () => {}, aborted = () => false } = {}) {
+async function fingerprintLocal({ funda = false, onProgress = () => {}, aborted = () => false, no = semTrilha, pai = null } = {}) {
   const drives = await localDrives();
 
+  // Cada disco é um nó, e toda pasta lida dentro dele se pendura nele pelo
+  // rastro (ver "O RASTRO DAS PASTAS").
   for (const drive of drives) {
-    for (const root of await localCandidateRoots(drive)) {
-      const found = await detectAtRoot(null, null, root, []);
-      if (found) return { ...found, root };
-    }
+    const idDisco = `${pai}|${drive}`;
+    no(idDisco, pai, drive, "andando");
+    const achado = await comRastro(no, idDisco, drive, async () => {
+      for (const root of await localCandidateRoots(drive)) {
+        const found = await detectAtRoot(null, null, root, []);
+        if (found) {
+          anotarPasta(root, "ok", TYPE_LABEL[found.type] || found.type);
+          return { ...found, root };
+        }
+      }
+      return null;
+    });
+    no(idDisco, pai, drive, achado ? "ok" : "nada");
+    if (achado) return achado;
   }
 
   for (const drive of drives) {
-    for (const root of await printExpRoots(drive)) {
-      const found = await detectPrintExp(null, null, root);
-      if (found) return { ...found, root };
+    const idDisco = `${pai}|${drive}`;
+    const achado = await comRastro(no, idDisco, drive, async () => {
+      for (const root of await printExpRoots(drive)) {
+        const found = await detectPrintExp(null, null, root);
+        if (found) {
+          anotarPasta(root, "ok", TYPE_LABEL[found.type] || found.type);
+          return { ...found, root };
+        }
+      }
+      return null;
+    });
+    if (achado) {
+      no(idDisco, pai, drive, "ok");
+      return achado;
     }
   }
 
@@ -565,14 +688,23 @@ async function fingerprintLocal({ funda = false, onProgress = () => {}, aborted 
   // Ver "A BUSCA FUNDA".
   if (funda) {
     for (const drive of drives) {
+      const idFunda = `${pai}|funda|${drive}`;
       onProgress({ message: `Procurando fundo em ${drive}...` });
-      const achados = await buscaFunda(drive, {
+      no(idFunda, pai, `Busca funda em ${drive}`, "andando");
+      let olhadas = 0;
+      const achados = await comRastro(no, idFunda, drive, () => buscaFunda(drive, {
         aborted,
-        onProgress: ({ visitadas }) => onProgress({
-          message: `Procurando fundo em ${drive} — ${visitadas} pasta(s) olhada(s)...`,
-        }),
-      });
-      if (achados.length) return achados[0];
+        onProgress: ({ visitadas }) => {
+          olhadas = visitadas;
+          onProgress({ message: `Procurando fundo em ${drive} — ${visitadas} pasta(s) olhada(s)...` });
+          no(idFunda, pai, `Busca funda em ${drive}`, "andando", `${visitadas} pasta(s) olhada(s)`);
+        },
+      }));
+      if (achados.length) {
+        no(idFunda, pai, `Busca funda em ${drive}`, "ok", `${olhadas} pasta(s) olhada(s)`);
+        return achados[0];
+      }
+      no(idFunda, pai, `Busca funda em ${drive}`, "nada", `${olhadas} pasta(s) olhada(s)`);
     }
   }
   return null;
@@ -613,18 +745,26 @@ function suggestIdentity(host, takenIds) {
 async function scanNetwork({ hosts = [], funda = false, onProgress = () => {}, signal } = {}) {
   const aborted = () => signal && signal.aborted;
   let reachable;
+  // Um nó da trilha (ver "A TRILHA", acima). Vai pelo mesmo `onProgress`.
+  const no = (id, pai, rotulo, estado = "andando", detalhe) =>
+    onProgress({ no: { id, pai, rotulo, estado, detalhe: detalhe || null } });
 
   // Esta máquina primeiro, e sem falar rede: é leitura de disco, custa
   // milissegundos, e é o único jeito de achar a impressora quando o Optmize
   // foi instalado no mesmo PC que roda o software dela.
   let local = null;
   onProgress({ phase: "starting", message: "Procurando neste computador..." });
+  const rotuloLocal = `Este computador (${os.hostname()})`;
+  no("local", null, rotuloLocal, "andando");
   try {
     const print = await fingerprintLocal({
       funda,
       aborted,
       onProgress: ({ message }) => onProgress({ phase: "starting", message }),
+      no,
+      pai: "local",
     });
+    no("local", null, rotuloLocal, print ? "ok" : "nada", print ? TYPE_LABEL[print.type] || print.type : "nenhuma impressora");
     if (print) {
       local = {
         host: os.hostname(),
@@ -637,12 +777,17 @@ async function scanNetwork({ hosts = [], funda = false, onProgress = () => {}, s
     }
   } catch (error) {
     onProgress({ phase: "starting", message: `Falha ao ler este computador: ${error.message}` });
+    no("local", null, rotuloLocal, "erro", error.message);
   }
 
   if (hosts.length) {
     onProgress({ phase: "hosts", message: `Testando ${hosts.length} host(s) informado(s)...`, scanned: 0, total: hosts.length });
+    no("rede", null, `Hosts informados (${hosts.length})`, "andando", `porta ${SMB_PORT}`);
     const checked = await mapLimit(hosts, PORT_CONCURRENCY, async target => {
-      if (!(await probePort(target))) return null;
+      if (!(await probePort(target))) {
+        no(`alvo:${target}`, "rede", target, "nada", `porta ${SMB_PORT} fechada`);
+        return null;
+      }
       // IP digitado vira apenas o IP: o nome do computador é resolvido depois,
       // porque é ele que entra nas rotas UNC e sobrevive a troca de IP.
       if (net.isIP(target)) return { ip: target };
@@ -650,8 +795,15 @@ async function scanNetwork({ hosts = [], funda = false, onProgress = () => {}, s
       return { host: target, ip: lookup ? lookup.address : null };
     });
     reachable = checked.filter(Boolean);
+    no("rede", null, `Hosts informados (${hosts.length})`, reachable.length ? "ok" : "nada", `${reachable.length} responderam`);
   } else {
     const targets = localTargets();
+    // A rede vira UM nó com a contagem: 254 filhos "sem resposta" afogariam
+    // os poucos que responderam, que são o que interessa.
+    // A varredura cobre um /24 por faixa (ver `localTargets`), e é isso que o rótulo diz.
+    const rotuloRede = `Rede local — ${faixasLocais().map(f => `${f.base}.0/24`).join(", ") || `${targets.length} endereços`}`;
+    let responderam = 0;
+    no("rede", null, rotuloRede, "andando", `0/${targets.length} testados na porta ${SMB_PORT}`);
     onProgress({ phase: "sweep", message: `Varrendo ${targets.length} endereços na rede local...`, scanned: 0, total: targets.length });
     // Antes de varrer, dizer o que a varredura NÃO vai cobrir. Vem aqui e não
     // no fim porque no fim a pessoa já leu "nada encontrado" e foi embora; e
@@ -668,11 +820,20 @@ async function scanNetwork({ hosts = [], funda = false, onProgress = () => {}, s
       if (aborted()) return null;
       const ok = await probePort(ip);
       scanned++;
-      if (scanned % 25 === 0) onProgress({ phase: "sweep", scanned, total: targets.length });
+      if (ok) {
+        responderam++;
+        no(`alvo:${ip}`, "rede", ip, "andando", `porta ${SMB_PORT} aberta`);
+      }
+      if (scanned % 25 === 0) {
+        onProgress({ phase: "sweep", scanned, total: targets.length });
+        no("rede", null, rotuloRede, "andando", `${scanned}/${targets.length} testados · ${responderam} responderam`);
+      }
       return ok ? { ip } : null;
     });
     onProgress({ phase: "sweep", scanned: targets.length, total: targets.length });
     reachable = checked.filter(Boolean);
+    no("rede", null, rotuloRede, reachable.length ? "ok" : "nada",
+      `${targets.length} testados · ${reachable.length} responderam`);
   }
 
   onProgress({
@@ -687,11 +848,16 @@ async function scanNetwork({ hosts = [], funda = false, onProgress = () => {}, s
     if (aborted()) return null;
     const host = entry.host || (await resolveHostName(entry.ip)) || entry.ip;
     const ip = entry.ip || null;
+    const idAlvo = `alvo:${entry.ip || entry.host}`;
+    const rotuloAlvo = ip && host !== ip ? `${ip} — ${host}` : host;
+    no(idAlvo, "rede", rotuloAlvo, "andando", "lendo os compartilhamentos");
     let candidate = null;
     try {
       const shares = await listShares(host);
+      no(`${idAlvo}|compartilhamentos`, idAlvo, "Compartilhamentos", shares.length ? "info" : "nada",
+        shares.length ? shares.join(", ") : "nenhum visível");
       if (shares.length) {
-        const print = await fingerprintHost(host, shares);
+        const print = await fingerprintHost(host, shares, no, idAlvo);
         if (print) {
           candidate = {
             host,
@@ -705,7 +871,10 @@ async function scanNetwork({ hosts = [], funda = false, onProgress = () => {}, s
     } catch (error) {
       candidate = null;
       onProgress({ phase: "identify", message: `Falha ao ler ${host}: ${error.message}` });
+      no(idAlvo, "rede", rotuloAlvo, "erro", error.message);
     }
+    if (candidate) no(idAlvo, "rede", rotuloAlvo, "ok", candidate.typeLabel);
+    else no(idAlvo, "rede", rotuloAlvo, "nada", "nenhuma impressora reconhecida");
     identified++;
     onProgress({
       phase: "identify",

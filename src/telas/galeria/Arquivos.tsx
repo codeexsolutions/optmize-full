@@ -30,6 +30,7 @@ import {
   galeriaApi, type ArquivoDaGaleria, type ComOnde, type ConteudoDaPasta, type PastaDaGaleria,
 } from "../../api/galeria";
 import { FundoDaGaleria, LateralDaGaleria, tamanhoLegivel, type NavegacaoDaGaleria } from "./Casca";
+import { Carrossel } from "./Carrossel";
 
 /** O tipo que marca um arraste de dentro da própria tela (e não do Windows). */
 const ARRASTE_INTERNO = "application/x-optmize-galeria";
@@ -113,6 +114,19 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
 
   // Só na chegada: depois, quem relê é cada ação, com a pasta que ela mexeu.
   useEffect(() => { void recarregar(null); }, []);
+
+  /*
+   * AS IMAGENS DO CARROSSEL NA RAIZ: as últimas de todas as pastas. Relidas a
+   * cada mudança do conteúdo — enviar, mover ou apagar passa por `conteudo` —
+   * para uma foto recém-guardada já entrar na roda.
+   */
+  const [imagensDaRaiz, setImagensDaRaiz] = useState<ComOnde<ArquivoDaGaleria>[]>([]);
+  useEffect(() => {
+    if (aberta !== null) return;
+    let valendo = true;
+    galeriaApi.imagens(20).then((r) => { if (valendo) setImagensDaRaiz(r.imagens); }).catch(() => {});
+    return () => { valendo = false; };
+  }, [aberta, conteudo]);
 
   // A busca procura em tudo, com uma folga de digitação para não pedir a
   // cada letra.
@@ -370,6 +384,13 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
   const nomeDaAberta = conteudo?.caminho.at(-1)?.nome ?? "Galeria";
   const bytesNaPasta = (conteudo?.arquivos || []).reduce((s, a) => s + a.bytes, 0);
   const recentes = aberta === null && !buscando ? (resumo?.recentes || []) : [];
+  /* O carrossel: na raiz, as últimas imagens de todas as pastas; numa pasta,
+     as imagens dela. Durante a busca, nenhum — a tela é dos achados. */
+  const imagensDoCarrossel = buscando
+    ? []
+    : aberta === null
+      ? imagensDaRaiz
+      : (conteudo?.arquivos || []).filter((a) => comoMostrar(a) === "imagem");
 
   const acoesDaPasta = (pasta: { id: number; nome: string }) => (
     <>
@@ -566,6 +587,14 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
             />
           ) : (
             <>
+              {imagensDoCarrossel.length > 0 && (
+                <Carrossel
+                  key={aberta ?? "raiz"}
+                  imagens={imagensDoCarrossel}
+                  aoAbrir={(imagem) => abrirArquivo(imagem)}
+                />
+              )}
+
               {recentes.length > 0 && (
                 <Secao rotulo="Acesso rápido" icone="icones.svg#clock">
                   <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pt-1 pb-3">

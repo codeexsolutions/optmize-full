@@ -28,6 +28,9 @@ const db = require("./db");
  * porque `.mjs` vem antes de `.js` na lista dele.
  */
 const rede = require("../src/motores/encaixeRede.mjs");
+// A memória de TODAS as lojas (ver o cabeçalho de lá). Ela soma, nunca manda:
+// sem internet, tudo aqui segue igual ao que era.
+const coletivo = require("./encaixe-coletivo");
 
 const router = express.Router();
 
@@ -211,8 +214,37 @@ function talvezRetreinar() {
  * os encaixes. A camada geral é o que evita começar no zero quando um formato
  * de peça aparece pela primeira vez.
  */
-router.get("/memoria", (req, res) => {
+/*
+ * O PESO DA MEMÓRIA COLETIVA NO PLACAR.
+ *
+ * O placar é lido por PROPORÇÃO (vitórias ÷ usos, em encaixeMotor.js), então
+ * o que importa é quanto cada fonte pesa na soma. Somado cru, o coletivo —
+ * milhares de encaixes de todas as lojas — afogaria o que esta loja aprendeu
+ * sozinha com os trabalhos DELA. Então ele entra escalado: cada receita pesa
+ * no máximo `TETO_*` usos, com a proporção dela preservada. Quanto mais a loja
+ * encaixa um tipo de trabalho, mais a voz dela vence a do coletivo ali.
+ */
+const TETO_COLETIVO_DO_TIPO = 30;
+const TETO_COLETIVO_GERAL = 10;
+
+function somarEscalado(memoria, receitas, teto, pesoVitoria = 1) {
+  const maior = receitas.reduce((m, r) => Math.max(m, Number(r.usos) || 0), 0);
+  if (!(maior > 0)) return;
+  const fator = Math.min(1, teto / maior);
+  receitas.forEach((r) => {
+    const usos = (Number(r.usos) || 0) * fator;
+    const vitorias = (Number(r.vitorias) || 0) * fator * pesoVitoria;
+    if (!(usos > 0)) return;
+    const antes = memoria[r.receita] || { usos: 0, vitorias: 0 };
+    memoria[r.receita] = { usos: antes.usos + usos, vitorias: antes.vitorias + vitorias };
+  });
+}
+
+router.get("/memoria", async (req, res) => {
   const assinatura = String(req.query.assinatura || "");
+  // O placar de todas as lojas para este tipo, com teto curto de espera (ver
+  // `placarDe`): pedido antes do resto para correr junto das leituras locais.
+  const doColetivo = coletivo.placarDe(assinatura).catch(() => null);
 
   const doTipo = db.prepare(
     "SELECT receita, usos, vitorias FROM encaixe_receitas WHERE assinatura = ?").all(assinatura);
@@ -233,6 +265,14 @@ router.get("/memoria", (req, res) => {
     };
   });
 
+  // O que as outras lojas aprenderam: o geral, como o geral daqui (a vitória
+  // pesa 0,4), e o do tipo, com o teto de `TETO_COLETIVO_DO_TIPO`.
+  somarEscalado(memoria, coletivo.placarGeral(), TETO_COLETIVO_GERAL, 0.4);
+  const placarColetivo = await doColetivo;
+  if (placarColetivo && Array.isArray(placarColetivo.receitas)) {
+    somarEscalado(memoria, placarColetivo.receitas, TETO_COLETIVO_DO_TIPO);
+  }
+
   const encaixesDoTipo = db.prepare(
     "SELECT COUNT(*) AS total FROM encaixe_historico WHERE assinatura = ?").get(assinatura).total;
   const encaixesNoTotal = db.prepare("SELECT COUNT(*) AS total FROM encaixe_historico").get().total;
@@ -250,16 +290,45 @@ router.get("/memoria", (req, res) => {
      WHERE features IS NOT NULL AND placar IS NOT NULL AND features_versao = ?`
   ).get(rede.REDE_VERSAO_FEATURES).n;
 
+  /*
+   * QUAL REDE A BUSCA USA: a global, quando ela serve para o vocabulário de
+   * hoje e já viu MAIS exemplos que a desta loja — ela aprendeu com todas,
+   * inclusive com os encaixes daqui que já foram mandados. Senão, a local.
+   * A maturidade vem de quem foi escolhida: a global com os números dela.
+   */
+  const global = coletivo.redeGlobal();
+  const globalServe = global && redeServeAinda(JSON.stringify(global.rede))
+    && (!redeUtil || global.exemplos >= redeUtil.exemplos);
+
+  const escolhida = globalServe
+    ? {
+        rede: global.rede,
+        exemplos: global.exemplos,
+        formatos: global.formatos,
+        madura: Boolean(global.madura),
+        origem: "coletiva",
+      }
+    : {
+        rede: redeUtil ? JSON.parse(redeUtil.pesos) : null,
+        exemplos: redeUtil ? redeUtil.exemplos : 0,
+        formatos: diversidadeDeFormatos,
+        madura: redeUtil
+          ? (redeUtil.exemplos >= REDE_LIMIAR_MADUREZA && diversidadeDeFormatos >= REDE_LIMIAR_DIVERSIDADE)
+          : false,
+        origem: redeUtil ? "local" : null,
+      };
+
   res.json({
     memoria, encaixesDoTipo, encaixesNoTotal, melhorAntes,
     // `rede` já vem como o objeto pronto (não a string), para a tela só
     // repassar para o motor sem ter que saber o formato interno dela.
-    rede: redeUtil ? JSON.parse(redeUtil.pesos) : null,
-    redeExemplos: redeUtil ? redeUtil.exemplos : 0,
-    redeFormatosDistintos: diversidadeDeFormatos,
-    redeMadura: redeUtil
-      ? (redeUtil.exemplos >= REDE_LIMIAR_MADUREZA && diversidadeDeFormatos >= REDE_LIMIAR_DIVERSIDADE)
-      : false,
+    rede: escolhida.rede,
+    redeExemplos: escolhida.exemplos,
+    redeFormatosDistintos: escolhida.formatos,
+    redeMadura: escolhida.madura,
+    redeOrigem: escolhida.origem,
+    // Quantos encaixes de outras lojas já ensinaram este tipo de trabalho.
+    coletivoDoTipo: placarColetivo ? placarColetivo.encaixes : 0,
   });
 });
 
@@ -315,6 +384,9 @@ router.post("/memoria", (req, res) => {
   // memória (ver a nota no topo do arquivo): um treino que falhasse não pode
   // derrubar o registro do encaixe que já foi salvo.
   try { talvezRetreinar(); } catch (erro) { console.warn("[encaixe] retreino da rede falhou:", erro); }
+  // O encaixe novo entra na fila da memória coletiva; a ida junta os
+  // seguidos num envio só (ver `agendar`).
+  coletivo.agendar();
 
   const encaixesDoTipo = db.prepare(
     "SELECT COUNT(*) AS total FROM encaixe_historico WHERE assinatura = ?").get(assinatura).total;

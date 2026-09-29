@@ -129,6 +129,21 @@ export interface AchadoDaVarredura {
   importing?: boolean;
 }
 
+/**
+ * Um passo da varredura, como nó de árvore (ver "A TRILHA", em
+ * servidor/impressoras/services/discovery.js). `pai` nulo = raiz: este
+ * computador, a rede, o histórico.
+ */
+export interface NoDaVarredura {
+  id: string;
+  pai: string | null;
+  rotulo: string;
+  /** `pasta`: uma pasta lida ou listada no caminho; `nada`: testada e não existe. */
+  estado: "andando" | "ok" | "nada" | "erro" | "info" | "pasta";
+  detalhe: string | null;
+  t?: number;
+}
+
 export interface EstadoDaVarredura {
   running: boolean;
   startedAt: number | null;
@@ -144,6 +159,8 @@ export interface EstadoDaVarredura {
      Separado do `message` porque aquele é reescrito a cada passo e este tem de
      durar até o fim, quando a pessoa lê o resultado. */
   avisos?: string[];
+  /** Cada passo, na ordem em que apareceu. Ausente em servidor antigo. */
+  arvore?: NoDaVarredura[];
 }
 
 /** Uma impressão acontecendo agora. */

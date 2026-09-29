@@ -225,9 +225,9 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 </canvas>
 </div>
 
-<div className="mesa-dica pointer-events-none absolute inset-0 hidden place-items-center p-6">
+<div id="encaixe-mesa-dica" role="button" tabIndex={0} aria-label="Escolher os arquivos do encaixe" title="Clique para escolher os arquivos" className="mesa-dica absolute inset-0 hidden cursor-pointer place-items-center p-6 outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--accent-line)]">
 
-<div className="max-w-sm rounded-2xl border border-linha bg-painel-suave/90 p-6 text-center backdrop-blur-sm">
+<div className="max-w-sm rounded-2xl border border-linha bg-painel-suave/90 p-6 text-center backdrop-blur-sm transition-colors hover:border-[var(--accent-line)]">
 
 <span className="mesa-vazia-selo mx-auto grid size-12 place-items-center rounded-xl border border-linha text-tinta-apagada">
 
@@ -241,6 +241,10 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <p className="mt-3 mb-0 font-titulo text-base font-semibold text-tinta">
 {"Arraste seus arquivos aqui"}
+</p>
+
+<p className="mt-1 mb-0 text-[0.8rem] font-semibold text-ambar">
+{"ou clique para escolher"}
 </p>
 
 <p className="mt-1 mb-0 text-[0.8rem] leading-relaxed text-tinta-fraca">
@@ -775,7 +779,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 <div className="complemento-grupo">
 <span className="campo-rotulo">{"Até onde"}</span>
 <div className="complemento-opcoes complemento-opcoes-coluna">
-<label className="complemento-opcao"><input type="radio" name="complemento-modo" value="vaos" defaultChecked={true} /><span>{"Só os espaços vazios — a metragem não muda"}</span></label>
+<label className="complemento-opcao"><input type="radio" name="complemento-modo" value="vaos" defaultChecked={true} /><span>{"Pelos espaços vazios — sugere o que cabe sem aumentar a metragem"}</span></label>
 <label className="complemento-opcao"><input type="radio" name="complemento-modo" value="ate" /><span>{"Completar até"}</span>
 <span className="campo-caixa complemento-meta"><input type="number" id="complemento-meta" min="0.1" step="0.1" /><span className="campo-unidade">{"m"}</span></span>
 </label>

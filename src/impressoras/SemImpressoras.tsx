@@ -46,13 +46,14 @@ import { Icone } from "../casca/Icone";
 import { useSemCabecalho } from "../casca/semCabecalho";
 import { ImpressoraProcurando } from "./Procura";
 import { useVarredura } from "./varredura";
+import { ArvoreDaVarredura } from "./ArvoreDaVarredura";
 
 /**
  * Quanto tempo a notícia "achei duas impressoras" fica na tela antes de a
  * porta dar lugar à tela de Máquinas. Curto o bastante para não parecer
  * travado, longo o bastante para ser lido.
  */
-const ESPERA_ANTES_DE_ABRIR = 1400;
+const ESPERA_ANTES_DE_ABRIR = 1800;
 
 export function SemImpressoras() {
   useSemCabecalho(true);
@@ -66,11 +67,20 @@ export function SemImpressoras() {
   /* `procureiAqui` é o que separa a varredura desta visita da que já estava
      guardada no servidor. Ver o cabeçalho. */
   const [procureiAqui, setProcureiAqui] = useState(false);
-  const achou = procureiAqui && !rodando && fase === "done" && achadas > 0;
+  /** Cada clique é uma rodada nova: a árvore recomeça a se revelar do zero. */
+  const [rodada, setRodada] = useState(0);
+  /* A árvore se revela no ritmo de uma varredura (ver ArvoreDaVarredura). A
+     troca para Máquinas espera ela terminar: sair no meio cortaria a procura
+     que a pessoa está olhando. */
+  const [arvoreMostrada, setArvoreMostrada] = useState(false);
+  const aoTerminarDeRevelar = useCallback(() => setArvoreMostrada(true), []);
+  const achou = procureiAqui && !rodando && fase === "done" && achadas > 0 && arvoreMostrada;
   const terminouVazio = procureiAqui && fase === "done" && achadas === 0;
 
   const comecar = useCallback(() => {
     setProcureiAqui(true);
+    setArvoreMostrada(false);
+    setRodada((r) => r + 1);
     procurar();
   }, [procurar]);
 
@@ -99,9 +109,29 @@ export function SemImpressoras() {
     return () => window.clearTimeout(relogio);
   }, [achou, navegar]);
 
+  /*
+   * A VARREDURA EM ÁRVORE, embaixo da impressora imprimindo: enquanto ela
+   * trabalha, dá para ver onde a procura está olhando — este computador, cada
+   * IP que respondeu, os compartilhamentos e as pastas. Só a desta visita
+   * (`procureiAqui`): a guardada no servidor é de outra hora.
+   */
+  const mostrarArvore = procureiAqui;
+
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-10">
-      <div className="flex w-full max-w-[460px] flex-col items-center text-center">
+    <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 py-10">
+      {/*
+        Com a árvore, DUAS COLUNAS: a impressora imprimindo de um lado e, do
+        outro, cada pasta que a procura percorre. Em tela estreita, uma embaixo
+        da outra. O `my-auto` centraliza enquanto cabe e deixa rolar quando
+        não cabe — `justify-center` cortaria o topo.
+      */}
+      <div
+        className={[
+          "my-auto flex w-full items-center justify-center gap-10",
+          mostrarArvore ? "max-w-[1180px] flex-col lg:flex-row" : "max-w-[460px] flex-col",
+        ].join(" ")}
+      >
+      <div className={`flex w-full shrink-0 flex-col items-center text-center ${mostrarArvore ? "max-w-[380px]" : "max-w-[460px]"}`}>
         {/*
           O BOTÃO GIGANTE. A impressora mora dentro dele, e é ele a tela
           inteira: um <button> de verdade, então Tab chega nele, Enter e Espaço
@@ -160,6 +190,17 @@ export function SemImpressoras() {
             {falha || estado?.error}
           </p>
         )}
+      </div>
+
+      {mostrarArvore && (
+        <ArvoreDaVarredura
+          key={rodada}
+          estado={estado}
+          revelar
+          aoTerminarDeRevelar={aoTerminarDeRevelar}
+          className="w-full min-w-0 max-w-[720px] flex-1 text-left animar-entrada"
+        />
+      )}
       </div>
     </div>
   );

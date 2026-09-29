@@ -78,6 +78,7 @@ const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m
 const Whatsapp = lazy(() => import("./telas/Whatsapp").then((m) => ({ default: m.Whatsapp })));
 const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default: m.Historico })));
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
+const Retrabalho = lazy(() => import("./telas/Retrabalho").then((m) => ({ default: m.Retrabalho })));
 const Ponto = lazy(() => import("./telas/Ponto").then((m) => ({ default: m.Ponto })));
 const Funcionarios = lazy(() => import("./telas/Funcionarios").then((m) => ({ default: m.Funcionarios })));
 const Sobre = lazy(() => import("./telas/Sobre").then((m) => ({ default: m.Sobre })));
@@ -87,7 +88,7 @@ const Painel = lazy(() => import("./telas/Painel").then((m) => ({ default: m.Pai
 export type NomeDeTela =
   | "moldes" | "projetos" | "encaixe" | "digitalizar" | "montagem" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
-  | "historico" | "reposicao" | "ponto" | "funcionarios"
+  | "reposicao" | "historico" | "retrabalho" | "ponto" | "funcionarios"
   // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
   // programa falando de si mesmo e da conta, não trabalho de produção.
   | "sobre" | "conta"
@@ -235,6 +236,21 @@ export const TELAS: readonly Tela[] = [
     Componente: Projetos,
   },
   {
+    /*
+     * A REPOSIÇÃO: todo encaixe exportado fica guardado aqui, peça por peça,
+     * e as que saírem erradas voltam ao Encaixe com a medida de antes. Ao
+     * lado da Galeria porque as duas guardam trabalho pronto — a Galeria o
+     * que se repete, a Reposição o que se refaz.
+     */
+    nome: "reposicao",
+    grupo: "producao",
+    rotulo: "Reposição",
+    apoioMenu: "Refazer peças de um trabalho",
+    apoioTopo: "Cada encaixe exportado fica guardado aqui: escolha as peças que precisam sair de novo e mande ao Encaixe.",
+    icone: "icones.svg#rotate-ccw",
+    Componente: Reposicao,
+  },
+  {
     nome: "encaixe",
     grupo: "producao",
     rotulo: "Encaixe",
@@ -348,15 +364,17 @@ export const TELAS: readonly Tela[] = [
     Componente: Funcionarios,
   },
   {
-    nome: "reposicao",
+    // Era "reposicao" até 2026-09-29: o nome foi para a aba nova, que guarda
+    // cada trabalho exportado para refazer peças (ver `Reposicao.tsx`).
+    nome: "retrabalho",
     grupo: "relatorios",
     foraDoMenu: true,
-    rotulo: "Reposição",
+    rotulo: "Retrabalho",
     apoioMenu: "Quanto foi refeito",
     apoioTopo: "Acompanhe semana a semana quanto tecido foi gasto refazendo trabalho.",
     icone: "icones.svg#rotate-ccw",
     escopo: "relatorios",
-    Componente: Reposicao,
+    Componente: Retrabalho,
   },
 
   /*
