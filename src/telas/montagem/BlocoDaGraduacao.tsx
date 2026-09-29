@@ -26,6 +26,8 @@ interface Props {
   /** O nó clicado na mesa (a regra aberta). */
   noDaRegra: number | null;
   aoMudarGraduacao: (mudar: (g: Graduacao) => Graduacao, lembrarAntes: boolean) => void;
+  /** Gerar os tamanhos desta peça, ou de todas as peças com graduação. */
+  aoGerar: (todas: boolean) => void;
 }
 
 /** `valor` null: o ponto ainda não tem regra — o campo fica vazio, e qualquer número digitado, 0 inclusive, põe a regra. */
@@ -48,8 +50,9 @@ function CampoDeMedida({ valor, rotulo, aoMudar }: { valor: number | null; rotul
   );
 }
 
-export function BlocoDaGraduacao({ base, baseDaGrade, grade, noDaRegra, aoMudarGraduacao }: Props) {
+export function BlocoDaGraduacao({ base, baseDaGrade, grade, noDaRegra, aoMudarGraduacao, aoGerar }: Props) {
   const dialogo = useDialogo();
+  const [todas, setTodas] = useState(false);
 
   if (!base) {
     return (
@@ -177,6 +180,14 @@ export function BlocoDaGraduacao({ base, baseDaGrade, grade, noDaRegra, aoMudarG
           )}
         </ul>
       )}
+
+      <div className="mt-auto flex flex-col gap-1.5 border-t border-linha pt-2">
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={todas} onChange={(e) => setTodas(e.target.checked)} />
+          todas as peças com graduação
+        </label>
+        <button type="button" className="btn primary btn-sm" onClick={() => aoGerar(todas)}>Gerar tamanhos</button>
+      </div>
     </aside>
   );
 }

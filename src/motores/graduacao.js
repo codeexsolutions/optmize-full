@@ -355,6 +355,8 @@ export function avisosDaGraduacao(base, grade) {
  * O que gerar: cada grupo com graduação (ou só o `grupo` pedido), cada
  * tamanho da grade menos o base. Sem desenho: criar. Gerado pela graduação:
  * refazer. Com desenho próprio (Audaces, "juntar", ajustado à mão): perguntar.
+ *
+ * @param {number | null} [grupo]
  */
 export function planejarGeracao(pecas, grade, grupo = null) {
   const alvos = [];

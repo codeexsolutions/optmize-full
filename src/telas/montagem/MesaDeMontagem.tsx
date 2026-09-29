@@ -9,7 +9,12 @@ import { Icone } from "../../casca/Icone";
 import { useMoldeEmMontagem, type PecaEmMontagem } from "./useMoldeEmMontagem";
 import { ChipsDeTamanho } from "./ChipsDeTamanho";
 import { JanelaDaGrade } from "./JanelaDaGrade";
-import { alinhamentoDaCamada, gerarTamanho, graduacaoVazia, transladarNos } from "../../motores/graduacao";
+import {
+  ORIGEM_AJUSTADA, ORIGEM_GERADA, alinhamentoDaCamada, aplicarGeracao, gerarTamanho, graduacaoVazia, planejarGeracao, transladarNos,
+} from "../../motores/graduacao";
+import { pecaParaGravar } from "../../motores/montagem";
+import { useDialogo } from "../../casca/Dialogo";
+import { JanelaDeSubstituir } from "./JanelaDeSubstituir";
 import type { Graduacao } from "../../api/moldes";
 import { BlocoDaGraduacao } from "./BlocoDaGraduacao";
 import { aplicarNoGrupo, comunsDoGrupo, gruposDasPecas } from "../../motores/tamanhos";
@@ -30,6 +35,11 @@ const FERRAMENTAS: { qual: Ferramenta; rotulo: string; icone: string; dica: stri
   { qual: "graduar", rotulo: "Graduar", icone: "icones.svg#ruler", dica: "Clique num nó para ver ou pôr a regra de graduação; os outros tamanhos aparecem tracejados" },
 ];
 
+type AlvoDeGeracao = {
+  grupo: number; tamanho: string; iBase: number; iExistente: number;
+  acao: "criar" | "refazer" | "perguntar"; origem: string | null; nome: string;
+};
+
 export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   const molde = useMoldeEmMontagem(id);
   // A peça mostrada é um GRUPO (a mesma peça em todos os tamanhos) num
@@ -38,6 +48,8 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   const [tamanhoAtivo, setTamanhoAtivo] = useState("");
   const [verTamanhos, setVerTamanhos] = useState(false);
   const [gradeAberta, setGradeAberta] = useState(false);
+  const dialogo = useDialogo();
+  const [perguntando, setPerguntando] = useState<AlvoDeGeracao[] | null>(null);
   const [ferramenta, setFerramenta] = useState<Ferramenta>("nos");
   const [verTodas, setVerTodas] = useState(false);
   const [noAtivo, setNoAtivo] = useState<number | null>(null);
@@ -163,13 +175,49 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
     );
   }
 
+  // Mexer à mão num tamanho gerado tira dele a marca da graduação: gerar de
+  // novo passa a perguntar antes de perder o ajuste.
   const mudarEsta = (mudar: Parameters<typeof molde.mudarPeca>[1], lembrarAntes: boolean) =>
-    molde.mudarPeca(atual, mudar, lembrarAntes);
+    molde.mudarPeca(atual, (p) => {
+      const q = mudar(p);
+      return p.origem === ORIGEM_GERADA ? { ...q, origem: ORIGEM_AJUSTADA } : q;
+    }, lembrarAntes);
 
   /** Mexe na graduação da peça (na linha do base). */
   const mudarGraduacao = (mudar: (g: Graduacao) => Graduacao, lembrarAntes: boolean) => {
     if (iDaBase === undefined) return;
     molde.mudarPeca(iDaBase, (p) => ({ ...p, graduacao: mudar(p.graduacao ?? (graduacaoVazia() as Graduacao)) }), lembrarAntes);
+  };
+
+  const chaveDoAlvo = (a: { grupo: number; tamanho: string }) => `${a.grupo}/${a.tamanho}`;
+
+  /** Aplica a geração: um passo só no desfazer, e a mensagem diz o que entrou e o que ficou de fora. */
+  const aplicarAlvos = (alvos: AlvoDeGeracao[]) => {
+    const r = aplicarGeracao(molde.pecas, molde.tamanhos, alvos, pecaParaGravar);
+    if (r.gerados.length > 0) molde.mudarPecas(() => r.pecas, true);
+    const linhas: string[] = [];
+    if (r.gerados.length > 0) linhas.push(`Gerados: ${r.gerados.map((a: AlvoDeGeracao) => `${a.nome} ${a.tamanho}`).join(", ")}.`);
+    for (const n of r.naoGerados as (AlvoDeGeracao & { motivo: string })[]) {
+      linhas.push(`Não gerei o ${n.tamanho} de ${n.nome}: ${n.motivo}.`);
+    }
+    linhas.push(...(r.avisos as string[]));
+    void dialogo.avisar(linhas.join(" ") || "Nada foi gerado.");
+  };
+
+  const gerar = (todas: boolean) => {
+    if (!todas && !pecaDaBase?.graduacao) {
+      void dialogo.avisar("Esta peça ainda não tem graduação: marque pontos ou uma porcentagem.");
+      return;
+    }
+    const alvos: AlvoDeGeracao[] = planejarGeracao(molde.pecas, molde.tamanhos, todas ? null : (pecaDaBase!.grupo ?? -1));
+    if (alvos.length === 0) {
+      void dialogo.avisar(molde.tamanhos.length < 2
+        ? "A grade só tem um tamanho: acrescente tamanhos na Grade antes de gerar."
+        : "Nenhuma peça com graduação para gerar.");
+      return;
+    }
+    if (alvos.some((a) => a.acao === "perguntar")) { setPerguntando(alvos); return; }
+    aplicarAlvos(alvos);
   };
 
   /** Nome, papel, quantidade, espelhar e margem: o grupo inteiro, todos os tamanhos. */
@@ -222,6 +270,23 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
         aoAbrirGrade={() => setGradeAberta(true)}
       />
       {gradeAberta && <JanelaDaGrade molde={molde} aoFechar={() => setGradeAberta(false)} />}
+      {perguntando && (
+        <JanelaDeSubstituir
+          alvos={perguntando.filter((a) => a.acao === "perguntar")
+            .map((a) => ({ chave: chaveDoAlvo(a), nome: a.nome, tamanho: a.tamanho, origem: a.origem }))}
+          aoCancelar={() => setPerguntando(null)}
+          aoConfirmar={(escolhidos) => {
+            // Planeja de novo: com a janela aberta, um Ctrl+Z pode ter mudado a
+            // lista de peças (desfeito um "Tirar" da Grade, por exemplo), e os
+            // índices do plano de antes apontariam para OUTRA peça. Do plano
+            // novo, só os alvos que a pessoa pediu — e, dos perguntados, os marcados.
+            const pedidos = new Set(perguntando.map(chaveDoAlvo));
+            setPerguntando(null);
+            const agora: AlvoDeGeracao[] = planejarGeracao(molde.pecas, molde.tamanhos, null);
+            aplicarAlvos(agora.filter((a) => pedidos.has(chaveDoAlvo(a)) && (a.acao !== "perguntar" || escolhidos.has(chaveDoAlvo(a)))));
+          }}
+        />
+      )}
       <div className="flex min-h-0 flex-1">
         <ListaDePecas molde={molde} moldeId={id} grupo={doGrupo?.grupo ?? 0} aoEscolherGrupo={setGrupo} />
         <div className="min-w-0 flex-1">
@@ -254,7 +319,7 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
         </div>
         {ferramenta === "graduar" ? (
           <BlocoDaGraduacao base={pecaDaBase} baseDaGrade={baseDaGrade} grade={molde.tamanhos}
-            noDaRegra={noAtivo} aoMudarGraduacao={mudarGraduacao} />
+            noDaRegra={noAtivo} aoMudarGraduacao={mudarGraduacao} aoGerar={gerar} />
         ) : (
           peca && !semDesenho && <PainelDaPeca peca={peca} aoMudar={mudarEsta} aoMudarGrupo={mudarGrupo} />
         )}
