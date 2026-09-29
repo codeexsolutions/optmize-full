@@ -291,8 +291,8 @@ reduzir com o controle, Ctrl+Z e F5 (o tipo do nó volta igual).
   duas tangentes, que hoje é interno), `src/motores/montagem.js` (piques e regras
   nas ações de grupo; girar), `src/telas/risco/desenhoDeNos.ts` (seleção, alças
   dos selecionados, retângulo), `src/telas/Digitalizar.tsx`,
-  `src/telas/montagem/Mesa.tsx`, `src/telas/montagem/MesaDeMontagem.tsx`,
-  `src/telas/montagem/PainelDaPeca.tsx` (girar), `servidor/moldes-pecas.js`
+  `src/telas/montagem/Mesa.tsx`, `src/telas/montagem/MesaDeMontagem.tsx` (o girar vai na barra dos nós,
+  ver §9), `servidor/moldes-pecas.js`
   (`simetrico`), `src/api/moldes.ts` (o tipo do nó),
   `.github/workflows/conferir.yml` (`bancada:nos` no CI).
 - **Novo**: `src/telas/risco/BarraDosNos.tsx`.
