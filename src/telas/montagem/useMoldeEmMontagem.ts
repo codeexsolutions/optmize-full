@@ -52,10 +52,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { moldesApi, type Marcacoes, type PecaDoMolde, type SituacaoDoMolde } from "../../api/moldes";
+import { moldesApi, type Marcacoes, type PecaDoMolde, type SituacaoDoMolde, type TamanhoDoMolde } from "../../api/moldes";
 import type { NoDoRisco } from "../../api/risco";
 import { ErroDaApi } from "../../api/cliente";
 import { pecaParaGravar, pecaParaMontar } from "../../motores/montagem";
+import { completarGrupos, tamanhosDoMolde } from "../../motores/tamanhos";
 
 export type PecaEmMontagem = PecaDoMolde & { nos: NoDoRisco[]; marcacoes: Marcacoes };
 export type EstadoDaGravacao = "salvo" | "pendente" | "salvando" | "erro";
@@ -68,6 +69,8 @@ export interface MoldeEmMontagem {
   nome: string;
   situacao: SituacaoDoMolde;
   pecas: PecaEmMontagem[];
+  /** A grade de tamanhos, com cor e o base. Ver `motores/tamanhos.js`. */
+  tamanhos: TamanhoDoMolde[];
   gravacao: EstadoDaGravacao;
   /** Por que a última gravação não foi: margem que se cruza, servidor fora. */
   problema: { peca: number | null; texto: string } | null;
@@ -77,6 +80,7 @@ export interface MoldeEmMontagem {
   mudarPecas(mudar: (antes: PecaEmMontagem[]) => PecaEmMontagem[], lembrarAntes?: boolean): void;
   mudarPeca(indice: number, mudar: (peca: PecaEmMontagem) => PecaEmMontagem, lembrarAntes?: boolean): void;
   renomear(nome: string): void;
+  mudarTamanhos(mudar: (antes: TamanhoDoMolde[]) => TamanhoDoMolde[]): void;
   /** Grava agora (e muda a situação, se pedido). `true` se ficou tudo salvo. */
   gravar(situacao?: SituacaoDoMolde): Promise<boolean>;
   /** Tenta abrir de novo depois de um `erroAoAbrir`. */
@@ -97,6 +101,7 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   const [observacoes, setObservacoes] = useState<string | null>(null);
   const [situacao, setSituacao] = useState<SituacaoDoMolde>("pronto");
   const [pecas, setPecas] = useState<PecaEmMontagem[]>([]);
+  const [tamanhos, setTamanhos] = useState<TamanhoDoMolde[]>([]);
   const [gravacao, setGravacao] = useState<EstadoDaGravacao>("salvo");
   const [problema, setProblema] = useState<MoldeEmMontagem["problema"]>(null);
   const [pilha, setPilha] = useState<PecaEmMontagem[][]>([]);
@@ -112,8 +117,8 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   // O snapshot que a gravação lê, sempre com a VERSÃO que valia quando este
   // render aconteceu — nunca a versão "ao vivo" isolada. Ver a nota grande no
   // topo do arquivo ("A VERSÃO ANDA JUNTO COM O DADO").
-  const atual = useRef({ nome, observacoes, pecas, versao: 0 });
-  atual.current = { nome, observacoes, pecas, versao: versao.current };
+  const atual = useRef({ nome, observacoes, pecas, tamanhos, versao: 0 });
+  atual.current = { nome, observacoes, pecas, tamanhos, versao: versao.current };
 
   useEffect(() => {
     let vivo = true;
@@ -124,7 +129,11 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
         setNome(m.nome);
         setObservacoes(m.observacoes);
         setSituacao(m.situacao);
-        setPecas(m.pecas.map((p) => pecaParaMontar(p) as PecaEmMontagem));
+        // Molde de antes da graduação não tem grupo: ele sai da posição da
+        // peça dentro do seu tamanho (ver `completarGrupos`).
+        const montadas = completarGrupos(m.pecas.map((p) => pecaParaMontar(p) as PecaEmMontagem));
+        setPecas(montadas);
+        setTamanhos(tamanhosDoMolde(montadas, m.tamanhos ?? []));
         carregouOk.current = true;
       })
       .catch((e) => {
@@ -177,6 +186,11 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
     mudarPecas((antes) => antes.map((p, i) => (i === indice ? mudar(p) : p)), lembrarAntes);
   }, [mudarPecas]);
 
+  const mudarTamanhos = useCallback((mudar: (antes: TamanhoDoMolde[]) => TamanhoDoMolde[]) => {
+    setTamanhos(mudar);
+    marcarMexida();
+  }, []);
+
   const renomear = useCallback((novo: string) => {
     setNome(novo);
     marcarMexida();
@@ -197,7 +211,7 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
 
     // Versão e dado do MESMO snapshot — nunca a versão de um render com o
     // `pecas` de outro (ver a nota grande no topo do arquivo).
-    const { nome: nomeAgora, observacoes: obsAgora, pecas: pecasAgora, versao: mandada } = atual.current;
+    const { nome: nomeAgora, observacoes: obsAgora, pecas: pecasAgora, tamanhos: tamanhosAgora, versao: mandada } = atual.current;
     if (!novaSituacao && mandada === gravada.current) return true;
 
     const prontas = [];
@@ -216,6 +230,8 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
       nome: nomeAgora.trim() || "Molde sem nome",
       observacoes: obsAgora ?? "",
       pecas: prontas.map(({ id: _id, ...resto }) => resto),
+      // Recalculada: um tamanho que veio numa junção entra, a ordem se refaz.
+      tamanhos: tamanhosDoMolde(pecasAgora, tamanhosAgora),
       ...(novaSituacao ? { situacao: novaSituacao } : {}),
     })
       .then(() => {
@@ -287,8 +303,8 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   }, []);
 
   return {
-    carregando, naoAchado, erroAoAbrir, nome, situacao, pecas, gravacao, problema,
+    carregando, naoAchado, erroAoAbrir, nome, situacao, pecas, tamanhos, gravacao, problema,
     podeDesfazer: pilha.length > 0,
-    lembrar, desfazer, mudarPecas, mudarPeca, renomear, gravar, tentarAbrirDeNovo,
+    lembrar, desfazer, mudarPecas, mudarPeca, renomear, mudarTamanhos, gravar, tentarAbrirDeNovo,
   };
 }
