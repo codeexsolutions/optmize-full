@@ -6,13 +6,18 @@
  * camisa que não coube numa foto só e foi digitalizada em duas. Vêm as peças
  * do primeiro tamanho do outro molde, e entram no tamanho deste. O outro
  * molde fica como estava — apagar é decisão da estante.
+ *
+ * JUNTAR COMO UM TAMANHO NOVO é o caso dos pijamas M e G da fábrica, salvos na
+ * Audaces em dois arquivos: as peças de lá entram como o tamanho G das peças
+ * daqui, casadas pela tabela que a pessoa confirma (`CasamentoDePecas`).
  */
 import { useEffect, useState } from "react";
 import { moldesApi, type MoldeNaEstante } from "../../api/moldes";
 import { achatarCurvas } from "../../motores/ajusteDeCurvas";
 import { caixaDe, pecaParaMontar } from "../../motores/montagem";
 import { corDaPeca } from "../../utils/coresDePeca";
-import { gruposDasPecas } from "../../motores/tamanhos";
+import { PALETA, casarPecasParaJuntar, gruposDasPecas, juntarComoTamanho } from "../../motores/tamanhos";
+import { CasamentoDePecas } from "./CasamentoDePecas";
 import type { GrupoDePecas } from "./useMoldeEmMontagem";
 import { Icone } from "../../casca/Icone";
 import type { MoldeEmMontagem, PecaEmMontagem } from "./useMoldeEmMontagem";
@@ -48,6 +53,16 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
   // juntar()` deixava a rejeição sem tratamento e a pessoa via o botão voltar
   // a "Juntar" sem explicação nenhuma do porquê não juntou nada.
   const [erroDeJuntar, setErroDeJuntar] = useState("");
+  // "pecas": as peças de lá entram como peças novas; "tamanho": como um tamanho novo das daqui.
+  const [comoJuntar, setComoJuntar] = useState<"pecas" | "tamanho">("pecas");
+  const [nomeDoTamanho, setNomeDoTamanho] = useState("");
+  const [corDoTamanho, setCorDoTamanho] = useState("");
+  const [casamento, setCasamento] = useState<{
+    tamanho: string; cor: string;
+    daqui: { grupo: number; peca: PecaEmMontagem }[];
+    dela: PecaEmMontagem[];
+    pares: { grupo: number; indiceDela: number | null }[];
+  } | null>(null);
 
   useEffect(() => {
     moldesApi.estante().then((l) => setOutros(l.filter((m) => m.id !== moldeId))).catch(() => setOutros([]));
@@ -62,13 +77,38 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
     aoEscolherGrupo(grupos.find((x) => x.grupo !== g)?.grupo ?? 0);
   };
 
+  /** A primeira cor da paleta que a grade ainda não usa. */
+  const corLivre = () => PALETA.find((c: string) => !molde.tamanhos.some((t) => t.cor === c)) ?? PALETA[0] ?? "#808080";
+
   const juntar = async () => {
     const id = Number(deQual);
     if (!id) return;
+    const tamanhoNovo = nomeDoTamanho.trim().toUpperCase();
+    if (comoJuntar === "tamanho") {
+      if (!tamanhoNovo) { setErroDeJuntar("Dê o nome do tamanho novo (ex.: G)."); return; }
+      if (molde.tamanhos.some((t) => t.nome === tamanhoNovo)) {
+        setErroDeJuntar(`Este molde já tem o tamanho ${tamanhoNovo}.`);
+        return;
+      }
+    }
     setJuntando(true);
     setErroDeJuntar("");
     try {
       const outro = await moldesApi.abrir(id);
+      if (comoJuntar === "tamanho") {
+        // De lá vem o tamanho base (ou o primeiro): é a peça "inteira" daquele molde.
+        const deLa = outro.tamanhos?.find((t) => t.base)?.nome ?? outro.pecas[0]?.tamanho;
+        const dela = outro.pecas.filter((p) => p.tamanho === deLa).map((p) => pecaParaMontar(p) as PecaEmMontagem);
+        const base = molde.tamanhos.find((t) => t.base)?.nome;
+        const daqui = grupos.map((g) => ({ grupo: g.grupo, peca: molde.pecas[g.porTamanho[base ?? ""] ?? Object.values(g.porTamanho)[0]!]! }));
+        const medida = (p: PecaEmMontagem) => ({ nome: p.nome || p.papel, papel: p.papel, largura: p.largura, altura: p.altura });
+        const pares = casarPecasParaJuntar(
+          daqui.map((d) => ({ grupo: d.grupo, ...medida(d.peca) })),
+          dela.map(medida),
+        ) as { grupo: number; indiceDela: number | null }[];
+        setCasamento({ tamanho: tamanhoNovo, cor: corDoTamanho || corLivre(), daqui, dela, pares });
+        return;
+      }
       const tamanhoDeLa = outro.pecas[0]?.tamanho;
       const tamanhoDaqui = molde.pecas[0]?.tamanho ?? "base";
       // Peças NOVAS: grupos novos, acima dos daqui (o grupo de lá colidiria).
@@ -88,8 +128,35 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
     }
   };
 
+  const confirmarCasamento = () => {
+    if (!casamento) return;
+    const { tamanho, cor, dela, pares } = casamento;
+    // Um passo só no desfazer: as peças e a grade mudam juntas.
+    molde.lembrar();
+    molde.mudarPecas((antes) => juntarComoTamanho(antes, dela, pares, tamanho) as PecaEmMontagem[], false);
+    molde.mudarTamanhos((t) => [...t, { nome: tamanho, cor, ordem: t.length, base: false }]);
+    setCasamento(null);
+    setDeQual("");
+    setNomeDoTamanho("");
+    setCorDoTamanho("");
+  };
+
   return (
     <aside className="flex h-full w-[220px] shrink-0 flex-col gap-2 overflow-auto border-r border-linha p-3">
+      {casamento && (
+        <CasamentoDePecas
+          tamanho={casamento.tamanho}
+          daqui={casamento.daqui}
+          dela={casamento.dela}
+          pares={casamento.pares}
+          aoTrocar={(grupo, indiceDela) => setCasamento((c) => c && {
+            ...c,
+            pares: c.pares.map((p) => (p.grupo === grupo ? { ...p, indiceDela } : p)),
+          })}
+          aoConfirmar={confirmarCasamento}
+          aoCancelar={() => setCasamento(null)}
+        />
+      )}
       <p className="m-0 text-[0.8rem] font-semibold text-tinta-fraca">Peças</p>
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
         {grupos.map((g, i) => {
@@ -133,6 +200,28 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
           <option value="">Escolha um molde…</option>
           {outros.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
         </select>
+        <label className="flex items-center gap-1.5 text-[0.78rem]">
+          <input type="radio" name="comoJuntar" checked={comoJuntar === "pecas"} onChange={() => setComoJuntar("pecas")} />
+          como peças novas
+        </label>
+        <label className="flex items-center gap-1.5 text-[0.78rem]">
+          <input type="radio" name="comoJuntar" checked={comoJuntar === "tamanho"} onChange={() => setComoJuntar("tamanho")} />
+          como um tamanho novo
+        </label>
+        {comoJuntar === "tamanho" && (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text" value={nomeDoTamanho} placeholder="G"
+              onChange={(e) => { setNomeDoTamanho(e.target.value); setErroDeJuntar(""); }}
+              aria-label="Nome do tamanho novo" className="w-16!"
+            />
+            <input
+              type="color" value={corDoTamanho || corLivre()}
+              onChange={(e) => setCorDoTamanho(e.target.value)}
+              aria-label="Cor do tamanho novo" className="h-8 w-10 p-0"
+            />
+          </div>
+        )}
         <button type="button" className="btn secondary btn-sm" disabled={!deQual || juntando} onClick={() => void juntar()}>
           {juntando ? "Juntando…" : "Juntar"}
         </button>
