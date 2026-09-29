@@ -361,8 +361,13 @@ export function avisosDaGraduacao(base, grade) {
 export function planejarGeracao(pecas, grade, grupo = null) {
   const alvos = [];
   const nomes = nomesEmOrdem(grade);
+  // Um base por grupo: a primeira linha graduada, a mesma que o Graduar abre. Duas
+  // linhas graduadas no mesmo grupo (juntadas antes de o "juntar" limpar a
+  // graduação) gerariam cada tamanho duas vezes, e ofereceriam o base como alvo.
+  const comBase = new Set();
   pecas.forEach((base, iBase) => {
-    if (!base.graduacao || (grupo !== null && base.grupo !== grupo)) return;
+    if (!base.graduacao || (grupo !== null && base.grupo !== grupo) || comBase.has(base.grupo)) return;
+    comBase.add(base.grupo);
     for (const tamanho of nomes) {
       if (tamanho === base.tamanho) continue;
       const iExistente = pecas.findIndex((q) => q.grupo === base.grupo && q.tamanho === tamanho);

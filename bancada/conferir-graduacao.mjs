@@ -227,4 +227,16 @@ assert.ok(g.deslocamentosDoTamanho(base, grade, "M").every((d) => d.dx === 0 && 
   assert.equal(g.planejarGeracao(pecas, grade, 1).length, 0, "o grupo 1 não tem graduação");
 }
 
+// 19. Um base por grupo. Duas linhas graduadas no mesmo grupo (um G graduado noutro molde
+//     e juntado aqui antes de o "juntar" limpar a graduação): o plano parte só da primeira,
+//     nunca repete (grupo, tamanho) — repetido ia duas vezes para o corte — e o base não vira alvo.
+{
+  const pecas = [base, { ...base, id: 8, tamanho: "G", origem: "Digitalizar" }];
+  const alvos = g.planejarGeracao(pecas, grade, null);
+  const chaves = alvos.map((a) => `${a.grupo}/${a.tamanho}`);
+  assert.equal(new Set(chaves).size, chaves.length, `(grupo, tamanho) repetido: ${chaves.join(" ")}`);
+  assert.ok(alvos.every((a) => a.iBase === 0), "parte só do primeiro base do grupo");
+  assert.ok(!alvos.some((a) => a.tamanho === "M"), "o base de verdade nunca vira alvo");
+}
+
 console.log("OK — a graduação confere.");

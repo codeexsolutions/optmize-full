@@ -171,7 +171,9 @@ export function juntarComoTamanho(pecas, dela, pares, tamanho) {
     const deLa = dela[indiceDela];
     if (!modelo || !deLa) continue;
     const { id: _id, ...semId } = deLa;
-    vindas.push(comunsDoGrupo(modelo)({ ...semId, tamanho, grupo }));
+    // Sem a graduação de lá: o tamanho juntado é desenho próprio, nunca base. Com
+    // ela, o grupo ficaria com dois bases, e gerar duplicaria os tamanhos.
+    vindas.push(comunsDoGrupo(modelo)({ ...semId, tamanho, grupo, graduacao: null }));
   }
   return [...pecas, ...vindas];
 }

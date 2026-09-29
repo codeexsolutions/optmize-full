@@ -169,4 +169,16 @@ assert.equal(t.normalizarNomeDePeca("BERMUDA  MASC. 2X"), "BERMUDA MASC.");
   assert.equal(t.trocarCor(grade, "P", "azul")[0].cor, "#00ff00");
 }
 
+// 15. Juntar como tamanho: o que vem de lá é desenho próprio — chega sem graduação, mesmo
+//     que lá fosse o base graduado. Com ela, o grupo ficaria com dois bases, e gerar duplicava peças.
+{
+  const graduacao = { jeito: "pontos", porcentagem: 0, regras: [{ no: 0, modo: "igual", passo: { dx: 1, dy: 0 } }] };
+  const aqui = [peca("M", "A", { grupo: 0, graduacao })];
+  const dela = [peca("M", "A", { graduacao })];
+  const juntas = t.juntarComoTamanho(aqui, dela, [{ grupo: 0, indiceDela: 0 }], "G");
+  assert.deepEqual(juntas.map((p) => p.tamanho), ["M", "G"]);
+  assert.equal(juntas[1].graduacao, null, "o G juntado não é base de graduação");
+  assert.deepEqual(juntas[0].graduacao, graduacao, "a graduação daqui fica");
+}
+
 console.log("OK — os tamanhos do molde conferem.");
