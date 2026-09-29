@@ -31,6 +31,8 @@ export interface PecaParaOEncaixe {
   largura: number;
   altura: number;
   quantidade: number;
+  /** O giro de quando a peça saiu (a Reposição guarda). Sem ele, o padrão da tela. */
+  giro?: string | null;
 }
 
 export interface ProjetoParaOEncaixe {

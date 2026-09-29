@@ -31,6 +31,7 @@ import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { PainelDaVarredura } from "../impressoras/Procura";
+import { ArvoreDaVarredura } from "../impressoras/ArvoreDaVarredura";
 import { useVarredura } from "../impressoras/varredura";
 import { dataBr, metrosCurtos } from "../utils/formato";
 import type { AchadoDaVarredura, MaquinaGerenciada, RotasDaMaquina } from "../impressoras/tipos";
@@ -115,6 +116,14 @@ export function Maquinas() {
 
         {/* A impressora imprimindo, o passo e o placar. Ver `impressoras/Procura.tsx`. */}
         <PainelDaVarredura estado={estado} aoProcurar={rodando ? undefined : comOsAlvosDoCampo} />
+        {/* A mesma varredura, em árvore: onde cada coisa foi olhada. */}
+        <details className="mt-3 group" open={rodando || (estado?.arvore?.length ?? 0) > 0}>
+          <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-[0.8rem] text-tinta-fraca hover:text-ambar">
+            <Icone referencia="icones.svg#list-tree" className="size-4" />
+            Ver a varredura em árvore
+          </summary>
+          <ArvoreDaVarredura estado={estado} className="mt-2" />
+        </details>
       </Cartao>
 
       {pendentes.length > 0 && (

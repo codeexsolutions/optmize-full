@@ -42,6 +42,7 @@ import { Icone } from "../casca/Icone";
 import { useEventos, useRecarregarComEventos } from "../impressoras/socket";
 import { SemImpressoras } from "../impressoras/SemImpressoras";
 import { useVarredura } from "../impressoras/varredura";
+import { JanelaDaVarredura } from "../impressoras/ArvoreDaVarredura";
 import {
   falar, gravarPreferencias, lerPreferencias, notificar,
   pedirPermissaoDeNotificacao, prepararSom, tocarBipe,
@@ -652,6 +653,9 @@ function tetoRedondo(valor: number): number {
  */
 function BotaoDeProcurar({ aoTerminar }: { aoTerminar: () => void }) {
   const { estado, rodando, falha, procurar, parar } = useVarredura(aoTerminar);
+  /* A árvore da varredura, pelo link "ver em árvore" — durante ou depois de
+     terminar. Na porta sem impressoras ela fica embaixo da animação. */
+  const [vendoArvore, setVendoArvore] = useState(false);
 
   // Quantas a última varredura achou e ainda estão sem nome. `pending` é
   // exatamente isso: reconhecida, fora do banco (ver `AcaoDaVarredura`).
@@ -676,6 +680,21 @@ function BotaoDeProcurar({ aoTerminar }: { aoTerminar: () => void }) {
           <Icone referencia="icones.svg#radar" className="size-4" />
           Procurar na rede
         </button>
+      )}
+
+      {(rodando || (estado?.arvore?.length ?? 0) > 0) && (
+        <button
+          type="button"
+          onClick={() => setVendoArvore(true)}
+          className="flex items-center gap-1 text-[0.75rem] text-tinta-apagada underline-offset-2 hover:text-ambar hover:underline"
+        >
+          <Icone referencia="icones.svg#list-tree" className="size-3.5" />
+          ver em árvore
+        </button>
+      )}
+
+      {vendoArvore && (
+        <JanelaDaVarredura estado={estado} aoFechar={() => setVendoArvore(false)} aoParar={parar} />
       )}
 
       {/* O passo da varredura, uma linha. O painel inteiro de progresso é da

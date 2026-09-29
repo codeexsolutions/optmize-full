@@ -23,11 +23,34 @@ const scan = {
   // reescrito a cada passo. Declarado aqui e não só no `runScan` porque o
   // GET /scan responde antes de qualquer varredura, e a tela mapeia esta lista.
   avisos: [],
+  /*
+    A TRILHA DA VARREDURA — cada passo como um nó de árvore (id, pai, rótulo,
+    estado, detalhe), na ordem em que apareceu. A tela de Impressoras a
+    desenha "em tree" para quem quer ver o que foi olhado e onde. Ver "A
+    TRILHA", em services/discovery.js.
+  */
+  arvore: [],
   controller: null,
   // Máquinas achadas na rede que ainda não existem no banco. Ficam aqui,
   // esperando alguém dar o nome — só então viram cadastro (POST /register).
   pending: new Map()
 };
+
+/** Teto de nós: uma rede grande com muita pasta não pode virar um JSON de megabytes. */
+const MAX_NOS = 6000;
+const indiceDaArvore = new Map();
+
+function anotarNo(no) {
+  const existente = indiceDaArvore.get(no.id);
+  if (existente) {
+    Object.assign(existente, no, { t: Date.now() });
+    return;
+  }
+  if (scan.arvore.length >= MAX_NOS) return;
+  const novo = { ...no, t: Date.now() };
+  scan.arvore.push(novo);
+  indiceDaArvore.set(no.id, novo);
+}
 
 function snapshot() {
   const { controller, pending, ...rest } = scan;
@@ -114,7 +137,27 @@ function createMachinesRouter(io) {
 
   const publish = () => { try { io.emit("machines:scan", snapshot()); } catch { /* socket opcional */ } };
 
+  /*
+    Nó da árvore não publica na hora: numa rede com muita pasta são centenas
+    por segundo, e cada publicação leva o estado inteiro. Junta e manda no
+    máximo a cada 250 ms — rápido o bastante para a árvore parecer ao vivo.
+  */
+  let publicacaoAgendada = null;
+  const publishLogo = () => {
+    if (publicacaoAgendada) return;
+    publicacaoAgendada = setTimeout(() => { publicacaoAgendada = null; publish(); }, 250);
+  };
+
   function onProgress(update) {
+    if (update.no) {
+      anotarNo(update.no);
+      // Só nó: agenda. Com fase, mensagem ou contagem junto, segue o caminho
+      // de sempre e publica já.
+      if (!update.phase && !update.message && typeof update.scanned !== "number" && !update.aviso) {
+        publishLogo();
+        return;
+      }
+    }
     if (update.phase) scan.phase = update.phase;
     if (typeof update.scanned === "number") scan.scanned = update.scanned;
     if (typeof update.total === "number") scan.total = update.total;
@@ -137,6 +180,8 @@ function createMachinesRouter(io) {
     scan.results = [];
     scan.error = null;
     scan.avisos = [];
+    scan.arvore = [];
+    indiceDaArvore.clear();
     scan.message = "Iniciando varredura...";
     scan.controller = new AbortController();
     publish();
@@ -176,14 +221,22 @@ function createMachinesRouter(io) {
       const known = scan.results.filter(result => result.machineId);
       if (known.length) {
         onProgress({ phase: "history", scanned: 0, total: known.length, message: "Puxando o histórico das máquinas já cadastradas..." });
+        anotarNo({ id: "historico", pai: null, rotulo: "Histórico das máquinas cadastradas", estado: "andando", detalhe: null });
         let done = 0;
         for (const result of known) {
           const machine = getMachineRow(result.machineId);
+          const idNo = `historico|${result.machineId}`;
+          anotarNo({ id: idNo, pai: "historico", rotulo: result.machineName || result.host, estado: "andando", detalhe: "importando..." });
           if (machine) {
             const outcome = await backfillMachine(machine);
             result.imported = outcome.imported;
             result.importError = outcome.ok ? null : outcome.error;
             importedTotal += outcome.imported;
+            anotarNo({
+              id: idNo, pai: "historico", rotulo: result.machineName || result.host,
+              estado: outcome.ok ? "ok" : "erro",
+              detalhe: outcome.ok ? `${outcome.imported || 0} registro(s) importado(s)` : outcome.error,
+            });
           }
           done++;
           onProgress({
@@ -195,6 +248,9 @@ function createMachinesRouter(io) {
         }
       }
 
+      if (known.length) {
+        anotarNo({ id: "historico", pai: null, rotulo: "Histórico das máquinas cadastradas", estado: "ok", detalhe: `${importedTotal} registro(s)` });
+      }
       const novas = scan.results.filter(r => r.action === "pending").length;
       const updated = scan.results.filter(r => r.action === "updated").length;
       scan.phase = "done";

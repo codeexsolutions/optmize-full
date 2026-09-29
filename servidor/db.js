@@ -479,6 +479,32 @@ garantirColuna("encaixe_historico", "placar", "TEXT");
 // os antigos, e ninguém veria. Linha gravada antes disto fica NULL, que é
 // tratado como versão 1 e simplesmente não entra mais no treino.
 garantirColuna("encaixe_historico", "features_versao", "INTEGER");
+// Quando este encaixe foi mandado para a memória coletiva (ver
+// `encaixe-coletivo.js`). NULL = ainda na fila.
+garantirColuna("encaixe_historico", "coletivo_enviado_em", "TEXT");
+
+/*
+ * A MEMÓRIA COLETIVA, do lado de cá (ver `encaixe-coletivo.js`):
+ *
+ *   `encaixe_coletivo_estado`  chave/valor: o id sorteado desta instalação, a
+ *                              rede global e o placar geral baixados, e quando
+ *                              foi a última conversa;
+ *   `encaixe_coletivo_cache`   o placar de todas as lojas por tipo de trabalho,
+ *                              guardado para a busca não esperar a internet.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS encaixe_coletivo_estado (
+    chave TEXT PRIMARY KEY,
+    valor TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS encaixe_coletivo_cache (
+    assinatura TEXT PRIMARY KEY,
+    receitas TEXT NOT NULL,
+    encaixes INTEGER NOT NULL DEFAULT 0,
+    lido_em TEXT NOT NULL
+  );
+`);
 
 db.pragma("optimize");
 

@@ -143,6 +143,24 @@ router.get("/resumo", (req, res) => {
   res.json({ arquivos, bytes, pastas, clientes, projetos, recentes, disco });
 });
 
+/**
+ * As últimas IMAGENS guardadas, de todas as pastas — o carrossel do topo da
+ * Galeria, na raiz. Só o que a tela sabe desenhar (o TIFF fica de fora: ele
+ * só baixa), e com o caminho de onde cada uma mora, para a legenda.
+ */
+const IMAGENS_NA_TELA = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp"];
+router.get("/imagens", (req, res) => {
+  const limite = Math.min(40, Math.max(1, Number(req.query.limite) || 20));
+  const marcas = IMAGENS_NA_TELA.map(() => "?").join(", ");
+  const imagens = db.prepare(
+    `SELECT * FROM galeria_arquivos WHERE tipo IN (${marcas}) ORDER BY criado_em DESC, id DESC LIMIT ?`
+  ).all(...IMAGENS_NA_TELA, limite).map((a) => ({
+    ...paraTela(a),
+    onde: caminhoAte(a.pasta_id).map((c) => c.nome).join(" / ") || "Galeria",
+  }));
+  res.json({ imagens });
+});
+
 /** Procura em TODAS as pastas pelo nome, e diz onde cada achado mora. */
 router.get("/busca", (req, res) => {
   const termo = texto(req.query.q, 80);

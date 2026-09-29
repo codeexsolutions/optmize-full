@@ -11,7 +11,7 @@ import { prepararArteParaONavegador } from "../api/arte";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
 import { assinaturaDoTrabalho,
   midiaConsumida, aproveitamentoDaMidia,
-  prepararComplemento, analisarComplemento, complementarNosVaos } from "../motores/encaixeMotor";
+  prepararComplemento, analisarComplemento } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
 import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
 import {
@@ -949,7 +949,9 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
         altura: p.altura,
         qtd: Math.max(1, Math.round(p.quantidade * unidades)),
         qtdDoArquivo: false,
-        giro: giroPadrao(),
+        // O giro guardado (a Reposição traz o de quando foi exportado); sem
+        // ele, o padrão da tela.
+        giro: ["180", "fixa", "livre"].includes(p.giro) ? p.giro : giroPadrao(),
         contorno: "auto",
         origem: `projeto ${nomeDoProjeto}${cortada ? " · fundo removido" : ""}`,
       });
@@ -1181,6 +1183,22 @@ escopo.ouvir(btnLimparPecas, "click", async () => {
   renderPecasEncaixe();
   redesenharMesaVazia();
 });
+
+/*
+ * A MESA VAZIA É CLICÁVEL, INTEIRA: o convite "Arraste seus arquivos aqui"
+ * cobre a mesa toda, e clicar em qualquer ponto dela abre o seletor. Ele só
+ * aparece enquanto não há risco (ver `producao.css`), então não rouba o clique
+ * de nada.
+ */
+const mesaDica = document.getElementById("encaixe-mesa-dica");
+if (mesaDica) {
+  escopo.ouvir(mesaDica, "click", () => encaixeFilesInput.click());
+  escopo.ouvir(mesaDica, "keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    encaixeFilesInput.click();
+  });
+}
 
 // Arrastar as imagens direto para a tabela também adiciona as peças.
 const encaixePage = document.querySelector('.page[data-page="encaixe"]');
@@ -1473,13 +1491,17 @@ function renderPecasEncaixe() {
   encaixePecasBody.innerHTML = "";
 
   if (pecasEncaixe.length === 0) {
+    // A lista vazia INTEIRA é um botão: arrastar continua valendo, e quem
+    // prefere clicar não precisa caçar o Adicionar.
     encaixePecasBody.innerHTML =
-      `<div class="flex h-full flex-col items-center justify-center gap-3 px-4 py-8">
+      `<button type="button" data-escolher-arquivos class="flex h-full min-h-[160px] w-full cursor-pointer flex-col items-center justify-center gap-3 px-4 py-8 transition-colors hover:bg-[var(--surface-hover)]">
          <span class="mesa-vazia-selo grid size-11 place-items-center rounded-xl border border-linha">
            <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#file-text" /></svg>
          </span>
-         <p class="m-0 text-center text-[11px] text-tinta-apagada">Arraste os moldes ou as artes para cá.</p>
-       </div>`;
+         <span class="m-0 text-center text-[11px] text-tinta-apagada">Arraste os moldes ou as artes para cá,<br><span class="font-semibold text-ambar">ou clique para escolher</span>.</span>
+       </button>`;
+    encaixePecasBody.querySelector("[data-escolher-arquivos]")
+      ?.addEventListener("click", () => encaixeFilesInput.click());
     atualizarPainelDoTrabalho();
     atualizarBarraDeGrupo();
     renderAvisosDeCor();
@@ -3317,6 +3339,7 @@ escopo.ouvir(btnBaixarEncaixe, "click", async () => {
 
     await destino.gravar(imagem);
     avisarQueSalvou(destino.nome);
+    void guardarParaReposicao(ultimoResultado, destino.nome);
   } catch (err) {
     console.error("[encaixe] falhou ao salvar o PNG:", err);
     mostrarErroEncaixe(`Não consegui salvar o PNG: ${err.message}`);
@@ -3401,6 +3424,85 @@ function destinoDeDownload(nome) {
       URL.revokeObjectURL(endereco);
     },
   };
+}
+
+/*
+ * ===========================================================================
+ * GUARDAR PARA A REPOSIÇÃO
+ * ===========================================================================
+ *
+ * Todo encaixe EXPORTADO vira um trabalho na aba Reposição: o nome do arquivo
+ * que saiu, o tecido, a metragem, uma miniatura do risco e cada peça com a
+ * arte, a medida, a quantidade e o giro. Quando uma peça sair errada, é lá que
+ * ela é escolhida e volta para o Encaixe — sem montar o trabalho do zero.
+ *
+ * Roda DEPOIS de o arquivo sair, e nunca atrapalha a exportação: se falhar,
+ * fica no console, e o PDF já está na pasta. Exportar o mesmo risco de novo
+ * (o PNG e depois o PDF) não guarda duas vezes.
+ */
+let resultadoGuardadoParaReposicao = null;
+
+async function guardarParaReposicao(r, nomeDoArquivo) {
+  if (!r || r === resultadoGuardadoParaReposicao) return;
+  resultadoGuardadoParaReposicao = r;
+  try {
+    // Só as peças que foram para o risco: a linha zerada não é deste trabalho.
+    const usadas = new Set(r.posicoes.map((p) => p.item && p.item.indice));
+    const pecas = pecasEncaixe
+      .map((peca, indice) => ({ peca, indice }))
+      .filter(({ peca, indice }) => (Number(peca.qtd) || 0) > 0 && usadas.has(indice));
+    if (pecas.length === 0) return;
+
+    // A miniatura do risco: pequena, só para reconhecer o trabalho na lista.
+    let miniatura = null;
+    try {
+      const tela = document.createElement("canvas");
+      desenharEncaixe(tela, r, { escala: Math.min(2, 320 / Math.max(1, r.larguraTecido)), comLegenda: false });
+      miniatura = tela.toDataURL("image/jpeg", 0.7);
+    } catch { /* sem miniatura, o trabalho entra assim mesmo */ }
+
+    const area = Number(r.areaReal) || 0;
+    const resposta = await fetch("/api/reposicao/trabalhos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome: String(nomeDoArquivo || "").replace(/\.(pdf|png)$/i, ""),
+        larguraTecido: r.larguraTecido,
+        consumoCm: r.consumo,
+        aproveitamento: r.larguraTecido > 0 && r.consumo > 0 ? (area / (r.larguraTecido * r.consumo)) * 100 : null,
+        folga: r.folgaPedida,
+        miniatura,
+        pecas: pecas.map(({ peca }) => ({
+          nome: peca.nome,
+          largura: peca.largura,
+          altura: peca.altura,
+          qtd: peca.qtd,
+          giro: peca.giro,
+          miniatura: peca.miniatura || null,
+        })),
+      }),
+    });
+    if (!resposta.ok) throw new Error(`o servidor respondeu ${resposta.status}`);
+    const { pecas: ids } = await resposta.json();
+
+    // As artes, uma por vez: juntas, num pedido só, passariam de centenas de MB.
+    // A ORIGINAL quando é imagem (com o fundo que tinha, como a Galeria guarda:
+    // o recorte é refeito na volta); senão, o desenho que o encaixe usou.
+    for (let i = 0; i < pecas.length; i++) {
+      const { peca } = pecas[i];
+      const original = peca.arquivoOriginal;
+      const arte = original instanceof Blob && /^image\//.test(original.type)
+        ? original
+        : await fetch(peca.src).then((resp) => resp.blob());
+      await fetch(`/api/reposicao/pecas/${ids[i]}/arte`, {
+        method: "PUT",
+        headers: { "Content-Type": arte.type || "application/octet-stream" },
+        body: arte,
+      });
+    }
+  } catch (erro) {
+    console.warn("[reposição] o trabalho não foi guardado:", erro);
+  }
 }
 
 /** Confirma na barra da bancada que o arquivo saiu, e com que nome. */
@@ -3566,6 +3668,7 @@ async function baixarEncaixeEmPdf() {
       btnExportarRotulo.textContent = "Gravando…";
       await saida.gravar(cano);
       avisarQueSalvou(saida.nome);
+      void guardarParaReposicao(r, saida.nome);
       return;
     }
 
@@ -3602,6 +3705,7 @@ async function baixarEncaixeEmPdf() {
     }
 
     avisarQueSalvou(`${bancadas.length} arquivos em ${saida.onde}`);
+    void guardarParaReposicao(r, saida.base);
 
   } catch (err) {
     // O recado amigável não pode ser o fim da linha: erro de programa aqui
@@ -4083,8 +4187,9 @@ function atualizarContagemDosAjustes() {
  * Depois do encaixe, o "Optmizar" vira "Complementar". A caixa mede o tecido
  * que sobrou sem peça, procura o que cabe ali — nas artes da Galeria (a tela
  * de Projetos) e nas peças do próprio encaixe — e a pessoa escolhe quantas de
- * cada entram. Nada do que já está assentado sai do lugar; quem faz a conta é
- * `complementarNosVaos`, em motores/encaixeMotor.js.
+ * cada entram. A medida dos vãos (`analisarComplemento`) só SUGERE as
+ * quantidades; ao complementar, o encaixe é refeito do zero com tudo junto
+ * (ver `complementarOtimizando`), para aproveitar o tecido ao máximo.
  *
  * As artes da Galeria que entram viram peças da lista, como se tivessem sido
  * mandadas de um projeto: é o que faz o PDF, a impressão e a lista saírem com
@@ -4329,8 +4434,8 @@ async function procurarComplemento() {
       ? (metaCm > 0
         ? "Nenhuma peça cabe até essa metragem. Tente uma metragem maior."
         : "Nenhuma peça cabe nos espaços vazios deste encaixe. Tente “Completar até” uma metragem.")
-      : `${cabem} de ${candidatos.length} cabe${cabem === 1 ? "" : "m"}. O número é de cada uma sozinha — `
-        + "juntas elas disputam o mesmo espaço. Ajuste as quantidades e aperte Complementar.");
+      : "Escolha as quantidades e aperte Complementar: o encaixe é refeito do zero com tudo junto, "
+        + "para aproveitar o tecido ao máximo.");
     btnComplementoAplicar.disabled = cabem === 0;
   } catch (erro) {
     console.error("[complemento] falhou ao procurar:", erro);
@@ -4365,13 +4470,16 @@ function mostrarCandidatos(candidatos) {
     const qtd = document.createElement("label");
     qtd.className = "complemento-qtd";
     if (c.cabem > 0) {
-      // A conta para em LIMITE_DA_ANALISE: uma arte miúda num vão grande
-      // caberia às centenas, e contar todas só atrasaria a lista.
-      qtd.append(c.cabem >= LIMITE_DA_ANALISE ? `cabem ${c.cabem} ou mais` : `cabem ${c.cabem}`);
+      /*
+       * SEM O "CABEM N". O número era de cada peça sozinha, e juntas elas
+       * disputam o mesmo espaço — dizia mais do que era verdade. Agora o
+       * complemento refaz o encaixe inteiro (ver `complementar`), e quem
+       * decide quantas couberam é a otimização. A conta continua servindo de
+       * sugestão: é a quantidade que o campo já traz.
+       */
       const campo = document.createElement("input");
       campo.type = "number";
       campo.min = "0";
-      campo.max = String(c.cabem);
       campo.step = "1";
       // As da Galeria nascem com a quantidade toda; as do próprio encaixe
       // nascem zeradas — repetir peça do pedido é decisão de quem vende, não
@@ -4386,7 +4494,8 @@ function mostrarCandidatos(candidatos) {
     li.append(qtd);
     return li;
   });
-  complementoLista.replaceChildren(...linhas);
+  // Só o que tem chance: a peça que não entra em vão nenhum não vira linha.
+  complementoLista.replaceChildren(...linhas.filter((_, i) => candidatos[i].cabem > 0));
   complementoLista.classList.toggle("hidden", linhas.length === 0);
 }
 
@@ -4400,7 +4509,7 @@ function complementar() {
   const pedidos = [];
   complementoLista.querySelectorAll("input[data-candidato]").forEach((campo) => {
     const c = analise.candidatos[Number(campo.dataset.candidato)];
-    const quantidade = Math.max(0, Math.min(c.cabem, Math.floor(Number(campo.value) || 0)));
+    const quantidade = Math.max(0, Math.floor(Number(campo.value) || 0));
     if (quantidade > 0) pedidos.push({ c, item: c.item, quantidade });
   });
   if (pedidos.length === 0) {
@@ -4408,70 +4517,55 @@ function complementar() {
     return;
   }
 
-  const r = analise.resultado;
-  const mapa = prepararComplemento(r.posicoes, analise.config);
-  const { novas, colocadas } = complementarNosVaos(mapa,
-    pedidos.map((p) => ({ item: p.item, quantidade: p.quantidade })), { metaCm: analise.metaCm });
-  const total = colocadas.reduce((soma, n) => soma + n, 0);
-  if (total === 0) {
-    avisarNoComplemento("Juntas, as peças escolhidas não couberam. Escolha menos ou outras.", true);
-    return;
-  }
+  void complementarOtimizando(analise, pedidos);
+}
 
+/*
+ * O COMPLEMENTO REFAZ O ENCAIXE INTEIRO.
+ *
+ * Antes, as peças escolhidas eram encaixadas só nos vãos do risco pronto — o
+ * risco de antes ficava intocado e as novas se ajeitavam onde sobrava. Agora
+ * elas entram na lista e o Optmizar roda de novo, do zero, com tudo junto:
+ * a otimização reposiciona as peças de antes para abrir espaço às novas, e o
+ * tecido sai aproveitado ao máximo.
+ *
+ * O "Desfazer" volta a lista e o risco de antes, como sempre voltou.
+ */
+async function complementarOtimizando(analise, pedidos) {
+  const r = analise.resultado;
   const antes = { resultado: r, pecas: pecasEncaixe.map((p) => ({ ...p })) };
 
-  // As peças entram na lista: as da Galeria como peças novas, as do encaixe
-  // somando na quantidade. O índice definitivo vai para as posições novas.
-  const indiceFinal = new Map();
-  const copias = new Map();
-  pedidos.forEach((p, i) => {
-    if (!colocadas[i]) return;
+  for (const p of pedidos) {
     if (p.c.daGaleria) {
-      const indice = pecasEncaixe.length;
-      pecasEncaixe.push({ ...p.c.peca, id: proximoIdPeca++, qtd: colocadas[i] });
-      indiceFinal.set(p.item, indice);
-      copias.set(indice, 0);
+      pecasEncaixe.push({ ...p.c.peca, id: proximoIdPeca++, qtd: p.quantidade });
     } else {
       const peca = pecasEncaixe[p.c.indice];
-      copias.set(p.c.indice, Number(peca.qtd) || 0);
-      peca.qtd = (Number(peca.qtd) || 0) + colocadas[i];
-      indiceFinal.set(p.item, p.c.indice);
+      peca.qtd = (Number(peca.qtd) || 0) + p.quantidade;
     }
-  });
-  novas.forEach((pos) => {
-    const indice = indiceFinal.get(pos.item);
-    const copia = copias.get(indice) + 1;
-    copias.set(indice, copia);
-    pos.item = { ...pos.item, indice, copia };
-  });
-
-  const posicoes = [...r.posicoes, ...novas];
-  const peDaArte = posicoes.reduce((m, p) => Math.max(m, p.y + p.altura), 0);
-  const novo = {
-    ...r,
-    posicoes,
-    consumo: Math.max(r.consumo, peDaArte),
-    areaReal: r.areaReal + novas.reduce((s, p) => s + p.item.mascaras.areaReal, 0),
-    areaCaixas: (r.areaCaixas || 0) + novas.reduce((s, p) => s + p.largura * p.altura, 0),
-    totalItens: (r.totalItens || r.posicoes.length) + total,
-    complementado: (r.complementado || 0) + total,
-  };
-
-  guardarResultado(novo);
-  antesDoComplemento = antes;
-  renderPecasEncaixe();
-  renderResultado();
+  }
+  const total = pedidos.reduce((soma, p) => soma + p.quantidade, 0);
 
   analiseDoComplemento = null;
   complementoLista.replaceChildren();
   complementoLista.classList.add("hidden");
   btnComplementoAplicar.disabled = true;
-  btnComplementoDesfazer.classList.remove("hidden");
-  resumirComplemento();
-  const nomes = pedidos
-    .map((p, i) => (colocadas[i] ? `${colocadas[i]} × ${p.c.peca.nome || "arte"}` : null))
-    .filter(Boolean).join(", ");
-  avisarNoComplemento(`Entraram ${total} peça${total === 1 ? "" : "s"}: ${nomes}.`);
+  fecharComplemento(false);
+  renderPecasEncaixe();
+
+  await optmizar();
+
+  if (ultimoResultado === r || !ultimoResultado) {
+    // A otimização não trouxe risco novo (cancelada, ou falhou): a lista volta
+    // a ser a de antes, para não ficar com peças que não estão no risco.
+    pecasEncaixe = antes.pecas;
+    guardarResultado(antes.resultado);
+    renderPecasEncaixe();
+    renderResultado();
+    return;
+  }
+  // `guardarResultado` zera o "o que desfazer"; o do complemento vem depois.
+  antesDoComplemento = antes;
+  ultimoResultado.complementado = (r.complementado || 0) + total;
 }
 
 function desfazerComplemento() {

@@ -121,7 +121,7 @@ export function Casca() {
   }
 
   const bancada = tela.nome === "encaixe" || tela.nome === "projetos"
-    || tela.nome === "moldes";
+    || tela.nome === "moldes" || tela.nome === "reposicao";
 
   /* Bancada ou tela que pediu (ver `useSemCabecalho`): as duas trocam o
      cabeçalho pelo botão flutuante da gaveta. */

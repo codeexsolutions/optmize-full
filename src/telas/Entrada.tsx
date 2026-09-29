@@ -42,6 +42,7 @@
  */
 
 import { useMemo, useSyncExternalStore } from "react";
+import { somDeEntrada, somDeSaida } from "./somSessao";
 
 /* ------------------------------------------------------------------------- */
 /* O ESTADO, FORA DO REACT                                                    */
@@ -83,6 +84,11 @@ const SAIDA_MS = 420;
  * sempre seria um programa que não abre.
  */
 export function tocarEntrada(nome: string, sentido: Sentido = "entrada"): Promise<void> {
+  /* O som do Flow, aqui e não em quem chama: este é o único ponto por onde as
+     duas passagens (login e logout) passam — a mesma escolha do Flow, em
+     `transicao.store.ts`. Ver `somSessao.ts`. */
+  if (sentido === "entrada") somDeEntrada();
+  else somDeSaida();
   mudar({ nome, sentido, saindo: false });
   const duracao = reduzido() ? 700 : sentido === "entrada" ? 2200 : 1400;
   return new Promise((resolve) => {

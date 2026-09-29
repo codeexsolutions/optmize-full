@@ -48,6 +48,9 @@ const daPasta = (id: number | null) => (id === null ? "raiz" : String(id));
 export const galeriaApi = {
   pastas: () => api.get<{ pastas: PastaDaGaleria[]; arquivosNaRaiz: number }>("/galeria/pastas"),
   conteudo: (id: number | null) => api.get<ConteudoDaPasta>(`/galeria/pastas/${daPasta(id)}/conteudo`),
+  /** As últimas imagens de todas as pastas, para o carrossel da raiz. */
+  imagens: (limite = 20) =>
+    api.get<{ imagens: ComOnde<ArquivoDaGaleria>[] }>(`/galeria/imagens?limite=${limite}`),
   busca: (termo: string) =>
     api.get<{ pastas: ComOnde<PastaDaGaleria>[]; arquivos: ComOnde<ArquivoDaGaleria>[] }>(
       `/galeria/busca?q=${encodeURIComponent(termo)}`,

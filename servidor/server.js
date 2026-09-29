@@ -181,6 +181,9 @@ app.use("/api/macros", macrosRouter);
 app.use("/api/moldes", moldesRouter);
 app.use("/api/projetos", projetosRouter);
 app.use("/api/galeria", galeriaArquivosRouter);
+// A Reposição: cada trabalho exportado, guardado para refazer peças.
+// O JSON leva as miniaturas das peças, por isso o limite maior.
+app.use("/api/reposicao", express.json({ limit: "30mb" }), require("./reposicao-api"));
 app.use("/api/ponto", pontoRouter);
 app.use("/api/voz", vozRouter);
 // As impressoras da produção: varredura da rede, histórico, ordens de
@@ -236,6 +239,9 @@ function enderecosDaRede() {
 // olhar. Quem roda o Optimize só para moldes e encaixe não perde nada — o
 // endereço local continua sendo o mesmo de sempre.
 servidor.listen(PORT, "0.0.0.0", () => {
+  // A memória coletiva do encaixe: manda a fila e baixa o que as outras lojas
+  // ensinaram, logo depois de subir e de tempo em tempo (ver encaixe-coletivo.js).
+  require("./encaixe-coletivo").iniciar();
   console.log("");
   console.log(`Optimize rodando em http://localhost:${PORT}`);
   for (const endereco of enderecosDaRede()) {
