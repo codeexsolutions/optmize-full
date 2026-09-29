@@ -116,12 +116,57 @@ assert.equal(t.normalizarNomeDePeca("BERMUDA  MASC. 2X"), "BERMUDA MASC.");
   assert.equal(new Set(chaves).size, chaves.length, `par repetido: ${chaves.join(" ")}`);
 }
 
-// 10. A grade não guarda tamanho que nenhuma peça tem (desfazer uma junção,
-//     tirar um tamanho pelo editor antigo): nada de chip fantasma.
+// 10. A grade guarda o tamanho declarado, mesmo sem peça: é preciso declarar P, G e GG antes de graduar.
 {
   const r = t.tamanhosDoMolde([peca("M", "A")], [{ nome: "M", cor: "#ff0000", ordem: 0, base: true }, { nome: "G", cor: "#00ff00", ordem: 1, base: false }]);
-  assert.deepEqual(r.map((x) => x.nome), ["M"]);
-  assert.equal(r[0].cor, "#ff0000", "a cor guardada do que ficou continua");
+  assert.deepEqual(r.map((x) => x.nome), ["M", "G"]);
+  assert.equal(r[1].cor, "#00ff00");
+}
+
+// 11. Acrescentar: no fim, com cor livre; nome repetido (sem ligar para maiúscula) recusa.
+{
+  const grade = t.tamanhosDoMolde([peca("M", "A")], [{ nome: "M", cor: "#ff0000", ordem: 0, base: true }]);
+  const r = t.acrescentarTamanho(grade, "GG");
+  assert.deepEqual(r.grade.map((x) => x.nome), ["M", "GG"]);
+  assert.ok(r.grade[1].cor !== "#ff0000", "cor livre");
+  assert.ok(t.acrescentarTamanho(grade, "m").erro);
+}
+
+// 12. O "base" do Digitalizar vira M, e o G vira XG: grade, peças e chaves das regras juntas.
+{
+  const graduada = peca("base", "A", { graduacao: { jeito: "pontos", porcentagem: 0, regras: [
+    { no: 0, modo: "porTamanho", deslocamentos: { G: { dx: 1, dy: 0 } } }] } });
+  const pecas = [graduada, peca("G", "A")];
+  let r = t.renomearTamanho(pecas, t.tamanhosDoMolde(pecas, []), "base", "M");
+  assert.deepEqual(r.grade.map((x) => x.nome), ["M", "G"]);
+  assert.equal(r.pecas[0].tamanho, "M");
+  r = t.renomearTamanho(r.pecas, r.grade, "G", "XG");
+  assert.equal(r.pecas[1].tamanho, "XG");
+  assert.deepEqual(Object.keys(r.pecas[0].graduacao.regras[0].deslocamentos), ["XG"]);
+  assert.ok(t.renomearTamanho(r.pecas, r.grade, "M", "xg").erro, "nome repetido, sem ligar para maiúscula");
+}
+
+// 13. Tirar: some da grade, das peças e das regras; o base não sai.
+{
+  const pecas = [peca("M", "A", { graduacao: { jeito: "pontos", porcentagem: 0, regras: [
+    { no: 0, modo: "porTamanho", deslocamentos: { P: { dx: -1, dy: 0 }, G: { dx: 1, dy: 0 } } }] } }), peca("P", "A"), peca("G", "A")];
+  const grade = t.marcarBase(t.tamanhosDoMolde(pecas, [
+    { nome: "P", cor: "#00ff00", ordem: 0 }, { nome: "M", cor: "#ff0000", ordem: 1 }, { nome: "G", cor: "#00ffff", ordem: 2 }]), "M");
+  const r = t.tirarTamanho(pecas, grade, "P");
+  assert.deepEqual(r.grade.map((x) => `${x.nome}${x.ordem}`), ["M0", "G1"]);
+  assert.deepEqual(r.pecas.map((p) => p.tamanho), ["M", "G"]);
+  assert.deepEqual(Object.keys(r.pecas[0].graduacao.regras[0].deslocamentos), ["G"]);
+  assert.ok(t.tirarTamanho(pecas, grade, "M").erro, "o base não sai");
+}
+
+// 14. Ordem, base e cor.
+{
+  const grade = t.tamanhosDoMolde([], [{ nome: "P", cor: "#00ff00", ordem: 0, base: false }, { nome: "M", cor: "#ff0000", ordem: 1, base: true }]);
+  assert.deepEqual(t.moverTamanho(grade, "M", -1).map((x) => x.nome), ["M", "P"]);
+  assert.deepEqual(t.moverTamanho(grade, "P", -1).map((x) => x.nome), ["P", "M"], "o primeiro não sobe");
+  assert.deepEqual(t.marcarBase(grade, "P").map((x) => x.base), [true, false]);
+  assert.equal(t.trocarCor(grade, "P", "#ABCDEF")[0].cor, "#abcdef");
+  assert.equal(t.trocarCor(grade, "P", "azul")[0].cor, "#00ff00");
 }
 
 console.log("OK — os tamanhos do molde conferem.");

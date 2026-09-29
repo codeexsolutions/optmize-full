@@ -107,7 +107,7 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   const [tamanhos, setTamanhos] = useState<TamanhoDoMolde[]>([]);
   const [gravacao, setGravacao] = useState<EstadoDaGravacao>("salvo");
   const [problema, setProblema] = useState<MoldeEmMontagem["problema"]>(null);
-  const [pilha, setPilha] = useState<PecaEmMontagem[][]>([]);
+  const [pilha, setPilha] = useState<{ pecas: PecaEmMontagem[]; tamanhos: TamanhoDoMolde[] }[]>([]);
 
   const versao = useRef(0);
   const gravada = useRef(0);
@@ -166,14 +166,17 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
     setGravacao("pendente");
   };
 
+  // Peças E grade: desfazer uma junção tira também o tamanho que ela criou.
   const lembrar = useCallback(() => {
-    setPilha((p) => [...p.slice(-(PASSOS_DE_DESFAZER - 1)), atual.current.pecas]);
+    setPilha((p) => [...p.slice(-(PASSOS_DE_DESFAZER - 1)), { pecas: atual.current.pecas, tamanhos: atual.current.tamanhos }]);
   }, []);
 
   const desfazer = useCallback(() => {
     setPilha((p) => {
       if (p.length === 0) return p;
-      setPecas(p[p.length - 1]!);
+      const topo = p[p.length - 1]!;
+      setPecas(topo.pecas);
+      setTamanhos(topo.tamanhos);
       marcarMexida();
       return p.slice(0, -1);
     });
@@ -305,8 +308,8 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
     };
   }, []);
 
-  // A grade que a tela vê sai das PEÇAS (com as cores guardadas): desfeita uma
-  // junção, o tamanho que sumiu das peças some do chip na hora.
+  // A grade que a tela vê: a guardada (tamanhos declarados, mesmo sem desenho)
+  // mais os tamanhos que só existem nas peças, com as cores guardadas.
   const tamanhosDasPecas = useMemo(() => tamanhosDoMolde(pecas, tamanhos) as TamanhoDoMolde[], [pecas, tamanhos]);
 
   return {

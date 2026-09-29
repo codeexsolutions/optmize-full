@@ -86,8 +86,10 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
     const tamanhoNovo = nomeDoTamanho.trim().toUpperCase();
     if (comoJuntar === "tamanho") {
       if (!tamanhoNovo) { setErroDeJuntar("Dê o nome do tamanho novo (ex.: G)."); return; }
-      if (molde.tamanhos.some((t) => t.nome === tamanhoNovo)) {
-        setErroDeJuntar(`Este molde já tem o tamanho ${tamanhoNovo}.`);
+      // Um tamanho declarado na grade e ainda vazio pode ser preenchido pela
+      // junção; o que já tem desenho, não.
+      if (molde.pecas.some((p) => p.tamanho.toUpperCase() === tamanhoNovo)) {
+        setErroDeJuntar(`Este molde já tem desenho no tamanho ${tamanhoNovo}.`);
         return;
       }
     }
@@ -106,7 +108,9 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
           daqui.map((d) => ({ grupo: d.grupo, ...medida(d.peca) })),
           dela.map(medida),
         ) as { grupo: number; indiceDela: number | null }[];
-        setCasamento({ tamanho: tamanhoNovo, cor: corDoTamanho || corLivre(), tamanhoDeLa: deLa ?? "", daqui, dela, pares });
+        // O nome como a grade o escreve, se ela já o declara.
+        const tamanhoDaGrade = molde.tamanhos.find((t) => t.nome.toUpperCase() === tamanhoNovo)?.nome ?? tamanhoNovo;
+        setCasamento({ tamanho: tamanhoDaGrade, cor: corDoTamanho || corLivre(), tamanhoDeLa: deLa ?? "", daqui, dela, pares });
         return;
       }
       const tamanhoDeLa = outro.pecas[0]?.tamanho;
@@ -134,7 +138,7 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
     // Um passo só no desfazer: as peças e a grade mudam juntas.
     molde.lembrar();
     molde.mudarPecas((antes) => juntarComoTamanho(antes, dela, pares, tamanho) as PecaEmMontagem[], false);
-    molde.mudarTamanhos((t) => [...t, { nome: tamanho, cor, ordem: t.length, base: false }]);
+    molde.mudarTamanhos((t) => (t.some((x) => x.nome === tamanho) ? t : [...t, { nome: tamanho, cor, ordem: t.length, base: false }]));
     setCasamento(null);
     setDeQual("");
     setNomeDoTamanho("");

@@ -10,17 +10,20 @@
  * é de cada tamanho, porque é assim que vem graduado da Audaces.
  */
 
+import { graduacaoRenomearTamanho, graduacaoTirarTamanho } from "./graduacao";
+
 /** Cores para tamanho sem cor guardada — as da Audaces primeiro. */
 export const PALETA = ["#00ff00", "#ff0000", "#00ffff", "#ff8000", "#ff00ff", "#0080ff", "#ffff00", "#8000ff", "#808080"];
 
 export function tamanhosDoMolde(pecas, guardados = []) {
   const saida = [];
   const vistos = new Set();
-  // Só os tamanhos que alguma peça tem: um tamanho guardado sem peça (desfazer
-  // uma junção, tirar um tamanho pelo passo a passo antigo) seria chip fantasma.
-  const nasPecas = new Set(pecas.map((p) => p.tamanho));
+  // A grade guarda os tamanhos DECLARADOS, mesmo sem desenho: é preciso
+  // declarar P, G e GG antes de graduar. O chip de tamanho que sobraria de uma
+  // junção desfeita não sobra porque o desfazer guarda a grade junto (ver
+  // useMoldeEmMontagem).
   for (const g of [...guardados].sort((a, b) => a.ordem - b.ordem)) {
-    if (vistos.has(g.nome) || !nasPecas.has(g.nome)) continue;
+    if (vistos.has(g.nome)) continue;
     vistos.add(g.nome);
     saida.push({ nome: g.nome, cor: g.cor || null, base: !!g.base });
   }
@@ -171,4 +174,73 @@ export function juntarComoTamanho(pecas, dela, pares, tamanho) {
     vindas.push(comunsDoGrupo(modelo)({ ...semId, tamanho, grupo }));
   }
   return [...pecas, ...vindas];
+}
+
+// ---------------------------------------------------------------------------
+// A GRADE (a janela "Grade" da Montagem)
+// ---------------------------------------------------------------------------
+
+const mesmoNome = (a, b) => String(a).trim().toUpperCase() === String(b).trim().toUpperCase();
+const emOrdem = (grade) => [...grade].sort((a, b) => a.ordem - b.ordem);
+const refazerOrdem = (lista) => lista.map((t, ordem) => ({ ...t, ordem }));
+
+/** Um tamanho novo no fim da grade — sem desenho ainda: é para graduar ou juntar. */
+export function acrescentarTamanho(grade, nome, cor) {
+  const limpo = String(nome || "").trim();
+  if (!limpo) return { erro: "Dê o nome do tamanho." };
+  if (grade.some((t) => mesmoNome(t.nome, limpo))) return { erro: `A grade já tem o tamanho ${limpo}.` };
+  const usadas = new Set(grade.map((t) => t.cor));
+  const corNova = cor || PALETA.find((c) => !usadas.has(c)) || PALETA[0];
+  return { grade: refazerOrdem([...emOrdem(grade), { nome: limpo, cor: corNova, ordem: 0, base: grade.length === 0 }]) };
+}
+
+/** Renomeia na grade, nas peças e nas chaves das regras de graduação. */
+export function renomearTamanho(pecas, grade, velho, novo) {
+  const limpo = String(novo || "").trim();
+  if (!limpo) return { erro: "O tamanho precisa de um nome." };
+  if (limpo === velho) return { pecas, grade };
+  if (grade.some((t) => t.nome !== velho && mesmoNome(t.nome, limpo))) return { erro: `A grade já tem o tamanho ${limpo}.` };
+  return {
+    grade: grade.map((t) => (t.nome === velho ? { ...t, nome: limpo } : t)),
+    pecas: pecas.map((p) => {
+      const q = p.tamanho === velho ? { ...p, tamanho: limpo } : p;
+      return q.graduacao ? { ...q, graduacao: graduacaoRenomearTamanho(q.graduacao, velho, limpo) } : q;
+    }),
+  };
+}
+
+/**
+ * Tira o tamanho da grade, as peças dele e os valores dele nas regras. O base
+ * não sai (marque outro antes), nem o último tamanho.
+ */
+export function tirarTamanho(pecas, grade, nome) {
+  const t = grade.find((x) => x.nome === nome);
+  if (!t) return { pecas, grade };
+  if (t.base) return { erro: "O base não pode sair: marque outro tamanho como base antes." };
+  if (grade.length <= 1) return { erro: "A grade precisa de pelo menos um tamanho." };
+  return {
+    grade: refazerOrdem(emOrdem(grade).filter((x) => x.nome !== nome)),
+    pecas: pecas
+      .filter((p) => p.tamanho !== nome)
+      .map((p) => (p.graduacao ? { ...p, graduacao: graduacaoTirarTamanho(p.graduacao, nome) } : p)),
+  };
+}
+
+/** Sobe (−1) ou desce (+1) o tamanho na ordem da grade. */
+export function moverTamanho(grade, nome, rumo) {
+  const lista = emOrdem(grade);
+  const i = lista.findIndex((t) => t.nome === nome);
+  const j = i + rumo;
+  if (i < 0 || j < 0 || j >= lista.length) return grade;
+  [lista[i], lista[j]] = [lista[j], lista[i]];
+  return refazerOrdem(lista);
+}
+
+export function marcarBase(grade, nome) {
+  return grade.map((t) => ({ ...t, base: t.nome === nome }));
+}
+
+export function trocarCor(grade, nome, cor) {
+  if (!/^#[0-9a-f]{6}$/i.test(String(cor))) return grade;
+  return grade.map((t) => (t.nome === nome ? { ...t, cor: cor.toLowerCase() } : t));
 }
