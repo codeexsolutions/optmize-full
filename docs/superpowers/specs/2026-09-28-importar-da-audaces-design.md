@@ -42,11 +42,11 @@ TACTEL.ads`, `PIJAMA INF. (M).ADS`, `PIJAMA INF. (G).ADS`, 11–15 KB):
 | Caixa de cada peça | 4 `double` (minX, minY, maxX, maxY) no começo do bloco da peça | confere com o desenho |
 | Contorno | trechos `u16 tipo, u16 n` + `n` pares de `double`; há parâmetros de Bézier (1/3, 2/3) | **em parte**: os trechos curvos saem certos (conferido contra a miniatura); faltam tipos (os retos, o retângulo da barra) |
 | Ficha da peça | textos `u16 tamanho + texto`: nome com quantidade ("COSTA 2X") e um rótulo livre ("SAIA BABADO CURTO") | confirmado |
-| Grade de tamanhos | tabela na peça, registros de 20 bytes: nome curto (P, M, G, GG), 8 bytes, **cor RGB** (`ff 00 00` P vermelho, `00 ff ff` M ciano, `ff 80 00` G laranja), `u32` | **achada**; falta fechar o registro do GG e uma cor verde (`00 ff 00`) antes do P, provável tamanho base |
+| Grade de tamanhos | tabela na peça, registros de 20 bytes: **cor RGB**, `u32` ativo, `01`, nome curto (P, M, G, GG), 8 bytes fixos. Saia e short: P `00ff00` verde, M `ff0000` vermelho, G `00ffff` ciano, GG `ff8000` laranja, os quatro ativos. Pijama M e G: um registro cada (ambos `ff0000`) | **achada e conferida nos 4** |
 | Desenho de cada tamanho | ? | **não achado** — regra por ponto ou contorno por tamanho |
 | Piques, fio, costura/corte | ? | **não achado** |
 
-Saia e short trazem P, M e G em todas as peças. Os dois pijamas trazem um
+Saia e short trazem P, M, G e GG em todas as peças. Os dois pijamas trazem um
 tamanho cada (M e G) — foram salvos um tamanho por arquivo.
 
 ## Decisões
