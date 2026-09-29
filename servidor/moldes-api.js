@@ -83,8 +83,8 @@ router.post("/", (req, res) => {
       .run(String(nome).trim(), String(observacoes || "").trim() || null, lerSituacao(situacao) || "pronto", agora());
     const inserir = db.prepare(`
       INSERT INTO molde_pecas
-        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem, grupo)
-      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem, @grupo)
+        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem, grupo, graduacao)
+      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem, @grupo, @graduacao)
     `);
     arrumadas.forEach((p) => inserir.run({ ...p, molde_id: info.lastInsertRowid }));
     const tamanhos = arrumarTamanhos(req.body.tamanhos);
@@ -114,8 +114,8 @@ router.put("/:id", (req, res) => {
     db.prepare("DELETE FROM molde_pecas WHERE molde_id = ?").run(molde.id);
     const inserir = db.prepare(`
       INSERT INTO molde_pecas
-        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem, grupo)
-      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem, @grupo)
+        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem, grupo, graduacao)
+      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem, @grupo, @graduacao)
     `);
     arrumadas.forEach((p) => inserir.run({ ...p, molde_id: molde.id }));
     // Sem `tamanhos` no pedido (o passo a passo antigo), a grade guardada fica.

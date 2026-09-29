@@ -80,4 +80,30 @@ assert.equal(lerSituacao("x"), null);
   assert.equal(arrumarPeca({ contorno: quadrado }, 0).grupo, null);
 }
 
+// 8. Graduação: limpa e conferida; só com nós; nó fora, número absurdo, modo torto e tamanho vazio saem.
+{
+  const nos = quadrado.map((p) => no(p.x, p.y));
+  const l = arrumarPeca({ contorno: quadrado, nos, graduacao: {
+    jeito: "pontos", porcentagem: 999, perdidos: 1,
+    regras: [
+      { no: 1, modo: "igual", passo: { dx: 1, dy: -0.5 } },
+      { no: 9, modo: "igual", passo: { dx: 1, dy: 0 } },
+      { no: 2, modo: "porTamanho", deslocamentos: { G: { dx: 2, dy: 0 }, "": { dx: 1, dy: 0 }, GG: { dx: 500, dy: 0 } } },
+      { no: 1, modo: "igual", passo: { dx: 9, dy: 9 } },
+      { no: 3, modo: "torto", passo: { dx: 1, dy: 1 } },
+    ],
+  } }, 0);
+  const gr = pecaDoBanco({ ...l, id: 1 }).graduacao;
+  assert.equal(gr.jeito, "pontos");
+  assert.equal(gr.porcentagem, 0, "porcentagem fora de −50…50 vira 0");
+  assert.equal(gr.perdidos, 1);
+  assert.deepEqual(gr.regras, [
+    { no: 1, modo: "igual", passo: { dx: 1, dy: -0.5 } },
+    { no: 2, modo: "porTamanho", deslocamentos: { G: { dx: 2, dy: 0 } } },
+  ]);
+  assert.equal(arrumarPeca({ contorno: quadrado, graduacao: { jeito: "pontos", regras: [] } }, 0).graduacao, null, "sem nós, sem graduação");
+  assert.equal(arrumarPeca({ contorno: quadrado, nos, graduacao: { jeito: "outro" } }, 0).graduacao, null);
+  assert.equal(pecaDoBanco({ ...arrumarPeca({ contorno: quadrado }, 0), id: 2 }).graduacao, null);
+}
+
 console.log("OK — o servidor guarda nós e marcações sem inventar nem perder.");

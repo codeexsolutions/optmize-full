@@ -33,6 +33,11 @@ export interface ParteEmEdicao {
    * muda o desenho, não qual peça é.
    */
   grupo?: number | null;
+  /**
+   * A graduação da peça no molde guardado. O passo a passo não a edita, só a
+   * devolve — e trocar o arquivo a descarta: ela é presa aos nós.
+   */
+  graduacao?: import("../../api/moldes").Graduacao | null;
   largura: number;
   altura: number;
   contorno: { x: number; y: number }[] | null;

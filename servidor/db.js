@@ -504,6 +504,9 @@ db.exec(`
   );
 `);
 garantirColuna("molde_pecas", "grupo", "INTEGER");
+// A graduação da peça (docs/superpowers/specs/2026-09-29-graduacao-design.md),
+// só na linha do tamanho base.
+garantirColuna("molde_pecas", "graduacao", "TEXT");
 
 db.pragma("optimize");
 

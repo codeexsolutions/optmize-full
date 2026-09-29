@@ -47,6 +47,24 @@ export interface TamanhoDoMolde {
   base: boolean;
 }
 
+/** Quanto um ponto anda, em cm (x para a direita, y para baixo). */
+export interface Deslocamento { dx: number; dy: number }
+
+/** A regra de um nó. Ver `motores/graduacao.js`. */
+export type RegraDeGraduacao =
+  | { no: number; modo: "igual"; passo: Deslocamento }
+  | { no: number; modo: "porTamanho"; deslocamentos: Record<string, Deslocamento> };
+
+/** A graduação de uma peça, guardada na linha do tamanho base. */
+export interface Graduacao {
+  jeito: "pontos" | "porcentagem";
+  regras: RegraDeGraduacao[];
+  /** % por tamanho, no jeito "porcentagem". */
+  porcentagem: number;
+  /** Regras perdidas quando nós do base foram apagados (a tela avisa). */
+  perdidos?: number;
+}
+
 /** Uma peça do molde: o contorno de UMA parte, num tamanho. */
 export interface PecaDoMolde {
   id?: number;
@@ -65,6 +83,8 @@ export interface PecaDoMolde {
   ordem?: number;
   /** Linhas com o mesmo grupo são a mesma peça em tamanhos diferentes. */
   grupo?: number | null;
+  /** Só na linha do base: a regra que gera os outros tamanhos. */
+  graduacao?: Graduacao | null;
 }
 
 /** O ajuste de uma arte dentro do contorno. Ver `motores/arteMolde.js`. */
