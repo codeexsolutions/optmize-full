@@ -86,3 +86,37 @@ export function desenharNos(
     ctx.stroke();
   });
 }
+
+/**
+ * Os pontos de graduação (nós com regra) ganham um losango amarelo; o nó cuja
+ * regra está aberta no bloco ganha um anel. Desenhado por cima dos nós.
+ */
+export function desenharPontosDeGraduacao(
+  ctx: CanvasRenderingContext2D, nos: No[], comRegra: readonly number[], marcado: number | null, emTela: (p: Ponto) => Ponto,
+) {
+  for (const i of comRegra) {
+    const n = nos[i];
+    if (!n) continue;
+    const c = emTela(n);
+    const r = 7;
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y - r);
+    ctx.lineTo(c.x + r, c.y);
+    ctx.lineTo(c.x, c.y + r);
+    ctx.lineTo(c.x - r, c.y);
+    ctx.closePath();
+    ctx.fillStyle = "#f5c518";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(10, 14, 16, 0.95)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  if (marcado !== null && nos[marcado]) {
+    const c = emTela(nos[marcado]!);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 11, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ff7a1a";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  }
+}

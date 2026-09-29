@@ -4,12 +4,13 @@
  * A MESA — onde a peça é marcada
  * ===========================================================================
  *
- * Um canvas em cima de uma grade de 1 cm. Quatro ferramentas, uma de cada vez:
+ * Um canvas em cima de uma grade de 1 cm. Cinco ferramentas, uma de cada vez:
  *
- *   NÓS    a edição do Digitalizar, as mesmas contas (`motores/edicaoDeNos.js`);
- *   PIQUE  clique no traço põe, clique num pique tira;
- *   PONTO  clique dentro da peça põe, clique num ponto tira;
- *   FIO    arrasta pelo meio, gira pelas pontas.
+ *   NÓS      a edição do Digitalizar, as mesmas contas (`motores/edicaoDeNos.js`);
+ *   PIQUE    clique no traço põe, clique num pique tira;
+ *   PONTO    clique dentro da peça põe, clique num ponto tira;
+ *   FIO      arrasta pelo meio, gira pelas pontas;
+ *   GRADUAR  clique num nó abre a regra dele (o bloco da graduação); nada se arrasta.
  *
  * Uma ferramenta por vez, e não um clique que adivinha, porque os alvos se
  * sobrepõem: pique mora em cima do traço, e o traço é onde o nó também mora.
@@ -27,11 +28,11 @@ import {
   PROFUNDIDADE_DO_PIQUE, apagarNoDaPeca, arranjar, caixaDe, desenhoDaPeca, inserirNoNaPeca,
   pecaParaGravar, posicaoDoPique,
 } from "../../motores/montagem";
-import { desenharNos, tracarCaminho, type Ponto } from "../risco/desenhoDeNos";
+import { desenharNos, desenharPontosDeGraduacao, tracarCaminho, type Ponto } from "../risco/desenhoDeNos";
 import { corDaPeca } from "../../utils/coresDePeca";
 import type { PecaEmMontagem } from "./useMoldeEmMontagem";
 
-export type Ferramenta = "nos" | "pique" | "ponto" | "fio";
+export type Ferramenta = "nos" | "pique" | "ponto" | "fio" | "graduar";
 
 /** Pixels de canvas por centímetro enquanto a largura da mesa não é conhecida. */
 const PX_POR_CM = 24;
@@ -59,8 +60,10 @@ interface Props {
   aoEscolherPeca: (indice: number) => void;
   aoLembrar: () => void;
   aoMudar: (mudar: (peca: PecaEmMontagem) => PecaEmMontagem, lembrarAntes: boolean) => void;
-  /** Os outros tamanhos da peça ("Ver tamanhos"), desenhados por baixo, cada um na sua cor. */
-  camadas?: { nos: PecaEmMontagem["nos"]; cor: string }[];
+  /** Os outros tamanhos da peça, desenhados por baixo, cada um na sua cor; `tracejada` na prévia da graduação. */
+  camadas?: { nos: PecaEmMontagem["nos"]; cor: string; tracejada?: boolean }[];
+  /** Na ferramenta Graduar: os nós que têm regra (ganham o losango). */
+  regras?: readonly number[];
 }
 
 /**
@@ -93,6 +96,7 @@ function desenhoParaVer(p: PecaEmMontagem) {
 export function Mesa(props: Props) {
   const { pecas, indice, ferramenta, verTodas, noAtivo, comErro } = props;
   const camadas = useMemo(() => props.camadas ?? [], [props.camadas]);
+  const regras = useMemo(() => props.regras ?? [], [props.regras]);
   const peca = pecas[indice];
   const tela = useRef<HTMLCanvasElement>(null);
   const moldura = useRef<HTMLDivElement>(null);
@@ -221,7 +225,9 @@ export function Mesa(props: Props) {
       ctx.strokeStyle = k.cor;
       ctx.globalAlpha = 0.75;
       ctx.lineWidth = 1.25;
+      ctx.setLineDash(k.tracejada ? [6, 4] : []);
       ctx.stroke();
+      ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     }
     // A peça escolhida, na posição em que está sendo editada (sem encostar no canto).
@@ -243,7 +249,11 @@ export function Mesa(props: Props) {
       ctx.fillText("A margem fecha a peça sobre ela mesma: diminua a margem.", 12 * fator, 22 * fator);
     }
     if (ferramenta === "nos") desenharNos(ctx, peca.nos, noAtivoValido, emTela);
-  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro, camadas]);
+    if (ferramenta === "graduar") {
+      desenharNos(ctx, peca.nos, null, emTela);
+      desenharPontosDeGraduacao(ctx, peca.nos, regras, noAtivoValido, emTela);
+    }
+  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro, camadas, regras]);
 
   // ------------------------------------------------------------ o ponteiro
   const aoApertar = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -301,6 +311,15 @@ export function Mesa(props: Props) {
         ...p,
         marcacoes: { ...p.marcacoes, pontos: [...p.marcacoes.pontos, alvo] },
       }), true);
+      return;
+    } else if (ferramenta === "graduar") {
+      // Clicar num nó abre a regra dele no bloco da graduação. Nada se arrasta.
+      // O campo do bloco que estava sendo digitado grava AGORA, no nó de antes:
+      // o blur natural só viria depois deste pointerdown, com o bloco já no nó
+      // novo — e o número cairia nele.
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      const sob = pegaSob(peca.nos, alvo, raio, null);
+      props.aoMarcarNo(sob ? sob.no : null);
       return;
     } else {
       const f = peca.marcacoes.fio;

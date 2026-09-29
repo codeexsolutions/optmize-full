@@ -9,7 +9,9 @@ import { Icone } from "../../casca/Icone";
 import { useMoldeEmMontagem, type PecaEmMontagem } from "./useMoldeEmMontagem";
 import { ChipsDeTamanho } from "./ChipsDeTamanho";
 import { JanelaDaGrade } from "./JanelaDaGrade";
-import { alinhamentoDaCamada, transladarNos } from "../../motores/graduacao";
+import { alinhamentoDaCamada, gerarTamanho, graduacaoVazia, transladarNos } from "../../motores/graduacao";
+import type { Graduacao } from "../../api/moldes";
+import { BlocoDaGraduacao } from "./BlocoDaGraduacao";
 import { aplicarNoGrupo, comunsDoGrupo, gruposDasPecas } from "../../motores/tamanhos";
 import type { GrupoDePecas } from "./useMoldeEmMontagem";
 import { EscolhaDoMolde } from "./EscolhaDoMolde";
@@ -25,6 +27,7 @@ const FERRAMENTAS: { qual: Ferramenta; rotulo: string; icone: string; dica: stri
   { qual: "pique", rotulo: "Pique", icone: "icones.svg#scissors", dica: "Clique no traço para pôr um pique; num pique, para tirar" },
   { qual: "ponto", rotulo: "Ponto", icone: "icones.svg#crosshair", dica: "Clique dentro da peça para marcar pence ou bolso" },
   { qual: "fio", rotulo: "Fio", icone: "icones.svg#move-vertical", dica: "Arraste o meio para mover, uma ponta para girar" },
+  { qual: "graduar", rotulo: "Graduar", icone: "icones.svg#ruler", dica: "Clique num nó para ver ou pôr a regra de graduação; os outros tamanhos aparecem tracejados" },
 ];
 
 export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
@@ -58,6 +61,36 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   const baseDoGrupo = doGrupo
     ? Object.values(doGrupo.porTamanho).map((i) => molde.pecas[i]).find((p) => p?.graduacao) ?? null
     : null;
+
+  // O base da graduação desta peça: a linha que guarda a regra, ou a do base da grade.
+  const iDaBase: number | undefined = doGrupo
+    ? (Object.values(doGrupo.porTamanho).find((i) => molde.pecas[i]?.graduacao) ?? doGrupo.porTamanho[baseDaGrade])
+    : undefined;
+  const pecaDaBase = iDaBase === undefined ? null : molde.pecas[iDaBase] ?? null;
+
+  // A prévia: com a ferramenta Graduar, os outros tamanhos da grade, calculados das regras, tracejados.
+  const previa = useMemo(() => {
+    if (ferramenta !== "graduar" || !pecaDaBase?.graduacao) return [];
+    return molde.tamanhos
+      .filter((t) => t.nome !== pecaDaBase.tamanho)
+      .map((t) => {
+        const r = gerarTamanho(pecaDaBase, molde.tamanhos, t.nome);
+        return r.peca ? { nos: r.peca.nos, cor: t.cor, tracejada: true } : null;
+      })
+      .filter((c): c is { nos: PecaEmMontagem["nos"]; cor: string; tracejada: boolean } => c !== null);
+  }, [ferramenta, pecaDaBase, molde.tamanhos]);
+  const regrasNaMesa = useMemo(
+    () => (ferramenta === "graduar" && pecaDaBase?.graduacao?.jeito === "pontos" ? pecaDaBase.graduacao.regras.map((r) => r.no) : []),
+    [ferramenta, pecaDaBase],
+  );
+
+  // A ferramenta Graduar trabalha no base: troca para ele se outro chip estiver
+  // marcado. Compara o chip, e não `peca`: com um tamanho sem desenho marcado,
+  // `peca` já é o base (é o que a mesa mostraria), mas a tela mostra o aviso.
+  useEffect(() => {
+    if (ferramenta !== "graduar" || !pecaDaBase || escolhido === pecaDaBase.tamanho) return;
+    setTamanhoAtivo(pecaDaBase.tamanho);
+  }, [ferramenta, pecaDaBase, escolhido]);
 
   // As peças do tamanho da peça mostrada: é o que a Mesa desenha e o "ver todas" arranja.
   const doTamanho = useMemo(
@@ -101,8 +134,12 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   useEffect(() => {
     const ouvir = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+      // Só campo de texto: rádio e caixa de marcar (o bloco da graduação) não
+      // têm texto para desfazer, e o foco fica neles depois do clique.
       const foco = document.activeElement as HTMLElement | null;
-      if (foco && ["INPUT", "TEXTAREA"].includes(foco.tagName)) return;
+      const digitando = !!foco && (foco.tagName === "TEXTAREA" || (foco.tagName === "INPUT"
+        && !["radio", "checkbox", "button", "color", "range"].includes((foco as HTMLInputElement).type)));
+      if (digitando) return;
       e.preventDefault();
       molde.desfazer();
     };
@@ -128,6 +165,12 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
 
   const mudarEsta = (mudar: Parameters<typeof molde.mudarPeca>[1], lembrarAntes: boolean) =>
     molde.mudarPeca(atual, mudar, lembrarAntes);
+
+  /** Mexe na graduação da peça (na linha do base). */
+  const mudarGraduacao = (mudar: (g: Graduacao) => Graduacao, lembrarAntes: boolean) => {
+    if (iDaBase === undefined) return;
+    molde.mudarPeca(iDaBase, (p) => ({ ...p, graduacao: mudar(p.graduacao ?? (graduacaoVazia() as Graduacao)) }), lembrarAntes);
+  };
 
   /** Nome, papel, quantidade, espelhar e margem: o grupo inteiro, todos os tamanhos. */
   const mudarGrupo = (mudar: (p: PecaEmMontagem) => PecaEmMontagem, lembrarAntes: boolean) => {
@@ -192,7 +235,8 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
           <Mesa
             pecas={doTamanho.map((x) => x.p)}
             indice={naMesa}
-            camadas={camadas}
+            camadas={ferramenta === "graduar" ? previa : camadas}
+            regras={regrasNaMesa}
             ferramenta={ferramenta}
             verTodas={verTodas}
             noAtivo={noAtivo}
@@ -208,7 +252,12 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
           />
           )}
         </div>
-        {peca && !semDesenho && <PainelDaPeca peca={peca} aoMudar={mudarEsta} aoMudarGrupo={mudarGrupo} />}
+        {ferramenta === "graduar" ? (
+          <BlocoDaGraduacao base={pecaDaBase} baseDaGrade={baseDaGrade} grade={molde.tamanhos}
+            noDaRegra={noAtivo} aoMudarGraduacao={mudarGraduacao} />
+        ) : (
+          peca && !semDesenho && <PainelDaPeca peca={peca} aoMudar={mudarEsta} aoMudarGrupo={mudarGrupo} />
+        )}
       </div>
     </div>
   );
