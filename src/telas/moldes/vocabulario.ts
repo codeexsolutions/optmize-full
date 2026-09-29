@@ -27,6 +27,12 @@ export interface ParteEmEdicao {
    * o descarta junto com `nos` e `marcacoes`.
    */
   nomeGuardado?: string;
+  /**
+   * O grupo da peça no molde guardado (a mesma peça nos outros tamanhos). O
+   * passo a passo não o edita, só o devolve — trocar o arquivo o descarta,
+   * como os nós.
+   */
+  grupo?: number | null;
   largura: number;
   altura: number;
   contorno: { x: number; y: number }[] | null;

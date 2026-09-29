@@ -107,6 +107,7 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
         origem: peca.origem || "guardado",
         nos: peca.nos ?? null,
         marcacoes: peca.marcacoes ?? null,
+        grupo: peca.grupo ?? null,
       });
     }
     const tamanhos = Object.keys(mapa);
@@ -206,6 +207,7 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
       ...parte,
       nome: doNome.nome,
       nomeGuardado: "",
+      grupo: null,
       largura: Math.round(desenho.largura * 10) / 10,
       altura: Math.round(desenho.altura * 10) / 10,
       contorno: desenho.contorno,
@@ -380,6 +382,9 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
         origem: p.origem,
         nos: p.nos,
         marcacoes: p.marcacoes,
+        // O grupo volta; a grade de tamanhos (com as cores) não vai no pedido,
+        // e o servidor a mantém.
+        grupo: p.grupo ?? null,
         ordem,
       })),
     };
