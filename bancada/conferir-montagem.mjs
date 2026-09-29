@@ -157,4 +157,16 @@ for (const volta of [quadrado, [...quadrado].reverse()]) {
   assert.ok(!svg.includes("<teste>"), "nome escapado");
 }
 
+// Graduação presa aos nós: inserir e apagar nó levam as regras junto.
+{
+  const p = { ...pecaQuadrada(), graduacao: { jeito: "pontos", porcentagem: 0, regras: [
+    { no: 1, modo: "igual", passo: { dx: 1, dy: 0 } }, { no: 2, modo: "igual", passo: { dx: 1, dy: 1 } }] } };
+  const inserida = m.inserirNoNaPeca(p, 0, 0.5);
+  assert.deepEqual(inserida.graduacao.regras.map((r) => r.no), [2, 3], "o nó novo entrou antes das regras");
+  const apagada = m.apagarNoDaPeca(p, 1);
+  assert.deepEqual(apagada.graduacao.regras.map((r) => r.no), [1]);
+  assert.equal(apagada.graduacao.perdidos, 1);
+  assert.equal(m.inserirNoNaPeca(pecaQuadrada(), 0, 0.5).graduacao, undefined, "peça sem graduação continua sem");
+}
+
 console.log("OK — as contas da Montagem conferem.");

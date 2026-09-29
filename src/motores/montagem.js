@@ -34,6 +34,7 @@
 import { achatarCurvas } from "./ajusteDeCurvas";
 import { areaComSinalDe, margemDeCostura } from "./margemDeCostura";
 import { apagarNo, inserirNoNoTraco, pontoNoTrecho } from "./edicaoDeNos";
+import { graduacaoAoApagarNo, graduacaoAoInserirNo } from "./graduacao";
 
 /** Meio centímetro: o pique que a tesoura faz sem pensar. */
 export const PROFUNDIDADE_DO_PIQUE = 0.5;
@@ -126,7 +127,13 @@ export function inserirNoNaPeca(peca, i, t) {
     if (p.no > i) return { ...p, no: p.no + 1 };
     return p.t < t ? { ...p, t: p.t / t } : { ...p, no: i + 1, t: (p.t - t) / (1 - t) };
   });
-  return { ...peca, nos, marcacoes: { ...peca.marcacoes, piques } };
+  return {
+    ...peca,
+    nos,
+    marcacoes: { ...peca.marcacoes, piques },
+    // A regra da graduação é presa ao nó, como o pique ao trecho.
+    ...(peca.graduacao ? { graduacao: graduacaoAoInserirNo(peca.graduacao, i) } : {}),
+  };
 }
 
 /**
@@ -150,7 +157,12 @@ export function apagarNoDaPeca(peca, i) {
     if (no > i) no -= 1;
     return { ...p, no, t };
   });
-  return { ...peca, nos, marcacoes: { ...peca.marcacoes, piques } };
+  return {
+    ...peca,
+    nos,
+    marcacoes: { ...peca.marcacoes, piques },
+    ...(peca.graduacao ? { graduacao: graduacaoAoApagarNo(peca.graduacao, i) } : {}),
+  };
 }
 
 /**
