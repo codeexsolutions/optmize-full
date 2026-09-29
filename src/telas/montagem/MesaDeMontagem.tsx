@@ -8,6 +8,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Icone } from "../../casca/Icone";
 import { useMoldeEmMontagem, type PecaEmMontagem } from "./useMoldeEmMontagem";
 import { ChipsDeTamanho } from "./ChipsDeTamanho";
+import { JanelaDaGrade } from "./JanelaDaGrade";
+import { alinhamentoDaCamada, transladarNos } from "../../motores/graduacao";
 import { aplicarNoGrupo, comunsDoGrupo, gruposDasPecas } from "../../motores/tamanhos";
 import type { GrupoDePecas } from "./useMoldeEmMontagem";
 import { EscolhaDoMolde } from "./EscolhaDoMolde";
@@ -32,23 +34,30 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   const [grupo, setGrupo] = useState(0);
   const [tamanhoAtivo, setTamanhoAtivo] = useState("");
   const [verTamanhos, setVerTamanhos] = useState(false);
+  const [gradeAberta, setGradeAberta] = useState(false);
   const [ferramenta, setFerramenta] = useState<Ferramenta>("nos");
   const [verTodas, setVerTodas] = useState(false);
   const [noAtivo, setNoAtivo] = useState<number | null>(null);
 
   const grupos = useMemo(() => gruposDasPecas(molde.pecas) as GrupoDePecas[], [molde.pecas]);
-  const tamanhoValido = molde.tamanhos.some((t) => t.nome === tamanhoAtivo)
-    ? tamanhoAtivo
-    : (molde.tamanhos.find((t) => t.base)?.nome ?? molde.tamanhos[0]?.nome ?? "");
+  // O tamanho que a pessoa escolheu no chip ("" = ainda não escolheu).
+  const escolhido = molde.tamanhos.some((t) => t.nome === tamanhoAtivo) ? tamanhoAtivo : "";
+  const baseDaGrade = molde.tamanhos.find((t) => t.base)?.nome ?? molde.tamanhos[0]?.nome ?? "";
   const doGrupo = grupos.find((g) => g.grupo === grupo) ?? grupos[0];
+  // Escolheu um tamanho que a peça não tem: a mesa AVISA, em vez de mostrar
+  // outro tamanho no lugar — editar ali mexeria no tamanho errado.
+  const semDesenho = !!escolhido && !!doGrupo && doGrupo.porTamanho[escolhido] === undefined;
+  const tamanhoMostrado = escolhido && !semDesenho ? escolhido : baseDaGrade;
 
   // Um só índice (na lista plana de peças), usado em TUDO (peça mostrada,
-  // `mudarEsta`, a Mesa) — duas fontes da verdade (uma "para mostrar", outra
-  // "para mexer") foi exatamente o bug de antes: a tela mostrava uma peça e a
-  // mexida ia para outra. Se o grupo não tem o tamanho ativo, vale o primeiro
-  // tamanho que ele tem.
-  const atual = doGrupo ? (doGrupo.porTamanho[tamanhoValido] ?? Object.values(doGrupo.porTamanho)[0] ?? 0) : 0;
+  // `mudarEsta`, a Mesa). Sem escolha, o base; se o grupo não tem o base, o
+  // primeiro tamanho que ele tem.
+  const atual = doGrupo ? (doGrupo.porTamanho[tamanhoMostrado] ?? Object.values(doGrupo.porTamanho)[0] ?? 0) : 0;
   const peca = molde.pecas[atual];
+  // A linha graduada do grupo (a que guarda a regra): é por ela que as camadas se alinham.
+  const baseDoGrupo = doGrupo
+    ? Object.values(doGrupo.porTamanho).map((i) => molde.pecas[i]).find((p) => p?.graduacao) ?? null
+    : null;
 
   // As peças do tamanho da peça mostrada: é o que a Mesa desenha e o "ver todas" arranja.
   const doTamanho = useMemo(
@@ -59,8 +68,12 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   const camadas = useMemo(() => (verTamanhos && doGrupo && peca
     ? Object.entries(doGrupo.porTamanho)
       .filter(([t]) => t !== peca.tamanho)
-      .map(([t, i]) => ({ nos: molde.pecas[i]!.nos, cor: molde.tamanhos.find((x) => x.nome === t)?.cor ?? "#888888" }))
-    : []), [verTamanhos, doGrupo, peca, molde.pecas, molde.tamanhos]);
+      .map(([t, i]) => {
+        const outra = molde.pecas[i]!;
+        const d = alinhamentoDaCamada(peca, outra, baseDoGrupo, molde.tamanhos);
+        return { nos: transladarNos(outra.nos, d), cor: molde.tamanhos.find((x) => x.nome === t)?.cor ?? "#888888" };
+      })
+    : []), [verTamanhos, doGrupo, peca, baseDoGrupo, molde.pecas, molde.tamanhos]);
 
   useEffect(() => { setNoAtivo(null); }, [atual, ferramenta]);
 
@@ -135,7 +148,7 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
 
   return (
     <div className="flex h-full flex-col">
-      <BarraDaMontagem molde={molde} moldeId={id} aoTrocar={aoTrocar} aoIrParaPeca={irParaPeca} tamanhoAtivo={peca?.tamanho ?? tamanhoValido} />
+      <BarraDaMontagem molde={molde} moldeId={id} aoTrocar={aoTrocar} aoIrParaPeca={irParaPeca} tamanhoAtivo={tamanhoMostrado} />
       <div className="flex items-center gap-1 border-b border-linha px-3 py-1.5">
         {FERRAMENTAS.map((f) => (
           <button
@@ -156,18 +169,26 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
           {FERRAMENTAS.find((f) => f.qual === ferramenta)?.dica}. Roda do mouse aproxima.
         </span>
       </div>
-      {molde.tamanhos.length > 1 && (
-        <ChipsDeTamanho
-          tamanhos={molde.tamanhos}
-          ativo={peca?.tamanho ?? tamanhoValido}
-          aoEscolher={setTamanhoAtivo}
-          verTamanhos={verTamanhos}
-          aoVerTamanhos={setVerTamanhos}
-        />
-      )}
+      <ChipsDeTamanho
+        tamanhos={molde.tamanhos}
+        ativo={escolhido || peca?.tamanho || baseDaGrade}
+        comDesenho={new Set(Object.keys(doGrupo?.porTamanho ?? {}))}
+        aoEscolher={setTamanhoAtivo}
+        verTamanhos={verTamanhos}
+        aoVerTamanhos={setVerTamanhos}
+        aoAbrirGrade={() => setGradeAberta(true)}
+      />
+      {gradeAberta && <JanelaDaGrade molde={molde} aoFechar={() => setGradeAberta(false)} />}
       <div className="flex min-h-0 flex-1">
         <ListaDePecas molde={molde} moldeId={id} grupo={doGrupo?.grupo ?? 0} aoEscolherGrupo={setGrupo} />
         <div className="min-w-0 flex-1">
+          {semDesenho ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-tinta-fraca">
+              <p className="m-0">Esta peça ainda não tem o tamanho {escolhido}.</p>
+              <p className="m-0">Gradue a partir do base (ferramenta Graduar) ou junte um molde como {escolhido}.</p>
+              <button type="button" className="btn secondary btn-sm" onClick={() => setTamanhoAtivo("")}>Ver o base</button>
+            </div>
+          ) : (
           <Mesa
             pecas={doTamanho.map((x) => x.p)}
             indice={naMesa}
@@ -185,8 +206,9 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
             aoLembrar={molde.lembrar}
             aoMudar={mudarEsta}
           />
+          )}
         </div>
-        {peca && <PainelDaPeca peca={peca} aoMudar={mudarEsta} aoMudarGrupo={mudarGrupo} />}
+        {peca && !semDesenho && <PainelDaPeca peca={peca} aoMudar={mudarEsta} aoMudarGrupo={mudarGrupo} />}
       </div>
     </div>
   );
