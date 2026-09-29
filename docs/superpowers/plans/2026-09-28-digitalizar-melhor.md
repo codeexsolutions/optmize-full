@@ -1,5 +1,10 @@
 # Digitalizar melhor — Plano de Implementação
 
+> **2026-09-29:** as tarefas da parte **B** deste plano (vários nós, Virar reta/curva,
+> girar) foram substituídas pelo editor estilo Corel — spec
+> `2026-09-29-editor-estilo-corel-design.md`, com plano próprio. Quando chegar a vez
+> da parte **A** (o último trabalho da fila), este plano é refeito só com ela.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** O traço das peças recortadas sai limpo (retas retas, cantos no lugar, curvas suaves, poucos nós, sem pegar a faixa da mesa) e o editor de nós passa a mexer em vários nós de uma vez (mover, apagar, Virar reta, Virar curva), com girar a peça na Montagem.

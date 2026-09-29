@@ -2,6 +2,11 @@
 
 Data: 2026-09-28 · Estado: design aprovado em conversa, aguardando revisão da spec
 
+> **2026-09-29:** a parte **B** foi substituída pela spec do editor estilo Corel
+> (`2026-09-29-editor-estilo-corel-design.md`), e a parte **D** virou a spec da
+> graduação (`2026-09-29-graduacao-design.md`, já feita). Aqui vale só a parte
+> **A**, o último trabalho da fila.
+
 Esta é a parte **A+B** de quatro. As outras têm spec própria, depois desta:
 
 - **A. Peças recortadas mais limpas** (esta) — o traço da foto sai com as
