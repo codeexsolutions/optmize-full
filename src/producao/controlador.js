@@ -27,7 +27,7 @@ import {
 import { lerQuantidadeDoNome } from "../motores/nomeDeArquivo";
 import {
   bancadasDoResultado, cortesEntreBancadas, desenharEncaixe, desenharMidiaVazia,
-  desenharRascunho,
+  desenharRascunho, prepararPrevias,
 } from "../motores/desenhoDoEncaixe";
 import { prepararArtes } from "../motores/exportarEncaixe";
 import { DPI_PREVIA } from "../motores/resolucaoDaArte";
@@ -2653,6 +2653,11 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
   // morria em "The image source is detached", e só às vezes: quando o fundo
   // terminava antes do clique, passava.
   await preparoDeFundo;
+  // As prévias da tela saem agora, enquanto a busca ainda nem começou: sem
+  // elas, o primeiro desenho do risco sobe cada arte inteira para a placa de
+  // vídeo e trava a tela uns 600 ms (ver "A PRÉVIA DA TELA", em
+  // desenhoDoEncaixe.js). Não se espera por elas: a busca leva mais.
+  prepararPrevias(pecasEncaixe.map((peca) => peca.img));
 
   // Expande pela quantidade: cada cópia é uma peça independente no encaixe.
   const itens = [];

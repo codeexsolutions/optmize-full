@@ -42,6 +42,67 @@ import { corDaPeca } from "../utils/coresDePeca";
 /** Nada marcado. Uma só, para não criar um Set a cada desenho. */
 const SEM_SELECAO = new Set();
 
+/*
+ * ===========================================================================
+ * A PRÉVIA DA TELA
+ * ===========================================================================
+ *
+ * A arte de trabalho tem milhares de pixels de lado (uma camiseta a 195 dpi
+ * passa de 4.900), e na tela a peça ocupa umas centenas. Desenhá-la assim não
+ * custa a redução — custa SUBIR o bitmap para a placa de vídeo na primeira vez
+ * que ele é desenhado: medido, 570 a 620 ms para seis artes, com a tela
+ * parada logo depois do encaixe, antes mesmo de a conferência começar.
+ *
+ * Então a tela desenha uma prévia de até `LADO_DA_PREVIA` px, feita uma vez por
+ * arte. Seis prévias saem em ~60 ms, e o desenho com elas em ~7 ms.
+ *
+ * A redução é "low" (bilinear), e não "medium": a "medium" trava a tela 5
+ * vezes mais (314 ms contra 60) e a diferença medida foi de 0,09 de média em
+ * 255. O desenho de antes, direto da arte grande, já era bilinear.
+ *
+ * Só a TELA usa prévia, e só quando ela basta para o tamanho em que a peça
+ * está sendo desenhada — com zoom grande, volta a arte de trabalho. O PNG, o
+ * PDF e a conferência pela arte nunca passam por aqui.
+ *
+ * O `WeakMap` é pela arte: arte trocada (o fundo saiu, girou) é outra chave, e
+ * a prévia da velha vai embora junto com ela.
+ */
+const LADO_DA_PREVIA = 1024;
+const previas = new WeakMap();
+
+/** Faz (uma vez) a prévia de cada arte. Devolve quando todas estão prontas. */
+export async function prepararPrevias(imagens) {
+  await Promise.all(imagens.map(async (img) => {
+    if (!img || previas.has(img)) return;
+    const largura = img.naturalWidth || img.width;
+    const altura = img.naturalHeight || img.height;
+    const maior = Math.max(largura, altura);
+    if (!maior || maior <= LADO_DA_PREVIA || typeof createImageBitmap !== "function") return;
+    // Marca antes do `await`: dois desenhos seguidos não fazem duas prévias.
+    previas.set(img, null);
+    try {
+      const fator = LADO_DA_PREVIA / maior;
+      previas.set(img, await createImageBitmap(img, {
+        resizeWidth: Math.max(1, Math.round(largura * fator)),
+        resizeHeight: Math.max(1, Math.round(altura * fator)),
+        resizeQuality: "low",
+      }));
+    } catch (e) {
+      // Sem prévia a tela desenha a arte de trabalho, como sempre desenhou.
+    }
+  }));
+}
+
+/** A prévia de `img`, se ela existe e basta para `lado` pixels de tela. */
+function previaQueServe(img, lado) {
+  const previa = img ? previas.get(img) : null;
+  if (previa === undefined) {
+    prepararPrevias([img]); // fica para o próximo desenho
+    return null;
+  }
+  return previa && lado <= Math.max(previa.width, previa.height) ? previa : null;
+}
+
 /**
  * Desenha o rolo em pé (largura na horizontal, comprimento descendo), com a
  * arte de cada peça dentro do seu lugar — igual à prévia dos encaixadores.
@@ -52,8 +113,10 @@ const SEM_SELECAO = new Set();
  * Cada rotação tem sua própria origem porque o canvas gira em torno do ponto
  * transladado — errar isso joga a arte para fora do lugar.
  */
-export function desenharArte(ctx, p, x, y, w, h) {
-  const img = p.item.img;
+export function desenharArte(ctx, p, x, y, w, h, fonte = null) {
+  // `fonte` é a mesma arte noutro tamanho (a prévia da tela); o giro e a caixa
+  // são os de sempre, porque o `drawImage` estica a fonte até a caixa.
+  const img = fonte || p.item.img;
   // O giro do encaixe mais o giro que a peça recebeu antes dele (ver "O GIRO
   // DA PEÇA ANTES DO ENCAIXE", em encaixeMascara.js). `w` e `h` já são a caixa
   // da peça no rolo, então só o giro da arte dentro dela muda.
@@ -341,7 +404,7 @@ export function desenharEncaixe(canvas, r, {
     ctx.beginPath();
     ctx.rect(x, y, w, h);
     ctx.clip();
-    desenharArte(ctx, p, x, y, w, h);
+    desenharArte(ctx, p, x, y, w, h, escala ? null : previaQueServe(p.item.img, Math.max(w, h) * dpr));
     ctx.restore();
 
     // No contorno, o traço segue a silhueta; no retângulo, a caixa mesmo.
