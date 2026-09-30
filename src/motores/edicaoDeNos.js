@@ -171,33 +171,45 @@ export function inserirNoNoTraco(nos, i, t) {
 }
 
 /**
- * O que está debaixo do ponteiro: uma alça do nó ativo, ou um nó.
+ * O que está debaixo do ponteiro: uma alça de um nó selecionado, ou um nó.
  *
- * As alças primeiro: ficam por cima e costumam estar perto do nó. Lado reto
- * não tem alça para pegar — ela está em cima do nó, e deixar pegá-la roubaria
- * o clique do próprio nó.
+ * As alças primeiro: ficam por cima e costumam estar perto do nó. Só as dos
+ * nós em `comAlcas` (um índice, uma lista ou um Set; `null` = nenhum) — são
+ * as que estão desenhadas. Lado reto não tem alça para pegar, e alça zerada
+ * também não: as duas estão em cima do nó, e pegá-las roubaria o clique dele.
  */
-export function pegaSob(nos, alvo, raio, noAtivo) {
-  if (noAtivo !== null && noAtivo !== undefined && nos[noAtivo]) {
-    const n = nos[noAtivo];
-    const anterior = nos[(noAtivo - 1 + nos.length) % nos.length];
+export function pegaSob(nos, alvo, raio, comAlcas) {
+  const n = nos.length;
+  const lista = comAlcas === null || comAlcas === undefined ? [] : typeof comAlcas === "number" ? [comAlcas] : [...comAlcas];
+  let alca = null;
+  let menorAlca = raio;
+  for (const i of lista) {
+    const no = nos[i];
+    if (!no) continue;
+    const anterior = nos[(i - 1 + n) % n];
     for (const parte of ["entrada", "saida"]) {
-      if (parte === "saida" && n.retaDepois) continue;
+      if (parte === "saida" && no.retaDepois) continue;
       if (parte === "entrada" && anterior.retaDepois) continue;
-      const d = Math.hypot(n[parte].x - alvo.x, n[parte].y - alvo.y);
-      if (d < raio) return { no: noAtivo, parte, distancia: d };
+      if (tamanho(menos(no[parte], no)) < 1e-9) continue;
+      const d = Math.hypot(no[parte].x - alvo.x, no[parte].y - alvo.y);
+      if (d < menorAlca) { menorAlca = d; alca = { no: i, parte, distancia: d }; }
     }
   }
+  if (alca) return alca;
   let achado = null;
   let menor = raio;
-  for (let i = 0; i < nos.length; i++) {
+  for (let i = 0; i < n; i++) {
     const d = Math.hypot(nos[i].x - alvo.x, nos[i].y - alvo.y);
     if (d < menor) { menor = d; achado = { no: i, parte: "no", distancia: d }; }
   }
   return achado;
 }
 
-/** Em que trecho o ponteiro caiu, e em que `t`. Dezesseis passos por trecho. */
+/**
+ * Em que trecho o ponteiro caiu, e em que `t`: dezesseis passos por trecho, e
+ * mais dezesseis em volta do melhor — puxar a curva pega o ponto em `t`, e um
+ * dezesseis avos de erro já se vê.
+ */
 export function tracoSob(nos, alvo, raio) {
   let melhor = null;
   let menor = raio;
@@ -208,6 +220,16 @@ export function tracoSob(nos, alvo, raio) {
       const d = Math.hypot(q.x - alvo.x, q.y - alvo.y);
       if (d < menor) { menor = d; melhor = { no: i, t, distancia: d }; }
     }
+  }
+  if (!melhor) return null;
+  const { no } = melhor;
+  const de = Math.max(0, melhor.t - 1 / 16);
+  const ate = Math.min(1, melhor.t + 1 / 16);
+  for (let k = 0; k <= 16; k++) {
+    const t = de + ((ate - de) * k) / 16;
+    const q = pontoNoTrecho(nos, no, t);
+    const d = Math.hypot(q.x - alvo.x, q.y - alvo.y);
+    if (d < melhor.distancia) melhor = { no, t, distancia: d };
   }
   return melhor;
 }
@@ -269,5 +291,75 @@ export function mudarTipoDosNos(nos, indices, tipo) {
       entrada: retaAntes ? { x: no.x, y: no.y } : somar(no, vezes(direcao, -ce)),
       saida: retaDepois ? { x: no.x, y: no.y } : somar(no, vezes(direcao, cs)),
     };
+  });
+}
+
+/** Os nós dentro do retângulo de cantos `a` e `b` (em qualquer ordem). */
+export function nosNoRetangulo(nos, a, b) {
+  const x0 = Math.min(a.x, b.x);
+  const x1 = Math.max(a.x, b.x);
+  const y0 = Math.min(a.y, b.y);
+  const y1 = Math.max(a.y, b.y);
+  const saida = [];
+  nos.forEach((no, i) => { if (no.x >= x0 && no.x <= x1 && no.y >= y0 && no.y <= y1) saida.push(i); });
+  return saida;
+}
+
+/** Move os nós escolhidos, com as alças. */
+export function moverNos(nos, indices, dx, dy) {
+  const escolhidos = new Set(indices);
+  const d = { x: dx, y: dy };
+  return nos.map((no, i) => (escolhidos.has(i)
+    ? { ...no, x: no.x + dx, y: no.y + dy, entrada: somar(no.entrada, d), saida: somar(no.saida, d) }
+    : no));
+}
+
+/**
+ * As sequências de índices vizinhos na volta. A volta é fechada, então uma
+ * sequência pode passar pelo nó 0 — por isso a contagem começa depois de um
+ * nó que NÃO está na lista. Todos na lista: uma sequência só, de 0 a n−1.
+ */
+export function sequenciasDe(indices, n) {
+  const marcado = new Uint8Array(n);
+  for (const i of indices) if (i >= 0 && i < n) marcado[i] = 1;
+  let total = 0;
+  for (let i = 0; i < n; i++) total += marcado[i];
+  if (total === 0) return [];
+  if (total === n) return [Array.from({ length: n }, (_, i) => i)];
+  let inicio = 0;
+  while (marcado[inicio]) inicio++;
+  const saida = [];
+  let atual = [];
+  for (let k = 1; k <= n; k++) {
+    const i = (inicio + k) % n;
+    if (marcado[i]) atual.push(i);
+    else if (atual.length) { saida.push(atual); atual = []; }
+  }
+  if (atual.length) saida.push(atual);
+  return saida;
+}
+
+/**
+ * Os trechos em que as ações da barra agem, pelo nó que começa cada um: os que
+ * têm as duas pontas selecionadas; com um nó só selecionado, o trecho que
+ * CHEGA nele, como no Corel.
+ */
+export function trechosDaSelecao(nos, indices) {
+  const n = nos.length;
+  const sel = new Set(indices.filter((i) => i >= 0 && i < n));
+  if (sel.size === 1) {
+    const [i] = sel;
+    return [(i - 1 + n) % n];
+  }
+  return [...sel].sort((a, b) => a - b).filter((i) => sel.has((i + 1) % n));
+}
+
+/** Alinha os escolhidos pela `referencia`: "horizontal" = a mesma altura (y); "vertical" = a mesma coluna (x). */
+export function alinharNos(nos, indices, eixo, referencia) {
+  const escolhidos = new Set(indices);
+  return nos.map((no, i) => {
+    if (!escolhidos.has(i)) return no;
+    const d = eixo === "horizontal" ? { x: 0, y: referencia.y - no.y } : { x: referencia.x - no.x, y: 0 };
+    return { ...no, x: no.x + d.x, y: no.y + d.y, entrada: somar(no.entrada, d), saida: somar(no.saida, d) };
   });
 }

@@ -117,4 +117,63 @@ assert.equal(m.apagarNo(quadrado, 1).length, 3);
   assert.equal(m.clonarNos([q])[0].simetrico, true, "clonar leva o tipo");
 }
 
+const octogono = Array.from({ length: 8 }, (_, k) => {
+  const a = (k / 8) * 2 * Math.PI;
+  return reto(Math.round(100 * Math.cos(a)), Math.round(100 * Math.sin(a)));
+});
+
+// 10. Sequências: a que passa pelo nó 0 é UMA só.
+{
+  const s = m.sequenciasDe([7, 0, 1, 4], 8);
+  assert.equal(s.length, 2);
+  assert.ok(s.some((q) => q.join() === "7,0,1"), `sequências ${JSON.stringify(s)}`);
+  assert.ok(s.some((q) => q.join() === "4"));
+  assert.deepEqual(m.sequenciasDe([0, 1, 2, 3], 4), [[0, 1, 2, 3]]);
+}
+
+// 11. Mover em grupo leva nó e alças, só dos escolhidos, sem mexer na lista recebida.
+{
+  const r = m.moverNos(octogono, [1, 2], 5, -3);
+  assert.ok(perto(r[1], { x: octogono[1].x + 5, y: octogono[1].y - 3 }));
+  assert.ok(perto(r[1].saida, { x: octogono[1].saida.x + 5, y: octogono[1].saida.y - 3 }));
+  assert.ok(perto(r[3], octogono[3]));
+  assert.ok(perto(octogono[1], reto(71, 71)), "a lista recebida não muda");
+}
+
+// 12. O retângulo de seleção, com os cantos em qualquer ordem.
+assert.deepEqual(m.nosNoRetangulo(octogono, { x: 110, y: 80 }, { x: 50, y: -10 }).sort(), [0, 1]);
+
+// 13. Os trechos da seleção: entre selecionados vizinhos; com um nó só, o que chega nele.
+assert.deepEqual(m.trechosDaSelecao(octogono, [1, 2, 3, 6]), [1, 2]);
+assert.deepEqual(m.trechosDaSelecao(octogono, [7, 0]), [7], "o trecho do 7 ao 0, pela volta");
+assert.deepEqual(m.trechosDaSelecao(octogono, [0]), [7], "um nó só: o trecho que chega nele");
+
+// 14. Alinhar pela referência, com as alças junto; os de fora não mexem.
+{
+  const r = m.alinharNos(octogono, [1, 2, 3], "horizontal", { x: 0, y: 71 });
+  assert.ok([1, 2, 3].every((i) => r[i].y === 71 && r[i].x === octogono[i].x && r[i].saida.y === 71));
+  assert.equal(r[0].y, octogono[0].y);
+  const v = m.alinharNos(octogono, [0, 1], "vertical", { x: 50, y: 0 });
+  assert.ok(v[0].x === 50 && v[1].x === 50 && v[1].entrada.x === 50);
+}
+
+// 15. As alças que pegam são as dos selecionados, a mais perto ganha, e alça zerada não rouba o clique do nó.
+{
+  const nos = [
+    { x: 0, y: 0, entrada: { x: -1, y: 0 }, saida: { x: 1, y: 0 } },
+    { x: 10, y: 0, entrada: { x: 9, y: 0 }, saida: { x: 11, y: 0 } },
+    { x: 5, y: 5, entrada: { x: 6, y: 5 }, saida: { x: 4, y: 5 } },
+  ];
+  assert.equal(m.pegaSob(nos, { x: 9.1, y: 0 }, 0.5, new Set([0, 1])).parte, "entrada");
+  assert.equal(m.pegaSob(nos, { x: 9.1, y: 0 }, 0.5, [0]), null, "a alça do 1 não está à mostra");
+  const zerada = [{ ...nos[0], entrada: { x: 0, y: 0 } }, nos[1], nos[2]];
+  assert.equal(m.pegaSob(zerada, { x: 0, y: 0.05 }, 0.5, [0]).parte, "no", "alça em cima do nó não rouba o clique");
+}
+
+// 16. O t do traço sai refinado, sem o degrau de 1/16.
+{
+  const t = m.tracoSob(quadrado, { x: 4.3, y: 0.2 }, 0.5);
+  assert.ok(Math.abs(t.t - 0.43) < 0.005, `t = ${t.t}`);
+}
+
 console.log("OK — as contas de edição de nós conferem.");
