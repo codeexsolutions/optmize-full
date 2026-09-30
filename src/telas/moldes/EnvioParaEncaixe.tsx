@@ -37,6 +37,12 @@ import { carregarImagem, lerComoDataURL } from "../../utils/arquivoDeImagem";
 import { formatarNumero } from "../../utils/numero";
 import { useLigacao } from "../../producao/ligacao";
 import { emCm } from "./vocabulario";
+import { GradeDeQuantidades, type LinhaDaGrade } from "./GradeDeQuantidades";
+import {
+  LINHA_NOVA, LINHA_SEM_ESTAMPA, celulasParaMandar, colunasDaGrade, depoisDaFalha, levarLinha,
+  linhaDaEstampa, mexer, mudarQuantidade, resumo, tirarLinha,
+  type CelulaParaMandar, type Mexidas, type Quantidades,
+} from "./envioPorTamanho";
 import { useErroEmAlerta } from "../../casca/Alerta";
 
 /** A prévia é pequena de propósito: serve para conferir, não para imprimir. */
@@ -70,16 +76,22 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
   const dialogo = useDialogo();
   const ligacao = useLigacao();
 
-  const tamanhos = useMemo(() => [...new Set(molde.pecas.map((p) => p.tamanho))], [molde]);
-  const [tamanho, setTamanho] = useState(tamanhos[0] ?? "único");
-  const [unidades, setUnidades] = useState("20");
+  // A grade: uma coluna por tamanho, uma linha por estampa (ver `envioPorTamanho.ts`).
+  const colunas = useMemo(() => colunasDaGrade(molde), [molde]);
+  const [quantidades, setQuantidades] = useState<Quantidades>({});
+  const [mexidas, setMexidas] = useState<Mexidas>({});
+  const [aberta, setAberta] = useState<string | null>(null);
+  // A prévia da arte num tamanho só: a arte é por papel e serve a todos. Não tem nada a ver com o que vai.
+  const comDesenho = colunas.filter((c) => !c.semDesenho).map((c) => c.nome);
+  const baseDaGrade = molde.tamanhos.find((t) => t.base)?.nome;
+  const [tamanhoDaPrevia, setTamanhoDaPrevia] = useState(
+    baseDaGrade && comDesenho.includes(baseDaGrade) ? baseDaGrade : (comDesenho[0] ?? ""),
+  );
   const [dpi, setDpi] = useState("150");
 
   const [artes, setArtes] = useState<ArtesPorPapel>({});
   const [nomeDaEstampa, setNomeDaEstampa] = useState("");
   const [emEdicao, setEmEdicao] = useState<number | null>(null);
-  /** As estampas guardadas, cada uma com a quantidade pedida agora. */
-  const [pedidos, setPedidos] = useState<Record<number, number>>({});
 
   const setErro = useErroEmAlerta("Não deu certo no envio");
   const [ocupado, setOcupado] = useState("");
@@ -96,12 +108,36 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
   }, [aoFechar]);
 
   const estampas = molde.artes || [];
+  // A estampa nova só é linha enquanto tem arte no painel e ainda não foi salva no molde.
+  const temEstampaNova = emEdicao === null && Object.keys(artes).length > 0;
+  const linhas: LinhaDaGrade[] = [
+    ...estampas.map((e) => ({ chave: linhaDaEstampa(e.id), nome: e.nome })),
+    ...(temEstampaNova ? [{ chave: LINHA_NOVA, nome: nomeDaEstampa.trim() || "estampa nova" }] : []),
+    { chave: LINHA_SEM_ESTAMPA, nome: "sem estampa" },
+  ];
+  const nomeDaLinha = (linha: string) => linhas.find((l) => l.chave === linha)?.nome ?? "";
+  /** A linha usa as artes do painel: a estampa nova, e a guardada que está aberta para edição. */
+  const usaOPainel = (linha: string) => linha === LINHA_NOVA || (emEdicao !== null && linha === linhaDaEstampa(emEdicao));
+  const temArte = (linha: string, papel: string) => {
+    if (linha === LINHA_SEM_ESTAMPA) return false;
+    if (usaOPainel(linha)) return !!artes[papel];
+    return !!estampas.find((e) => linhaDaEstampa(e.id) === linha)?.pecas.some((x) => x.papel === papel);
+  };
+  const celulas = celulasParaMandar(linhas.map((l) => l.chave), colunas, molde.pecas, quantidades, mexidas);
+  const rotulo = (c: { linha: string; tamanho: string }) => `${nomeDaLinha(c.linha)} · ${c.tamanho}`;
+  /** Outra estampa no painel: os números da "estampa nova" não ficam pendurados para reaparecer nela. */
+  const esquecerANova = () => {
+    const r = tirarLinha(quantidades, mexidas, LINHA_NOVA);
+    setQuantidades(r.quantidades);
+    setMexidas(r.mexidas);
+    setAberta(null);
+  };
   // A peça marcada "espelhar" na Montagem vira duas — uma do avesso. Ver
   // `pecasParaOEncaixe`: o espelho é no contorno, então a arte entra nele
   // como em qualquer outro.
   const pecas = useMemo(
-    () => pecasParaOEncaixe(molde.pecas.filter((p) => p.tamanho === tamanho)) as PecaDoMolde[],
-    [molde, tamanho],
+    () => pecasParaOEncaixe(molde.pecas.filter((p) => p.tamanho === tamanhoDaPrevia)) as PecaDoMolde[],
+    [molde, tamanhoDaPrevia],
   );
 
   // ==================== AS ESTAMPAS GUARDADAS ====================
@@ -119,6 +155,7 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
           arquivo: peca.arquivo,
         };
       }
+      esquecerANova();
       setArtes(carregadas);
       setEmEdicao(estampa.id);
       setNomeDaEstampa(estampa.nome);
@@ -179,6 +216,13 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
         })),
       });
 
+      // A estampa nova virou guardada: os números dela vão junto para a linha nova.
+      if (emEdicao === null) {
+        const r = levarLinha(quantidades, mexidas, LINHA_NOVA, linhaDaEstampa(id));
+        setQuantidades(r.quantidades);
+        setMexidas(r.mexidas);
+        setAberta(null);
+      }
       // Recarrega o molde para a lista vir do servidor, já com a estampa nova.
       aoRecarregar(await moldesApi.abrir(molde.id));
       setEmEdicao(id);
@@ -231,55 +275,22 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
 
   // ==================== O QUE VAI PARA O ENCAIXE ====================
 
-  /**
-   * Cada "trabalho" é uma estampa com a quantidade dela: a que está aberta no
-   * painel usa a quantidade de cima, e cada estampa guardada usa a sua. É o
-   * que deixa mandar 20 camisetas da caveira e 12 da flor no mesmo tecido.
-   */
-  const trabalhos = useMemo(() => {
-    const lista: { nome: string; artes?: ArtesPorPapel; estampa?: Estampa; unidades: number }[] = [];
-    const quantas = Math.max(0, Math.floor(Number(unidades) || 0));
-    if (quantas > 0) {
-      lista.push({
-        nome: emEdicao
-          ? (estampas.find((x) => x.id === emEdicao)?.nome ?? "")
-          : (Object.keys(artes).length > 0 ? nomeDaEstampa.trim() : ""),
-        artes,
-        unidades: quantas,
-      });
-    }
-    for (const estampa of estampas) {
-      const quantidade = pedidos[estampa.id] ?? 0;
-      if (quantidade > 0 && estampa.id !== emEdicao) {
-        lista.push({ nome: estampa.nome, estampa, unidades: quantidade });
-      }
-    }
-    return lista;
-  }, [unidades, emEdicao, estampas, artes, nomeDaEstampa, pedidos]);
-
-  const porUnidade = pecas.reduce((soma, p) => soma + p.quantidade, 0);
-  const total = trabalhos.reduce((soma, t) => soma + porUnidade * t.unidades, 0);
-
-  const resumo = pecas.length === 0
-    ? "Esse tamanho não tem peça nenhuma."
-    : trabalhos.length === 0
+  const total = resumo(celulas);
+  const textoDoResumo = comDesenho.length === 0
+    ? "Este molde não tem peça nenhuma."
+    : celulas.length === 0
       ? "Nenhuma quantidade pedida ainda."
-      : `${trabalhos.map((t) => `${t.unidades} ${t.nome ? `de "${t.nome}"` : "sem estampa"}`).join(" + ")}`
-        + ` = ${trabalhos.reduce((s, t) => s + t.unidades, 0)} peça(s) pronta(s) × `
-        + `${porUnidade} corte(s) cada = ${total} peça(s) para encaixar.`;
+      : `${total.prontas} peça(s) pronta(s) → ${total.pecas} peça(s) para encaixar, em ${celulas.length} envio(s).`;
 
-  /** Quanto a arte vai pesar de verdade, no dpi escolhido. */
-  const qualidade = useMemo(() => {
+  /** Quanto a arte vai pesar de verdade, no dpi escolhido, somando todas as células que vão. Conta de soma: sem memo. */
+  const qualidade = (() => {
     const alvo = Number(dpi) || 150;
     let pontos = 0;
     let ppcmMenor = Infinity;
     let comArte = 0;
-    for (const trabalho of trabalhos) {
-      for (const peca of pecas) {
-        const temArte = trabalho.artes
-          ? !!trabalho.artes[peca.papel]
-          : !!trabalho.estampa?.pecas.some((x) => x.papel === peca.papel);
-        if (!temArte) continue;
+    for (const celula of celulas) {
+      for (const peca of celula.pecas) {
+        if (!temArte(celula.linha, peca.papel)) continue;
         comArte++;
         const ppcm = ppcmDaArte(peca.largura, peca.altura, alvo);
         ppcmMenor = Math.min(ppcmMenor, ppcm);
@@ -290,54 +301,74 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
     const dpiReal = Math.round(ppcmMenor * 2.54);
     return `${comArte} peça(s) com arte a ${dpiReal} dpi (${formatarNumero(pontos / 1e6, 0)} milhões de pontos)`
       + (dpiReal < alvo - 1 ? " — abaixei o dpi para caber na memória." : "");
-  }, [trabalhos, pecas, dpi]);
+  })();
+
+  /** As artes de uma linha. A estampa guardada só carrega as imagens aqui, uma vez para todos os tamanhos. */
+  const artesDaLinha = async (linha: string, guardadas: Map<string, ArtesPorPapel>): Promise<ArtesPorPapel> => {
+    if (linha === LINHA_SEM_ESTAMPA) return {};
+    if (usaOPainel(linha)) return artes;
+    const ja = guardadas.get(linha);
+    if (ja) return ja;
+    const carregadas: ArtesPorPapel = {};
+    for (const peca of estampas.find((e) => linhaDaEstampa(e.id) === linha)?.pecas ?? []) {
+      carregadas[peca.papel] = {
+        nome: peca.nomeOriginal || peca.arquivo,
+        img: await carregarImagem(peca.url),
+        ajuste: { ...AJUSTE_PADRAO, ...peca.ajuste },
+      };
+    }
+    guardadas.set(linha, carregadas);
+    return carregadas;
+  };
 
   const mandarParaOEncaixe = async () => {
     setErro("");
     if (!ligacao) return setErro("O editor de produção não está montado.");
-    if (pecas.length === 0) return setErro("Esse tamanho não tem peça nenhuma.");
-    if (trabalhos.length === 0) {
-      return setErro("Diga quantas peças prontas você quer, aqui em cima ou numa estampa guardada.");
+    if (celulas.length === 0) {
+      const pediu = Object.values(quantidades).some((q) => Object.values(q).some((n) => n > 0));
+      return setErro(pediu
+        ? "As peças dos tamanhos pedidos estão todas em zero."
+        : "Diga quantas peças prontas você quer, em pelo menos um tamanho.");
     }
 
     const alvo = Number(dpi) || 150;
+    const guardadas = new Map<string, ArtesPorPapel>();
+    const mandadas: CelulaParaMandar[] = [];
     try {
-      for (const trabalho of trabalhos) {
-        setOcupado(trabalho.nome ? `Montando "${trabalho.nome}"…` : "Montando a arte…");
-
-        // Estampa guardada: as imagens só são carregadas aqui, na hora de usar.
-        let doTrabalho = trabalho.artes;
-        if (!doTrabalho) {
-          doTrabalho = {};
-          for (const peca of trabalho.estampa!.pecas) {
-            doTrabalho[peca.papel] = {
-              nome: peca.nomeOriginal || peca.arquivo,
-              img: await carregarImagem(peca.url),
-              ajuste: { ...AJUSTE_PADRAO, ...peca.ajuste },
-            };
-          }
-        }
+      // Célula por célula: o Encaixe soma o que chega, então vários tamanhos são vários envios.
+      for (const [k, celula] of celulas.entries()) {
+        setOcupado(`Montando ${rotulo(celula)} (${k + 1} de ${celulas.length})…`);
+        const artesDaCelula = await artesDaLinha(celula.linha, guardadas);
+        const estampa = celula.linha === LINHA_SEM_ESTAMPA ? "" : nomeDaLinha(celula.linha);
 
         // A arte grande só é desenhada agora, na hora de mandar.
-        const comArte = pecas.map((peca) => {
-          const arte = doTrabalho![peca.papel];
-          if (!arte) return { ...peca, estampa: trabalho.nome };
+        const comArte = celula.pecas.map((peca) => {
+          const arte = artesDaCelula[peca.papel];
+          if (!arte) return { ...peca, estampa };
           const ppcm = ppcmDaArte(peca.largura, peca.altura, alvo);
           const desenho = desenharArteNoMolde(
             { contorno: peca.contorno, furos: peca.furos || [], largura: peca.largura, altura: peca.altura },
             arte.img, arte.ajuste, ppcm, { margem: 0 });
-          return { ...peca, desenho, arte: arte.nome, estampa: trabalho.nome };
+          return { ...peca, desenho, arte: arte.nome, estampa };
         });
 
-        await ligacao.mandarMoldeParaOEncaixe({
-          nome: molde.nome, tamanho, pecas: comArte, unidades: trabalho.unidades,
-        });
+        // `unidades: 1` com a quantidade final em cada peça, e só as > 0: o Encaixe faz
+        // `max(1, quantidade × unidades)`, e uma peça em 0 chegaria como 1.
+        await ligacao.mandarMoldeParaOEncaixe({ nome: molde.nome, tamanho: celula.tamanho, pecas: comArte, unidades: 1 });
+        mandadas.push(celula);
       }
 
       aoFechar();
       ligacao.irPara("encaixe");
     } catch (e) {
-      setErro(`Não deu para mandar ao encaixe: ${e instanceof Error ? e.message : String(e)}`);
+      // O que já chegou fica no Encaixe; as células dele zeram, e o próximo clique manda só o que faltou.
+      const faltou = celulas.filter((c) => !mandadas.includes(c));
+      setQuantidades((q) => depoisDaFalha(q, mandadas));
+      setAberta(null);
+      setErro([
+        mandadas.length > 0 ? `Foram: ${mandadas.map(rotulo).join(", ")}.` : "",
+        `Faltou: ${faltou.map(rotulo).join(", ")} — ${e instanceof Error ? e.message : String(e)}`,
+      ].filter(Boolean).join(" "));
     } finally {
       setOcupado("");
     }
@@ -357,24 +388,12 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
         <div className="modal-corpo">
           <p className="hint">
             Mande a arte de cada parte — o retângulo que saiu do seu programa de desenho. O sistema
-            coloca a arte dentro do contorno do molde, no tamanho escolhido, e recorta pela linha da
-            peça. A mesma arte serve para todos os tamanhos: trocando o tamanho aqui em cima, ela se
-            ajusta sozinha ao contorno novo. Parte sem arte vai para o encaixe só como contorno.
+            coloca a arte dentro do contorno do molde e recorta pela linha da peça. A mesma arte serve
+            para todos os tamanhos: o "Ver no tamanho" mostra a prévia em cada um. Parte sem arte vai
+            para o encaixe só como contorno.
           </p>
 
           <div className="row">
-            <label style={{ flex: "0 0 130px" }}>
-              Tamanho
-              <select value={tamanho} onChange={(e) => setTamanho(e.target.value)}>
-                {tamanhos.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
-
-            <label style={{ flex: "0 0 170px" }}>
-              Quantas peças prontas
-              <input type="number" min="1" step="1" value={unidades} onChange={(e) => setUnidades(e.target.value)} />
-            </label>
-
             <label style={{ flex: "0 0 150px" }}>
               Qualidade da arte
               <select value={dpi} onChange={(e) => setDpi(e.target.value)}>
@@ -392,7 +411,7 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
               <button
                 type="button"
                 className="btn secondary btn-sm"
-                onClick={() => { setArtes({}); setEmEdicao(null); setNomeDaEstampa(""); }}
+                onClick={() => { esquecerANova(); setArtes({}); setEmEdicao(null); setNomeDaEstampa(""); }}
               >
                 Começar outra estampa
               </button>
@@ -408,20 +427,7 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
                   <span className="estampa-nome">{estampa.nome}</span>
                   <span className="hint">{estampa.pecas.map((p) => p.papel).join(", ")}</span>
 
-                  {emEdicao === estampa.id ? (
-                    <span className="etiqueta-tamanho">em edição — usa a quantidade lá de cima</span>
-                  ) : (
-                    <label className="estampa-qtd">
-                      Peças prontas
-                      <input
-                        type="number" min="0" step="1"
-                        value={pedidos[estampa.id] ?? 0}
-                        onChange={(e) => setPedidos((atuais) => ({
-                          ...atuais, [estampa.id]: Math.max(0, Math.floor(Number(e.target.value) || 0)),
-                        }))}
-                      />
-                    </label>
-                  )}
+                  {emEdicao === estampa.id && <span className="etiqueta-tamanho">em edição</span>}
 
                   <span className="estampa-botoes">
                     <button type="button" className="btn secondary btn-sm" disabled={!!ocupado}
@@ -438,10 +444,23 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
             </div>
 
             <p className="hint">
-              Ponha quantas peças prontas quer de cada estampa guardada. As que ficarem em zero
-              não vão para o encaixe. Dá para mandar várias estampas de uma vez no mesmo tecido.
+              Ponha na grade quantas peças prontas quer de cada estampa em cada tamanho. O que ficar em
+              zero não vai para o encaixe. O ▸ de uma célula mostra as peças dela, e dá para mudar a
+              quantidade de cada uma só neste envio.
             </p>
           </section>
+
+          <GradeDeQuantidades
+            linhas={linhas}
+            colunas={colunas}
+            pecas={molde.pecas}
+            quantidades={quantidades}
+            mexidas={mexidas}
+            aberta={aberta}
+            aoMudarQuantidade={(linha, tamanho, valor) => setQuantidades((q) => mudarQuantidade(q, linha, tamanho, valor))}
+            aoMexer={(celula, indice, valor) => setMexidas((m) => mexer(m, celula, indice, valor))}
+            aoAbrir={setAberta}
+          />
 
           <div className="estampa-titulo">
             <strong>
@@ -461,6 +480,13 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
             </span>
           </div>
 
+          <label style={{ maxWidth: 200 }}>
+            Ver no tamanho
+            <select aria-label="Ver no tamanho" value={tamanhoDaPrevia} onChange={(e) => setTamanhoDaPrevia(e.target.value)}>
+              {comDesenho.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+
           <div className="partes-arte">
             {pecas.length === 0
               ? <p className="hint">Esse tamanho não tem peça nenhuma.</p>
@@ -479,7 +505,7 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
               ))}
           </div>
 
-          <p className="hint">{resumo}</p>
+          <p className="hint">{textoDoResumo}</p>
         </div>
 
         <footer className="modal-rodape">

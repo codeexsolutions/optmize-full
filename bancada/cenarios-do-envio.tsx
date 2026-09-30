@@ -8,6 +8,9 @@ import assert from "node:assert/strict";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { GradeDeQuantidades } from "../src/telas/moldes/GradeDeQuantidades";
+import { EnvioParaEncaixe } from "../src/telas/moldes/EnvioParaEncaixe";
+import { ProvedorDeDialogo } from "../src/casca/Dialogo";
+import { ProvedorDaLigacao } from "../src/producao/ligacao";
 import {
   colunasDaGrade, mexer, mudarQuantidade, type Mexidas, type Quantidades,
 } from "../src/telas/moldes/envioPorTamanho";
@@ -67,6 +70,128 @@ function TelaDaGrade() {
 }
 
 export const cenariosDaTela: [string, () => Promise<void>][] = [];
+
+/** Uma ligação de mentira: anota o que o Encaixe recebeu, e pode falhar na N-ésima chamada. */
+function ligacaoFalsa(falharNa: number | null = null) {
+  const recebidos: Qualquer[] = [];
+  const idas: string[] = [];
+  let chamadas = 0;
+  const ligacao: Qualquer = {
+    adicionarArquivos: async () => {},
+    mandarProjetoParaOEncaixe: async () => {},
+    async mandarMoldeParaOEncaixe(m: Qualquer) {
+      chamadas++;
+      if (chamadas === falharNa) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
+      recebidos.push(m);
+    },
+    irPara: (destino: string) => { idas.push(destino); },
+  };
+  return { ligacao, recebidos, idas, parar: () => { falharNa = null; } };
+}
+
+const moldeDoPijama: Qualquer = {
+  id: 7, nome: "pijama", observacoes: null, situacao: "pronto", pecas, tamanhos: grade,
+  artes: [{ id: 3, nome: "caveira", pecas: [] }],
+};
+
+async function abrirJanela(ligacao: Qualquer) {
+  let fechou = false;
+  const desmontar = await montar(
+    <ProvedorDeDialogo>
+      <ProvedorDaLigacao value={ligacao}>
+        <EnvioParaEncaixe molde={moldeDoPijama} aoFechar={() => { fechou = true; }} aoRecarregar={() => {}} />
+      </ProvedorDaLigacao>
+    </ProvedorDeDialogo>,
+  );
+  return { desmontar, fechou: () => fechou };
+}
+const mandar = () => clicar(botaoPeloTexto("Mandar para o encaixe"));
+const resumoDoEnvio = (m: Qualquer) => [m.tamanho, m.unidades, m.pecas.map((p: Qualquer) => [p.nome || p.papel, p.quantidade, p.estampa ?? ""])];
+
+// J. 1 — três células viram três chamadas, na ordem da grade, com unidades 1 e a quantidade em cada peça.
+cenariosDaTela.push(["janela 1", async () => {
+  const f = ligacaoFalsa();
+  const j = await abrirJanela(f.ligacao);
+  await digitar(campo("caveira P"), "2");
+  await digitar(campo("caveira M"), "1");
+  await digitar(campo("sem estampa M"), "3");
+  await mandar();
+  assert.deepEqual(f.recebidos.map(resumoDoEnvio), [
+    ["P", 1, [["frente", 2, "caveira"], ["manga", 2, "caveira"], ["manga (espelhada)", 2, "caveira"]]],
+    ["M", 1, [["frente", 1, "caveira"], ["manga", 1, "caveira"], ["manga (espelhada)", 1, "caveira"]]],
+    ["M", 1, [["frente", 3, ""], ["manga", 3, ""], ["manga (espelhada)", 3, ""]]],
+  ]);
+  assert.equal(j.fechou(), true, "deu tudo certo: fecha");
+  assert.deepEqual(f.idas, ["encaixe"]);
+  await j.desmontar();
+}]);
+
+// J. 2 — a peça zerada no ▸ não vai; as prontas mudando refazem só a não mexida.
+cenariosDaTela.push(["janela 2", async () => {
+  const f = ligacaoFalsa();
+  const j = await abrirJanela(f.ligacao);
+  await digitar(campo("caveira M"), "1");
+  await clicar(botao("Peças de caveira M"));
+  await digitar(campo("Quantidade de frente"), "0");
+  await digitar(campo("caveira M"), "2");
+  await mandar();
+  assert.deepEqual(f.recebidos.map(resumoDoEnvio), [
+    ["M", 1, [["manga", 2, "caveira"], ["manga (espelhada)", 2, "caveira"]]],
+  ]);
+  await j.desmontar();
+}]);
+
+// J. 3 — falha no meio: a janela fica, o aviso diz o que foi e o que faltou, as mandadas zeram,
+//        e o próximo clique manda só o que faltou.
+cenariosDaTela.push(["janela 3", async () => {
+  const f = ligacaoFalsa(2);
+  const j = await abrirJanela(f.ligacao);
+  (globalThis as Qualquer).alertas.length = 0;
+  await digitar(campo("caveira P"), "2");
+  await digitar(campo("caveira M"), "1");
+  await digitar(campo("sem estampa M"), "3");
+  await mandar();
+  assert.equal(j.fechou(), false, "falhou: não fecha");
+  const aviso = (globalThis as Qualquer).alertas.join("\n");
+  assert.match(aviso, /Foram: caveira · P\./);
+  assert.match(aviso, /Faltou: caveira · M, sem estampa · M — Aguarde o trabalho atual/);
+  assert.equal(campo("caveira P")!.value, "", "a mandada zerou");
+  assert.equal(campo("caveira M")!.value, "1", "a que faltou ficou");
+  f.parar();
+  await mandar();
+  assert.deepEqual(f.recebidos.map((m: Qualquer) => m.tamanho), ["P", "M", "M"], "a segunda vez manda só o que faltou");
+  assert.equal(j.fechou(), true);
+  await j.desmontar();
+}]);
+
+// J. 4 — falha logo na primeira: nada zera, e o aviso diz "Faltou:" com tudo.
+cenariosDaTela.push(["janela 4", async () => {
+  const f = ligacaoFalsa(1);
+  const j = await abrirJanela(f.ligacao);
+  (globalThis as Qualquer).alertas.length = 0;
+  await digitar(campo("caveira P"), "2");
+  await mandar();
+  assert.equal(j.fechou(), false);
+  assert.doesNotMatch((globalThis as Qualquer).alertas.join("\n"), /Foram:/);
+  assert.match((globalThis as Qualquer).alertas.join("\n"), /Faltou: caveira · P/);
+  assert.equal(campo("caveira P")!.value, "2", "nada zerou");
+  await j.desmontar();
+}]);
+
+// J. 5 — nada pedido: avisa e não manda; o "Ver no tamanho" só oferece os tamanhos com desenho.
+cenariosDaTela.push(["janela 5", async () => {
+  const f = ligacaoFalsa();
+  const j = await abrirJanela(f.ligacao);
+  (globalThis as Qualquer).alertas.length = 0;
+  await mandar();
+  assert.equal(f.recebidos.length, 0);
+  assert.match((globalThis as Qualquer).alertas.join("\n"), /pelo menos um tamanho/);
+  const ver = document.querySelector<HTMLSelectElement>('select[aria-label="Ver no tamanho"]');
+  assert.ok(ver, "o seletor da prévia existe");
+  assert.deepEqual([...ver!.options].map((o) => o.value), ["P", "M"]);
+  assert.equal(ver!.value, "M", "começa no base da grade");
+  await j.desmontar();
+}]);
 
 export async function rodar() {
   const falhas: string[] = [];
