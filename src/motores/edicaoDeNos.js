@@ -16,6 +16,8 @@
  * tipo do nó (`tipoDoNo`) diz como as duas alças andam juntas.
  */
 
+import { curvasDoTrecho } from "./ajusteDeCurvas";
+
 const somar = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
 const menos = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
 const vezes = (a, k) => ({ x: a.x * k, y: a.y * k });
@@ -432,4 +434,72 @@ export function porNosNoTraco(nos, pontos) {
   let r = nos;
   for (const [no, t] of [...porTrecho].sort((x, y) => y[0] - x[0])) r = inserirNoNoTraco(r, no, t);
   return r;
+}
+
+/** Os pontos do trecho `i` em `passos` pedaços, sem o último (que é o nó seguinte). */
+function amostrasDoTrecho(nos, i, passos) {
+  const saida = [];
+  for (let k = 0; k < passos; k++) saida.push(pontoNoTrecho(nos, i, k / passos));
+  return saida;
+}
+
+/** A direção com que o trecho `i` sai do nó que o começa (a alça; na reta, ou com a alça zerada, a corda). */
+function saidaDoTrecho(nos, i) {
+  const a = nos[i];
+  const b = nos[(i + 1) % nos.length];
+  return (a.retaDepois ? null : unitario(menos(a.saida, a))) ?? unitario(menos(b, a));
+}
+
+/** A direção, a partir do nó seguinte, de volta para dentro do trecho `i`. */
+function chegadaDoTrecho(nos, i) {
+  const a = nos[i];
+  const b = nos[(i + 1) % nos.length];
+  return (a.retaDepois ? null : unitario(menos(b.entrada, b))) ?? unitario(menos(a, b));
+}
+
+/** Os pontos do pedaço feito dos trechos `velhos` (`passos` por trecho), mais o nó em que ele termina. */
+function pontosDoPedaco(nos, velhos, passos) {
+  const pontos = [];
+  for (const s of velhos) pontos.push(...amostrasDoTrecho(nos, s, passos));
+  const fim = nos[(velhos[velhos.length - 1] + 1) % nos.length];
+  pontos.push({ x: fim.x, y: fim.y });
+  return pontos;
+}
+
+/**
+ * Apaga os nós, refazendo cada pedaço juntado para ficar o mais perto possível
+ * do desenho de antes, como o Corel: o traço antigo do pedaço é achatado e
+ * ajustado por UMA cúbica com as tangentes das duas pontas (`curvasDoTrecho`).
+ * Se todos os trechos juntados eram retos, o pedaço novo é reto. A peça nunca
+ * fica com menos de três nós: `{ erro }`, e nada é apagado.
+ */
+export function apagarNos(nos, indices) {
+  const n = nos.length;
+  const fora = new Set(indices.filter((i) => i >= 0 && i < n));
+  if (n - fora.size < 3) return { erro: "A peça ficaria com menos de três nós." };
+  const copia = nos.slice();
+  const pedacos = sequenciasDe([...fora], n).map((seq) => {
+    const a = (seq[0] - 1 + n) % n;
+    const b = (seq[seq.length - 1] + 1) % n;
+    const velhos = [a, ...seq];
+    if (velhos.every((s) => nos[s].retaDepois)) {
+      copia[a] = { ...copia[a], retaDepois: true, saida: { x: nos[a].x, y: nos[a].y } };
+      copia[b] = { ...copia[b], entrada: { x: nos[b].x, y: nos[b].y } };
+    } else {
+      const inicial = saidaDoTrecho(nos, a) ?? { x: 1, y: 0 };
+      const final = chegadaDoTrecho(nos, velhos[velhos.length - 1]) ?? { x: -1, y: 0 };
+      const [curva] = curvasDoTrecho(pontosDoPedaco(nos, velhos, 24), inicial, final, Infinity);
+      copia[a] = { ...copia[a], retaDepois: false, saida: { ...curva[1] } };
+      copia[b] = { ...copia[b], entrada: { ...curva[2] } };
+    }
+    return { a, velhos };
+  });
+  const mapa = [];
+  let k = 0;
+  for (let i = 0; i < n; i++) mapa.push(fora.has(i) ? null : k++);
+  return {
+    nos: copia.filter((_, i) => !fora.has(i)),
+    mapa,
+    trechos: pedacos.map((p) => ({ velhos: p.velhos, novos: [mapa[p.a]] })),
+  };
 }

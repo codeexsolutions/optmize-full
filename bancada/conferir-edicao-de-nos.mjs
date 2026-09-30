@@ -222,4 +222,48 @@ assert.deepEqual(m.trechosDaSelecao(octogono, [0]), [7], "um nó só: o trecho q
   assert.ok(perto(r[9], { x: (octogono[7].x + octogono[0].x) / 2, y: (octogono[7].y + octogono[0].y) / 2 }));
 }
 
+// Um arco de 5 nós (4 trechos de 45°, raio 100) por cima, fechado por duas retas.
+const arco = (() => {
+  const h = (4 / 3) * Math.tan(Math.PI / 16) * 100;
+  const nos = Array.from({ length: 5 }, (_, k) => {
+    const a = Math.PI - (k / 4) * Math.PI;
+    const p = { x: 100 * Math.cos(a), y: -100 * Math.sin(a) };
+    const tg = { x: Math.sin(a), y: Math.cos(a) };
+    return { x: p.x, y: p.y, entrada: { x: p.x - tg.x * h, y: p.y - tg.y * h }, saida: { x: p.x + tg.x * h, y: p.y + tg.y * h } };
+  });
+  nos[4] = { ...nos[4], retaDepois: true, saida: { x: nos[4].x, y: nos[4].y } };
+  return [...nos, reto(0, 60)];
+})();
+
+// 20. Apagar os três do meio do arco: sobra UMA cúbica que segue o arco, com a tangente de antes nas pontas.
+{
+  const r = m.apagarNos(arco, [1, 2, 3]);
+  assert.ok(!r.erro, r.erro);
+  assert.equal(r.nos.length, 3);
+  assert.deepEqual(r.mapa, [0, null, null, null, 1, 2]);
+  assert.deepEqual(r.trechos, [{ velhos: [0, 1, 2, 3], novos: [0] }]);
+  assert.equal(r.nos[0].retaDepois, false);
+  assert.ok(perto(r.nos[0], arco[0]) && perto(r.nos[1], arco[4]), "os nós que ficam não andam");
+  let maior = 0;
+  for (let k = 0; k <= 50; k++) {
+    const q = m.pontoNoTrecho(r.nos, 0, k / 50);
+    maior = Math.max(maior, Math.abs(Math.hypot(q.x, q.y) - 100));
+  }
+  // Uma cúbica só não é um meio círculo: com as tangentes presas nas pontas, fica a uns 3% do raio.
+  assert.ok(maior < 4, `a cúbica se afastou ${maior.toFixed(2)} do arco`);
+  const meio = m.pontoNoTrecho(r.nos, 0, 0.5);
+  assert.ok(Math.abs(meio.x) < 1e-6 && meio.y < -95, `o meio foi para ${JSON.stringify(meio)}`);
+  const s = r.nos[0].saida;
+  assert.ok(Math.abs(s.x - arco[0].x) < 1e-9 && s.y < arco[0].y, "sai do nó 0 para cima, como antes");
+}
+
+// 21. Apagar entre retas deixa reta; pela volta do 0; nunca menos de três nós.
+{
+  const r = m.apagarNos(octogono, [7, 0]);
+  assert.equal(r.nos.length, 6);
+  assert.deepEqual(r.trechos, [{ velhos: [6, 7, 0], novos: [5] }]);
+  assert.equal(r.nos[5].retaDepois, true, "reta com reta continua reta");
+  assert.ok(m.apagarNos(octogono, [0, 1, 2, 3, 4, 5]).erro);
+}
+
 console.log("OK — as contas de edição de nós conferem.");
