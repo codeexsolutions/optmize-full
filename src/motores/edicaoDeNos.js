@@ -363,3 +363,73 @@ export function alinharNos(nos, indices, eixo, referencia) {
     return { ...no, x: no.x + d.x, y: no.y + d.y, entrada: somar(no.entrada, d), saida: somar(no.saida, d) };
   });
 }
+
+/**
+ * Puxa o trecho que começa no nó `i` pelo ponto em `t`, até `alvo`.
+ *
+ * O ponto pego acompanha o ponteiro EXATAMENTE, e as pontas ficam paradas: só
+ * as duas alças do trecho mudam. O deslocamento se divide entre elas pelo peso
+ * de `t` (o do Inkscape) — perto de uma ponta, anda mais a alça daquela ponta.
+ * As pontas respeitam o tipo (via `moverPega`): na suave e na simétrica, a
+ * alça do outro lado gira junto, e a curva continua lisa no nó. Trecho reto não
+ * entorta: `null`.
+ */
+export function puxarTrecho(nos, i, t, alvo) {
+  const n = nos.length;
+  const a = nos[i];
+  const j = (i + 1) % n;
+  const b = nos[j];
+  if (!a || !b || a.retaDepois) return null;
+  const tt = Math.min(0.98, Math.max(0.02, t));
+  const u = 1 - tt;
+  const agora = naCurva(a, a.saida, b.entrada, b, tt);
+  const delta = menos(alvo, agora);
+  let peso;
+  if (tt <= 1 / 6) peso = 0;
+  else if (tt <= 0.5) peso = Math.pow((6 * tt - 1) / 2, 3) / 2;
+  else if (tt <= 5 / 6) peso = (1 - Math.pow((6 * u - 1) / 2, 3)) / 2 + 0.5;
+  else peso = 1;
+  const saida = somar(a.saida, vezes(delta, (1 - peso) / (3 * tt * u * u)));
+  const entrada = somar(b.entrada, vezes(delta, peso / (3 * tt * tt * u)));
+  return moverPega(moverPega(nos, { no: i, parte: "saida" }, saida), { no: j, parte: "entrada" }, entrada);
+}
+
+/**
+ * Converte os `trechos` (pelo nó que começa cada um) em linha ou em curva, com
+ * os nós no lugar. Em linha, as alças daquele trecho desabam em cima dos nós.
+ * Em curva, o trecho reto ganha alças a um terço e a dois terços do caminho: a
+ * curva nasce igual à reta, e só muda quando alguém puxa.
+ */
+export function converterTrechos(nos, trechos, jeito) {
+  const n = nos.length;
+  const copia = nos.slice();
+  for (const i of trechos) {
+    const j = (i + 1) % n;
+    const a = copia[i];
+    const b = copia[j];
+    if (jeito === "linha") {
+      if (a.retaDepois) continue;
+      copia[i] = { ...a, retaDepois: true, saida: { x: a.x, y: a.y } };
+      copia[j] = { ...copia[j], entrada: { x: b.x, y: b.y } };
+    } else {
+      if (!a.retaDepois) continue;
+      const terco = (de, para) => ({ x: de.x + (para.x - de.x) / 3, y: de.y + (para.y - de.y) / 3 });
+      copia[i] = { ...a, retaDepois: false, saida: terco(a, b) };
+      copia[j] = { ...copia[j], entrada: terco(b, a) };
+    }
+  }
+  return copia;
+}
+
+/**
+ * Um nó em cada ponto `{ no, t }` — no máximo um por trecho —, sem mudar o
+ * desenho. Do trecho de número maior para o menor: assim os de antes não
+ * mudam de número.
+ */
+export function porNosNoTraco(nos, pontos) {
+  const porTrecho = new Map();
+  for (const p of pontos) if (p.no >= 0 && p.no < nos.length && !porTrecho.has(p.no)) porTrecho.set(p.no, p.t);
+  let r = nos;
+  for (const [no, t] of [...porTrecho].sort((x, y) => y[0] - x[0])) r = inserirNoNoTraco(r, no, t);
+  return r;
+}

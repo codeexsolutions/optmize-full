@@ -176,4 +176,50 @@ assert.deepEqual(m.trechosDaSelecao(octogono, [0]), [7], "um nó só: o trecho q
   assert.ok(Math.abs(t.t - 0.43) < 0.005, `t = ${t.t}`);
 }
 
+// 17. Puxar a curva: o ponto em t vai EXATAMENTE para o ponteiro; as pontas ficam; a ponta suave continua lisa; o canto não mexe na outra alça.
+{
+  const nos = [
+    { x: 0, y: 0, entrada: { x: -3, y: 1 }, saida: { x: 3, y: -1 } },
+    { x: 10, y: 0, entrada: { x: 7, y: -1 }, saida: { x: 13, y: 1 }, canto: true },
+    { x: 5, y: 8, entrada: { x: 8, y: 8 }, saida: { x: 2, y: 8 } },
+  ];
+  for (const t of [0.1, 0.3, 0.5, 0.8]) {
+    const alvo = { x: 4, y: -5 };
+    const r = m.puxarTrecho(nos, 0, t, alvo);
+    assert.ok(perto(m.pontoNoTrecho(r, 0, t), alvo, 1e-9), `t=${t}: o ponto pego foi para ${JSON.stringify(m.pontoNoTrecho(r, 0, t))}`);
+    assert.ok(perto(r[0], nos[0]) && perto(r[1], nos[1]), "as pontas ficam");
+    const e = r[0].entrada;
+    const s = r[0].saida;
+    assert.ok(Math.abs(e.x * s.y - e.y * s.x) < 1e-9 && e.x * s.x + e.y * s.y < 0, "a ponta suave continua lisa");
+    assert.ok(Math.abs(Math.hypot(e.x, e.y) - Math.hypot(3, 1)) < 1e-9, "a alça do outro lado mantém o tamanho");
+    assert.ok(perto(r[1].saida, nos[1].saida), "o canto não mexe na outra alça");
+  }
+  assert.equal(m.puxarTrecho(quadrado, 0, 0.5, { x: 5, y: 3 }), null, "trecho reto não entorta");
+}
+
+// 18. Converter: em linha endireita e as alças desabam, com os nós no lugar; em curva, alças a um terço — o desenho não muda.
+{
+  const curvo = [
+    { x: 0, y: 0, entrada: { x: 0, y: 0 }, saida: { x: 3, y: 4 }, canto: true },
+    { x: 10, y: 0, entrada: { x: 7, y: 4 }, saida: { x: 10, y: 0 }, canto: true, retaDepois: true },
+    reto(5, -8),
+  ];
+  const linha = m.converterTrechos(curvo, [0], "linha");
+  assert.equal(linha[0].retaDepois, true);
+  assert.ok(perto(linha[0].saida, { x: 0, y: 0 }) && perto(linha[1].entrada, { x: 10, y: 0 }));
+  assert.ok(perto(linha[0], curvo[0]) && perto(linha[1], curvo[1]), "os nós ficam");
+  const volta = m.converterTrechos(linha, [0], "curva");
+  assert.equal(volta[0].retaDepois, false);
+  assert.ok(perto(m.pontoNoTrecho(volta, 0, 0.37), { x: 3.7, y: 0 }, 1e-9), "a curva nasce igual à reta");
+  assert.deepEqual(m.converterTrechos(curvo, [1], "linha"), curvo, "trecho já reto: nada muda");
+}
+
+// 19. Um nó no meio de cada trecho escolhido, sem mudar o desenho; o do trecho que fecha a volta vai para o fim.
+{
+  const r = m.porNosNoTraco(octogono, [{ no: 0, t: 0.5 }, { no: 7, t: 0.5 }]);
+  assert.equal(r.length, 10);
+  assert.ok(perto(r[1], { x: (octogono[0].x + octogono[1].x) / 2, y: (octogono[0].y + octogono[1].y) / 2 }));
+  assert.ok(perto(r[9], { x: (octogono[7].x + octogono[0].x) / 2, y: (octogono[7].y + octogono[0].y) / 2 }));
+}
+
 console.log("OK — as contas de edição de nós conferem.");
