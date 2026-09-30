@@ -176,6 +176,17 @@ function lerSituacao(valor) {
   return valor === "rascunho" || valor === "pronto" ? valor : null;
 }
 
+/**
+ * A grossura da linha em volta da peça, em mm: de 0 a 10, com um décimo. `null` quando não veio
+ * ou não é número — quem chama decide (o POST usa 0; o PUT mantém a guardada).
+ */
+function lerLinha(valor) {
+  if (valor === undefined || valor === null || valor === "") return null;
+  const n = Number(valor);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(10, Math.max(0, Math.round(n * 10) / 10));
+}
+
 /** A linha de `molde_pecas` como a tela a recebe. */
 function pecaDoBanco(linha) {
   return {
@@ -188,4 +199,4 @@ function pecaDoBanco(linha) {
   };
 }
 
-module.exports = { PAPEIS, arrumarPeca, arrumarTamanhos, lerSituacao, pecaDoBanco };
+module.exports = { PAPEIS, arrumarPeca, arrumarTamanhos, lerLinha, lerSituacao, pecaDoBanco };

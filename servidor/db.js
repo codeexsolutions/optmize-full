@@ -514,6 +514,10 @@ garantirColuna("moldes", "situacao", "TEXT NOT NULL DEFAULT 'pronto'");
 garantirColuna("molde_pecas", "nos", "TEXT");
 garantirColuna("molde_pecas", "marcacoes", "TEXT");
 
+// A linha em volta da peça (docs/superpowers/specs/2026-09-30-linha-em-volta-da-peca-design.md):
+// um traço preto, em mm, no molde todo. Os moldes que já existiam ficam sem linha.
+garantirColuna("moldes", "linha_mm", "REAL NOT NULL DEFAULT 0");
+
 // Importar da Audaces (docs/superpowers/specs/2026-09-28-importar-da-audaces-design.md):
 // a grade de tamanhos do molde, com a cor em que a Audaces desenha cada um, e
 // o GRUPO de cada peça — as linhas com o mesmo grupo são a mesma peça em

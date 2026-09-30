@@ -135,6 +135,8 @@ export interface Molde {
   pecas: PecaDoMolde[];
   /** A grade guardada; vazia num molde que nunca teve cor de tamanho. */
   tamanhos: TamanhoDoMolde[];
+  /** A linha preta em volta de cada peça, em mm (0 = sem). Ver a spec da linha em volta da peça. */
+  linha: number;
   artes: Estampa[];
 }
 
@@ -145,6 +147,8 @@ export interface MoldeParaGravar {
   pecas: Omit<PecaDoMolde, "id">[];
   /** Sem o campo, o servidor mantém a grade guardada (o passo a passo antigo). */
   tamanhos?: TamanhoDoMolde[];
+  /** A linha em volta da peça, em mm. Sem o campo, o servidor mantém a guardada. */
+  linha?: number;
 }
 
 export const moldesApi = {

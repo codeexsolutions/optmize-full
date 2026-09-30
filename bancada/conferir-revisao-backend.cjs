@@ -61,6 +61,23 @@ async function principal() {
   const parcial = await api("POST", "/api/encaixe/guardado", { ...recorde, totalItens: 2 });
   conferir("recorde que declara peças ausentes é recusado", () => assert.equal(parcial.status, 400));
   const molde = (await api("POST", "/api/moldes", { nome: "Molde", pecas: [peca] })).dados.id;
+  // A linha em volta da peça (docs/superpowers/specs/2026-09-30-linha-em-volta-da-peca-design.md):
+  // molde sem o campo lê 0; gravada volta igual; PUT sem o campo mantém; fora de 0–10 é limitada.
+  const semLinha = (await api("GET", `/api/moldes/${molde}`)).dados;
+  const comLinha = (await api("POST", "/api/moldes", { nome: "Com linha", pecas: [peca], linha: 2.5 })).dados.id;
+  const lidoComLinha = (await api("GET", `/api/moldes/${comLinha}`)).dados;
+  await api("PUT", `/api/moldes/${comLinha}`, { nome: "Com linha", pecas: [peca] });
+  const linhaMantida = (await api("GET", `/api/moldes/${comLinha}`)).dados;
+  await api("PUT", `/api/moldes/${comLinha}`, { nome: "Com linha", pecas: [peca], linha: 99 });
+  const limitada = (await api("GET", `/api/moldes/${comLinha}`)).dados;
+  await api("DELETE", `/api/moldes/${comLinha}`);
+  conferir("a linha em volta da peça: 0 sem o campo, grava, PUT sem o campo mantém, limita a 10 mm", () => {
+    assert.equal(semLinha.linha, 0);
+    assert.equal(lidoComLinha.linha, 2.5);
+    assert.equal(linhaMantida.linha, 2.5);
+    assert.equal(limitada.linha, 10);
+    assert.equal("linha_mm" in lidoComLinha, false, "a tela recebe `linha`, não o nome da coluna");
+  });
   const cliente = (await api("POST", "/api/projetos/clientes", { nome: "Cliente" })).dados.id;
   const projeto = (await api("POST", "/api/projetos", { nome: "Projeto", clienteId: cliente })).dados.id;
   const original = { nome: "Projeto", pecas: [{ ...peca, arquivo: "original.png" }] };
