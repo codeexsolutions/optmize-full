@@ -806,7 +806,15 @@ async function criarBitmapOuImagem(blob, endereco, tetoDeLado = 0) {
             opcoes = {
               resizeWidth: Math.max(1, Math.round(m.largura * fator)),
               resizeHeight: Math.max(1, Math.round(m.altura * fator)),
-              resizeQuality: "high",
+              // O "high" custava mais que a própria decodificação: seis artes
+              // de 7677 px levavam 6 s para entrar, contra 2,8 s no "low" — que
+              // é o mesmo tempo de não reduzir nada (o "medium" do Chrome é o
+              // "high", byte a byte). Até a metade do tamanho, o bilinear do
+              // "low" não pula pixel, e a diferença medida foi só na borda
+              // antisserrilhada (0,09% dos bytes, no máximo 26 de 255). Abaixo
+              // da metade ele serrilharia, e aí o "high" volta a valer a espera.
+              // A impressão não passa por aqui: ela reabre o arquivo original.
+              resizeQuality: fator >= 0.5 ? "low" : "high",
             };
           }
         }
