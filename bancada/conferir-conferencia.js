@@ -147,6 +147,33 @@ function conferirContaRapida(motor) {
     }
   }
 
+  // A janela do par recortada da imagem de uma peça: igual a copiar pixel a
+  // pixel, com o que cai fora da peça sem tinta — inclusive janela que só
+  // raspa a peça, ou que nem encosta nela.
+  for (let caso = 0; caso < 200; caso++) {
+    const imagem = {
+      ix0: Math.floor(sortear() * 40) - 20, iy0: Math.floor(sortear() * 40) - 20,
+      W: 1 + Math.floor(sortear() * 30), H: 1 + Math.floor(sortear() * 30),
+    };
+    imagem.alfa = Uint8Array.from({ length: imagem.W * imagem.H }, () => Math.floor(sortear() * 256));
+    const jx0 = Math.floor(sortear() * 80) - 40;
+    const jy0 = Math.floor(sortear() * 80) - 40;
+    const Wj = 1 + Math.floor(sortear() * 40);
+    const Hj = 1 + Math.floor(sortear() * 40);
+    const janela = motor.janelaDaImagem(imagem, jx0, jy0, Wj, Hj);
+    for (let y = 0; y < Hj; y++) {
+      for (let x = 0; x < Wj; x++) {
+        const ix = jx0 + x - imagem.ix0;
+        const iy = jy0 + y - imagem.iy0;
+        const esperado = ix >= 0 && iy >= 0 && ix < imagem.W && iy < imagem.H ? imagem.alfa[iy * imagem.W + ix] : 0;
+        if (janela[y * Wj + x] !== esperado) {
+          falhar(`janela: caso ${caso}, pixel (${x}, ${y}) deu ${janela[y * Wj + x]}, devia ${esperado}`);
+          return;
+        }
+      }
+    }
+  }
+
   // O tempo: arte cheia de furinhos (quase todo pixel é borda), 800 x 1200
   // pixels e 1 cm de folga. A varredura antiga levava perto de 1 s por par,
   // com a tela parada; o teto aqui é folgado para não depender da máquina.
@@ -164,7 +191,7 @@ function conferirContaRapida(motor) {
   const inicio = Date.now();
   const r = motor.compararAlfas(alfaA, alfaB, W, H, 0.05, 1);
   const ms = Date.now() - inicio;
-  console.log(`conta rápida: 200 casos iguais à régua; arte furada 800x1200 com 1 cm de folga em ${ms} ms`);
+  console.log(`conta rápida: 200 casos iguais à régua, 200 janelas iguais à cópia; arte furada 800x1200 com 1 cm de folga em ${ms} ms`);
   if (ms > 250) falhar(`conta rápida: a arte furada levou ${ms} ms (teto 250 ms)`);
   if (Math.abs(r.menor - 0.65) > 1e-9) falhar(`conta rápida: a arte furada devia medir 0,65 cm, mediu ${r.menor}`);
 }
