@@ -27,7 +27,7 @@ import {
 import { lerQuantidadeDoNome } from "../motores/nomeDeArquivo";
 import {
   bancadasDoResultado, cortesEntreBancadas, desenharEncaixe, desenharMidiaVazia,
-  desenharRascunho, prepararPrevias,
+  desenharRascunho, prepararPrevias, previaDaArte,
 } from "../motores/desenhoDoEncaixe";
 import { prepararArtes } from "../motores/exportarEncaixe";
 import { DPI_PREVIA } from "../motores/resolucaoDaArte";
@@ -594,7 +594,7 @@ async function montarPecaDaImagem(cru, semFundo, imagemPronta = null) {
     src: endereco,
     arquivoOriginal: file,
     fundoNaExportacao: semFundo ? "auto" : null,
-    miniatura: miniaturaDaArte(img),
+    miniatura: await miniaturaDaArte(img),
     img,
     pxW: img.naturalWidth || img.width,
     pxH: img.naturalHeight || img.height,
@@ -644,7 +644,7 @@ async function lerArtePDFdoArquivo(file) {
     nome: doNome.nome,
     src: arte.endereco,
     pdfOriginal: file,
-    miniatura: miniaturaDaArte(arte.bitmap),
+    miniatura: await miniaturaDaArte(arte.bitmap),
     img: arte.bitmap,
     pxW: arte.bitmap.width,
     pxH: arte.bitmap.height,
@@ -696,7 +696,7 @@ async function lerMoldesDoArquivo(file) {
       id: proximoIdPeca++,
       nome: doNome.nome,
       src: imagem.src,
-      miniatura: miniaturaDaArte(img),
+      miniatura: await miniaturaDaArte(img),
       img,
       pxW: imagem.pxW,
       pxH: imagem.pxH,
@@ -837,10 +837,16 @@ async function criarBitmapOuImagem(blob, endereco, tetoDeLado = 0) {
  *
  * Desenhar uma vez num canvas de 96 px resolve de vez: o custo é uma redução só,
  * e daí em diante a tabela é de graça.
+ *
+ * E a redução sai da PRÉVIA da tela, não da arte de trabalho. Desenhar a arte
+ * de 4.900 px no canvas da miniatura a subia inteira para a placa de vídeo —
+ * 790 ms de tela parada para seis artes, no meio da leitura dos arquivos. A
+ * prévia (ver "A PRÉVIA DA TELA", em desenhoDoEncaixe.js) sai do bitmap em
+ * ~10 ms, e fica pronta para o risco que vier depois.
  */
 const LADO_DA_MINIATURA = 96;
 
-function miniaturaDaArte(img) {
+async function miniaturaDaArte(img) {
   const largura = img.naturalWidth || img.width;
   const altura = img.naturalHeight || img.height;
   if (!largura || !altura) return null;
@@ -850,7 +856,18 @@ function miniaturaDaArte(img) {
     canvas.width = Math.max(1, Math.round(largura * fator));
     canvas.height = Math.max(1, Math.round(altura * fator));
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    await prepararPrevias([img]);
+    // A redução de 1.024 para 96 px sai do bitmap, e não do canvas: desenhar a
+    // prévia no canvas a subia para a placa de vídeo, e o `toDataURL` esperava
+    // por isso. Nesse tamanho a "high" é barata e evita a miniatura serrilhada.
+    const fonte = previaDaArte(img) || img;
+    const pequena = typeof createImageBitmap === "function"
+      ? await createImageBitmap(fonte, {
+        resizeWidth: canvas.width, resizeHeight: canvas.height, resizeQuality: "high",
+      }).catch(() => null)
+      : null;
+    ctx.drawImage(pequena || fonte, 0, 0, canvas.width, canvas.height);
+    if (pequena) pequena.close();
     return canvas.toDataURL("image/png");
   } catch (e) {
     return null; // canvas bloqueado: a tabela cai na arte inteira, como antes
@@ -947,7 +964,7 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
         src: endereco,
         arquivoOriginal: blobs[indice],
         fundoNaExportacao: cortada ? "auto" : null,
-        miniatura: miniaturaDaArte(img),
+        miniatura: await miniaturaDaArte(img),
         img,
         pxW: img.naturalWidth || img.width,
         pxH: img.naturalHeight || img.height,
@@ -1768,7 +1785,7 @@ async function alternarCorDireta(id) {
     peca.img = cru.img;
     peca.src = cru.endereco;
     peca.arquivoOriginal = preparada.file;
-    peca.miniatura = miniaturaDaArte(cru.img);
+    peca.miniatura = await miniaturaDaArte(cru.img);
     peca.corDireta = ligando && preparada.direta;
     peca.cor = preparada.convertida ? corDaArteConvertida(preparada) : peca.cor;
     // A silhueta sai dos pixels, e os pixels mudaram: o contorno é refeito no
@@ -1890,7 +1907,7 @@ async function tirarFundoDepois(pecasPorIndice, crus) {
         peca.img = img;
         peca.src = semFundo.src;
         peca.fundoNaExportacao = "auto";
-        peca.miniatura = miniaturaDaArte(peca.img);
+        peca.miniatura = await miniaturaDaArte(peca.img);
         peca._cacheMascaras = null; // a silhueta muda: será refeita no encaixe
         trocadas++;
       }
@@ -1924,7 +1941,7 @@ async function tirarFundoAForca(peca) {
   peca.img = img;
   peca.src = semFundo.src;
   peca.fundoNaExportacao = "forcar";
-  peca.miniatura = miniaturaDaArte(peca.img);
+  peca.miniatura = await miniaturaDaArte(peca.img);
   peca._cacheMascaras = null;
   renderPecasEncaixe();
 }
@@ -4323,7 +4340,7 @@ async function pecasDaGaleria(artes) {
         src: cortada ? cortada.src : arte.url,
         arquivoOriginal: blobs[i],
         fundoNaExportacao: cortada ? "auto" : null,
-        miniatura: arte.miniatura || miniaturaDaArte(img),
+        miniatura: arte.miniatura || await miniaturaDaArte(img),
         img,
         pxW: img.naturalWidth || img.width,
         pxH: img.naturalHeight || img.height,

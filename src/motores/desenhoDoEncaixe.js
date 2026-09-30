@@ -68,34 +68,51 @@ const SEM_SELECAO = new Set();
  * a prévia da velha vai embora junto com ela.
  */
 const LADO_DA_PREVIA = 1024;
+// arte -> a prévia (ImageBitmap), ou `null` quando ela não tem ou não precisa de uma.
 const previas = new WeakMap();
+// arte -> a promessa da prévia que está sendo feita: quem chega no meio espera
+// a mesma, em vez de cair na arte grande ou fazer outra.
+const fazendo = new WeakMap();
+
+function fazerPrevia(img) {
+  const largura = img.naturalWidth || img.width;
+  const altura = img.naturalHeight || img.height;
+  const maior = Math.max(largura, altura);
+  if (!maior || maior <= LADO_DA_PREVIA || typeof createImageBitmap !== "function") {
+    previas.set(img, null);
+    return Promise.resolve();
+  }
+  const fator = LADO_DA_PREVIA / maior;
+  const promessa = createImageBitmap(img, {
+    resizeWidth: Math.max(1, Math.round(largura * fator)),
+    resizeHeight: Math.max(1, Math.round(altura * fator)),
+    resizeQuality: "low",
+  })
+    .then((previa) => { previas.set(img, previa); })
+    // Sem prévia a tela desenha a arte de trabalho, como sempre desenhou.
+    .catch(() => { previas.set(img, null); })
+    .finally(() => { fazendo.delete(img); });
+  fazendo.set(img, promessa);
+  return promessa;
+}
 
 /** Faz (uma vez) a prévia de cada arte. Devolve quando todas estão prontas. */
 export async function prepararPrevias(imagens) {
-  await Promise.all(imagens.map(async (img) => {
-    if (!img || previas.has(img)) return;
-    const largura = img.naturalWidth || img.width;
-    const altura = img.naturalHeight || img.height;
-    const maior = Math.max(largura, altura);
-    if (!maior || maior <= LADO_DA_PREVIA || typeof createImageBitmap !== "function") return;
-    // Marca antes do `await`: dois desenhos seguidos não fazem duas prévias.
-    previas.set(img, null);
-    try {
-      const fator = LADO_DA_PREVIA / maior;
-      previas.set(img, await createImageBitmap(img, {
-        resizeWidth: Math.max(1, Math.round(largura * fator)),
-        resizeHeight: Math.max(1, Math.round(altura * fator)),
-        resizeQuality: "low",
-      }));
-    } catch (e) {
-      // Sem prévia a tela desenha a arte de trabalho, como sempre desenhou.
-    }
+  await Promise.all(imagens.map((img) => {
+    if (!img || previas.has(img)) return null;
+    return fazendo.get(img) || fazerPrevia(img);
   }));
+}
+
+/** A prévia de `img` já pronta, ou `null`. */
+export function previaDaArte(img) {
+  return (img && previas.get(img)) || null;
 }
 
 /** A prévia de `img`, se ela existe e basta para `lado` pixels de tela. */
 function previaQueServe(img, lado) {
-  const previa = img ? previas.get(img) : null;
+  if (!img) return null;
+  const previa = previas.get(img);
   if (previa === undefined) {
     prepararPrevias([img]); // fica para o próximo desenho
     return null;
