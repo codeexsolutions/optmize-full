@@ -169,4 +169,77 @@ for (const volta of [quadrado, [...quadrado].reverse()]) {
   assert.equal(m.inserirNoNaPeca(pecaQuadrada(), 0, 0.5).graduacao, undefined, "peça sem graduação continua sem");
 }
 
+// --- Vários nós na peça (o editor estilo Corel) ---
+{
+  const retoC = (x, y) => ({ x, y, entrada: { x, y }, saida: { x, y }, canto: true, retaDepois: true });
+  const base = {
+    nos: [retoC(0, 0), retoC(10, 0), retoC(20, 0), retoC(20, 10), retoC(0, 10)],
+    papel: "frente", tamanho: "M", quantidade: 1, nome: "",
+    marcacoes: {
+      margem: 0, espelhar: false, fio: { x: 10, y: 5, angulo: 0, comprimento: 6 },
+      piques: [{ no: 1, t: 0.5, profundidade: 0.5 }, { no: 3, t: 0.5, profundidade: 0.5 }], pontos: [{ x: 5, y: 5 }],
+    },
+    graduacao: { jeito: "pontos", porcentagem: 0, regras: [
+      { no: 1, modo: "igual", passo: { dx: 1, dy: 0 } }, { no: 3, modo: "igual", passo: { dx: 0, dy: 1 } }] },
+  };
+  const perto = (a, b, tol = 1e-9) => Math.abs(a - b) < tol;
+
+  // Apagar: o trecho 0 (de 0 a 10) e o 1 (de 10 a 20) viram o trecho 0 (de 0 a 20) — o pique do meio do 1 fica a 3/4.
+  const r = m.apagarNosDaPeca(base, [1]);
+  assert.ok(!r.erro, r.erro);
+  assert.equal(r.peca.nos.length, 4);
+  assert.equal(r.peca.marcacoes.piques[0].no, 0);
+  assert.ok(perto(r.peca.marcacoes.piques[0].t, 0.75, 1e-6), `t = ${r.peca.marcacoes.piques[0].t}`);
+  assert.deepEqual(r.peca.marcacoes.piques[1], { no: 2, t: 0.5, profundidade: 0.5 }, "trecho que não mudou: o mesmo t, no número novo");
+  assert.deepEqual(r.peca.graduacao.regras, [{ no: 2, modo: "igual", passo: { dx: 0, dy: 1 } }]);
+  assert.equal(r.peca.graduacao.perdidos, 1, "a regra do nó apagado conta em perdidos");
+  assert.ok(m.apagarNosDaPeca(base, [0, 1, 2]).erro, "nunca menos de três nós");
+
+  // Pôr nó no meio dos trechos 0 e 3: piques e regras andam junto.
+  const p = m.porNosDaPeca(base, [{ no: 0, t: 0.5 }, { no: 3, t: 0.5 }]);
+  assert.equal(p.nos.length, 7);
+  assert.deepEqual(p.marcacoes.piques.map((q) => q.no), [2, 5], "os piques dos trechos 1 e 3 andaram");
+  assert.deepEqual(p.graduacao.regras.map((q) => q.no), [2, 4]);
+
+  // Girar 4× 90° devolve a peça: nós, pontos, fio e regras; 90° troca largura e altura, sem a peça sair do lugar.
+  let g = base;
+  for (let k = 0; k < 4; k++) g = m.girarPeca(g, 90);
+  g.nos.forEach((n, i) => assert.ok(perto(n.x, base.nos[i].x) && perto(n.y, base.nos[i].y), `nó ${i} não voltou`));
+  assert.ok(perto(g.marcacoes.pontos[0].x, 5) && perto(g.marcacoes.pontos[0].y, 5));
+  assert.ok(perto(g.marcacoes.fio.x, 10) && perto(g.marcacoes.fio.y, 5) && perto(g.marcacoes.fio.angulo, 0));
+  assert.deepEqual(g.graduacao.regras, base.graduacao.regras);
+  const noventa = m.girarPeca(base, 90);
+  const cx = m.caixaDe(noventa.nos);
+  assert.ok(perto(cx.largura, 10) && perto(cx.altura, 20), `caixa ${JSON.stringify(cx)}`);
+  assert.ok(perto(cx.minX, 0) && perto(cx.minY, 0), "o canto de cima à esquerda fica onde estava");
+  assert.ok(perto(Math.abs(noventa.marcacoes.fio.angulo), 90), "o fio girou junto");
+  assert.deepEqual(noventa.graduacao.regras[0].passo, { dx: 0, dy: 1 }, "o salto (1, 0) gira para (0, 1): 90° no sentido do relógio da tela");
+}
+
+// Reduzir na peça: o nó com regra é âncora, a regra vai para o número novo, e o pique fica no mesmo lugar da costura.
+{
+  const N = 40;
+  const h = (4 / 3) * Math.tan(((2 * Math.PI) / N) / 4) * 100;
+  const nos = Array.from({ length: N }, (_, k) => {
+    const a = (k / N) * 2 * Math.PI;
+    const p = { x: 100 * Math.cos(a), y: 100 * Math.sin(a) };
+    const tg = { x: -Math.sin(a), y: Math.cos(a) };
+    return { x: p.x, y: p.y, entrada: { x: p.x - tg.x * h, y: p.y - tg.y * h }, saida: { x: p.x + tg.x * h, y: p.y + tg.y * h } };
+  });
+  const peca = {
+    nos, papel: "frente", tamanho: "M", quantidade: 1, nome: "",
+    marcacoes: { margem: 0, espelhar: false, fio: { x: 0, y: 0, angulo: 0, comprimento: 6 }, piques: [{ no: 5, t: 0.5, profundidade: 0.5 }], pontos: [] },
+    graduacao: { jeito: "pontos", porcentagem: 0, regras: [{ no: 15, modo: "igual", passo: { dx: 1, dy: 0 } }] },
+  };
+  const antesDoPique = m.posicaoDoPique(peca.nos, peca.marcacoes.piques[0]).ponto;
+  const r = m.reduzirNosDaPeca(peca, null, 0.5);
+  assert.ok(!r.erro, r.erro);
+  assert.ok(r.depois < r.antes);
+  const regra = r.peca.graduacao.regras[0];
+  assert.ok(Math.abs(r.peca.nos[regra.no].x - nos[15].x) < 1e-9 && Math.abs(r.peca.nos[regra.no].y - nos[15].y) < 1e-9, "a regra seguiu o seu nó");
+  assert.equal(r.peca.graduacao.perdidos ?? 0, 0, "nenhuma regra perdida");
+  const depoisDoPique = m.posicaoDoPique(r.peca.nos, r.peca.marcacoes.piques[0]).ponto;
+  assert.ok(Math.hypot(depoisDoPique.x - antesDoPique.x, depoisDoPique.y - antesDoPique.y) < 1, "o pique ficou no mesmo lugar da costura");
+}
+
 console.log("OK — as contas da Montagem conferem.");

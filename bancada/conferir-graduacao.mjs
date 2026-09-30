@@ -239,4 +239,22 @@ assert.ok(g.deslocamentosDoTamanho(base, grade, "M").every((d) => d.dx === 0 && 
   assert.ok(!alvos.some((a) => a.tamanho === "M"), "o base de verdade nunca vira alvo");
 }
 
+// 20. Vários nós de uma vez: as regras seguem o mapa (a do nó que saiu conta em perdidos), e giram com a peça.
+{
+  const g0 = { jeito: "pontos", porcentagem: 0, regras: [
+    { no: 1, modo: "igual", passo: { dx: 1, dy: 0 } },
+    { no: 3, modo: "porTamanho", deslocamentos: { G: { dx: 0, dy: 2 } } },
+  ] };
+  const r = g.graduacaoPorMapa(g0, [0, null, 1, 2]);
+  assert.deepEqual(r.regras, [{ no: 2, modo: "porTamanho", deslocamentos: { G: { dx: 0, dy: 2 } } }]);
+  assert.equal(r.perdidos, 1);
+  const girada = g.graduacaoGirada(g0, 90);
+  assert.deepEqual(girada.regras[0].passo, { dx: 0, dy: 1 });
+  assert.deepEqual(girada.regras[1].deslocamentos.G, { dx: -2, dy: 0 });
+  let volta = g0;
+  for (let k = 0; k < 4; k++) volta = g.graduacaoGirada(volta, 90);
+  assert.deepEqual(volta.regras, g0.regras, "4× 90° devolve as regras exatas");
+  assert.equal(g.graduacaoPorMapa(null, [0]), null);
+}
+
 console.log("OK — a graduação confere.");

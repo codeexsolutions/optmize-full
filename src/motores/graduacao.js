@@ -165,6 +165,42 @@ export function graduacaoAoApagarNo(graduacao, i) {
   };
 }
 
+/**
+ * Vários nós mudaram de número de uma vez (apagar, reduzir): `mapa[i]` é o
+ * número novo do nó `i`, ou `null` se ele saiu. A regra de nó que saiu sai
+ * e conta em `perdidos`.
+ */
+export function graduacaoPorMapa(graduacao, mapa) {
+  if (!graduacao) return graduacao;
+  const regras = graduacao.regras || [];
+  const ficam = regras.filter((r) => mapa[r.no] !== null && mapa[r.no] !== undefined);
+  return {
+    ...graduacao,
+    perdidos: (graduacao.perdidos || 0) + (regras.length - ficam.length),
+    regras: ficam.map((r) => ({ ...r, no: mapa[r.no] })),
+  };
+}
+
+/**
+ * A peça girou `graus`: os saltos giram junto — o `passo` do salto igual e
+ * cada deslocamento do por tamanho. A mesma conta de `girarNos`, com os
+ * múltiplos de 90° exatos.
+ */
+export function graduacaoGirada(graduacao, graus) {
+  if (!graduacao) return graduacao;
+  const exato = (v) => (Math.abs(v) < 1e-12 ? 0 : Math.abs(Math.abs(v) - 1) < 1e-12 ? Math.sign(v) : v);
+  const rad = (graus * Math.PI) / 180;
+  const c = exato(Math.cos(rad));
+  const s = exato(Math.sin(rad));
+  const gira = (d) => ({ dx: d.dx * c - d.dy * s + 0, dy: d.dx * s + d.dy * c + 0 });
+  return {
+    ...graduacao,
+    regras: (graduacao.regras || []).map((r) => (r.modo === "igual"
+      ? { ...r, passo: gira(r.passo) }
+      : { ...r, deslocamentos: Object.fromEntries(Object.entries(r.deslocamentos || {}).map(([k, d]) => [k, gira(d)])) })),
+  };
+}
+
 const renomearChaves = (objeto, velho, novo) =>
   Object.fromEntries(Object.entries(objeto).map(([k, v]) => [k === velho ? novo : k, v]));
 
