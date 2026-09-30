@@ -106,4 +106,15 @@ assert.equal(lerSituacao("x"), null);
   assert.equal(pecaDoBanco({ ...arrumarPeca({ contorno: quadrado }, 0), id: 2 }).graduacao, null);
 }
 
+// 9. O tipo simétrico do nó é guardado; nó de canto não é simétrico; nó sem o campo volta sem ele.
+{
+  const nos = quadrado.map((p) => no(p.x, p.y));
+  nos[1] = { ...nos[1], canto: false, simetrico: true };
+  nos[2] = { ...nos[2], canto: true, simetrico: true };
+  const volta = pecaDoBanco({ ...arrumarPeca({ contorno: quadrado, nos }, 0), id: 1 }).nos;
+  assert.equal(volta[1].simetrico, true);
+  assert.equal("simetrico" in volta[2], false, "canto não é simétrico");
+  assert.equal("simetrico" in volta[0], false, "sem o campo, volta sem ele");
+}
+
 console.log("OK — o servidor guarda nós e marcações sem inventar nem perder.");

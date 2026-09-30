@@ -58,14 +58,16 @@ assert.equal(m.apagarNo(quadrado, 1).length, 3);
   assert.ok(perto(r[0].saida, { x: 3, y: 3 }));
 }
 
-// 6. Alça de nó de curva espelha a outra; de canto, não.
+// 6. A alça segue o tipo do nó: suave gira a outra e mantém o tamanho; simétrico espelha; canto não mexe na outra.
 {
   const liso = [{ x: 0, y: 0, entrada: { x: -1, y: 0 }, saida: { x: 1, y: 0 } }, reto(10, 0), reto(5, 5)];
+  assert.equal(m.tipoDoNo(liso[0]), "suave", "nó sem o campo é suave");
   const r = m.moverPega(liso, { no: 0, parte: "entrada" }, { x: -2, y: 1 });
-  assert.ok(perto(r[0].saida, { x: 2, y: -1 }));
+  assert.ok(perto(r[0].saida, { x: 2 / Math.sqrt(5), y: -1 / Math.sqrt(5) }), "suave: gira e fica com o tamanho 1");
+  const simetrico = [{ ...liso[0], simetrico: true }, liso[1], liso[2]];
+  assert.ok(perto(m.moverPega(simetrico, { no: 0, parte: "entrada" }, { x: -2, y: 1 })[0].saida, { x: 2, y: -1 }), "simétrico: espelho");
   const canto = [{ ...liso[0], canto: true }, liso[1], liso[2]];
-  const r2 = m.moverPega(canto, { no: 0, parte: "entrada" }, { x: -2, y: 1 });
-  assert.ok(perto(r2[0].saida, { x: 1, y: 0 }));
+  assert.ok(perto(m.moverPega(canto, { no: 0, parte: "entrada" }, { x: -2, y: 1 })[0].saida, { x: 1, y: 0 }), "canto: a outra fica");
 }
 
 // 7. Reta vira curva com alças a um terço, e volta.
@@ -87,6 +89,32 @@ assert.equal(m.apagarNo(quadrado, 1).length, 3);
   const t = m.tracoSob(quadrado, { x: 4, y: 0.2 }, 0.5);
   assert.equal(t.no, 0);
   assert.ok(Math.abs(t.t - 0.4) < 0.07);
+}
+
+// 9. Mudar o tipo: suave alinha e mantém os tamanhos; simétrico iguala; entre reta e curva, a direção da reta; canto só marca.
+{
+  const nos = [
+    { x: 0, y: 0, entrada: { x: 0, y: 0 }, saida: { x: 3, y: 0 }, canto: true },
+    { x: 10, y: 0, entrada: { x: 8, y: 0 }, saida: { x: 10, y: 4 }, canto: true },
+    { x: 10, y: 10, entrada: { x: 10, y: 7 }, saida: { x: 10, y: 10 }, canto: true, retaDepois: true },
+  ];
+  const s = m.mudarTipoDosNos(nos, [1], "suave")[1];
+  const e = { x: s.entrada.x - 10, y: s.entrada.y };
+  const d = { x: s.saida.x - 10, y: s.saida.y };
+  assert.ok(Math.abs(e.x * d.y - e.y * d.x) < 1e-9 && e.x * d.x + e.y * d.y < 0, "suave: as duas na mesma reta, em lados opostos");
+  assert.ok(Math.abs(Math.hypot(e.x, e.y) - 2) < 1e-9 && Math.abs(Math.hypot(d.x, d.y) - 4) < 1e-9, "suave: cada uma com o seu tamanho");
+  assert.equal(m.tipoDoNo(s), "suave");
+  const q = m.mudarTipoDosNos(nos, [1], "simetrico")[1];
+  assert.ok(Math.abs(Math.hypot(q.entrada.x - 10, q.entrada.y) - 3) < 1e-9 && Math.abs(Math.hypot(q.saida.x - 10, q.saida.y) - 3) < 1e-9, "simétrico: as duas com a média, 3");
+  assert.equal(m.tipoDoNo(q), "simetrico");
+  // O nó 2 recebe curva (do 1) e sai reta (para o 0): a alça da curva vai para a direção da reta.
+  const r = m.mudarTipoDosNos(nos, [2], "suave")[2];
+  assert.ok(perto(r.entrada, { x: 10 + 3 / Math.SQRT2, y: 10 + 3 / Math.SQRT2 }), JSON.stringify(r.entrada));
+  assert.ok(perto(r.saida, { x: 10, y: 10 }), "o lado reto fica sem alça");
+  const c = m.mudarTipoDosNos(nos, [1], "canto")[1];
+  assert.ok(c.canto && perto(c.entrada, nos[1].entrada) && perto(c.saida, nos[1].saida), "canto só marca");
+  assert.equal("simetrico" in m.mudarTipoDosNos([q, nos[0], nos[2]], [0], "suave")[0], false, "voltar a suave tira o campo");
+  assert.equal(m.clonarNos([q])[0].simetrico, true, "clonar leva o tipo");
 }
 
 console.log("OK — as contas de edição de nós conferem.");

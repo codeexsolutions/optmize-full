@@ -10,7 +10,7 @@
  */
 
 export type Ponto = { x: number; y: number };
-export type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean };
+export type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean; simetrico?: boolean };
 
 /** O caminho fechado dos nós. Só traça o caminho: a cor e a grossura são de quem chama. */
 export function tracarCaminho(ctx: CanvasRenderingContext2D, nos: No[], emTela: (p: Ponto) => Ponto) {

@@ -96,7 +96,7 @@ jobs:
         run: npm run bancada:conferencia
 
       - name: Moldes e tamanhos
-        run: npm run bancada:tamanhos && npm run bancada:moldes-pecas && npm run bancada:montagem && npm run bancada:graduacao
+        run: npm run bancada:tamanhos && npm run bancada:moldes-pecas && npm run bancada:montagem && npm run bancada:graduacao && npm run bancada:nos
 
       - name: Medida de cada peça no Digitalizar
         run: npm run bancada:medida

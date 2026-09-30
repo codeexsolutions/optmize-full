@@ -38,6 +38,8 @@ function lerNos(brutos) {
       saida: lerPonto(n.saida) || centro,
       canto: !!n.canto,
       retaDepois: !!n.retaDepois,
+      // O tipo simétrico do Corel: só vale em nó que não é canto. Sem ele, o nó é suave.
+      ...(n.simetrico && !n.canto ? { simetrico: true } : {}),
     });
   }
   return nos;

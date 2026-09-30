@@ -11,9 +11,26 @@
  * recebeu — a tela guarda a antiga na pilha do desfazer, e um objeto alterado
  * no lugar desfaria o desfazer.
  *
- * Um nó: `{ x, y, entrada, saida, canto?, retaDepois? }`. Quem guarda se o
- * trecho até o nó seguinte é reta é o nó que COMEÇA o trecho.
+ * Um nó: `{ x, y, entrada, saida, canto?, retaDepois?, simetrico? }`. Quem
+ * guarda se o trecho até o nó seguinte é reta é o nó que COMEÇA o trecho. O
+ * tipo do nó (`tipoDoNo`) diz como as duas alças andam juntas.
  */
+
+const somar = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
+const menos = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+const vezes = (a, k) => ({ x: a.x * k, y: a.y * k });
+const tamanho = (v) => Math.hypot(v.x, v.y);
+/** O vetor com tamanho 1, ou `null` se ele é zero. */
+const unitario = (v) => {
+  const t = tamanho(v);
+  return t > 1e-9 ? { x: v.x / t, y: v.y / t } : null;
+};
+
+/** O tipo do nó, como no Corel: canto, suave ou simétrico. Nó sem o campo `simetrico` é suave. */
+export function tipoDoNo(no) {
+  if (no.canto) return "canto";
+  return no.simetrico ? "simetrico" : "suave";
+}
 
 /** Um ponto da cúbica em `t`. */
 export function naCurva(p0, p1, p2, p3, t) {
@@ -56,7 +73,7 @@ export function dividirCurva(p0, p1, p2, p3, t) {
 export function clonarNos(nos) {
   return nos.map((n) => ({
     x: n.x, y: n.y, entrada: { ...n.entrada }, saida: { ...n.saida },
-    canto: n.canto, retaDepois: n.retaDepois,
+    canto: n.canto, retaDepois: n.retaDepois, ...(n.simetrico ? { simetrico: true } : {}),
   }));
 }
 
@@ -64,29 +81,32 @@ export function clonarNos(nos) {
  * Arrasta o nó ou uma alça até `alvo`.
  *
  * O nó leva as alças junto: sem isso, mover um nó deformaria as duas curvas
- * vizinhas em vez de arrastar o trecho inteiro. Nó de curva mantém as duas
- * alças alinhadas (a curva passa lisa por ele); nó de CANTO não, senão o bico
- * se perderia ao mexer num lado.
+ * vizinhas em vez de arrastar o trecho inteiro. A alça segue o TIPO do nó, como
+ * no Corel: no canto, só ela anda; no suave, a do outro lado gira para ficar na
+ * mesma reta e mantém o tamanho; no simétrico, a do outro lado é o espelho. Do
+ * lado que é reta não há alça: ela fica em cima do nó.
  */
 export function moverPega(nos, pega, alvo) {
-  return nos.map((n, i) => {
-    if (i !== pega.no) return n;
+  const n = nos.length;
+  return nos.map((no, i) => {
+    if (i !== pega.no) return no;
     if (pega.parte === "no") {
-      const dx = alvo.x - n.x;
-      const dy = alvo.y - n.y;
-      return {
-        ...n,
-        x: alvo.x,
-        y: alvo.y,
-        entrada: { x: n.entrada.x + dx, y: n.entrada.y + dy },
-        saida: { x: n.saida.x + dx, y: n.saida.y + dy },
-      };
+      const d = { x: alvo.x - no.x, y: alvo.y - no.y };
+      return { ...no, x: alvo.x, y: alvo.y, entrada: somar(no.entrada, d), saida: somar(no.saida, d) };
     }
-    const oposta = { x: 2 * n.x - alvo.x, y: 2 * n.y - alvo.y };
-    if (pega.parte === "entrada") {
-      return { ...n, entrada: { x: alvo.x, y: alvo.y }, saida: n.canto ? n.saida : oposta };
+    const outraParte = pega.parte === "entrada" ? "saida" : "entrada";
+    const outroLadoReto = outraParte === "saida" ? no.retaDepois : nos[(i - 1 + n) % n].retaDepois;
+    const puxada = { x: alvo.x, y: alvo.y };
+    let outra = no[outraParte];
+    const tipo = tipoDoNo(no);
+    if (!outroLadoReto && tipo === "simetrico") {
+      outra = { x: 2 * no.x - alvo.x, y: 2 * no.y - alvo.y };
+    } else if (!outroLadoReto && tipo === "suave") {
+      const direcao = unitario(menos(no, puxada));
+      const comprimento = tamanho(menos(no[outraParte], no));
+      if (direcao && comprimento > 1e-9) outra = somar(no, vezes(direcao, comprimento));
     }
-    return { ...n, saida: { x: alvo.x, y: alvo.y }, entrada: n.canto ? n.entrada : oposta };
+    return { ...no, [pega.parte]: puxada, [outraParte]: outra };
   });
 }
 
@@ -190,4 +210,64 @@ export function tracoSob(nos, alvo, raio) {
     }
   }
   return melhor;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * O EDITOR ESTILO COREL — vários nós de uma vez, tipos, puxar a curva
+ * ---------------------------------------------------------------------------
+ *
+ * Ver docs/superpowers/specs/2026-09-29-editor-estilo-corel-design.md. A
+ * seleção é uma lista de índices da peça. As ações que mudam QUANTOS nós há
+ * (apagar, reduzir) devolvem, além dos nós, o `mapa` (o número novo de cada nó
+ * antigo, ou `null` se ele saiu) e os `trechos` que viraram outros (`velhos` →
+ * `novos`, pelo nó que começa cada trecho) — é com eles que a Montagem leva
+ * junto os piques e as regras da graduação.
+ */
+
+/**
+ * Muda o tipo dos nós escolhidos.
+ *
+ * Suave: a direção comum é a média das duas (a da saída e a da entrada
+ * invertida), e cada alça mantém o seu tamanho. Simétrico: a mesma direção, e
+ * o tamanho vira a média dos dois. Nó entre uma reta e uma curva: a direção é
+ * a da reta, e só a alça do lado curvo gira (o lado reto não tem alça). Canto
+ * só marca: as alças ficam onde estão.
+ */
+export function mudarTipoDosNos(nos, indices, tipo) {
+  const n = nos.length;
+  const escolhidos = new Set(indices);
+  return nos.map((no, i) => {
+    if (!escolhidos.has(i)) return no;
+    const { simetrico: _antes, ...semTipo } = no;
+    const base = { ...semTipo, canto: tipo === "canto", ...(tipo === "simetrico" ? { simetrico: true } : {}) };
+    if (tipo === "canto") return base;
+    const anterior = nos[(i - 1 + n) % n];
+    const seguinte = nos[(i + 1) % n];
+    const retaAntes = !!anterior.retaDepois;
+    const retaDepois = !!no.retaDepois;
+    if (retaAntes && retaDepois) return base;
+    const e = menos(no.entrada, no);
+    const s = menos(no.saida, no);
+    let direcao;
+    if (retaAntes) direcao = unitario(menos(no, anterior));
+    else if (retaDepois) direcao = unitario(menos(seguinte, no));
+    else {
+      const ue = unitario(e) ?? { x: 0, y: 0 };
+      const us = unitario(s) ?? { x: 0, y: 0 };
+      direcao = unitario({ x: us.x - ue.x, y: us.y - ue.y });
+    }
+    if (!direcao) return base;
+    let ce = tamanho(e);
+    let cs = tamanho(s);
+    if (tipo === "simetrico" && !retaAntes && !retaDepois) {
+      ce = (ce + cs) / 2;
+      cs = ce;
+    }
+    return {
+      ...base,
+      entrada: retaAntes ? { x: no.x, y: no.y } : somar(no, vezes(direcao, -ce)),
+      saida: retaDepois ? { x: no.x, y: no.y } : somar(no, vezes(direcao, cs)),
+    };
+  });
 }
