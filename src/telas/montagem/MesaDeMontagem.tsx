@@ -4,7 +4,7 @@
  * `useMoldeEmMontagem`; quem mexe na peça são as contas de
  * `motores/montagem.js`. Aqui só se liga uma coisa na outra.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icone } from "../../casca/Icone";
 import { useMoldeEmMontagem, type PecaEmMontagem } from "./useMoldeEmMontagem";
 import { ChipsDeTamanho } from "./ChipsDeTamanho";
@@ -12,7 +12,9 @@ import { JanelaDaGrade } from "./JanelaDaGrade";
 import {
   ORIGEM_AJUSTADA, ORIGEM_GERADA, alinhamentoDaCamada, aplicarGeracao, gerarTamanho, graduacaoVazia, planejarGeracao, transladarNos,
 } from "../../motores/graduacao";
-import { pecaParaGravar } from "../../motores/montagem";
+import { apagarNosDaPeca, girarPeca, pecaParaGravar, porNosDaPeca, reduzirNosDaPeca } from "../../motores/montagem";
+import { BarraDosNos } from "../risco/BarraDosNos";
+import { useEditorDeNos, type AlvoDoEditor } from "../risco/useEditorDeNos";
 import { useDialogo } from "../../casca/Dialogo";
 import { JanelaDeSubstituir } from "./JanelaDeSubstituir";
 import type { Graduacao } from "../../api/moldes";
@@ -28,7 +30,7 @@ import { BarraDaMontagem } from "./BarraDaMontagem";
 interface Props { id: number; aoTrocar: () => void; aoEscolherOutro: (id: number) => void }
 
 const FERRAMENTAS: { qual: Ferramenta; rotulo: string; icone: string; dica: string }[] = [
-  { qual: "nos", rotulo: "Nós", icone: "icones.svg#spline", dica: "Arrastar nós e alças; dois cliques põem ou tiram nó" },
+  { qual: "nos", rotulo: "Nós", icone: "icones.svg#spline", dica: "Clique, Shift e retângulo selecionam; arraste nós, alças ou a curva; setas movem; dois cliques põem ou tiram nó" },
   { qual: "pique", rotulo: "Pique", icone: "icones.svg#scissors", dica: "Clique no traço para pôr um pique; num pique, para tirar" },
   { qual: "ponto", rotulo: "Ponto", icone: "icones.svg#crosshair", dica: "Clique dentro da peça para marcar pence ou bolso" },
   { qual: "fio", rotulo: "Fio", icone: "icones.svg#move-vertical", dica: "Arraste o meio para mover, uma ponta para girar" },
@@ -120,6 +122,51 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
       })
     : []), [verTamanhos, doGrupo, peca, baseDoGrupo, molde.pecas, molde.tamanhos]);
 
+  // Mexer à mão num tamanho gerado tira dele a marca da graduação: gerar de
+  // novo passa a perguntar antes de perder o ajuste.
+  const mudarEsta = (mudar: Parameters<typeof molde.mudarPeca>[1], lembrarAntes: boolean) =>
+    molde.mudarPeca(atual, (p) => {
+      const q = mudar(p);
+      return p.origem === ORIGEM_GERADA ? { ...q, origem: ORIGEM_AJUSTADA } : q;
+    }, lembrarAntes);
+
+  // O editor estilo Corel da ferramenta Nós: piques e regras da graduação vão junto
+  // nas mexidas que mudam quantos nós há (ver `motores/montagem.js`).
+  const alvoDoEditor: AlvoDoEditor = {
+    nos: peca?.nos ?? [],
+    mudarNos: (mudar, lembrarAntes) => mudarEsta((p) => ({ ...p, nos: mudar(p.nos) }), lembrarAntes),
+    apagarNos: (indices) => {
+      if (!peca) return null;
+      const r = apagarNosDaPeca(peca, indices);
+      if (r.erro) return r.erro;
+      mudarEsta(() => r.peca, true);
+      return null;
+    },
+    porNos: (pontos) => mudarEsta((p) => porNosDaPeca(p, pontos), true),
+    retrato: () => peca,
+    reduzir: (retrato, indices, folga) => {
+      const r = reduzirNosDaPeca(retrato as PecaEmMontagem, indices, folga) as
+        { erro: string } | { peca: PecaEmMontagem; antes: number; depois: number };
+      if ("erro" in r) return { erro: r.erro };
+      return { antes: r.antes, depois: r.depois, aplicar: () => mudarEsta(() => r.peca, false) };
+    },
+    voltar: (retrato) => mudarEsta(() => retrato as PecaEmMontagem, false),
+    lembrar: molde.lembrar,
+    passos: { curto: 0.1, longo: 1 },
+    folgaEmUnidades: (mm) => mm / 10,
+    comMedida: true,
+  };
+  const editor = useEditorDeNos(alvoDoEditor, atual);
+  // O teclado do editor, pela referência mais nova: o ouvinte é posto uma vez só.
+  const editorAtual = useRef(editor);
+  editorAtual.current = editor;
+  useEffect(() => {
+    if (ferramenta !== "nos" || verTodas) return;
+    const ouvir = (e: KeyboardEvent) => { editorAtual.current.teclar(e); };
+    window.addEventListener("keydown", ouvir);
+    return () => window.removeEventListener("keydown", ouvir);
+  }, [ferramenta, verTodas]);
+
   useEffect(() => { setNoAtivo(null); }, [atual, ferramenta]);
 
   // O `indice` pode ficar velho depois de um desfazer ou de apagar peça: a
@@ -174,14 +221,6 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
       </div>
     );
   }
-
-  // Mexer à mão num tamanho gerado tira dele a marca da graduação: gerar de
-  // novo passa a perguntar antes de perder o ajuste.
-  const mudarEsta = (mudar: Parameters<typeof molde.mudarPeca>[1], lembrarAntes: boolean) =>
-    molde.mudarPeca(atual, (p) => {
-      const q = mudar(p);
-      return p.origem === ORIGEM_GERADA ? { ...q, origem: ORIGEM_AJUSTADA } : q;
-    }, lembrarAntes);
 
   /** Mexe na graduação da peça (na linha do base). */
   const mudarGraduacao = (mudar: (g: Graduacao) => Graduacao, lembrarAntes: boolean) => {
@@ -260,6 +299,9 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
           {FERRAMENTAS.find((f) => f.qual === ferramenta)?.dica}. Roda do mouse aproxima.
         </span>
       </div>
+      {ferramenta === "nos" && !verTodas && !semDesenho && peca && (
+        <BarraDosNos editor={editor} aoGirar={(graus) => mudarEsta((p) => girarPeca(p, graus), true)} />
+      )}
       <ChipsDeTamanho
         tamanhos={molde.tamanhos}
         ativo={escolhido || peca?.tamanho || baseDaGrade}
@@ -314,6 +356,7 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
             aoEscolherPeca={(i) => { setGrupo(doTamanho[i]?.p.grupo ?? 0); setVerTodas(false); }}
             aoLembrar={molde.lembrar}
             aoMudar={mudarEsta}
+            editor={editor}
           />
           )}
         </div>

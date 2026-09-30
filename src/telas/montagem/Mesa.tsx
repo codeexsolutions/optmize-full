@@ -6,7 +6,7 @@
  *
  * Um canvas em cima de uma grade de 1 cm. Cinco ferramentas, uma de cada vez:
  *
- *   NÓS      a edição do Digitalizar, as mesmas contas (`motores/edicaoDeNos.js`);
+ *   NÓS      o editor estilo Corel, o mesmo do Digitalizar (`risco/useEditorDeNos.ts`);
  *   PIQUE    clique no traço põe, clique num pique tira;
  *   PONTO    clique dentro da peça põe, clique num ponto tira;
  *   FIO      arrasta pelo meio, gira pelas pontas;
@@ -23,12 +23,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { achatarCurvas } from "../../motores/ajusteDeCurvas";
 import { margemDeCostura } from "../../motores/margemDeCostura";
-import { moverPega, pegaSob, tracoSob } from "../../motores/edicaoDeNos";
+import { pegaSob, tracoSob } from "../../motores/edicaoDeNos";
 import {
-  PROFUNDIDADE_DO_PIQUE, apagarNoDaPeca, arranjar, caixaDe, desenhoDaPeca, inserirNoNaPeca,
-  pecaParaGravar, posicaoDoPique,
+  PROFUNDIDADE_DO_PIQUE, arranjar, caixaDe, desenhoDaPeca, pecaParaGravar, posicaoDoPique,
 } from "../../motores/montagem";
-import { desenharNos, desenharPontosDeGraduacao, tracarCaminho, type Ponto } from "../risco/desenhoDeNos";
+import { desenharNos, desenharPontosDeGraduacao, desenharRetangulo, tracarCaminho, type Ponto } from "../risco/desenhoDeNos";
+import type { EditorDeNos } from "../risco/useEditorDeNos";
 import { corDaPeca } from "../../utils/coresDePeca";
 import type { PecaEmMontagem } from "./useMoldeEmMontagem";
 
@@ -45,7 +45,7 @@ const ZOOM_MAX = 12;
 interface Vista { minX: number; minY: number; largura: number; altura: number }
 
 type Arrasto =
-  | { tipo: "no"; no: number; parte: "no" | "entrada" | "saida" }
+  | { tipo: "editor" }
   | { tipo: "fio"; modo: "mover" | "girar" };
 
 interface Props {
@@ -64,6 +64,8 @@ interface Props {
   camadas?: { nos: PecaEmMontagem["nos"]; cor: string; tracejada?: boolean }[];
   /** Na ferramenta Graduar: os nós que têm regra (ganham o losango). */
   regras?: readonly number[];
+  /** Na ferramenta Nós: o editor estilo Corel (a seleção e o que o ponteiro faz). */
+  editor?: EditorDeNos;
 }
 
 /**
@@ -248,12 +250,15 @@ export function Mesa(props: Props) {
       ctx.textAlign = "left";
       ctx.fillText("A margem fecha a peça sobre ela mesma: diminua a margem.", 12 * fator, 22 * fator);
     }
-    if (ferramenta === "nos") desenharNos(ctx, peca.nos, noAtivoValido, emTela);
+    if (ferramenta === "nos") {
+      desenharNos(ctx, peca.nos, props.editor?.selecionados ?? null, emTela);
+      if (props.editor?.retangulo) desenharRetangulo(ctx, props.editor.retangulo.de, props.editor.retangulo.ate, emTela);
+    }
     if (ferramenta === "graduar") {
       desenharNos(ctx, peca.nos, null, emTela);
       desenharPontosDeGraduacao(ctx, peca.nos, regras, noAtivoValido, emTela);
     }
-  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro, camadas, regras]);
+  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro, camadas, regras, props.editor?.selecionados, props.editor?.retangulo]);
 
   // ------------------------------------------------------------ o ponteiro
   const aoApertar = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -268,11 +273,8 @@ export function Mesa(props: Props) {
     const raio = raioCm();
 
     if (ferramenta === "nos") {
-      const sob = pegaSob(peca.nos, alvo, raio, noAtivoValido);
-      if (!sob) { props.aoMarcarNo(null); return; }
-      if (sob.parte === "no") props.aoMarcarNo(sob.no);
-      props.aoLembrar();
-      arrasto.current = { tipo: "no", no: sob.no, parte: sob.parte as "no" | "entrada" | "saida" };
+      if (!props.editor?.apertar(alvo, raio, e.shiftKey)) return;
+      arrasto.current = { tipo: "editor" };
     } else if (ferramenta === "pique") {
       // Mesmo filtro que `desenhoDaPeca` aplica antes de desenhar: um pique
       // cujo `no` não existe mais (dado velho, ou um `apagarNoDaPeca` que não
@@ -340,8 +342,8 @@ export function Mesa(props: Props) {
     if (!a) return;
     const alvo = noCm(e);
     if (!alvo) return;
-    if (a.tipo === "no") {
-      props.aoMudar((p) => ({ ...p, nos: moverPega(p.nos, { no: a.no, parte: a.parte }, alvo) }), false);
+    if (a.tipo === "editor") {
+      props.editor?.mover(alvo);
     } else if (a.modo === "mover") {
       props.aoMudar((p) => ({ ...p, marcacoes: { ...p.marcacoes, fio: { ...p.marcacoes.fio, x: alvo.x, y: alvo.y } } }), false);
     } else {
@@ -355,6 +357,7 @@ export function Mesa(props: Props) {
 
   const aoSoltar = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!arrasto.current) return;
+    if (arrasto.current.tipo === "editor") props.editor?.soltar();
     arrasto.current = null;
     vistaCongelada.current = null;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
@@ -365,19 +368,7 @@ export function Mesa(props: Props) {
   const aoDobrarClique = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (verTodas || ferramenta !== "nos" || !peca) return;
     const alvo = noCm(e);
-    if (!alvo) return;
-    const raio = raioCm();
-    const sob = pegaSob(peca.nos, alvo, raio, null);
-    if (sob) {
-      if (peca.nos.length <= 3) return;
-      props.aoMudar((p) => apagarNoDaPeca(p, sob.no) ?? p, true);
-      props.aoMarcarNo(null);
-      return;
-    }
-    const traco = tracoSob(peca.nos, alvo, raio);
-    if (!traco) return;
-    props.aoMudar((p) => inserirNoNaPeca(p, traco.no, traco.t), true);
-    props.aoMarcarNo(traco.no + 1);
+    if (alvo) props.editor?.dobrarClique(alvo, raioCm());
   };
 
   // A largura da mesa, para o canvas nascer do tamanho em que aparece.
@@ -414,24 +405,6 @@ export function Mesa(props: Props) {
     caixa.addEventListener("wheel", aoRodar, { passive: false });
     return () => caixa.removeEventListener("wheel", aoRodar);
   }, []);
-
-  // Delete/Backspace apaga o nó marcado — menos quando se está digitando num campo.
-  useEffect(() => {
-    const ouvir = (e: KeyboardEvent) => {
-      if (e.key !== "Delete" && e.key !== "Backspace") return;
-      const foco = document.activeElement as HTMLElement | null;
-      if (foco && (["INPUT", "TEXTAREA", "SELECT"].includes(foco.tagName) || foco.isContentEditable)) return;
-      // `noAtivoValido`, não `noAtivo`: um nó marcado antes de um desfazer
-      // pode não existir mais na lista de agora (ver o comentário em cima de
-      // `noAtivoValido`) — apagar por um índice velho mexeria no nó ERRADO.
-      if (ferramenta !== "nos" || noAtivoValido === null || !peca || peca.nos.length <= 3) return;
-      e.preventDefault();
-      props.aoMudar((p) => apagarNoDaPeca(p, noAtivoValido) ?? p, true);
-      props.aoMarcarNo(null);
-    };
-    window.addEventListener("keydown", ouvir);
-    return () => window.removeEventListener("keydown", ouvir);
-  }, [ferramenta, noAtivoValido, peca, props]);
 
   return (
     <div ref={moldura} className="h-full overflow-auto bg-painel-suave">
