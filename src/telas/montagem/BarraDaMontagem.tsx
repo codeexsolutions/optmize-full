@@ -56,7 +56,7 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanh
   };
   const desenhos = () => arranjar(molde.pecas
     .filter((p) => todos || molde.tamanhos.length < 2 || p.tamanho === tamanhoAtivo)
-    .map((p) => desenhoDaPeca(pecaParaGravar(p).peca)));
+    .map((p) => desenhoDaPeca(pecaParaGravar(p).peca, molde.linha / 10)));
   const arquivo = (ext: string) => `${(molde.nome || "molde").replace(/[\\/:*?"<>|]+/g, "_")}-molde.${ext}`;
 
   /** Grava o que faltar; se não der, mostra por quê e devolve `false`. */
