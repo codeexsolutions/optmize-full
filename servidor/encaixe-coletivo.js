@@ -36,6 +36,15 @@ const { pedirComToken } = require("./sessao");
 
 /** Quanto a busca espera o placar coletivo antes de seguir sem ele. */
 const ESPERA_MS = 1500;
+/**
+ * Depois de o placar falhar, por quanto tempo a busca nem tenta a rede.
+ *
+ * Sem isto a falha se repetia a CADA encaixe: com a sessão recusada pelo
+ * backend (medido em 2026-09-30, 401 mesmo depois de renovar), toda busca
+ * esperava 0,5 a 0,9 s para ouvir o mesmo "não". Cinco minutos é pouco para
+ * a internet que voltou ficar esquecida, e muito para quem encaixa em série.
+ */
+const PAUSA_DEPOIS_DE_FALHAR_MS = 5 * 60 * 1000;
 /** O placar de um tipo de trabalho vale por isto antes de ser relido. */
 const CACHE_PLACAR_MS = 12 * 60 * 60 * 1000;
 /** De quanto em quanto sincroniza sozinho. */
@@ -72,16 +81,31 @@ function instalacao() {
 
 // ==================== A CONVERSA COM O BACKEND ====================
 
-/** Pedido com teto de tempo. `null` quando não há sessão, rede ou resposta boa. */
+/**
+ * Pedido com teto de tempo. `null` quando não há sessão, rede ou resposta boa.
+ *
+ * O teto vale para o pedido INTEIRO. Cancelar o `fetch` não bastava: num 401,
+ * `pedirComToken` renova o token com outro pedido, que não recebe o sinal —
+ * medido, 4 s de espera com teto de 1,5 s. Então quem decide é o relógio: deu
+ * o teto, a resposta é `null`, e o que ainda estiver correndo termina sozinho.
+ */
 async function pedir(rota, opcoes = {}, teto = 15000) {
   const controle = new AbortController();
-  const relogio = setTimeout(() => controle.abort(), teto);
+  let relogio;
+  const estourou = new Promise((pronto) => {
+    relogio = setTimeout(() => { controle.abort(); pronto(null); }, teto);
+  });
+  const conversa = (async () => {
+    try {
+      const resposta = await pedirComToken(rota, { ...opcoes, signal: controle.signal });
+      if (!resposta || !resposta.ok) return null;
+      return await resposta.json();
+    } catch {
+      return null;
+    }
+  })();
   try {
-    const resposta = await pedirComToken(rota, { ...opcoes, signal: controle.signal });
-    if (!resposta || !resposta.ok) return null;
-    return await resposta.json();
-  } catch {
-    return null;
+    return await Promise.race([conversa, estourou]);
   } finally {
     clearTimeout(relogio);
   }
@@ -207,8 +231,13 @@ function iniciar() {
  *
  * Do cache quando está fresco; senão pergunta ao backend com teto curto, e na
  * falta de resposta devolve o cache velho — velho é melhor que nada, e nada é
- * o que a busca tinha antes disto existir.
+ * o que a busca tinha antes disto existir. Uma falha pausa a rede por uns
+ * minutos, para todos os tipos de trabalho: quem falhou agora falharia de novo
+ * no encaixe seguinte, e cobraria a mesma espera.
  */
+// Até quando o placar não vai à rede, depois de uma falha (ver `PAUSA_DEPOIS_DE_FALHAR_MS`).
+let semRedeAte = 0;
+
 async function placarDe(assinatura) {
   if (!assinatura) return null;
   const guardado = db.prepare("SELECT * FROM encaixe_coletivo_cache WHERE assinatura = ?").get(assinatura);
@@ -217,9 +246,10 @@ async function placarDe(assinatura) {
     if (!guardado) return null;
     try { return { receitas: JSON.parse(guardado.receitas), encaixes: guardado.encaixes }; } catch { return null; }
   };
-  if (fresco) return doCache();
+  if (fresco || Date.now() < semRedeAte) return doCache();
 
   const resposta = await pedir(`/encaixe/coletivo/placar?assinatura=${encodeURIComponent(assinatura)}`, {}, ESPERA_MS);
+  if (!resposta) semRedeAte = Date.now() + PAUSA_DEPOIS_DE_FALHAR_MS;
   if (!resposta || !Array.isArray(resposta.receitas)) return doCache();
   db.prepare(`
     INSERT INTO encaixe_coletivo_cache (assinatura, receitas, encaixes, lido_em) VALUES (?, ?, ?, ?)
