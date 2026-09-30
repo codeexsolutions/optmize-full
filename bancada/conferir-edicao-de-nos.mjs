@@ -266,4 +266,82 @@ const arco = (() => {
   assert.ok(m.apagarNos(octogono, [0, 1, 2, 3, 4, 5]).erro);
 }
 
+// Um círculo de raio 100 em 40 nós suaves (cada trecho, um arco de 9°), com um canto no nó 10.
+const circulo = (() => {
+  const N = 40;
+  const h = (4 / 3) * Math.tan(((2 * Math.PI) / N) / 4) * 100;
+  const nos = Array.from({ length: N }, (_, k) => {
+    const a = (k / N) * 2 * Math.PI;
+    const p = { x: 100 * Math.cos(a), y: 100 * Math.sin(a) };
+    const tg = { x: -Math.sin(a), y: Math.cos(a) };
+    return { x: p.x, y: p.y, entrada: { x: p.x - tg.x * h, y: p.y - tg.y * h }, saida: { x: p.x + tg.x * h, y: p.y + tg.y * h } };
+  });
+  nos[10] = { ...nos[10], canto: true };
+  return nos;
+})();
+
+// 22. Reduzir a peça inteira: bem menos nós, o traço dentro da folga, o canto fica, e a mesma folga dá o mesmo resultado.
+{
+  const r = m.reduzirNos(circulo, null, 0.5);
+  assert.ok(!r.erro, r.erro);
+  assert.equal(r.antes, 40);
+  assert.ok(r.depois <= 8, `sobraram ${r.depois} nós`);
+  assert.ok(r.nos.some((n) => perto(n, circulo[10]) && n.canto), "o canto ficou");
+  let maior = 0;
+  for (let i = 0; i < r.nos.length; i++) {
+    for (let k = 0; k <= 32; k++) {
+      const q = m.pontoNoTrecho(r.nos, i, k / 32);
+      maior = Math.max(maior, Math.abs(Math.hypot(q.x, q.y) - 100));
+    }
+  }
+  assert.ok(maior <= 0.52, `o traço se afastou ${maior.toFixed(3)} (a folga é 0,5)`);
+  assert.deepEqual(m.reduzirNos(circulo, null, 0.5), r, "não acumula: o mesmo desenho e a mesma folga dão o mesmo");
+  assert.ok(m.reduzirNos(circulo, null, 1e-6).erro, "folga pequena demais: nada a tirar");
+}
+
+// 23. Reduzir só a seleção: os de fora ficam, e a âncora extra (a regra da graduação) também.
+{
+  const r = m.reduzirNos(circulo, [20, 21, 22, 23, 24, 25, 26], 0.5, [23]);
+  assert.ok(!r.erro, r.erro);
+  for (let i = 0; i < 40; i++) if (i < 20 || i > 26) assert.notEqual(r.mapa[i], null, `o nó ${i} estava fora da seleção`);
+  assert.notEqual(r.mapa[23], null, "a âncora extra fica");
+  assert.ok(r.depois < 40);
+}
+
+// 24. Girar 4× 90° volta ao começo; 90° gira no sentido do relógio da tela (y para baixo).
+{
+  const centro = { x: 10, y: 20 };
+  let r = octogono;
+  for (let k = 0; k < 4; k++) r = m.girarNos(r, 90, centro);
+  r.forEach((n, i) => assert.ok(perto(n, octogono[i], 1e-9)));
+  assert.ok(perto(m.girarNos([reto(20, 20)], 90, centro)[0], { x: 10, y: 30 }, 1e-9));
+}
+
+// 25. Peça grande com ruído de foto (±0,3 em 400 nós): o controle refaz a conta a cada movimento, então
+//     ela tem de ser rápida; e a curva nova passa pelo meio do ruído, sem passar da folga.
+{
+  const N = 400;
+  const h = (4 / 3) * Math.tan(((2 * Math.PI) / N) / 4) * 100;
+  const ruido = Array.from({ length: N }, (_, k) => {
+    const a = (k / N) * 2 * Math.PI;
+    const r = 100 + (k % 2 ? 0.3 : -0.3);
+    const p = { x: r * Math.cos(a), y: r * Math.sin(a) };
+    const tg = { x: -Math.sin(a), y: Math.cos(a) };
+    return { x: p.x, y: p.y, entrada: { x: p.x - tg.x * h, y: p.y - tg.y * h }, saida: { x: p.x + tg.x * h, y: p.y + tg.y * h } };
+  });
+  const t0 = performance.now();
+  const r = m.reduzirNos(ruido, null, 1);
+  const ms = performance.now() - t0;
+  assert.ok(ms < 1000, `levou ${ms.toFixed(0)} ms`);
+  assert.ok(!r.erro && r.depois <= 12, `sobraram ${r.depois}`);
+  let maior = 0;
+  for (let i = 0; i < r.nos.length; i++) {
+    for (let k = 0; k <= 16; k++) {
+      const q = m.pontoNoTrecho(r.nos, i, k / 16);
+      maior = Math.max(maior, Math.abs(Math.hypot(q.x, q.y) - 100));
+    }
+  }
+  assert.ok(maior <= 1.3, `afastou ${maior.toFixed(2)} do círculo (ruído 0,3 + folga 1)`);
+}
+
 console.log("OK — as contas de edição de nós conferem.");

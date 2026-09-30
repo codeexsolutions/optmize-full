@@ -503,3 +503,116 @@ export function apagarNos(nos, indices) {
     trechos: pedacos.map((p) => ({ velhos: p.velhos, novos: [mapa[p.a]] })),
   };
 }
+
+/** Distância de `p` ao segmento `u`–`v`. */
+function aoSegmento(p, u, v) {
+  const dx = v.x - u.x;
+  const dy = v.y - u.y;
+  const t2 = dx * dx + dy * dy;
+  const t = t2 > 0 ? Math.max(0, Math.min(1, ((p.x - u.x) * dx + (p.y - u.y) * dy) / t2)) : 0;
+  return Math.hypot(u.x + t * dx - p.x, u.y + t * dy - p.y);
+}
+
+/** O quanto as cúbicas se afastam da poligonal `pontos`, nos dois sentidos. */
+function afastamento(curvas, pontos) {
+  const naLinha = [];
+  for (const c of curvas) for (let k = 0; k <= 24; k++) naLinha.push(naCurva(c[0], c[1], c[2], c[3], k / 24));
+  const aoPoligono = (p, linha) => {
+    let menor = Infinity;
+    for (let i = 0; i + 1 < linha.length; i++) menor = Math.min(menor, aoSegmento(p, linha[i], linha[i + 1]));
+    return menor;
+  };
+  let maior = 0;
+  for (const q of naLinha) maior = Math.max(maior, aoPoligono(q, pontos));
+  for (const p of pontos) maior = Math.max(maior, aoPoligono(p, naLinha));
+  return maior;
+}
+
+/**
+ * Tira os nós que sobram, sem o traço se afastar mais que `folga` do de antes.
+ *
+ * Âncoras nunca saem: nó de canto, nó na ponta de um trecho reto, os de
+ * `ancorasExtras` (os que têm regra de graduação, na Montagem) e, com
+ * `indices`, os que não estão na seleção (`indices = null`: a peça inteira).
+ * Uma volta toda lisa ganha três âncoras espalhadas: o risco nunca fica com
+ * menos de três nós.
+ *
+ * Entre duas âncoras vizinhas, tenta UMA cúbica no lugar do pedaço todo, com
+ * as tangentes das pontas (`curvasDoTrecho`). Se ela se afasta mais que a
+ * folga, o nó do meio do pedaço fica — com as tangentes dele — e cada metade
+ * tenta de novo; um trecho só que não cabe fica como estava. Os nós que ficam
+ * são sempre nós que já estavam lá: o resultado nunca tem mais nós que antes,
+ * nunca se afasta mais que a folga, e a conta é rápida o bastante para o
+ * controle refazê-la a cada movimento.
+ *
+ * Devolve `{ nos, mapa, trechos, antes, depois }`, ou `{ erro }` quando não há
+ * nada a tirar dentro da folga.
+ */
+export function reduzirNos(nos, indices, folga, ancorasExtras = []) {
+  const n = nos.length;
+  const alvo = indices === null ? null : new Set(indices);
+  const extra = new Set(ancorasExtras);
+  const fica = nos.map((no, i) => (alvo !== null && !alvo.has(i)) || !!no.canto || extra.has(i)
+    || !!no.retaDepois || !!nos[(i - 1 + n) % n].retaDepois);
+  if (fica.filter(Boolean).length < 3) for (const i of [0, Math.floor(n / 3), Math.floor((2 * n) / 3)]) fica[i] = true;
+  const ancoras = [];
+  for (let i = 0; i < n; i++) if (fica[i]) ancoras.push(i);
+
+  const saidaNova = new Map();
+  const entradaNova = new Map();
+  const trocados = [];
+  const resolver = (a, b) => {
+    const velhos = [];
+    for (let s = a; s !== b; s = (s + 1) % n) velhos.push(s);
+    if (velhos.length < 2) return;
+    const pontos = pontosDoPedaco(nos, velhos, 12);
+    const inicial = saidaDoTrecho(nos, a) ?? { x: 1, y: 0 };
+    const final = chegadaDoTrecho(nos, velhos[velhos.length - 1]) ?? { x: -1, y: 0 };
+    const [curva] = curvasDoTrecho(pontos, inicial, final, Infinity);
+    if (afastamento([curva], pontos) <= folga) {
+      saidaNova.set(a, curva[1]);
+      entradaNova.set(b, curva[2]);
+      trocados.push({ a, velhos });
+      return;
+    }
+    const meio = velhos[Math.floor(velhos.length / 2)];
+    fica[meio] = true;
+    resolver(a, meio);
+    resolver(meio, b);
+  };
+  for (let k = 0; k < ancoras.length; k++) resolver(ancoras[k], ancoras[(k + 1) % ancoras.length]);
+  if (trocados.length === 0) return { erro: "Nada a reduzir com essa folga — aumente o controle." };
+
+  const novos = [];
+  const mapa = new Array(n).fill(null);
+  for (let i = 0; i < n; i++) {
+    if (!fica[i]) continue;
+    let no = nos[i];
+    if (saidaNova.has(i)) no = { ...no, retaDepois: false, saida: { ...saidaNova.get(i) } };
+    if (entradaNova.has(i)) no = { ...no, entrada: { ...entradaNova.get(i) } };
+    mapa[i] = novos.length;
+    novos.push(no);
+  }
+  return {
+    nos: novos,
+    mapa,
+    trechos: trocados.map((t) => ({ velhos: t.velhos, novos: [mapa[t.a]] })),
+    antes: n,
+    depois: novos.length,
+  };
+}
+
+/** Cosseno e seno de múltiplos de 90° saem exatos: girar 4× 90° devolve a peça sem sobra de conta. */
+const exato = (v) => (Math.abs(v) < 1e-12 ? 0 : Math.abs(Math.abs(v) - 1) < 1e-12 ? Math.sign(v) : v);
+
+/** Gira os nós `graus` em volta de `centro`. Com y para baixo (a tela), positivo gira no sentido do relógio. */
+export function girarNos(nos, graus, centro) {
+  const rad = (graus * Math.PI) / 180;
+  const c = exato(Math.cos(rad));
+  const s = exato(Math.sin(rad));
+  const gira = (p) => ({
+    x: centro.x + (p.x - centro.x) * c - (p.y - centro.y) * s,
+    y: centro.y + (p.x - centro.x) * s + (p.y - centro.y) * c,
+  });
+  return nos.map((n) => ({ ...n, ...gira(n), entrada: gira(n.entrada), saida: gira(n.saida) }));
+}
