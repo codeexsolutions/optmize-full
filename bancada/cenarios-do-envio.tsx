@@ -272,6 +272,44 @@ cenariosDaTela.push(["janela 6", async () => {
   }
 }]);
 
+// J. 7 — com linha em volta (2 mm), a peça sem arte vai DESENHADA (silhueta + linha), com a caixa
+//        1 linha maior e o contorno afastado; sem linha (o molde de sempre), nada muda.
+cenariosDaTela.push(["janela 7", async () => {
+  const f = ligacaoFalsa();
+  const desmontar = await montar(
+    <ProvedorDeDialogo>
+      <ProvedorDaLigacao value={f.ligacao}>
+        <EnvioParaEncaixe molde={{ ...moldeDoPijama, linha: 2 }} aoFechar={() => {}} aoRecarregar={() => {}} />
+      </ProvedorDaLigacao>
+    </ProvedorDeDialogo>,
+  );
+  try {
+    await digitar(campo("sem estampa P"), "1");
+    await mandar();
+    const frente = f.recebidos[0].pecas[0];
+    assert.ok(frente.desenho, "com linha, a peça sem arte vai desenhada");
+    assert.ok(Math.abs(frente.largura - 10.2) < 1e-9, `largura ${frente.largura}`);
+    assert.ok(Math.abs(frente.altura - 20.2) < 1e-9, `altura ${frente.altura}`);
+    const xs = frente.contorno.map((q: Qualquer) => q.x);
+    assert.ok(Math.min(...xs) > -1e-6 && Math.abs(Math.max(...xs) - 10.2) < 1e-6, `x ${xs}`);
+    assert.ok(Math.abs(frente.desenho.pxW / frente.desenho.ppcm - 10.2) < 0.05, "a imagem tem a caixa da peça com a linha");
+  } finally {
+    await desmontar();
+  }
+
+  // O molde de sempre (sem `linha`): a peça sem arte continua indo só como contorno, como hoje.
+  const g = ligacaoFalsa();
+  const j = await abrirJanela(g.ligacao);
+  try {
+    await digitar(campo("sem estampa P"), "1");
+    await mandar();
+    assert.equal(g.recebidos[0].pecas[0].desenho, undefined);
+    assert.equal(g.recebidos[0].pecas[0].largura, 10);
+  } finally {
+    await j.desmontar();
+  }
+}]);
+
 export async function rodar() {
   const falhas: string[] = [];
   const cenario = async (nome: string, f: () => Promise<void>) => {

@@ -189,6 +189,23 @@ for (const volta of [quadrado, [...quadrado].reverse()]) {
   assert.ok(!svgSem.includes("stroke-linejoin"), "sem linha, nada muda no corte");
 }
 
+// 12c. pecaComLinha: a peça como vai ao Encaixe com linha em volta — o contorno afastado meia linha,
+//      tudo de novo encostado no canto, a caixa uma linha inteira maior. Sem linha, a mesma peça.
+{
+  const furo = [{ x: 4, y: 4 }, { x: 6, y: 4 }, { x: 6, y: 6 }];
+  const peca = { papel: "frente", largura: 10, altura: 10, contorno: quadrado, furos: [furo], quantidade: 1 };
+  const r = m.pecaComLinha(peca, 0.4);
+  assert.equal(r.largura, 10.4);
+  assert.equal(r.altura, 10.4);
+  const xs = r.contorno.map((q) => q.x);
+  const ys = r.contorno.map((q) => q.y);
+  assert.ok(Math.abs(Math.min(...xs)) < 1e-6 && Math.abs(Math.max(...xs) - 10.4) < 1e-6, `x ${xs}`);
+  assert.ok(Math.abs(Math.min(...ys)) < 1e-6 && Math.abs(Math.max(...ys) - 10.4) < 1e-6, `y ${ys}`);
+  assert.ok(perto(r.furos[0][0], { x: 4.2, y: 4.2 }), "o furo anda junto");
+  assert.equal(m.pecaComLinha(peca, 0), peca);
+  assert.equal(m.COR_DA_LINHA, "#000000");
+}
+
 // Graduação presa aos nós: inserir e apagar nó levam as regras junto.
 {
   const p = { ...pecaQuadrada(), graduacao: { jeito: "pontos", porcentagem: 0, regras: [

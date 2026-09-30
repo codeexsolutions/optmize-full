@@ -384,6 +384,32 @@ export function pecasParaOEncaixe(pecas) {
   });
 }
 
+/** A linha em volta da peça é tinta de impressão, não cor de tema: preta sempre. */
+export const COR_DA_LINHA = "#000000";
+
+/**
+ * A peça como o Encaixe a recebe quando o molde tem linha em volta.
+ *
+ * Metade da linha fica FORA da peça, então a peça impressa é maior: o contorno é
+ * afastado meia linha (a mesma conta da margem de costura) e tudo volta a ficar
+ * encostado no canto — no mesmo lugar em que `desenharArteNoMolde`, com
+ * `margem` de meia linha, põe a peça na imagem. A caixa cresce uma linha
+ * inteira. É isso que faz o Encaixe reservar o espaço do traço.
+ */
+export function pecaComLinha(peca, linhaCm) {
+  if (!(linhaCm > 0)) return peca;
+  const meia = linhaCm / 2;
+  const mover = (p) => ({ x: arredondar(p.x + meia), y: arredondar(p.y + meia) });
+  const afastado = margemDeCostura(peca.contorno, meia) ?? peca.contorno;
+  return {
+    ...peca,
+    contorno: afastado.map(mover),
+    furos: (peca.furos || []).map((f) => f.map(mover)),
+    largura: arredondar(peca.largura + linhaCm, 2),
+    altura: arredondar(peca.altura + linhaCm, 2),
+  };
+}
+
 /**
  * O que se desenha de uma peça no PDF, no SVG e na mesa.
  *

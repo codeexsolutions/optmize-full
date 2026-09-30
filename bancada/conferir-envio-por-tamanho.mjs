@@ -114,7 +114,7 @@ const { JSDOM } = require("jsdom");
 const esbuild = require("esbuild");
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true, url: "http://localhost/" });
-for (const k of ["window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLButtonElement", "HTMLCanvasElement", "Node", "Element", "Event", "KeyboardEvent", "MutationObserver", "Image"]) {
+for (const k of ["window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLButtonElement", "HTMLCanvasElement", "Node", "Element", "Event", "KeyboardEvent", "MutationObserver", "Image", "getComputedStyle"]) {
   if (!(k in globalThis) || k === "window" || k === "document") globalThis[k] = k === "window" ? dom.window : dom.window[k];
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
