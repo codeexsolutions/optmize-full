@@ -5,12 +5,15 @@
  *
  * A arte fica guardada pelo PAPEL da peça — frente, costas, manga direita… —
  * e não pela peça de um tamanho. É isso que faz a mesma arte servir para P, M
- * e G: ao trocar o tamanho, o contorno muda e a arte se ajusta ao contorno
- * novo sem ninguém precisar mandar tudo de novo.
+ * e G: ao mudar o "Ver no tamanho", o contorno muda e a arte se ajusta ao
+ * contorno novo sem ninguém precisar mandar tudo de novo.
  *
  * Um jogo dessas artes é uma **estampa**, e ela é guardada junto com o molde.
  * Assim a mesma camiseta tem a estampa da caveira, a da flor e a lisa, e dá
  * para mandar mais de uma no mesmo encaixe, cada uma com a sua quantidade.
+ *
+ * As quantidades são uma grade estampa × tamanho e vão célula por célula para
+ * o Encaixe; as contas dessa grade estão em `envioPorTamanho.ts`.
  *
  * ---------------------------------------------------------------------------
  * O QUE É DESENHADO QUANDO
@@ -127,9 +130,10 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
   const rotulo = (c: { linha: string; tamanho: string }) => `${nomeDaLinha(c.linha)} · ${c.tamanho}`;
   /** Outra estampa no painel: os números da "estampa nova" não ficam pendurados para reaparecer nela. */
   const esquecerANova = () => {
-    const r = tirarLinha(quantidades, mexidas, LINHA_NOVA);
-    setQuantidades(r.quantidades);
-    setMexidas(r.mexidas);
+    // Atualização em função do estado de agora: quem chama já esperou imagens
+    // carregarem, e o que foi digitado na grade nesse meio tempo não pode voltar.
+    setQuantidades((q) => tirarLinha(q, {}, LINHA_NOVA).quantidades);
+    setMexidas((m) => tirarLinha({}, m, LINHA_NOVA).mexidas);
     setAberta(null);
   };
   // A peça marcada "espelhar" na Montagem vira duas — uma do avesso. Ver
@@ -188,6 +192,8 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
     if (!nome) return setErro("Dê um nome à estampa antes de salvar.");
     const papeis = Object.keys(artes);
     if (papeis.length === 0) return setErro("Mande a arte de pelo menos uma parte.");
+    // Guardado antes dos awaits: só a estampa nova leva os números da linha dela.
+    const eraNova = emEdicao === null;
 
     try {
       // Cada arte nova sobe uma vez; a que veio de uma estampa guardada já tem
@@ -216,15 +222,18 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
         })),
       });
 
-      // A estampa nova virou guardada: os números dela vão junto para a linha nova.
-      if (emEdicao === null) {
-        const r = levarLinha(quantidades, mexidas, LINHA_NOVA, linhaDaEstampa(id));
-        setQuantidades(r.quantidades);
-        setMexidas(r.mexidas);
-        setAberta(null);
-      }
       // Recarrega o molde para a lista vir do servidor, já com a estampa nova.
       aoRecarregar(await moldesApi.abrir(molde.id));
+      // A estampa nova virou guardada: os números dela vão junto para a linha nova. Só
+      // agora, com a linha nova já na lista — se o recarregamento falhar, os números
+      // ficam na "estampa nova", que continua na tela. Em função do estado de agora,
+      // porque a grade seguiu editável durante o salvamento.
+      if (eraNova) {
+        const alvo = linhaDaEstampa(id);
+        setQuantidades((q) => levarLinha(q, {}, LINHA_NOVA, alvo).quantidades);
+        setMexidas((m) => levarLinha({}, m, LINHA_NOVA, alvo).mexidas);
+        setAberta(null);
+      }
       setEmEdicao(id);
     } catch (e) {
       setErro(`Não deu para salvar a estampa: ${e instanceof Error ? e.message : String(e)}`);
@@ -325,7 +334,8 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
     setErro("");
     if (!ligacao) return setErro("O editor de produção não está montado.");
     if (celulas.length === 0) {
-      const pediu = Object.values(quantidades).some((q) => Object.values(q).some((n) => n > 0));
+      // Só as linhas que ainda existem: número de estampa apagada não conta como pedido.
+      const pediu = linhas.some((l) => Object.values(quantidades[l.chave] ?? {}).some((n) => n > 0));
       return setErro(pediu
         ? "As peças dos tamanhos pedidos estão todas em zero."
         : "Diga quantas peças prontas você quer, em pelo menos um tamanho.");

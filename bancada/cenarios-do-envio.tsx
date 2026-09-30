@@ -193,6 +193,85 @@ cenariosDaTela.push(["janela 5", async () => {
   await j.desmontar();
 }]);
 
+// J. 6 — salvar a estampa nova leva os números para a linha dela, e o que a pessoa digita com o
+//        salvamento no ar não é desfeito. A rede é de mentira (`fetch`), as imagens e o arquivo também;
+//        o componente é o de verdade.
+cenariosDaTela.push(["janela 6", async () => {
+  const g: Qualquer = globalThis;
+  const guardado = { fetch: g.fetch, Image: g.Image, FileReader: g.FileReader };
+  // O jsdom não carrega imagem nem lê arquivo: a imagem "carrega" sozinha, com tamanho, e a leitura devolve um endereço.
+  g.Image = class {
+    width = 100; height = 100; onload: null | (() => void) = null; onerror: null | (() => void) = null;
+    set src(_: string) { setTimeout(() => this.onload?.(), 0); }
+  };
+  g.FileReader = class {
+    result: string | null = null; onload: null | (() => void) = null; onerror: null | (() => void) = null;
+    readAsDataURL() { this.result = "data:image/png;base64,"; setTimeout(() => this.onload?.(), 0); }
+  };
+  // O servidor: guardarEstampa só responde quando o cenário mandar, para dar tempo de digitar no meio.
+  let soltar: () => void = () => {};
+  const guardarSolto = new Promise<void>((r) => { soltar = r; });
+  const resposta = (corpo: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(corpo), json: async () => corpo });
+  const noServidor: Qualquer = { ...moldeDoPijama, artes: [] };
+  let guardarChegou = () => {};
+  const guardarComecou = new Promise<void>((r) => { guardarChegou = r; });
+  g.fetch = async (url: string, opcoes: Qualquer = {}) => {
+    if (opcoes.method === "POST" && url.includes("/artes/imagem")) return resposta({ arquivo: "frente.png", url: "/x/frente.png" });
+    if (opcoes.method === "POST" && url.endsWith("/artes")) {
+      guardarChegou();
+      await guardarSolto;
+      noServidor.artes = [{ id: 9, nome: "flor", pecas: [] }];
+      return resposta({ id: 9 });
+    }
+    if (url.endsWith("/moldes/7")) return resposta(noServidor);
+    throw new Error(`fetch não esperado: ${opcoes.method ?? "GET"} ${url}`);
+  };
+
+  function Janela({ ligacao }: { ligacao: Qualquer }) {
+    const [molde, setMolde] = useState<Qualquer>(noServidor);
+    return (
+      <ProvedorDeDialogo>
+        <ProvedorDaLigacao value={ligacao}>
+          <EnvioParaEncaixe molde={molde} aoFechar={() => {}} aoRecarregar={setMolde} />
+        </ProvedorDaLigacao>
+      </ProvedorDeDialogo>
+    );
+  }
+  const desmontar = await montar(<Janela ligacao={ligacaoFalsa().ligacao} />);
+  try {
+    assert.equal(campo("estampa nova P"), null, "sem arte no painel, não há linha da estampa nova");
+    const entrada = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(entrada, "files", { value: [new File(["x"], "flor.png", { type: "image/png" })], configurable: true });
+    await fazer(async () => {
+      entrada.dispatchEvent(new window.Event("change", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    assert.ok(campo("estampa nova P"), "com arte no painel, a linha da estampa nova aparece");
+    await digitar(campo("estampa nova P"), "2");
+    await digitar(document.querySelector<HTMLInputElement>('input[placeholder^="Nome da estampa"]'), "flor");
+    assert.ok(campo("flor P"), "a linha ganha o nome digitado");
+
+    // Salva; com o servidor parado no meio, a pessoa digita mais um número na grade.
+    let salvando: Promise<void> = Promise.resolve();
+    await fazer(() => { salvando = Promise.resolve(botaoPeloTexto("Salvar no molde")!.click()); });
+    await fazer(() => guardarComecou);
+    await digitar(campo("flor M"), "5");
+    await fazer(async () => {
+      soltar();
+      await new Promise((r) => setTimeout(r, 20));
+      await salvando;
+    });
+
+    assert.equal(campo("flor P")!.value, "2", "o número da estampa nova foi para a linha dela");
+    assert.equal(campo("flor M")!.value, "5", "o que foi digitado com o salvamento no ar sobreviveu");
+    assert.match(document.body.textContent ?? "", /Editando a estampa: flor/);
+    assert.equal(campo("sem estampa P")!.value, "", "a linha sem estampa não ganhou nada");
+  } finally {
+    Object.assign(g, guardado);
+    await desmontar();
+  }
+}]);
+
 export async function rodar() {
   const falhas: string[] = [];
   const cenario = async (nome: string, f: () => Promise<void>) => {
