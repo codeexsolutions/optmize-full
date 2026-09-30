@@ -40,6 +40,7 @@
     "bancada:arte-cmyk": "node bancada/conferir-arte-cmyk.cjs",
     "bancada:nomes": "node bancada/conferir-nome-de-arquivo.mjs",
     "bancada:nos": "node bancada/conferir-edicao-de-nos.mjs",
+    "bancada:editor": "node bancada/conferir-editor-de-nos.mjs",
     "bancada:margem": "node bancada/conferir-margem.mjs",
     "bancada:montagem": "node bancada/conferir-montagem.mjs",
     "bancada:moldes-pecas": "node bancada/conferir-moldes-pecas.cjs",

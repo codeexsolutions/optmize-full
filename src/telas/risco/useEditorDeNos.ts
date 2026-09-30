@@ -58,6 +58,8 @@ type Arrasto =
 const MEXEU = 0.3;
 /** Setas com menos que isto entre uma e outra são um passo só no desfazer. */
 const SETAS_SEGUIDAS_MS = 1000;
+/** Sem peça, as telas mandam um `[]` novo a cada render; este fica sempre o mesmo. */
+const SEM_NOS: No[] = [];
 
 /** Há uma janela aberta na frente? Então as teclas são dela, não do editor. */
 function janelaAberta(): boolean {
@@ -65,7 +67,7 @@ function janelaAberta(): boolean {
 }
 
 export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
-  const nos = alvo.nos;
+  const nos = alvo.nos.length > 0 ? alvo.nos : SEM_NOS;
   const [selecionados, setSelecionados] = useState<Set<number>>(() => new Set());
   /** O último nó clicado: a referência do Alinhar. Seleção pelo retângulo ou Ctrl+A: `null` (a média). */
   const [referencia, setReferencia] = useState<number | null>(null);
@@ -77,6 +79,39 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
   const raioDoArrasto = useRef(0);
   const ultimaSeta = useRef(0);
   const reducao = useRef<{ retrato: unknown; indices: number[] | null; lembrou: boolean } | null>(null);
+  /** Os nós que o editor já viu, e se a mexida que está chegando é dele. */
+  const nosVistos = useRef(nos);
+  const mexidaDoEditor = useRef(false);
+  const [, marcarMexida] = useState(0);
+
+  /** Toda mexida do editor passa por aqui antes de chamar a tela; a que não passou veio de fora. */
+  const doEditor = () => {
+    mexidaDoEditor.current = true;
+    marcarMexida((n) => n + 1);
+  };
+  const mudarNos: AlvoDoEditor["mudarNos"] = (mudar, lembrarAntes) => { doEditor(); alvo.mudarNos(mudar, lembrarAntes); };
+  const apagarNos: AlvoDoEditor["apagarNos"] = (indices) => { doEditor(); return alvo.apagarNos(indices); };
+  const porNos: AlvoDoEditor["porNos"] = (pontos) => { doEditor(); alvo.porNos(pontos); };
+  const voltar: AlvoDoEditor["voltar"] = (retrato) => { doEditor(); alvo.voltar(retrato); };
+  const aplicar = (feito: ReducaoPronta) => { doEditor(); feito.aplicar(); };
+
+  // Os nós mudaram DE FORA do editor (o Ctrl+Z, o refazer do traço): o que estava em andamento acaba —
+  // a seleção (os números podem ser de outros nós agora), o arrasto, a sessão do Reduzir e a sequência
+  // de setas. Senão o passo seguinte reaplica um desenho velho, sem desfazer.
+  useEffect(() => {
+    const deFora = nos !== nosVistos.current && !mexidaDoEditor.current;
+    nosVistos.current = nos;
+    mexidaDoEditor.current = false;
+    if (!deFora) return;
+    arrasto.current = null;
+    reducao.current = null;
+    ultimaSeta.current = 0;
+    setRetangulo(null);
+    setSelecionados((s) => (s.size > 0 ? new Set() : s));
+    setReferencia(null);
+    setContagem(null);
+    setAviso("");
+  });
 
   // Outra peça: seleção nova.
   useEffect(() => {
@@ -157,7 +192,7 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     if (a.tipo === "alca") {
       const primeiro = !a.mexeu;
       a.mexeu = true;
-      alvo.mudarNos((atuais) => moverPega(atuais, { no: a.no, parte: a.parte }, ponto), primeiro);
+      mudarNos((atuais) => moverPega(atuais, { no: a.no, parte: a.parte }, ponto), primeiro);
       return;
     }
     const dx = ponto.x - a.de.x;
@@ -166,11 +201,11 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     const primeiro = !a.mexeu;
     a.mexeu = true;
     if (a.tipo === "nos") {
-      alvo.mudarNos(() => moverNos(a.base, a.indices, dx, dy), primeiro);
+      mudarNos(() => moverNos(a.base, a.indices, dx, dy), primeiro);
       return;
     }
     const puxado = puxarTrecho(a.base, a.no, a.t, ponto);
-    if (puxado) alvo.mudarNos(() => puxado, primeiro);
+    if (puxado) mudarNos(() => puxado, primeiro);
   };
 
   const soltar = () => {
@@ -192,14 +227,14 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     outraMexida();
     const sob = pegaSob(nos, ponto, raio, null);
     if (sob) {
-      const erro = alvo.apagarNos([sob.no]);
+      const erro = apagarNos([sob.no]);
       if (erro) setAviso(erro);
       else setSelecionados(new Set());
       return;
     }
     const traco = tracoSob(nos, ponto, raio);
     if (!traco) return;
-    alvo.porNos([{ no: traco.no, t: traco.t }]);
+    porNos([{ no: traco.no, t: traco.t }]);
     setSelecionados(new Set([traco.no + 1]));
     setReferencia(traco.no + 1);
   };
@@ -209,7 +244,7 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
   const apagar = () => {
     outraMexida();
     if (lista.length === 0) return;
-    const erro = alvo.apagarNos(lista);
+    const erro = apagarNos(lista);
     if (erro) { setAviso(erro); return; }
     setSelecionados(new Set());
     setReferencia(null);
@@ -218,20 +253,20 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
   const porNo = () => {
     outraMexida();
     if (trechos.length === 0) return;
-    alvo.porNos(trechos.map((no) => ({ no, t: 0.5 })));
+    porNos(trechos.map((no) => ({ no, t: 0.5 })));
     setSelecionados(new Set());
   };
 
   const converter = (jeito: "linha" | "curva") => {
     outraMexida();
     if (trechos.length === 0) return;
-    alvo.mudarNos((atuais) => converterTrechos(atuais, trechos, jeito), true);
+    mudarNos((atuais) => converterTrechos(atuais, trechos, jeito), true);
   };
 
   const mudarTipo = (tipo: TipoDeNo) => {
     outraMexida();
     if (lista.length === 0) return;
-    alvo.mudarNos((atuais) => mudarTipoDosNos(atuais, lista, tipo), true);
+    mudarNos((atuais) => mudarTipoDosNos(atuais, lista, tipo), true);
   };
 
   const alinhar = (eixo: "horizontal" | "vertical") => {
@@ -242,7 +277,7 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
       x: lista.reduce((s, i) => s + nos[i]!.x, 0) / lista.length,
       y: lista.reduce((s, i) => s + nos[i]!.y, 0) / lista.length,
     };
-    alvo.mudarNos((atuais) => alinharNos(atuais, lista, eixo, ref), true);
+    mudarNos((atuais) => alinharNos(atuais, lista, eixo, ref), true);
   };
 
   const selecionarTodos = () => {
@@ -260,11 +295,11 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     if ("erro" in feito) {
       setAviso(feito.erro);
       setContagem(null);
-      if (r.lembrou) alvo.voltar(r.retrato);
+      if (r.lembrou) voltar(r.retrato);
       return;
     }
     if (!r.lembrou) { alvo.lembrar(); r.lembrou = true; }
-    feito.aplicar();
+    aplicar(feito);
     setAviso("");
     setContagem({ antes: feito.antes, depois: feito.depois });
   };
@@ -283,7 +318,7 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     const feito = alvo.reduzir(alvo.retrato(), lista.length > 0 ? lista : null, alvo.folgaEmUnidades(folga));
     if ("erro" in feito) { setAviso(feito.erro); setContagem(null); return; }
     alvo.lembrar();
-    feito.aplicar();
+    aplicar(feito);
     setAviso("");
     setContagem({ antes: feito.antes, depois: feito.depois });
     setSelecionados(new Set());
@@ -297,6 +332,15 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     const foco = document.activeElement as HTMLElement | null;
     if (foco && (["INPUT", "TEXTAREA", "SELECT"].includes(foco.tagName) || foco.isContentEditable)) return false;
     if (janelaAberta()) return false;
+    // No meio de um arrasto, as teclas do editor não mexem nos nós: o movimento seguinte do arrasto
+    // reescreveria os nós de antes, e os piques e as regras da graduação iam para os nós errados.
+    if (arrasto.current) {
+      const ctrlA = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a";
+      if (!ctrlA && (e.ctrlKey || e.metaKey || e.altKey)) return false;
+      if (!ctrlA && !["Escape", "Delete", "Backspace", "+", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return false;
+      e.preventDefault();
+      return true;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
       e.preventDefault();
       selecionarTodos();
@@ -328,7 +372,7 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     const agora = Date.now();
     const seguida = agora - ultimaSeta.current < SETAS_SEGUIDAS_MS;
     ultimaSeta.current = agora;
-    alvo.mudarNos((atuais) => moverNos(atuais, lista, d[0] * passo, d[1] * passo), !seguida);
+    mudarNos((atuais) => moverNos(atuais, lista, d[0] * passo, d[1] * passo), !seguida);
     return true;
   };
 
