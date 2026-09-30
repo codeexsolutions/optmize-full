@@ -21,7 +21,11 @@ import { arranjar, desenhoDaPeca, pecaParaGravar, svgDaMontagem } from "../../mo
 import { EnvioParaEncaixe } from "../moldes/EnvioParaEncaixe";
 import type { MoldeEmMontagem } from "./useMoldeEmMontagem";
 
-interface Props { molde: MoldeEmMontagem; moldeId: number; aoTrocar: () => void; aoIrParaPeca: (i: number) => void }
+interface Props {
+  molde: MoldeEmMontagem; moldeId: number; aoTrocar: () => void; aoIrParaPeca: (i: number) => void;
+  /** O tamanho à mostra na mesa: é o que o PDF e o SVG levam, a não ser que se peça todos. */
+  tamanhoAtivo: string;
+}
 
 const ROTULO_DA_GRAVACAO = { salvo: "salvo", pendente: "salvando em instantes…", salvando: "salvando…", erro: "não salvo" } as const;
 
@@ -34,13 +38,17 @@ function baixar(blob: Blob, arquivo: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca }: Props) {
+export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanhoAtivo }: Props) {
   const dialogo = useDialogo();
   const setErro = useErroEmAlerta("Não deu certo na Montagem");
   const [ocupado, setOcupado] = useState("");
   const [envio, setEnvio] = useState<Molde | null>(null);
 
-  const desenhos = () => arranjar(molde.pecas.map((p) => desenhoDaPeca(pecaParaGravar(p).peca)));
+  // PDF e SVG: o tamanho marcado, ou a grade inteira.
+  const [todos, setTodos] = useState(false);
+  const desenhos = () => arranjar(molde.pecas
+    .filter((p) => todos || molde.tamanhos.length < 2 || p.tamanho === tamanhoAtivo)
+    .map((p) => desenhoDaPeca(pecaParaGravar(p).peca)));
   const arquivo = (ext: string) => `${(molde.nome || "molde").replace(/[\\/:*?"<>|]+/g, "_")}-molde.${ext}`;
 
   /** Grava o que faltar; se não der, mostra por quê e devolve `false`. */
@@ -119,6 +127,17 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca }: Prop
             <Icone referencia="icones.svg#rotate-ccw" className="size-4" />
             Desfazer
           </button>
+          {molde.tamanhos.length > 1 && (
+            <select
+              value={todos ? "todos" : "este"}
+              onChange={(e) => setTodos(e.target.value === "todos")}
+              className="w-auto!"
+              aria-label="Tamanhos do PDF e do SVG"
+            >
+              <option value="este">Tamanho {tamanhoAtivo}</option>
+              <option value="todos">Todos os tamanhos</option>
+            </select>
+          )}
           <button type="button" className="btn secondary btn-sm" disabled={!podeSair} onClick={() => void pdf()}>
             <Icone referencia="icones.svg#download" className="size-4" />
             {ocupado === "Gerando o PDF…" ? ocupado : "PDF"}

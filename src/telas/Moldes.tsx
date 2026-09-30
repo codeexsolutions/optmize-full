@@ -217,6 +217,10 @@ export function Moldes() {
                       <span className="text-[0.74rem] text-tinta-apagada">sem tamanho definido</span>
                     ) : molde.tamanhos.map((t) => (
                       <span className="etiqueta-tamanho" key={t} title="Tamanho guardado neste molde">
+                        {/* A cor em que a Audaces desenha o tamanho, quando o molde a guarda. */}
+                        {molde.cores?.[t] && (
+                          <span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: molde.cores[t] }} />
+                        )}
                         {t}
                       </span>
                     ))}

@@ -269,6 +269,22 @@ function ajustarTrecho(pontos, tangenteInicial, tangenteFinal, erroMaximo, profu
 }
 
 /**
+ * O ajuste de um trecho ABERTO, que o editor de nós usa para refazer um pedaço
+ * do risco: apagar nós (uma cúbica só) e reduzir nós (o mínimo de cúbicas
+ * dentro da folga).
+ *
+ * `tangenteInicial` sai do primeiro ponto para dentro do trecho, e
+ * `tangenteFinal` sai do último ponto de volta para dentro — as direções das
+ * duas alças das pontas. Devolve as cúbicas `[p0, p1, p2, p3]` em ordem; com
+ * `erroMaximo = Infinity`, uma só.
+ */
+export function curvasDoTrecho(pontos, tangenteInicial, tangenteFinal, erroMaximo) {
+  const saida = [];
+  ajustarTrecho(pontos, tangenteInicial, tangenteFinal, erroMaximo, 0, saida);
+  return saida;
+}
+
+/**
  * Os trechos que são reta.
  *
  * Varredura gulosa: de cada começo, estica enquanto todo ponto do caminho

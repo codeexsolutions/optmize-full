@@ -18,13 +18,24 @@ const db = require("./db");
 const {
   extensaoDaImagem, nomeDeArquivo, nomeDeImagemValido, limparImagensSoltas, pastaDeUploads,
 } = require("./uploads-arquivos");
-const { PAPEIS, arrumarPeca, lerSituacao, pecaDoBanco } = require("./moldes-pecas");
+const { PAPEIS, arrumarPeca, arrumarTamanhos, lerSituacao, pecaDoBanco } = require("./moldes-pecas");
 
 const router = express.Router();
 const agora = () => new Date().toISOString();
 
 function pecasDoMolde(moldeId) {
   return db.prepare("SELECT * FROM molde_pecas WHERE molde_id = ? ORDER BY ordem, id").all(moldeId).map(pecaDoBanco);
+}
+
+function tamanhosDoMolde(moldeId) {
+  return db.prepare("SELECT nome, cor, ordem, base FROM molde_tamanhos WHERE molde_id = ? ORDER BY ordem")
+    .all(moldeId).map((t) => ({ ...t, base: !!t.base }));
+}
+
+function gravarTamanhos(moldeId, tamanhos) {
+  db.prepare("DELETE FROM molde_tamanhos WHERE molde_id = ?").run(moldeId);
+  const inserir = db.prepare("INSERT INTO molde_tamanhos (molde_id, nome, cor, ordem, base) VALUES (?, ?, ?, ?, ?)");
+  for (const t of tamanhos) inserir.run(moldeId, t.nome, t.cor, t.ordem, t.base ? 1 : 0);
 }
 
 router.get("/papeis", (req, res) => res.json({ papeis: PAPEIS }));
@@ -39,6 +50,7 @@ router.get("/", (req, res) => {
     return {
       ...m,
       tamanhos,
+      cores: Object.fromEntries(tamanhosDoMolde(m.id).filter((t) => t.cor).map((t) => [t.nome, t.cor])),
       totalPecas: pecas.length,
       // Quantas peças de tecido saem de uma peça pronta, num tamanho só.
       pecasPorUnidade: pecas
@@ -52,7 +64,7 @@ router.get("/", (req, res) => {
 router.get("/:id", (req, res) => {
   const molde = db.prepare("SELECT * FROM moldes WHERE id = ?").get(req.params.id);
   if (!molde) return res.status(404).json({ error: "Molde não encontrado." });
-  res.json({ ...molde, pecas: pecasDoMolde(molde.id), artes: artesDoMolde(molde.id) });
+  res.json({ ...molde, pecas: pecasDoMolde(molde.id), tamanhos: tamanhosDoMolde(molde.id), artes: artesDoMolde(molde.id) });
 });
 
 router.post("/", (req, res) => {
@@ -71,10 +83,12 @@ router.post("/", (req, res) => {
       .run(String(nome).trim(), String(observacoes || "").trim() || null, lerSituacao(situacao) || "pronto", agora());
     const inserir = db.prepare(`
       INSERT INTO molde_pecas
-        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem)
-      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem)
+        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem, grupo, graduacao)
+      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem, @grupo, @graduacao)
     `);
     arrumadas.forEach((p) => inserir.run({ ...p, molde_id: info.lastInsertRowid }));
+    const tamanhos = arrumarTamanhos(req.body.tamanhos);
+    if (tamanhos) gravarTamanhos(info.lastInsertRowid, tamanhos);
     return info.lastInsertRowid;
   });
 
@@ -100,10 +114,13 @@ router.put("/:id", (req, res) => {
     db.prepare("DELETE FROM molde_pecas WHERE molde_id = ?").run(molde.id);
     const inserir = db.prepare(`
       INSERT INTO molde_pecas
-        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem)
-      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem)
+        (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem, grupo, graduacao)
+      VALUES (@molde_id, @tamanho, @papel, @nome, @quantidade, @largura, @altura, @contorno, @furos, @origem, @nos, @marcacoes, @ordem, @grupo, @graduacao)
     `);
     arrumadas.forEach((p) => inserir.run({ ...p, molde_id: molde.id }));
+    // Sem `tamanhos` no pedido (o passo a passo antigo), a grade guardada fica.
+    const tamanhos = arrumarTamanhos(req.body.tamanhos);
+    if (tamanhos) gravarTamanhos(molde.id, tamanhos);
   });
 
   salvar();

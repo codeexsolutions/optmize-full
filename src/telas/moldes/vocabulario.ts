@@ -27,6 +27,17 @@ export interface ParteEmEdicao {
    * o descarta junto com `nos` e `marcacoes`.
    */
   nomeGuardado?: string;
+  /**
+   * O grupo da peça no molde guardado (a mesma peça nos outros tamanhos). O
+   * passo a passo não o edita, só o devolve — e trocar o arquivo o mantém:
+   * muda o desenho, não qual peça é.
+   */
+  grupo?: number | null;
+  /**
+   * A graduação da peça no molde guardado. O passo a passo não a edita, só a
+   * devolve — e trocar o arquivo a descarta: ela é presa aos nós.
+   */
+  graduacao?: import("../../api/moldes").Graduacao | null;
   largura: number;
   altura: number;
   contorno: { x: number; y: number }[] | null;
