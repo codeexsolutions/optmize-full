@@ -10,6 +10,11 @@
  */
 import assert from "node:assert/strict";
 import { carregarModulo } from "./carregarModulo.mjs";
+import { createRequire } from "node:module";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const e = await carregarModulo("src/telas/moldes/envioPorTamanho.ts");
 
@@ -99,4 +104,54 @@ assert.deepEqual(
   assert.deepEqual(e.celulaDaChave("e:9|P"), { linha: "e:9", tamanho: "P" });
 }
 
-console.log("OK — as contas do envio de vários tamanhos conferem.");
+// ---------------------------------------------------------------- com React
+const aqui = path.dirname(fileURLToPath(import.meta.url));
+const raiz = path.join(aqui, "..");
+const require = createRequire(path.join(raiz, "package.json"));
+const { JSDOM } = require("jsdom");
+const esbuild = require("esbuild");
+
+const dom = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true, url: "http://localhost/" });
+for (const k of ["window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLButtonElement", "HTMLCanvasElement", "Node", "Element", "Event", "KeyboardEvent", "MutationObserver", "Image"]) {
+  if (!(k in globalThis) || k === "window" || k === "document") globalThis[k] = k === "window" ? dom.window : dom.window[k];
+}
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+// A prévia da arte desenha em canvas, e o jsdom não tem 2D: um contexto de mentira que aceita tudo.
+const ctxFalso = new Proxy({}, {
+  get: (alvo, k) => (k in alvo ? alvo[k] : () => ctxFalso),
+  set: (alvo, k, v) => { alvo[k] = v; return true; },
+});
+dom.window.HTMLCanvasElement.prototype.getContext = () => ctxFalso;
+dom.window.HTMLCanvasElement.prototype.toDataURL = () => "data:image/png;base64,";
+// Sem o provedor de alertas montado, o aviso cai no `window.alert`: os cenários leem daqui.
+globalThis.alertas = [];
+dom.window.alert = (texto) => { globalThis.alertas.push(String(texto)); };
+
+const saida = path.join(os.tmpdir(), `optimize-cenarios-do-envio-${process.pid}.mjs`);
+esbuild.buildSync({
+  entryPoints: [path.join(aqui, "cenarios-do-envio.tsx")],
+  bundle: true,
+  format: "esm",
+  platform: "node",
+  outfile: saida,
+  jsx: "automatic",
+  loader: { ".css": "empty" },
+  define: {
+    "process.env.NODE_ENV": '"development"',
+    "import.meta.env.BASE_URL": '"/"',
+    __VERSAO__: JSON.stringify(require(path.join(raiz, "package.json")).version),
+  },
+  resolveExtensions: [".mjs", ".js", ".ts", ".tsx", ".jsx", ".json"],
+  logLevel: "error",
+});
+try {
+  const { rodar } = await import(pathToFileURL(saida).href);
+  await rodar();
+} finally {
+  dom.window.close();
+  fs.rmSync(saida, { force: true });
+}
+console.log("OK — as contas do envio de vários tamanhos conferem, e a grade e a janela também.");
+// O agendador do React deixa portas de mensagem abertas no jsdom: sem sair à força, o processo não acaba
+// (como em `conferir-editor-de-nos.mjs`). Uma falha acima já saiu com erro antes daqui.
+process.exit(0);
