@@ -36,7 +36,7 @@ export const inteiro = (v: unknown) => Math.max(0, Math.floor(Number(v) || 0));
 /** Os tamanhos da grade, na ordem dela; sem grade guardada, os das peças. */
 export function colunasDaGrade(molde: Pick<Molde, "pecas" | "tamanhos">): Coluna[] {
   const comDesenho = [...new Set(molde.pecas.map((p) => p.tamanho))];
-  const nomes = [...molde.tamanhos].sort((a, b) => a.ordem - b.ordem).map((t) => t.nome);
+  const nomes = [...(molde.tamanhos ?? [])].sort((a, b) => a.ordem - b.ordem).map((t) => t.nome);
   // Peça num tamanho que a grade não declara (grade antiga): entra no fim, senão sumiria do envio calada.
   for (const t of comDesenho) if (!nomes.includes(t)) nomes.push(t);
   return nomes.map((nome) => ({ nome, semDesenho: !comDesenho.includes(nome) }));

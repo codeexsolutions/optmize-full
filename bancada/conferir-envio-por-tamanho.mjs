@@ -36,6 +36,8 @@ assert.deepEqual(e.colunasDaGrade({ pecas, tamanhos: grade }), [
   { nome: "P", semDesenho: false }, { nome: "M", semDesenho: false }, { nome: "G", semDesenho: true },
 ]);
 assert.deepEqual(e.colunasDaGrade({ pecas, tamanhos: [] }).map((c) => c.nome), ["P", "M"]);
+// Molde vindo de servidor antigo, sem grade: `tamanhos` nem existe.
+assert.deepEqual(e.colunasDaGrade({ pecas, tamanhos: undefined }).map((c) => c.nome), ["P", "M"]);
 // Peça num tamanho que a grade não declara (grade antiga): a coluna aparece no fim, senão a peça sumia do envio.
 assert.deepEqual(
   e.colunasDaGrade({ pecas: [...pecas, peca("GG", "frente", 1)], tamanhos: grade }).map((c) => c.nome),

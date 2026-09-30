@@ -83,7 +83,7 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
   const [aberta, setAberta] = useState<string | null>(null);
   // A prévia da arte num tamanho só: a arte é por papel e serve a todos. Não tem nada a ver com o que vai.
   const comDesenho = colunas.filter((c) => !c.semDesenho).map((c) => c.nome);
-  const baseDaGrade = molde.tamanhos.find((t) => t.base)?.nome;
+  const baseDaGrade = (molde.tamanhos ?? []).find((t) => t.base)?.nome;
   const [tamanhoDaPrevia, setTamanhoDaPrevia] = useState(
     baseDaGrade && comDesenho.includes(baseDaGrade) ? baseDaGrade : (comDesenho[0] ?? ""),
   );
