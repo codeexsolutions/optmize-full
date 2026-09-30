@@ -118,27 +118,28 @@ export function compararAlfas(alfaA, alfaB, W, H, passo, folga) {
 
   // A menor distância: da borda da tinta de A até qualquer tinta de B no disco
   // da folga. Só a BORDA de A interessa — o miolo está mais longe que ela.
+  //
+  // Antes cada pixel de borda varria o quadrado inteiro da folga atrás de
+  // tinta de B: com arte cheia de furinhos (quase todo pixel é borda) e 1 cm
+  // de folga, perto de 1 s por par, sem a tela respirar. Agora a distância até
+  // a tinta de B vem pronta da transformada (`distanciasAte`), e cada pixel de
+  // borda só a consulta: o tempo deixa de depender da folga e da arte.
   const R = Math.ceil(folga / passo);
   let menor2 = Infinity;
   let onde = null;
   if (R > 0) {
-    const tinta = (alfa, x, y) => x >= 0 && y >= 0 && x < W && y < H && alfa[y * W + x] >= ALFA_TINTA;
+    const ateB = distanciasAte(alfaB, W, H);
+    const limite = R * R;
+    const tinta = (x, y) => x >= 0 && y >= 0 && x < W && y < H && alfaA[y * W + x] >= ALFA_TINTA;
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
-        if (alfaA[y * W + x] < ALFA_TINTA) continue;
-        if (tinta(alfaA, x - 1, y) && tinta(alfaA, x + 1, y) && tinta(alfaA, x, y - 1) && tinta(alfaA, x, y + 1)) continue;
-        for (let dy = -R; dy <= R; dy++) {
-          const yy = y + dy;
-          if (yy < 0 || yy >= H) continue;
-          for (let dx = -R; dx <= R; dx++) {
-            const d2 = dx * dx + dy * dy;
-            if (d2 >= menor2) continue;
-            const xx = x + dx;
-            if (xx < 0 || xx >= W || alfaB[yy * W + xx] < ALFA_TINTA) continue;
-            menor2 = d2;
-            onde = { px: x, py: y };
-          }
-        }
+        const i = y * W + x;
+        if (alfaA[i] < ALFA_TINTA) continue;
+        const d2 = ateB[i];
+        if (d2 > limite || d2 >= menor2) continue;
+        if (tinta(x - 1, y) && tinta(x + 1, y) && tinta(x, y - 1) && tinta(x, y + 1)) continue;
+        menor2 = d2;
+        onde = { px: x, py: y };
       }
     }
   }
@@ -147,6 +148,65 @@ export function compararAlfas(alfaA, alfaB, W, H, passo, folga) {
     menor: menor2 === Infinity ? Infinity : Math.sqrt(menor2) * passo,
     onde,
   };
+}
+
+/**
+ * A transformada de distância: para cada pixel, o quadrado da distância (em
+ * pixels, de centro a centro) até o pixel com tinta mais perto — `Infinity` se
+ * não há tinta nenhuma. Exata, e em tempo proporcional ao número de pixels
+ * (Felzenszwalb & Huttenlocher, "Distance Transforms of Sampled Functions"):
+ * uma passada por coluna e outra por linha, cada uma a envoltória de parábolas.
+ *
+ * O "longe" das contas é finito e pequeno — maior que qualquer distância que
+ * cabe na grade, mas longe de 1e20, onde o `q * q` somado sumiria no
+ * arredondamento e a envoltória sairia torta.
+ */
+export function distanciasAte(alfa, W, H) {
+  const longe = 2 * (W + H) * (W + H) + 1;
+  const d = new Float64Array(W * H);
+  for (let i = 0; i < d.length; i++) d[i] = alfa[i] >= ALFA_TINTA ? 0 : longe;
+  const n = Math.max(W, H);
+  const f = new Float64Array(n);
+  const saida = new Float64Array(n);
+  const v = new Int32Array(n);
+  const z = new Float64Array(n + 1);
+
+  const umaLinha = (tamanho) => {
+    let k = 0;
+    v[0] = 0;
+    z[0] = -Infinity;
+    z[1] = Infinity;
+    for (let q = 1; q < tamanho; q++) {
+      let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      while (s <= z[k]) {
+        k--;
+        s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      }
+      k++;
+      v[k] = q;
+      z[k] = s;
+      z[k + 1] = Infinity;
+    }
+    k = 0;
+    for (let q = 0; q < tamanho; q++) {
+      while (z[k + 1] < q) k++;
+      const p = v[k];
+      saida[q] = (q - p) * (q - p) + f[p];
+    }
+  };
+
+  for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) f[y] = d[y * W + x];
+    umaLinha(H);
+    for (let y = 0; y < H; y++) d[y * W + x] = saida[y];
+  }
+  for (let y = 0; y < H; y++) {
+    const base = y * W;
+    for (let x = 0; x < W; x++) f[x] = d[base + x];
+    umaLinha(W);
+    for (let x = 0; x < W; x++) d[base + x] = saida[x] >= longe ? Infinity : saida[x];
+  }
+  return d;
 }
 
 /** A folga medida (de centro a centro de pixel) é curta mesmo no pior caso? */

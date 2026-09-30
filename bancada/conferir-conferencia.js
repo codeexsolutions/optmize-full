@@ -89,6 +89,86 @@ function conferirPorPartes(motor) {
   if (nomes.join(",") !== "0-1") falhar(`por partes: os pares vizinhos deviam ser 0-1, foram ${nomes.join(",")}`);
 }
 
+// ---------- a conta rápida ----------
+
+/*
+ * A distância de antes, pixel de borda por pixel de borda varrendo o quadrado
+ * inteiro da folga. Ficou aqui como a régua: a conta do motor (pela
+ * transformada de distância) tem de dar o mesmo ponto e a mesma medida.
+ */
+function menorPelaForcaBruta(alfaA, alfaB, W, H, passo, folga, tintaMin) {
+  const R = Math.ceil(folga / passo);
+  let menor2 = Infinity;
+  let onde = null;
+  const tinta = (alfa, x, y) => x >= 0 && y >= 0 && x < W && y < H && alfa[y * W + x] >= tintaMin;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (alfaA[y * W + x] < tintaMin) continue;
+      if (tinta(alfaA, x - 1, y) && tinta(alfaA, x + 1, y) && tinta(alfaA, x, y - 1) && tinta(alfaA, x, y + 1)) continue;
+      for (let dy = -R; dy <= R; dy++) {
+        for (let dx = -R; dx <= R; dx++) {
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= menor2 || d2 > R * R) continue;
+          if (!tinta(alfaB, x + dx, y + dy)) continue;
+          menor2 = d2;
+          onde = { px: x, py: y };
+        }
+      }
+    }
+  }
+  return { menor: menor2 === Infinity ? Infinity : Math.sqrt(menor2) * passo, onde };
+}
+
+function conferirContaRapida(motor) {
+  // Um sorteio que se repete: o mesmo erro aparece em toda rodada.
+  let semente = 7;
+  const sortear = () => { semente = (semente * 1103515245 + 12345) & 0x7fffffff; return semente / 0x7fffffff; };
+  for (let caso = 0; caso < 200; caso++) {
+    const W = 5 + Math.floor(sortear() * 40);
+    const H = 5 + Math.floor(sortear() * 40);
+    const passo = 0.05;
+    const folga = [0, 0.1, 0.25, 0.4, 1][caso % 5];
+    const alfaA = new Uint8Array(W * H);
+    const alfaB = new Uint8Array(W * H);
+    const cheiaA = sortear() * 0.5;
+    const cheiaB = sortear() * 0.3;
+    for (let i = 0; i < W * H; i++) {
+      if (sortear() < cheiaA) alfaA[i] = sortear() < 0.8 ? 255 : Math.floor(sortear() * 20);
+      else if (sortear() < cheiaB) alfaB[i] = sortear() < 0.8 ? 255 : Math.floor(sortear() * 20);
+    }
+    const r = motor.compararAlfas(alfaA, alfaB, W, H, passo, folga);
+    const ref = menorPelaForcaBruta(alfaA, alfaB, W, H, passo, folga, motor.ALFA_TINTA);
+    const igual = (r.menor === ref.menor || Math.abs(r.menor - ref.menor) < 1e-12)
+      && JSON.stringify(r.onde) === JSON.stringify(ref.onde);
+    if (!igual) {
+      falhar(`conta rápida: caso ${caso} (${W}x${H}, folga ${folga}) deu ${r.menor} em ${JSON.stringify(r.onde)}, `
+        + `a régua deu ${ref.menor} em ${JSON.stringify(ref.onde)}`);
+      return;
+    }
+  }
+
+  // O tempo: arte cheia de furinhos (quase todo pixel é borda), 800 x 1200
+  // pixels e 1 cm de folga. A varredura antiga levava perto de 1 s por par,
+  // com a tela parada; o teto aqui é folgado para não depender da máquina.
+  const W = 800;
+  const H = 1200;
+  const alfaA = new Uint8Array(W * H);
+  const alfaB = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const tinta = (x * 7 + y * 13) % 5 !== 0;
+      if (x < W / 2 - 6 && tinta) alfaA[y * W + x] = 255;
+      if (x >= W / 2 + 6 && tinta) alfaB[y * W + x] = 255;
+    }
+  }
+  const inicio = Date.now();
+  const r = motor.compararAlfas(alfaA, alfaB, W, H, 0.05, 1);
+  const ms = Date.now() - inicio;
+  console.log(`conta rápida: 200 casos iguais à régua; arte furada 800x1200 com 1 cm de folga em ${ms} ms`);
+  if (ms > 250) falhar(`conta rápida: a arte furada levou ${ms} ms (teto 250 ms)`);
+  if (Math.abs(r.menor - 0.65) > 1e-9) falhar(`conta rápida: a arte furada devia medir 0,65 cm, mediu ${r.menor}`);
+}
+
 // ---------- o fundo ----------
 
 function conferirFundo(motor) {
@@ -229,6 +309,7 @@ async function main() {
   const motor = await carregarMotor();
   conferirPorPartes(motor);
   console.log("por partes: encostar, folga, sobreposição e pares");
+  conferirContaRapida(motor);
   conferirFundo(motor);
   console.log("fundo: o que a máscara ignora tem de sair no PDF");
   console.log("encaixe (busca de 1,5 s):");
