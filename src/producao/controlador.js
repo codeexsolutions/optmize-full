@@ -556,8 +556,16 @@ async function lerImagemCrua(file) {
   const teto = m ? ladoDeTrabalho(Math.max(m.largura, m.altura) / ppcm) : 0;
   const img = await criarBitmapOuImagem(file, endereco, teto)
     .catch(() => { throw new Error(`"${file.name}" não parece ser uma imagem válida.`); });
+  // De onde o worker que tira o fundo tira a MESMA arte: o arquivo e as mesmas
+  // opções de redução (ver `opcoesDaReducao`). Mandar o bitmap custava ~50 ms
+  // de tela parada por arte, que é o Chrome copiando os pixels no postMessage.
+  // Só vale se a página abriu mesmo um bitmap por esse caminho — o `<img>` de
+  // reserva não dá a garantia de pixel igual, e aí vai o bitmap como antes.
+  const fonteDoFundo = typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap
+    ? { blob: file, opcoes: opcoesDaReducao(m, teto), largura: img.width, altura: img.height }
+    : null;
   return {
-    file, img, endereco, ppcm, ppcmDoArquivo,
+    file, img, endereco, ppcm, ppcmDoArquivo, fonteDoFundo,
     pxOriginal: m || { largura: img.naturalWidth || img.width, altura: img.naturalHeight || img.height },
   };
 }
@@ -781,6 +789,36 @@ async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
 }
 
 /**
+ * As opções com que a arte é decodificada reduzida, ou `undefined` quando ela
+ * entra inteira. Uma conta só, a partir das medidas do cabeçalho: a página
+ * decodifica com elas, e o worker que tira o fundo decodifica o mesmo arquivo
+ * com as MESMAS — e aí os pixels saem idênticos (conferido byte a byte, nas
+ * duas qualidades), sem a página precisar mandar o bitmap.
+ */
+function opcoesDaReducao(m, tetoDeLado) {
+  // Com teto e medidas conhecidas, o navegador já **decodifica reduzido**:
+  // a arte de 67 megapixels nunca chega inteira à memória. Reduzir só para
+  // baixo — ampliar não inventa detalhe, só custa.
+  if (!(tetoDeLado > 0) || !m || !(m.largura > 0) || !(m.altura > 0)) return undefined;
+  const maior = Math.max(m.largura, m.altura);
+  if (maior <= tetoDeLado) return undefined;
+  const fator = tetoDeLado / maior;
+  return {
+    resizeWidth: Math.max(1, Math.round(m.largura * fator)),
+    resizeHeight: Math.max(1, Math.round(m.altura * fator)),
+    // O "high" custava mais que a própria decodificação: seis artes
+    // de 7677 px levavam 6 s para entrar, contra 2,8 s no "low" — que
+    // é o mesmo tempo de não reduzir nada (o "medium" do Chrome é o
+    // "high", byte a byte). Até a metade do tamanho, o bilinear do
+    // "low" não pula pixel, e a diferença medida foi só na borda
+    // antisserrilhada (0,09% dos bytes, no máximo 26 de 255). Abaixo
+    // da metade ele serrilharia, e aí o "high" volta a valer a espera.
+    // A impressão não passa por aqui: ela reabre o arquivo original.
+    resizeQuality: fator >= 0.5 ? "low" : "high",
+  };
+}
+
+/**
  * Decodifica uma arte fora da thread da tela.
  *
  * Volta um `ImageBitmap` quando o navegador tem `createImageBitmap` (todos os
@@ -792,33 +830,9 @@ async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
 async function criarBitmapOuImagem(blob, endereco, tetoDeLado = 0) {
   if (typeof createImageBitmap === "function" && blob) {
     try {
-      // Com teto e medidas conhecidas, o navegador já **decodifica reduzido**:
-      // a arte de 67 megapixels nunca chega inteira à memória. Reduzir só para
-      // baixo — ampliar não inventa detalhe, só custa.
-      let opcoes;
-      if (tetoDeLado > 0) {
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        const m = medidasDoArquivo(bytes);
-        if (m && m.largura > 0 && m.altura > 0) {
-          const maior = Math.max(m.largura, m.altura);
-          if (maior > tetoDeLado) {
-            const fator = tetoDeLado / maior;
-            opcoes = {
-              resizeWidth: Math.max(1, Math.round(m.largura * fator)),
-              resizeHeight: Math.max(1, Math.round(m.altura * fator)),
-              // O "high" custava mais que a própria decodificação: seis artes
-              // de 7677 px levavam 6 s para entrar, contra 2,8 s no "low" — que
-              // é o mesmo tempo de não reduzir nada (o "medium" do Chrome é o
-              // "high", byte a byte). Até a metade do tamanho, o bilinear do
-              // "low" não pula pixel, e a diferença medida foi só na borda
-              // antisserrilhada (0,09% dos bytes, no máximo 26 de 255). Abaixo
-              // da metade ele serrilharia, e aí o "high" volta a valer a espera.
-              // A impressão não passa por aqui: ela reabre o arquivo original.
-              resizeQuality: fator >= 0.5 ? "low" : "high",
-            };
-          }
-        }
-      }
+      const opcoes = tetoDeLado > 0
+        ? opcoesDaReducao(medidasDoArquivo(new Uint8Array(await blob.arrayBuffer())), tetoDeLado)
+        : undefined;
       return await createImageBitmap(blob, opcoes);
     } catch (e) {
       // formato que o bitmap não abre: segue pelo caminho antigo
@@ -1892,7 +1906,8 @@ let preparoDeFundo = Promise.resolve();
 async function tirarFundoDepois(pecasPorIndice, crus) {
   const indices = [...pecasPorIndice.keys()];
   try {
-    const semFundos = await tirarFundoEmParalelo(indices.map((i) => crus[i].img));
+    const semFundos = await tirarFundoEmParalelo(indices.map((i) => crus[i].img), false, null,
+      indices.map((i) => crus[i].fonteDoFundo));
     let trocadas = 0;
     for (let k = 0; k < indices.length; k++) {
       const semFundo = semFundos[k];

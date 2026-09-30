@@ -237,7 +237,15 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
  * como travada. Os pixels precisam ser lidos aqui (só a tela tem canvas), mas
  * não precisam ser lidos todos de uma vez sem respirar.
  */
-export async function tirarFundoEmParalelo(imagens, forcar = false, aoAndar = null) {
+/*
+ * `fontes[i]`, quando vem, é `{ blob, opcoes, largura, altura }`: o arquivo da
+ * arte e as opções com que a página o decodificou. Aí quem decodifica é o
+ * worker, com as mesmas opções — os pixels saem idênticos (conferido byte a
+ * byte) — e a página não manda bitmap nenhum. Mandar o bitmap custava ~50 ms
+ * de tela parada por arte: o Chrome copia os pixels no `postMessage`, mesmo
+ * transferido. O preço é o fundo sair ~0,5 s mais tarde, por trás da tela.
+ */
+export async function tirarFundoEmParalelo(imagens, forcar = false, aoAndar = null, fontes = null) {
   if (imagens.length === 0) return [];
 
   const emSerie = async () => {
@@ -271,6 +279,19 @@ export async function tirarFundoEmParalelo(imagens, forcar = false, aoAndar = nu
     for (let i = 0; i < imagens.length; i++) {
       if (aoAndar) await aoAndar(i, imagens.length);
       const img = imagens[i];
+
+      const fonte = fontes && fontes[i];
+      if (fonte && fonte.blob) {
+        tarefas.push({
+          indice: i,
+          mensagem: {
+            tipo: "fundo", blob: fonte.blob, opcoes: fonte.opcoes,
+            largura: fonte.largura, altura: fonte.altura, forcar,
+          },
+          transferir: [],
+        });
+        continue;
+      }
 
       // Caminho bom: o ImageBitmap atravessa transferido e QUEM LÊ OS PIXELS É
       // O WORKER. Ler 29 megapixels na página custava 1,2 a 1,8 s de thread

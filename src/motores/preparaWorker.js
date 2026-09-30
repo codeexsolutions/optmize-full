@@ -66,19 +66,37 @@ self.onmessage = async (evento) => {
 
   try {
     if (tipo === "fundo") {
-      // Dois jeitos de receber a arte:
+      // Três jeitos de receber a arte:
       //
       //   `pixels`  os bytes já lidos pela página (caminho antigo);
-      //   `bitmap`  o ImageBitmap transferido, e a leitura acontece AQUI.
+      //   `bitmap`  o ImageBitmap transferido, e a leitura acontece AQUI;
+      //   `blob`    o ARQUIVO, decodificado aqui com as mesmas opções de
+      //             redução que a página usou.
       //
       // O segundo existe porque ler 29 megapixels na página custava 1,2 a 1,8 s
       // de thread travada por arte. O aviso do topo deste arquivo continua
       // valendo — o Chrome REDUZ um ImageBitmap com conta diferente de um
       // <img> —, mas aqui não há redução nenhuma: o desenho é 1:1, no tamanho
       // exato do bitmap, então os bytes saem idênticos aos que a página leria.
+      //
+      // O terceiro existe porque transferir o bitmap não é de graça: o Chrome
+      // copia os pixels no `postMessage`, ~50 ms de tela parada por arte. A
+      // mesma decodificação (`createImageBitmap` com as mesmas opções) dá os
+      // mesmos bytes aqui e lá — conferido byte a byte, no "low" e no "high".
       let px, w = largura, h = altura;
-      if (evento.data.bitmap) {
-        const bmp = evento.data.bitmap;
+      let bitmap = evento.data.bitmap;
+      if (!bitmap && evento.data.blob) {
+        bitmap = await createImageBitmap(evento.data.blob, evento.data.opcoes);
+        // A página tem uma arte deste tamanho; outro tamanho seria outra arte.
+        // Recusar faz a página tirar o fundo da dela, como antes.
+        if (bitmap.width !== largura || bitmap.height !== altura) {
+          const veio = `${bitmap.width}x${bitmap.height}`;
+          bitmap.close();
+          throw new Error(`o arquivo decodificou ${veio}, a página tem ${largura}x${altura}`);
+        }
+      }
+      if (bitmap) {
+        const bmp = bitmap;
         w = bmp.width; h = bmp.height;
         const lona = new OffscreenCanvas(w, h);
         const pincel = lona.getContext("2d", { willReadFrequently: true });
