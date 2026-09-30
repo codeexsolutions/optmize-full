@@ -26,6 +26,14 @@ assert.equal(m.lerCm(""), 0);
 assert.equal(m.lerCm("-1"), 0);
 assert.equal(m.lerCm("abc"), null);
 
+// 1b. lerLinhaMm: a linha em volta da peça, em mm, de 0 a 10, com vírgula; vazio é sem linha.
+assert.equal(m.lerLinhaMm("0,5"), 0.5);
+assert.equal(m.lerLinhaMm("2"), 2);
+assert.equal(m.lerLinhaMm(" 10 "), 10);
+assert.equal(m.lerLinhaMm(""), 0);
+assert.equal(m.lerLinhaMm("1,25"), 1.3);
+for (const ruim of ["abc", "12", "-1", "1,5,2"]) assert.equal(m.lerLinhaMm(ruim), null, ruim);
+
 // 2. Peça de DXF (só polígono) volta com o mesmo contorno, se ninguém mexer.
 {
   const p = pecaQuadrada();

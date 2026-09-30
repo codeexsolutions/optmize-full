@@ -52,6 +52,19 @@ export function lerCm(texto) {
   return Math.max(0, n);
 }
 
+/**
+ * A grossura da linha em volta da peça, como a pessoa escreve no campo: mm, com vírgula. Vazio é
+ * "sem linha" (0). Fora de 0–10, ou o que não for número, é `null`: o campo fica marcado e o molde
+ * não muda.
+ */
+export function lerLinhaMm(texto) {
+  const t = String(texto ?? "").trim().replace(",", ".");
+  if (t === "") return 0;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0 || n > 10) return null;
+  return Math.round(n * 10) / 10;
+}
+
 export function caixaDe(pontos) {
   let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
   for (const p of pontos) {

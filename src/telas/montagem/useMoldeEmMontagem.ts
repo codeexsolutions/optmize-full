@@ -74,6 +74,8 @@ export interface MoldeEmMontagem {
   pecas: PecaEmMontagem[];
   /** A grade de tamanhos, com cor e o base. Ver `motores/tamanhos.js`. */
   tamanhos: TamanhoDoMolde[];
+  /** A linha preta em volta de cada peça, em mm (0 = sem). Vale para o molde todo. */
+  linha: number;
   gravacao: EstadoDaGravacao;
   /** Por que a última gravação não foi: margem que se cruza, servidor fora. */
   problema: { peca: number | null; texto: string } | null;
@@ -83,6 +85,8 @@ export interface MoldeEmMontagem {
   mudarPecas(mudar: (antes: PecaEmMontagem[]) => PecaEmMontagem[], lembrarAntes?: boolean): void;
   mudarPeca(indice: number, mudar: (peca: PecaEmMontagem) => PecaEmMontagem, lembrarAntes?: boolean): void;
   renomear(nome: string): void;
+  /** Muda a linha em volta da peça (mm): um passo no desfazer, e grava como as outras mexidas. */
+  mudarLinha(mm: number): void;
   mudarTamanhos(mudar: (antes: TamanhoDoMolde[]) => TamanhoDoMolde[]): void;
   /** Grava agora (e muda a situação, se pedido). `true` se ficou tudo salvo. */
   gravar(situacao?: SituacaoDoMolde): Promise<boolean>;
@@ -105,9 +109,10 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   const [situacao, setSituacao] = useState<SituacaoDoMolde>("pronto");
   const [pecas, setPecas] = useState<PecaEmMontagem[]>([]);
   const [tamanhos, setTamanhos] = useState<TamanhoDoMolde[]>([]);
+  const [linha, setLinha] = useState(0);
   const [gravacao, setGravacao] = useState<EstadoDaGravacao>("salvo");
   const [problema, setProblema] = useState<MoldeEmMontagem["problema"]>(null);
-  const [pilha, setPilha] = useState<{ pecas: PecaEmMontagem[]; tamanhos: TamanhoDoMolde[] }[]>([]);
+  const [pilha, setPilha] = useState<{ pecas: PecaEmMontagem[]; tamanhos: TamanhoDoMolde[]; linha: number }[]>([]);
 
   const versao = useRef(0);
   const gravada = useRef(0);
@@ -120,8 +125,8 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   // O snapshot que a gravação lê, sempre com a VERSÃO que valia quando este
   // render aconteceu — nunca a versão "ao vivo" isolada. Ver a nota grande no
   // topo do arquivo ("A VERSÃO ANDA JUNTO COM O DADO").
-  const atual = useRef({ nome, observacoes, pecas, tamanhos, versao: 0 });
-  atual.current = { nome, observacoes, pecas, tamanhos, versao: versao.current };
+  const atual = useRef({ nome, observacoes, pecas, tamanhos, linha, versao: 0 });
+  atual.current = { nome, observacoes, pecas, tamanhos, linha, versao: versao.current };
 
   useEffect(() => {
     let vivo = true;
@@ -132,6 +137,8 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
         setNome(m.nome);
         setObservacoes(m.observacoes);
         setSituacao(m.situacao);
+        // Molde de antes da linha (ou servidor antigo): sem o campo, é sem linha.
+        setLinha(m.linha ?? 0);
         // Molde de antes da graduação não tem grupo: ele sai da posição da
         // peça dentro do seu tamanho (ver `completarGrupos`).
         const montadas = completarGrupos(m.pecas.map((p) => pecaParaMontar(p) as PecaEmMontagem));
@@ -166,9 +173,10 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
     setGravacao("pendente");
   };
 
-  // Peças E grade: desfazer uma junção tira também o tamanho que ela criou.
+  // Peças, grade e linha: desfazer uma junção tira também o tamanho que ela criou.
   const lembrar = useCallback(() => {
-    setPilha((p) => [...p.slice(-(PASSOS_DE_DESFAZER - 1)), { pecas: atual.current.pecas, tamanhos: atual.current.tamanhos }]);
+    setPilha((p) => [...p.slice(-(PASSOS_DE_DESFAZER - 1)),
+      { pecas: atual.current.pecas, tamanhos: atual.current.tamanhos, linha: atual.current.linha }]);
   }, []);
 
   const desfazer = useCallback(() => {
@@ -177,6 +185,7 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
       const topo = p[p.length - 1]!;
       setPecas(topo.pecas);
       setTamanhos(topo.tamanhos);
+      setLinha(topo.linha);
       marcarMexida();
       return p.slice(0, -1);
     });
@@ -202,6 +211,12 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
     marcarMexida();
   }, []);
 
+  const mudarLinha = useCallback((mm: number) => {
+    lembrar();
+    setLinha(mm);
+    marcarMexida();
+  }, [lembrar]);
+
   const gravar = useCallback(async (novaSituacao?: SituacaoDoMolde): Promise<boolean> => {
     // Sem carga bem-sucedida, não há o que mandar — nem placeholder vazio.
     if (!carregouOk.current) return false;
@@ -217,7 +232,7 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
 
     // Versão e dado do MESMO snapshot — nunca a versão de um render com o
     // `pecas` de outro (ver a nota grande no topo do arquivo).
-    const { nome: nomeAgora, observacoes: obsAgora, pecas: pecasAgora, tamanhos: tamanhosAgora, versao: mandada } = atual.current;
+    const { nome: nomeAgora, observacoes: obsAgora, pecas: pecasAgora, tamanhos: tamanhosAgora, linha: linhaAgora, versao: mandada } = atual.current;
     if (!novaSituacao && mandada === gravada.current) return true;
 
     const prontas = [];
@@ -238,6 +253,7 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
       pecas: prontas.map(({ id: _id, ...resto }) => resto),
       // Recalculada: um tamanho que veio numa junção entra, a ordem se refaz.
       tamanhos: tamanhosDoMolde(pecasAgora, tamanhosAgora),
+      linha: linhaAgora,
       ...(novaSituacao ? { situacao: novaSituacao } : {}),
     })
       .then(() => {
@@ -313,8 +329,8 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   const tamanhosDasPecas = useMemo(() => tamanhosDoMolde(pecas, tamanhos) as TamanhoDoMolde[], [pecas, tamanhos]);
 
   return {
-    carregando, naoAchado, erroAoAbrir, nome, situacao, pecas, tamanhos: tamanhosDasPecas, gravacao, problema,
+    carregando, naoAchado, erroAoAbrir, nome, situacao, pecas, tamanhos: tamanhosDasPecas, linha, gravacao, problema,
     podeDesfazer: pilha.length > 0,
-    lembrar, desfazer, mudarPecas, mudarPeca, renomear, mudarTamanhos, gravar, tentarAbrirDeNovo,
+    lembrar, desfazer, mudarPecas, mudarPeca, renomear, mudarLinha, mudarTamanhos, gravar, tentarAbrirDeNovo,
   };
 }

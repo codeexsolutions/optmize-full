@@ -11,13 +11,13 @@
  * identificado — peças sem papel no Encaixe viram "outro, outro, outro", e a
  * estampa não acha nenhuma.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icone } from "../../casca/Icone";
 import { useDialogo } from "../../casca/Dialogo";
 import { useErroEmAlerta } from "../../casca/Alerta";
 import { moldesApi, type Molde } from "../../api/moldes";
 import { riscoApi } from "../../api/risco";
-import { arranjar, desenhoDaPeca, pecaParaGravar, svgDaMontagem } from "../../motores/montagem";
+import { arranjar, desenhoDaPeca, lerLinhaMm, pecaParaGravar, svgDaMontagem } from "../../motores/montagem";
 import { EnvioParaEncaixe } from "../moldes/EnvioParaEncaixe";
 import type { MoldeEmMontagem } from "./useMoldeEmMontagem";
 
@@ -46,6 +46,14 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanh
 
   // PDF e SVG: o tamanho marcado, ou a grade inteira.
   const [todos, setTodos] = useState(false);
+  // A linha em volta da peça, como texto: aceita vírgula, e só muda o molde no blur ou no Enter
+  // (um número de três teclas não enche três passos do desfazer).
+  const [linhaEscrita, setLinhaEscrita] = useState(String(molde.linha).replace(".", ","));
+  useEffect(() => { setLinhaEscrita(String(molde.linha).replace(".", ",")); }, [molde.linha]);
+  const linhaLida = lerLinhaMm(linhaEscrita);
+  const confirmarLinha = () => {
+    if (linhaLida !== null && linhaLida !== molde.linha) molde.mudarLinha(linhaLida);
+  };
   const desenhos = () => arranjar(molde.pecas
     .filter((p) => todos || molde.tamanhos.length < 2 || p.tamanho === tamanhoAtivo)
     .map((p) => desenhoDaPeca(pecaParaGravar(p).peca)));
@@ -115,6 +123,19 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanh
           className="w-[260px]! font-semibold" aria-label="Nome do molde"
         />
         {molde.situacao === "rascunho" && <span className="etiqueta-tamanho">rascunho</span>}
+        <label
+          className="flex items-center gap-1 text-[0.8rem] text-tinta-fraca"
+          title="Traço preto em volta de cada peça, no Encaixe e no PDF/SVG. De 0 a 10 mm; 0 = sem linha."
+        >
+          Linha em volta (mm)
+          <input
+            type="text" inputMode="decimal" className="w-14!" aria-label="Linha em volta (mm)"
+            value={linhaEscrita} aria-invalid={linhaLida === null}
+            onChange={(e) => setLinhaEscrita(e.target.value)}
+            onBlur={confirmarLinha}
+            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+          />
+        </label>
         <span className={`text-[0.8rem] ${molde.gravacao === "erro" ? "text-[#ff4d4d]" : "text-tinta-fraca"}`}>
           {ROTULO_DA_GRAVACAO[molde.gravacao]}
           {molde.gravacao === "erro" && molde.problema ? ` — ${molde.problema.texto}` : ""}
