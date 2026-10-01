@@ -170,7 +170,7 @@ const mascaraMod = await carregarModulo("src/motores/encaixeMascara.js");
 const pedidos = await carregarModulo("src/producao/pedidos.js");
 const {
   pedidoDe, pedidosDaLista, temVariosPedidos, ultimoPedido, proximoPedido,
-  marcarLote, renomearPedido, corDoPedido, marcasDoRisco,
+  marcarLote, renomearPedido, corDoPedido, marcasDoRisco, marcaParaOPdf,
 } = pedidos;
 
 caso("pedidos da lista: P1 por padrão, próximo livre, último lote", () => {
@@ -232,6 +232,12 @@ caso("marcas do risco: nada com um pedido; pedido de AGORA, não o do item", () 
   const outra = marcasDoRisco(r, pecas);
   assert.equal(outra.marcas[3], null);
   assert.deepEqual(outra.semSigla, ["VIVO 2"]);
+});
+
+caso("a marca desce com a bancada, e sem marca não vai nada", () => {
+  const marca = { texto: "P2 COG3", x: 12.3, y: 1054.3, largura: 2.5, altura: 0.4 };
+  assert.deepEqual(marcaParaOPdf(marca, 1000), { texto: "P2 COG3", x: 12.3, y: 54.3, alturaCm: 0.4 });
+  assert.equal(marcaParaOPdf(null, 0), undefined);
 });
 
 // ---------- 4. O motor não enxerga o pedido ----------

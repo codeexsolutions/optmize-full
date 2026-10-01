@@ -111,3 +111,11 @@ export function marcasDoRisco(r, pecas) {
   const legenda = [...contagem].map(([pedido, quantas]) => ({ pedido, cor: corDoPedido(pedido), quantas }));
   return { pedidos: doRisco, marcas, semSigla, legenda };
 }
+
+/** A marca no formato do corpo do PDF, com o `y` contado do começo da página. */
+export function marcaParaOPdf(marca, deslocamento) {
+  if (!marca) return undefined;
+  // Arredonda a diferença: 1054.3 - 1000 dá 54.29999…, e o PDF não precisa dessa sobra.
+  const y = Math.round((marca.y - deslocamento) * 1e4) / 1e4;
+  return { texto: marca.texto, x: marca.x, y, alturaCm: marca.altura };
+}

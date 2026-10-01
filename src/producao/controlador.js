@@ -40,7 +40,7 @@ import { carregarImagem } from "../utils/arquivoDeImagem";
 import { respirarNaTela } from "../utils/respirar";
 import { criarEscopo } from "./escopo";
 import {
-  PEDIDO_PADRAO, corDoPedido, marcarLote, marcasDoRisco, normalizarPedido, pedidoDe, proximoPedido,
+  PEDIDO_PADRAO, corDoPedido, marcaParaOPdf, marcarLote, marcasDoRisco, normalizarPedido, pedidoDe, proximoPedido,
   renomearPedido, temVariosPedidos, ultimoPedido,
 } from "./pedidos";
 import { normalizarSigla, siglaDaPeca } from "../motores/siglaDoPedido";
@@ -2280,6 +2280,7 @@ async function usarEncaixeGuardado(guardado) {
       mascara: p.comMascara && mascaras ? mascaras.rotacoes[p.rot] : null,
       passo,
       bancada: p.bancada || 0,
+      marca: visao ? marcaParaOPdf(visao.marcas[indiceDa.get(p)], deslocamento) : undefined,
     });
   }
 
@@ -3795,6 +3796,8 @@ async function baixarEncaixeEmPdf() {
     }
 
     const imagens = [...artes.keys()].map((chave) => ({ chave }));
+    const visao = visaoDosPedidos(r);
+    const indiceDa = new Map(r.posicoes.map((p, i) => [p, i]));
     const daPeca = (p, deslocamento) => ({
       chave: `${p.item.indice}-${p.rot || (p.girado ? 90 : 0)}`,
       x: p.x,
@@ -3821,6 +3824,7 @@ async function baixarEncaixeEmPdf() {
       btnExportarRotulo.textContent = "Gravando…";
       await saida.gravar(cano);
       avisarQueSalvou(saida.nome);
+      avisarSemSigla(visao);
       void guardarParaReposicao(r, saida.nome);
       return;
     }
@@ -3858,6 +3862,7 @@ async function baixarEncaixeEmPdf() {
     }
 
     avisarQueSalvou(`${bancadas.length} arquivos em ${saida.onde}`);
+    avisarSemSigla(visao);
     void guardarParaReposicao(r, saida.base);
 
   } catch (err) {
@@ -4106,6 +4111,14 @@ function visaoDosPedidos(r) {
     r._pedidos = { chave, valor: marcasDoRisco(r, pecasEncaixe) };
   }
   return r._pedidos.valor;
+}
+
+/** Peça estreita demais para a sigla sai sem ela; a pessoa precisa saber quais. */
+function avisarSemSigla(visao) {
+  if (!visao || visao.semSigla.length === 0) return;
+  const lista = visao.semSigla.slice(0, 8).join(", ") + (visao.semSigla.length > 8 ? "…" : "");
+  mostrarErroEncaixe(`${visao.semSigla.length} peça(s) saíram sem a sigla do pedido — não cabia `
+    + `dentro delas: ${lista}. Separe essas pela tela ou pelo PNG da mesa.`, "aviso");
 }
 
 /** O PNG da mesa de corte com uma faixa no topo: cor, sigla e quantas peças de cada pedido. */
