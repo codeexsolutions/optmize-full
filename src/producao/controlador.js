@@ -39,6 +39,11 @@ import { coresDePeca } from "../utils/coresDePeca";
 import { carregarImagem } from "../utils/arquivoDeImagem";
 import { respirarNaTela } from "../utils/respirar";
 import { criarEscopo } from "./escopo";
+import {
+  PEDIDO_PADRAO, corDoPedido, marcarLote, normalizarPedido, pedidoDe, proximoPedido,
+  renomearPedido, temVariosPedidos, ultimoPedido,
+} from "./pedidos";
+import { normalizarSigla, siglaDaPeca } from "../motores/siglaDoPedido";
 export function montarProducao(raiz, irPara) {
 const escopo = criarEscopo(raiz);
 try {
@@ -731,6 +736,9 @@ async function lerMoldesDoArquivo(file) {
 async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
 
+  const pedido = await pedidoDoLote(pecas.length);
+  if (!pedido) return;
+
   const totalAntes = pecasEncaixe.length;
   iniciarCarregamentoArquivos(pecas.length, "molde salvo");
   btnEncaixar.disabled = true;
@@ -768,6 +776,7 @@ async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
       });
       concluirCarregamentoArquivo(indice, pecas.length);
     }
+    marcarLote(pecasEncaixe, totalAntes, pedido);
     renderPecasEncaixe();
     const adicionadas = pecasEncaixe.length - totalAntes;
     finalizarCarregamento("concluido", {
@@ -902,6 +911,10 @@ async function miniaturaDaArte(img) {
 async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
 
+  const precisaPerguntar = pecas.some((p) => !p.pedido);
+  const pedido = precisaPerguntar ? await pedidoDoLote(pecas.length) : null;
+  if (precisaPerguntar && !pedido) return;
+
   const totalAntes = pecasEncaixe.length;
   iniciarCarregamentoArquivos(pecas.length, "projeto salvo");
   btnEncaixar.disabled = true;
@@ -993,10 +1006,13 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
         giro: ["180", "fixa", "livre"].includes(p.giro) ? p.giro : giroPadrao(),
         contorno: "auto",
         origem: `projeto ${nomeDoProjeto}${cortada ? " · fundo removido" : ""}`,
+        pedido: p.pedido ? normalizarPedido(p.pedido) : undefined,
+        sigla: p.sigla ? normalizarSigla(p.sigla) : undefined,
       });
       concluirCarregamentoArquivo(indice, pecas.length);
       await respirarNaTela();
     }
+    if (pedido) marcarLote(pecasEncaixe, totalAntes, pedido);
     renderPecasEncaixe();
     const adicionadas = pecasEncaixe.length - totalAntes;
     const total = pecasEncaixe.reduce((soma, p) => soma + p.qtd, 0);
@@ -1055,12 +1071,42 @@ async function emParalelo(quantidade, teto, tarefa) {
   await Promise.all(linhas);
 }
 
+/**
+ * De qual pedido é o lote que está entrando.
+ *
+ * Lista vazia: é o primeiro pedido, sem pergunta. Lista com peças: "Mesmo
+ * pedido" (Enter) ou "Novo pedido"; Esc desiste da entrada. Sem a caixa nova
+ * (o editor fora da casca), fica no mesmo pedido — o jeito de antes.
+ * Devolve o pedido, ou `null` se a pessoa desistiu.
+ */
+async function pedidoDoLote(quantos) {
+  if (pecasEncaixe.length === 0) return PEDIDO_PADRAO;
+  const mesmo = ultimoPedido(pecasEncaixe);
+  const novo = proximoPedido(pecasEncaixe);
+  const ponte = window.__alertaOptmize;
+  if (!ponte) return mesmo;
+  const r = await ponte.mostrar({
+    tipo: "pergunta",
+    titulo: "De qual pedido são estas peças?",
+    texto: `${quantos === 1 ? "1 arquivo está" : `${quantos} arquivos estão`} entrando numa lista que já tem peças. `
+      + "Pedidos diferentes saem no mesmo rolo, e cada peça leva impressa a sigla do seu pedido.",
+    confirmar: `Mesmo pedido (${mesmo})`,
+    alternativa: `Novo pedido (${novo})`,
+    cancelavel: true,
+  });
+  if (r.alternativa) return novo;
+  return r.confirmado ? mesmo : null;
+}
+
 async function adicionarArquivos(files) {
   if (!files || files.length === 0) return; // nada a fazer, e o painel nem abre
   if (carregamentoAtivo) {
     mostrarErroEncaixe("Aguarde o trabalho atual terminar antes de adicionar outros arquivos.", "aviso");
     return;
   }
+
+  const pedido = await pedidoDoLote(files.length);
+  if (!pedido) return;
 
   limparErroEncaixe();
   const recados = [];
@@ -1157,6 +1203,7 @@ async function adicionarArquivos(files) {
       if (lista) lista.forEach((p) => pecasEncaixe.push(p));
       else concluirCarregamentoArquivo(indice, files.length);
     });
+    marcarLote(pecasEncaixe, totalAntes, pedido);
 
     // Passada 3: o fundo sai DEPOIS, com as peças já na tela. Não se espera por
     // ela aqui — é justamente esse `await` que fazia a tabela demorar.
@@ -1547,6 +1594,8 @@ function renderPecasEncaixe() {
     return;
   }
 
+  const variosPedidos = temVariosPedidos(pecasEncaixe);
+
   pecasEncaixe.forEach((peca, i) => {
     const cor = CORES_PECA[i % CORES_PECA.length];
     const linha = document.createElement("div");
@@ -1582,6 +1631,10 @@ function renderPecasEncaixe() {
             ${peca.grupo ? `<span class="shrink-0 rounded px-1 font-mono text-[8px] font-semibold uppercase leading-[1.4]"
                    style="background: ${corDoGrupo(peca.grupo)}22; color: ${corDoGrupo(peca.grupo)}; border: 1px solid ${corDoGrupo(peca.grupo)}66;"
                    title="Grupo ${escapeHtml(peca.grupo)}: estas peças saem perto umas das outras no rolo">${escapeHtml(peca.grupo)}</span>` : ""}
+            ${variosPedidos ? `<span data-pedido="${escapeHtml(pedidoDe(peca))}"
+                   class="shrink-0 cursor-pointer rounded px-1 font-mono text-[8px] font-semibold uppercase leading-[1.4] text-white"
+                   style="background: ${corDoPedido(pedidoDe(peca))};"
+                   title="Pedido ${escapeHtml(pedidoDe(peca))} — clique para renomear">${escapeHtml(pedidoDe(peca))}</span>` : ""}
           </span>
           <span class="block truncate font-mono text-[9px] text-tinta-apagada">${formatarNumero(peca.largura, 1)} × ${formatarNumero(peca.altura, 1)} cm${peca.qtdDoArquivo ? " · qtd do nome" : ""}</span>
         </span>
@@ -1642,6 +1695,13 @@ function renderPecasEncaixe() {
             </select>
           </label>
         </div>
+        ${variosPedidos ? `
+        <div class="mt-1.5 grid grid-cols-2 gap-1.5">
+          <label class="${CAMPO_MINI}">Sigla no tecido
+            <input type="text" maxlength="6" value="${escapeHtml(normalizarSigla(peca.sigla) || siglaDaPeca(peca.nome))}"
+                   data-campo="sigla" data-id="${peca.id}" />
+          </label>
+        </div>` : ""}
         <!-- Gira a PEÇA, antes do encaixe: é para arte que chegou deitada ou de
              cabeça para baixo. O "Girar" de cima é outra coisa — são os giros
              que o encaixe pode usar a partir daqui. -->
@@ -1849,6 +1909,26 @@ function alternarMarca(linha, id) {
   atualizarBarraDeGrupo();
 }
 
+/** Renomeia o pedido em todas as peças dele. Não refaz o encaixe: o motor não lê o pedido. */
+async function renomearPedidoNaTela(atual) {
+  const escrito = await uiPergunta({
+    titulo: `Renomear o pedido ${atual}`,
+    texto: "Até 6 letras ou números. É a sigla que sai impressa em cada peça deste pedido.",
+    valor: atual,
+    exemplo: "JOAO",
+    confirmar: "Renomear",
+  });
+  if (escrito == null) return;
+  const r = renomearPedido(pecasEncaixe, atual, escrito);
+  if (!r.ok) {
+    mostrarErroEncaixe("O nome do pedido precisa de pelo menos uma letra ou número.", "aviso");
+    return;
+  }
+  renderPecasEncaixe();
+  if (ultimoResultado) redesenharRisco();
+  if (r.juntou) mostrarErroEncaixe(`O pedido ${atual} entrou no ${r.pedido}, que já existia.`, "aviso");
+}
+
 /* Enter e Espaço na linha marcam, como o navegador faria num botão de
    verdade. O Espaço também rolaria a lista, daí o `preventDefault`. */
 escopo.ouvir(encaixePecasBody, "keydown", (e) => {
@@ -1861,10 +1941,17 @@ escopo.ouvir(encaixePecasBody, "keydown", (e) => {
 
 escopo.ouvir(encaixePecasBody, "change", (e) => {
   const campo = e.target.dataset.campo;
-  if (campo !== "girar" && campo !== "contorno") return;
+  if (campo !== "girar" && campo !== "contorno" && campo !== "sigla") return;
   const peca = pecasEncaixe.find((p) => p.id === Number(e.target.dataset.id));
   if (!peca) return;
   if (campo === "girar") peca.giro = e.target.value;
+  if (campo === "sigla") {
+    const escrita = normalizarSigla(e.target.value);
+    // Igual à automática, ou vazia: volta a valer a automática.
+    peca.sigla = escrita && escrita !== siglaDaPeca(peca.nome) ? escrita : undefined;
+    e.target.value = normalizarSigla(peca.sigla) || siglaDaPeca(peca.nome);
+    if (ultimoResultado) redesenharRisco();
+  }
   if (campo === "contorno") {
     peca.contorno = e.target.value;
     peca.ocupacao = null; // a silhueta muda: o percentual só volta no próximo encaixe
@@ -2028,6 +2115,12 @@ escopo.ouvir(encaixePecasBody, "click", (e) => {
   if (abrir) {
     const gaveta = encaixePecasBody.querySelector(`[data-detalhes="${abrir.dataset.abrirPeca}"]`);
     if (gaveta) gaveta.classList.toggle("hidden");
+    return;
+  }
+
+  const chipDoPedido = e.target.closest("[data-pedido]");
+  if (chipDoPedido) {
+    void renomearPedidoNaTela(chipDoPedido.dataset.pedido);
     return;
   }
 
@@ -4582,7 +4675,12 @@ async function complementarOtimizando(analise, pedidos) {
 
   for (const p of pedidos) {
     if (p.c.daGaleria) {
-      pecasEncaixe.push({ ...p.c.peca, id: proximoIdPeca++, qtd: p.quantidade });
+      // Peça do próprio encaixe já tem pedido (o spread leva); da Galeria,
+      // entra no pedido do último lote.
+      pecasEncaixe.push({
+        ...p.c.peca, id: proximoIdPeca++, qtd: p.quantidade,
+        pedido: p.c.peca.pedido || ultimoPedido(pecasEncaixe),
+      });
     } else {
       const peca = pecasEncaixe[p.c.indice];
       peca.qtd = (Number(peca.qtd) || 0) + p.quantidade;
