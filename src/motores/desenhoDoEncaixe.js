@@ -460,7 +460,7 @@ export function desenharEncaixe(canvas, r, {
     // A sigla fica no lugar do rolo em que vai ser impressa; na tela deitada
     // ela gira junto com o rolo, que é o mesmo desenho visto de lado.
     const marca = pedidos && pedidos.marcas[i];
-    if (marca) desenharSigla(ctx, marca, REGUA, px);
+    if (marca) desenharSigla(ctx, marca, REGUA, px, escala ? 9 : 0);
 
     // Deitado, o nome é escrito depois — dentro do giro ele sairia de lado.
     if (comLegenda && !deitar && w > 46 && h > 18) {
@@ -575,16 +575,22 @@ export function escreverNome(ctx, p, x, y, w, h, pedido = null) {
  * contorno branco, de pé no sentido do rolo. Na tela deitada ela gira junto
  * com o rolo — é o mesmo desenho, visto de lado.
  */
-export function desenharSigla(ctx, marca, REGUA, px) {
-  const corpo = tamanhoDaFonteCm(marca.altura) * px;
-  if (corpo < 4) return; // no zoom de tela viraria borrão
+export function desenharSigla(ctx, marca, REGUA, px, corpoMinimo = 0) {
+  const corpoReal = tamanhoDaFonteCm(marca.altura) * px;
+  // No PNG (escala fixa) a sigla é o que separa os pedidos na mesa de corte:
+  // a 4 px/cm ela sairia com ~2 px, então ganha um corpo mínimo, um pouco
+  // maior que o real. Na tela, abaixo de 4 px viraria borrão e a tarja do nome
+  // já leva o pedido.
+  const corpo = Math.max(corpoReal, corpoMinimo);
+  if (corpo < 4) return;
+  const proporcao = corpoReal > 0 ? corpo / corpoReal : 1;
   const x = REGUA + marca.x * px;
   const base = (marca.y + marca.altura) * px;
   ctx.save();
   ctx.font = `bold ${corpo}px "Liberation Sans", Arial, Helvetica, sans-serif`;
   ctx.textBaseline = "alphabetic";
   ctx.lineJoin = "round";
-  ctx.lineWidth = Math.max(1, 2 * CONTORNO_DA_LETRA_CM * px);
+  ctx.lineWidth = Math.max(1, 2 * CONTORNO_DA_LETRA_CM * px * proporcao);
   ctx.strokeStyle = "#ffffff";
   ctx.strokeText(marca.texto, x, base);
   ctx.fillStyle = "#000000";
