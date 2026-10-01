@@ -733,11 +733,15 @@ async function lerMoldesDoArquivo(file) {
  * peças são acrescentadas, não trocadas: dá para juntar dois moldes no mesmo
  * tecido, que é o que se faz quando sobra espaço no rolo.
  */
-async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
+async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades, pedidoEscolhido) {
   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
 
-  const pedido = await pedidoDoLote(pecas.length);
-  if (!pedido) return;
+  // Quem manda vários tamanhos de uma vez já escolheu o pedido uma vez só.
+  const pedido = pedidoEscolhido || await pedidoDoLote(pecas.length);
+  if (!pedido) {
+    mostrarErroEncaixe("Nenhuma peça entrou: a escolha do pedido foi fechada. Mande as peças de novo.", "aviso");
+    return;
+  }
 
   const totalAntes = pecasEncaixe.length;
   iniciarCarregamentoArquivos(pecas.length, "molde salvo");
@@ -913,7 +917,10 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
 
   const precisaPerguntar = pecas.some((p) => !p.pedido);
   const pedido = precisaPerguntar ? await pedidoDoLote(pecas.length) : null;
-  if (precisaPerguntar && !pedido) return;
+  if (precisaPerguntar && !pedido) {
+    mostrarErroEncaixe("Nenhuma peça entrou: a escolha do pedido foi fechada. Mande as peças de novo.", "aviso");
+    return;
+  }
 
   const totalAntes = pecasEncaixe.length;
   iniciarCarregamentoArquivos(pecas.length, "projeto salvo");
@@ -1106,7 +1113,10 @@ async function adicionarArquivos(files) {
   }
 
   const pedido = await pedidoDoLote(files.length);
-  if (!pedido) return;
+  if (!pedido) {
+    mostrarErroEncaixe("Nenhuma peça entrou: a escolha do pedido foi fechada. Mande as peças de novo.", "aviso");
+    return;
+  }
 
   limparErroEncaixe();
   const recados = [];
@@ -4910,8 +4920,13 @@ return {
   * entra na lista o que ela montou. A peça que chega sem `desenho` vale como
   * contorno pintado, que é o bastante para calcular o encaixe.
   */
- async mandarMolde({ nome, tamanho, pecas, unidades }) {
-   await mandarMoldeParaOEncaixe(nome, tamanho, pecas, unidades);
+ async mandarMolde({ nome, tamanho, pecas, unidades, pedido = "" }) {
+   await mandarMoldeParaOEncaixe(nome, tamanho, pecas, unidades, pedido);
+ },
+
+ /** A escolha do pedido de um lote que chega em vários envios (os tamanhos do molde). */
+ escolherPedidoDoLote(quantos) {
+   return pedidoDoLote(quantos);
  },
 
  async mandarProjeto({ nome, pecas, unidades, ajustes }) {
