@@ -33,6 +33,9 @@ export interface PecaParaOEncaixe {
   quantidade: number;
   /** O giro de quando a peça saiu (a Reposição guarda). Sem ele, o padrão da tela. */
   giro?: string | null;
+  /** O pedido e a sigla de quando a peça saiu (a Reposição guarda). Com o pedido, o Encaixe não pergunta. */
+  pedido?: string;
+  sigla?: string;
 }
 
 export interface ProjetoParaOEncaixe {

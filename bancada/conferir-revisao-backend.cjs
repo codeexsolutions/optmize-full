@@ -27,6 +27,7 @@ async function principal() {
   app.use("/api/projetos", require("../servidor/projetos-api"));
   app.use("/api/encaixe", require("../servidor/encaixe-pdf"));
   app.use("/api/encaixe", require("../servidor/encaixe-memoria"));
+  app.use("/api/reposicao", require("../servidor/reposicao-api"));
   servidor = await new Promise((resolve) => {
     const atual = app.listen(0, "127.0.0.1", () => resolve(atual));
   });
@@ -204,6 +205,22 @@ async function principal() {
     assert.equal(typeof quebrada.erro, "string");
     assert.equal(semRosto.erro, "Não achei nenhum rosto nesta foto.");
   });
+  const criado = await api("POST", "/api/reposicao/trabalhos", {
+    nome: "teste-pedidos", larguraTecido: 178, consumoCm: 100,
+    pecas: [
+      { nome: "COSTAS G", largura: 50, altura: 70, qtd: 2, giro: "180", pedido: "joão", sigla: "xy" },
+      { nome: "TIRA", largura: 12, altura: 60, qtd: 1, giro: "180" },
+    ],
+  });
+  const lido = await api("GET", `/api/reposicao/trabalhos/${criado.dados.id}`);
+  conferir("a reposição guarda o pedido e a sigla de cada peça, e devolve igual", () => {
+    assert.equal(criado.status, 200);
+    assert.equal(lido.dados.pecas[0].pedido, "JOAO");
+    assert.equal(lido.dados.pecas[0].sigla, "XY");
+    assert.equal(lido.dados.pecas[1].pedido, null);
+    assert.equal(lido.dados.pecas[1].sigla, null);
+  });
+
   console.log(`OK — ${passou} regressões do backend.`);
 }
 

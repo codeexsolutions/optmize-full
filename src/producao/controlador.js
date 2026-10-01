@@ -3631,6 +3631,8 @@ async function guardarParaReposicao(r, nomeDoArquivo) {
           altura: peca.altura,
           qtd: peca.qtd,
           giro: peca.giro,
+          pedido: temVariosPedidos(pecasEncaixe) ? pedidoDe(peca) : null,
+          sigla: peca.sigla || null,
           miniatura: peca.miniatura || null,
         })),
       }),
