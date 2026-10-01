@@ -14,7 +14,7 @@
  *
  * A LARGURA DO TEXTO É A DA FONTE DO PDF
  * --------------------------------------
- * O servidor escreve com Liberation Sans Bold (servidor/fontes). Medir com a
+ * O servidor escreve com Liberation Sans Bold (estatico/fontes). Medir com a
  * fonte da tela daria outra largura, e o lugar achado aqui deixaria de caber
  * no que o PDF imprime. A tabela abaixo é a largura de avanço de cada
  * caractere dessa fonte, em milésimos do corpo (lida com o fontkit, que vem
@@ -102,6 +102,11 @@ export function larguraDoTextoCm(texto, alturaLetraCm = ALTURA_DA_LETRA_CM) {
  * (c, r) dela começa em `p.x + offX − recuo + c·passo` — a mesma conta do
  * `contornar`, em desenhoDoEncaixe.js.
  *
+ * A célula da borda pode ser só um pouco peça: a grade arredonda para cima e
+ * a rasterização marca toda célula que o contorno toca. Por isso o retângulo
+ * reserva o recuo MAIS uma célula inteira de cada lado — com passo 0,59 (folga
+ * 0) o recuo só de 3 mm deixava a base do texto 2 mm fora da arte.
+ *
  * Sem máscara (encaixe por caixa), a peça é a caixa inteira.
  */
 export function lugarDaSigla(p, texto, {
@@ -118,8 +123,9 @@ export function lugarDaSigla(p, texto, {
   }
 
   const passo = p.passo;
-  const wC = Math.ceil((largura + 2 * recuoCm) / passo - 1e-9);
-  const hC = Math.ceil((altura + 2 * recuoCm) / passo - 1e-9);
+  const borda = recuoCm + passo;
+  const wC = Math.ceil((largura + 2 * borda) / passo - 1e-9);
+  const hC = Math.ceil((altura + 2 * borda) / passo - 1e-9);
   const { cols, rows, desenho } = m;
   if (wC > cols || hC > rows) return null;
 
@@ -144,8 +150,8 @@ export function lugarDaSigla(p, texto, {
     for (let c0 = 0; c0 + wC <= cols; c0++) {
       if (!cheio(c0, r0)) continue;
       return {
-        x: origemX + c0 * passo + recuoCm,
-        y: origemY + (r0 + hC) * passo - recuoCm - altura,
+        x: origemX + c0 * passo + borda,
+        y: origemY + (r0 + hC) * passo - borda - altura,
         largura, altura,
       };
     }

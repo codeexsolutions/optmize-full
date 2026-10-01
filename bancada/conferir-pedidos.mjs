@@ -97,14 +97,16 @@ function dentro(p, lugar) {
   return true;
 }
 
-caso("retângulo cheio: canto de baixo à esquerda, com o recuo", () => {
+caso("retângulo cheio: canto de baixo à esquerda, com o recuo e uma célula", () => {
   const p = posicao(100, 50, () => true); // 20 x 10 cm
   const lugar = lugarDaSigla(p, "P2 COG3");
   assert.ok(lugar);
-  assert.ok(Math.abs(lugar.x - (10 + RECUO_DA_SIGLA_CM)) < 1e-9, `x ${lugar.x}`);
-  // Embaixo: a base da caixa fica a recuo + o que sobra da célula do fundo.
-  assert.ok(lugar.y + lugar.altura <= 30 - RECUO_DA_SIGLA_CM + 1e-9);
-  assert.ok(lugar.y + lugar.altura >= 30 - RECUO_DA_SIGLA_CM - PASSO);
+  // A célula da borda pode ser só um pouco peça: o recuo conta a partir da
+  // célula seguinte.
+  assert.ok(Math.abs(lugar.x - (10 + RECUO_DA_SIGLA_CM + PASSO)) < 1e-9, `x ${lugar.x}`);
+  // Embaixo: a base da caixa fica a recuo + uma célula + o que sobra da célula do fundo.
+  assert.ok(lugar.y + lugar.altura <= 30 - RECUO_DA_SIGLA_CM - PASSO + 1e-9);
+  assert.ok(lugar.y + lugar.altura >= 30 - RECUO_DA_SIGLA_CM - 2 * PASSO - 1e-9);
   assert.equal(lugar.altura, ALTURA_DA_LETRA_CM);
   assert.ok(dentro(p, lugar));
 });
@@ -115,7 +117,7 @@ caso("canto de baixo cortado: a sigla anda para a direita na mesma linha", () =>
   const lugar = lugarDaSigla(p, "P2 COG3");
   assert.ok(lugar && dentro(p, lugar));
   assert.ok(lugar.x > 10 + RECUO_DA_SIGLA_CM, "saiu do canto cortado");
-  assert.ok(lugar.y + lugar.altura >= 30 - RECUO_DA_SIGLA_CM - PASSO, "ficou embaixo");
+  assert.ok(lugar.y + lugar.altura >= 30 - RECUO_DA_SIGLA_CM - 2 * PASSO - 1e-9, "ficou embaixo");
 });
 
 caso("pé estreito: a sigla sobe até caber", () => {
@@ -162,6 +164,56 @@ const mascaraMod = await carregarModulo("src/motores/encaixeMascara.js");
       const lugar = lugarDaSigla(p, "P2 COG3");
       assert.ok(lugar, `rot ${rot}: achou lugar`);
       assert.ok(dentro(p, lugar), `rot ${rot}: dentro da silhueta`);
+    }
+  });
+}
+
+{
+  // A grade arredonda para cima e a rasterização marca toda célula que o
+  // contorno toca: a última célula pode ser quase toda vazia. A conferência
+  // aqui é contra a ARTE de verdade, não contra as células.
+  const { gradeDaPeca, rasterizarPoligono, mascarasDeSilhueta } = mascaraMod;
+  /**
+   * Uma peça de `grade` (cm) com a arte retangular `arte` = { x0, y0, x1, y1 }
+   * (cm, a partir do canto da grade), posta em (3, 11) sem giro.
+   */
+  function pecaComArte(grade, arte, passo, raio) {
+    const { cols, rows } = gradeDaPeca(grade, passo);
+    const W = cols * passo, H = rows * passo;
+    const poligono = [[arte.x0, arte.y0], [arte.x1, arte.y0], [arte.x1, arte.y1], [arte.x0, arte.y1]]
+      .map(([x, y]) => [x / W, y / H]);
+    const bits = rasterizarPoligono(poligono, cols, rows);
+    const m = mascarasDeSilhueta({ bits, modo: "alfa" }, cols, rows, passo, raio, grade).rotacoes[0];
+    return { x: 3, y: 11, passo, mascara: m, largura: grade.largura, altura: grade.altura };
+  }
+  const naArte = (p, arte, lugar) => {
+    const folga = RECUO_DA_SIGLA_CM - 1e-9;
+    return lugar.x - folga >= p.x + arte.x0 && lugar.x + lugar.largura + folga <= p.x + arte.x1
+      && lugar.y - folga >= p.y + arte.y0 && lugar.y + lugar.altura + folga <= p.y + arte.y1;
+  };
+  caso("arte que não é múltiplo do passo: o recuo de 3 mm é dentro da arte", () => {
+    const arte = { x0: 0, y0: 0, x1: 20.15, y1: 10.05 };
+    for (const raio of [0, 2]) {
+      const p = pecaComArte({ largura: 20.15, altura: 10.05 }, arte, PASSO, raio);
+      const lugar = lugarDaSigla(p, "P2 COG3");
+      assert.ok(lugar, `raio ${raio}: achou lugar`);
+      assert.ok(naArte(p, arte, lugar), `raio ${raio}: ${JSON.stringify(lugar)}`);
+    }
+  });
+  caso("passo maior que o recuo (0,59, folga 0): o texto e o recuo ficam na arte", () => {
+    const casos = [
+      // Arte de 20,15 x 30,15 cm: a grade vai até 20,65 x 30,68.
+      { grade: { largura: 20.15, altura: 30.15 }, arte: { x0: 0, y0: 0, x1: 20.15, y1: 30.15 } },
+      // A mesma arte solta no meio da grade: a borda cai no meio da célula dos quatro lados.
+      { grade: { largura: 21, altura: 31 }, arte: { x0: 0.35, y0: 0.4, x1: 20.5, y1: 30.55 } },
+    ];
+    for (const { grade, arte } of casos) {
+      for (const raio of [0, 2]) {
+        const p = pecaComArte(grade, arte, 0.59, raio);
+        const lugar = lugarDaSigla(p, "P2 COG3");
+        assert.ok(lugar, `raio ${raio}: achou lugar`);
+        assert.ok(naArte(p, arte, lugar), `grade ${grade.largura}, raio ${raio}: ${JSON.stringify(lugar)}`);
+      }
     }
   });
 }
