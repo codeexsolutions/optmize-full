@@ -9,6 +9,12 @@
  */
 import assert from "node:assert/strict";
 import { carregarModulo } from "./carregarModulo.mjs";
+import { createRequire } from "node:module";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const require = createRequire(import.meta.url);
+const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const sigla = await carregarModulo("src/motores/siglaDoPedido.js");
 const {
@@ -156,5 +162,91 @@ const mascaraMod = await carregarModulo("src/motores/encaixeMascara.js");
     }
   });
 }
+
+// ---------- 3. Os pedidos da lista ----------
+const pedidos = await carregarModulo("src/producao/pedidos.js");
+const {
+  pedidoDe, pedidosDaLista, temVariosPedidos, ultimoPedido, proximoPedido,
+  marcarLote, renomearPedido, corDoPedido, marcasDoRisco,
+} = pedidos;
+
+caso("pedidos da lista: P1 por padrão, próximo livre, último lote", () => {
+  const lista = [{ nome: "a" }, { nome: "b", pedido: "P1" }];
+  assert.equal(pedidoDe(lista[0]), "P1");
+  assert.deepEqual(pedidosDaLista(lista), ["P1"]);
+  assert.equal(temVariosPedidos(lista), false);
+  assert.equal(proximoPedido(lista), "P2");
+  lista.push({ nome: "c", pedido: "P3" });
+  assert.equal(proximoPedido(lista), "P2");
+  assert.equal(ultimoPedido(lista), "P3");
+  assert.equal(ultimoPedido([]), "P1");
+  assert.equal(temVariosPedidos(lista), true);
+});
+
+caso("marcar lote só preenche quem não tem pedido", () => {
+  const lista = [{ pedido: "P1" }, {}, { pedido: "JOAO" }, {}];
+  marcarLote(lista, 1, "P2");
+  assert.deepEqual(lista.map(pedidoDe), ["P1", "P2", "JOAO", "P2"]);
+});
+
+caso("renomear: normaliza, junta com aviso, recusa vazio", () => {
+  const lista = [{ pedido: "P1" }, { pedido: "P2" }, { pedido: "P2" }];
+  assert.deepEqual(renomearPedido(lista, "P2", "joão silva"), { ok: true, pedido: "JOAOSI", juntou: false });
+  assert.deepEqual(lista.map(pedidoDe), ["P1", "JOAOSI", "JOAOSI"]);
+  assert.deepEqual(renomearPedido(lista, "JOAOSI", "p1"), { ok: true, pedido: "P1", juntou: true });
+  assert.deepEqual(pedidosDaLista(lista), ["P1"]);
+  assert.deepEqual(renomearPedido(lista, "P1", " - "), { ok: false });
+});
+
+caso("a cor do pedido sai do nome", () => {
+  assert.equal(corDoPedido("P2"), corDoPedido("P2"));
+  assert.match(corDoPedido("P2"), /^#[0-9a-f]{6}$/i);
+  assert.notEqual(corDoPedido("P1"), corDoPedido("P2"));
+});
+
+caso("marcas do risco: nada com um pedido; pedido de AGORA, não o do item", () => {
+  const pecas = [
+    { nome: "COSTAS Tam G", qtd: 2, pedido: "P1" },
+    { nome: "LATERAL Tam M", qtd: 1, pedido: "P1" },
+  ];
+  const pos = (indice, copia, x) => ({
+    item: { ...pecas[indice], indice, copia }, x, y: 0, largura: 30, altura: 40, passo: 0.2,
+  });
+  const r = { posicoes: [pos(0, 1, 0), pos(0, 2, 40), pos(1, 1, 80)] };
+  assert.equal(marcasDoRisco(r, pecas), null);
+
+  // Renomeado depois do encaixe: o item ainda diz P1, a lista diz P2.
+  pecas[1].pedido = "P2";
+  const visao = marcasDoRisco(r, pecas);
+  assert.deepEqual(visao.pedidos, ["P1", "P1", "P2"]);
+  assert.deepEqual(visao.marcas.map((m) => m.texto), ["P1 COG1", "P1 COG2", "P2 LAM"]);
+  assert.deepEqual(visao.legenda.map((l) => [l.pedido, l.quantas]), [["P1", 2], ["P2", 1]]);
+  assert.deepEqual(visao.semSigla, []);
+
+  // Peça estreita demais: entra em semSigla com nome e cópia.
+  pecas.push({ nome: "VIVO", qtd: 3, pedido: "P2" });
+  r.posicoes.push({ item: { ...pecas[2], indice: 2, copia: 2 }, x: 0, y: 50, largura: 1, altura: 60, passo: 0.2 });
+  const outra = marcasDoRisco(r, pecas);
+  assert.equal(outra.marcas[3], null);
+  assert.deepEqual(outra.semSigla, ["VIVO 2"]);
+});
+
+// ---------- 4. O motor não enxerga o pedido ----------
+const { PARA_A_BANCADA } = require("../empacotar/modulos-do-motor");
+caso("nenhum módulo do motor lê o pedido ou a sigla da peça", () => {
+  for (const modulo of PARA_A_BANCADA) {
+    const codigo = fs.readFileSync(path.join(RAIZ, "src", modulo), "utf8");
+    const achado = codigo.match(/\b\w+\.(?:pedido|sigla)\b/);
+    assert.equal(achado, null, `${modulo} lê "${achado && achado[0]}"`);
+  }
+});
+
+const { carregarMotor } = require("./motor");
+const motor = await carregarMotor({ comWasm: false });
+caso("pedido não desliga o sparrow (não é grupo)", () => {
+  const itens = [{ pedido: "P1", mascaras: { rotacoes: { 0: {} } } }, { pedido: "P2", mascaras: { rotacoes: { 0: {} } } }];
+  assert.equal(motor.motivoDoTrabalho(itens, { comprimentoBancada: 0 }), null);
+  assert.equal(motor.motivoDoTrabalho([{ ...itens[0], grupo: "A" }], { comprimentoBancada: 0 }), "grupos marcados");
+});
 
 console.log(`\nbancada:pedidos — ${casos} casos ok`);
