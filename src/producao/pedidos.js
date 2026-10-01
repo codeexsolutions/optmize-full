@@ -52,6 +52,40 @@ export function marcarLote(pecas, desde, pedido) {
 }
 
 /**
+ * O pedido de cada peça de um projeto que entra (a Reposição traz o pedido
+ * guardado de cada peça). `escolhido` é o que `pedidoDoLote` devolveu para a
+ * lista de agora; `null` é desistência, e aí nada entra (devolve `null`).
+ *
+ * - Lista vazia: o pedido guardado vale como veio; a peça sem ele é do P1.
+ * - "Mesmo pedido" (o escolhido já está na lista): todas ficam nele, por cima
+ *   do guardado — o P1 de um rolo antigo não é o P1 de hoje.
+ * - "Novo pedido": cada pedido guardado DIFERENTE ganha o seu `Pn` livre, o
+ *   primeiro fica com o escolhido e os outros com os `Pn` seguintes que
+ *   ninguém usa. Peça sem pedido guardado fica no escolhido.
+ */
+export function pedidosDaReposicao(listaAtual, entrando, escolhido) {
+  const guardados = (entrando || []).map((p) => normalizarPedido(p && p.pedido));
+  if (!listaAtual || listaAtual.length === 0) return guardados.map((g) => g || PEDIDO_PADRAO);
+  const pedido = normalizarPedido(escolhido);
+  if (!pedido) return null;
+  const naLista = pedidosDaLista(listaAtual);
+  if (naLista.includes(pedido)) return guardados.map(() => pedido);
+
+  const usados = new Set([...naLista, pedido]);
+  const livre = () => { for (let n = 1; ; n++) if (!usados.has(`P${n}`)) return `P${n}`; };
+  const novos = new Map();
+  return guardados.map((g) => {
+    if (!g) return pedido;
+    if (!novos.has(g)) {
+      const dado = novos.size === 0 ? pedido : livre();
+      usados.add(dado);
+      novos.set(g, dado);
+    }
+    return novos.get(g);
+  });
+}
+
+/**
  * Troca o nome de um pedido em todas as peças dele. Nome já usado por outro
  * pedido junta os dois (`juntou`), e quem chamou avisa.
  */

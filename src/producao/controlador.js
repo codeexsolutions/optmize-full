@@ -40,8 +40,8 @@ import { carregarImagem } from "../utils/arquivoDeImagem";
 import { respirarNaTela } from "../utils/respirar";
 import { criarEscopo } from "./escopo";
 import {
-  PEDIDO_PADRAO, corDoPedido, marcaParaOPdf, marcarLote, marcasDoRisco, normalizarPedido, pedidoDe, proximoPedido,
-  renomearPedido, temVariosPedidos, ultimoPedido,
+  PEDIDO_PADRAO, corDoPedido, marcaParaOPdf, marcarLote, marcasDoRisco, pedidoDe, pedidosDaReposicao,
+  proximoPedido, renomearPedido, temVariosPedidos, ultimoPedido,
 } from "./pedidos";
 import { normalizarSigla, siglaDaPeca } from "../motores/siglaDoPedido";
 import { tempoSugerido } from "./tempoSugerido";
@@ -912,16 +912,10 @@ async function miniaturaDaArte(img) {
  *
  * `pecas` vem da tela de Projetos: { nome, url, largura, altura, quantidade }.
  * `unidades` multiplica a quantidade de cada uma: é a repetição do pedido.
+ * `pedidos` é o pedido de cada peça, já escolhido (ver `pedidosDoProjeto`).
  */
-async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
+async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos) {
   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
-
-  const precisaPerguntar = pecas.some((p) => !p.pedido);
-  const pedido = precisaPerguntar ? await pedidoDoLote(pecas.length) : null;
-  if (precisaPerguntar && !pedido) {
-    mostrarErroEncaixe("Nenhuma peça entrou: a escolha do pedido foi fechada. Mande as peças de novo.", "aviso");
-    return;
-  }
 
   const totalAntes = pecasEncaixe.length;
   iniciarCarregamentoArquivos(pecas.length, "projeto salvo");
@@ -1014,13 +1008,12 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
         giro: ["180", "fixa", "livre"].includes(p.giro) ? p.giro : giroPadrao(),
         contorno: "auto",
         origem: `projeto ${nomeDoProjeto}${cortada ? " · fundo removido" : ""}`,
-        pedido: p.pedido ? normalizarPedido(p.pedido) : undefined,
+        pedido: pedidos[indice],
         sigla: p.sigla ? normalizarSigla(p.sigla) : undefined,
       });
       concluirCarregamentoArquivo(indice, pecas.length);
       await respirarNaTela();
     }
-    if (pedido) marcarLote(pecasEncaixe, totalAntes, pedido);
     renderPecasEncaixe();
     const adicionadas = pecasEncaixe.length - totalAntes;
     const total = pecasEncaixe.reduce((soma, p) => soma + p.qtd, 0);
@@ -1104,6 +1097,24 @@ async function pedidoDoLote(quantos) {
   });
   if (r.alternativa) return novo;
   return r.confirmado ? mesmo : null;
+}
+
+/**
+ * O pedido de cada peça de um projeto que vai entrar — ou `null` se a pessoa
+ * desistiu (aí o aviso já foi dado e nada pode mudar na tela).
+ *
+ * Lista com peças: pergunta SEMPRE, mesmo que as peças tragam pedido
+ * guardado (a Reposição traz): o P1 de um rolo antigo não é o P1 de hoje, e
+ * sem a pergunta os dois sairiam com a mesma sigla. A conta de quem fica em
+ * qual pedido é a de `pedidosDaReposicao`.
+ */
+async function pedidosDoProjeto(pecas) {
+  const escolhido = await pedidoDoLote(pecas.length);
+  const pedidos = escolhido ? pedidosDaReposicao(pecasEncaixe, pecas, escolhido) : null;
+  if (!pedidos) {
+    mostrarErroEncaixe("Nenhuma peça entrou: a escolha do pedido foi fechada. Mande as peças de novo.", "aviso");
+  }
+  return pedidos;
 }
 
 async function adicionarArquivos(files) {
@@ -4959,6 +4970,10 @@ return {
   * Escrever nos campos com `value` é o que existe enquanto o Encaixe for
   * dirigido por `getElementById`. Quando ele virar React, os ajustes viram
   * estado e esta função some junto com o arquivo.
+  *
+  * A PERGUNTA DO PEDIDO VEM ANTES DOS AJUSTES: quem desiste não pode ficar
+  * com a largura do tecido, a folga e o giro do projeto na lista que já
+  * estava montada — o próximo "Optmizar" sairia na largura errada.
   */
  /*
   * A ponte com a tela de Moldes, que é React.
@@ -4979,6 +4994,10 @@ return {
  },
 
  async mandarProjeto({ nome, pecas, unidades, ajustes }) {
+   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
+   const pedidos = await pedidosDoProjeto(pecas);
+   if (!pedidos) return;
+
    const escrever = (campo, valor) => {
      if (!campo || valor === null || valor === "" || !Number.isFinite(Number(valor))) return;
      campo.value = valor;
@@ -4997,7 +5016,7 @@ return {
     * pendurado para sempre, sem erro nenhum na tela.
     */
    await new Promise((seguir) => setTimeout(seguir, 60));
-   await mandarProjetoParaOEncaixe(nome, pecas, unidades);
+   await mandarProjetoParaOEncaixe(nome, pecas, unidades, pedidos);
  },
 
  navegar(pagina) {

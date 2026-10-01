@@ -222,7 +222,7 @@ const mascaraMod = await carregarModulo("src/motores/encaixeMascara.js");
 const pedidos = await carregarModulo("src/producao/pedidos.js");
 const {
   pedidoDe, pedidosDaLista, temVariosPedidos, ultimoPedido, proximoPedido,
-  marcarLote, renomearPedido, corDoPedido, marcasDoRisco, marcaParaOPdf,
+  marcarLote, renomearPedido, corDoPedido, marcasDoRisco, marcaParaOPdf, pedidosDaReposicao,
 } = pedidos;
 
 caso("pedidos da lista: P1 por padrão, próximo livre, último lote", () => {
@@ -242,6 +242,46 @@ caso("marcar lote só preenche quem não tem pedido", () => {
   const lista = [{ pedido: "P1" }, {}, { pedido: "JOAO" }, {}];
   marcarLote(lista, 1, "P2");
   assert.deepEqual(lista.map(pedidoDe), ["P1", "P2", "JOAO", "P2"]);
+});
+
+caso("reposição na lista vazia: o pedido guardado vale, e quem não tem é P1", () => {
+  const entrando = [{ pedido: "p3" }, {}, { pedido: "JOAO" }, { pedido: " - " }];
+  assert.deepEqual(pedidosDaReposicao([], entrando, "P1"), ["P3", "P1", "JOAO", "P1"]);
+});
+
+caso("reposição, mesmo pedido: todas ficam no escolhido, por cima do guardado", () => {
+  const lista = [{ pedido: "P1" }, { pedido: "P2" }];
+  const entrando = [{ pedido: "P1" }, { pedido: "P7" }, {}];
+  assert.deepEqual(pedidosDaReposicao(lista, entrando, "P2"), ["P2", "P2", "P2"]);
+});
+
+caso("reposição, novo pedido: cada guardado diferente vira um Pn que a lista não usa", () => {
+  const lista = [{ pedido: "P1" }, { pedido: "P3" }];
+  // pedidoDoLote devolveu P2 (o primeiro livre).
+  const entrando = [{ pedido: "P1" }, { pedido: "JOAO" }, { pedido: "p1" }, {}, { pedido: "P2" }];
+  const r = pedidosDaReposicao(lista, entrando, "P2");
+  assert.deepEqual(r, ["P2", "P4", "P2", "P2", "P5"]);
+  // Nenhum deles junta com um pedido que já está na lista.
+  for (const p of r) assert.ok(!pedidosDaLista(lista).includes(p), p);
+});
+
+caso("reposição desistida: nada entra", () => {
+  assert.equal(pedidosDaReposicao([{ pedido: "P1" }], [{ pedido: "P1" }], null), null);
+});
+
+caso("mandarProjeto pergunta o pedido antes de mexer na largura, na folga e no giro", () => {
+  const codigo = fs.readFileSync(path.join(RAIZ, "src", "producao", "controlador.js"), "utf8");
+  const funcao = codigo.indexOf("async mandarProjeto(");
+  const pergunta = codigo.indexOf("await pedidosDoProjeto(", funcao);
+  const desistiu = codigo.indexOf("if (!pedidos) return;", funcao);
+  const ajuste = codigo.indexOf("escrever(encaixeLarguraInput", funcao);
+  assert.ok(funcao >= 0 && pergunta > funcao && desistiu > pergunta && ajuste > desistiu,
+    "a pergunta e a desistência vêm antes do primeiro ajuste");
+  assert.ok(codigo.indexOf("mandarProjetoParaOEncaixe(nome, pecas, unidades, pedidos)", funcao) > ajuste);
+  // E a função que põe as peças na lista não pergunta de novo.
+  const entrada = codigo.slice(codigo.indexOf("async function mandarProjetoParaOEncaixe("),
+    codigo.indexOf("function juntasNaLeitura("));
+  assert.ok(!entrada.includes("pedidoDoLote("), "mandarProjetoParaOEncaixe não pergunta");
 });
 
 caso("renomear: normaliza, junta com aviso, recusa vazio", () => {
