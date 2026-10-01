@@ -85,9 +85,11 @@ export function corDoPedido(pedido) {
  * O que a tela, o PNG e o PDF precisam saber dos pedidos de um risco — ou
  * `null` com menos de dois pedidos (aí tudo sai como sempre saiu).
  *
- * O pedido e a sigla vêm de `pecas[indice]`, a lista DE AGORA: os itens do
- * risco são cópias feitas na hora do encaixe, e renomear um pedido não refaz
- * o encaixe (o motor não lê o pedido) — o nome novo tem de sair assim mesmo.
+ * O pedido, a sigla, o nome e a quantidade vêm de `pecas[indice]`, a lista
+ * DE AGORA: os itens do risco são cópias feitas na hora do encaixe, e
+ * renomear um pedido ou uma peça não refaz o encaixe (o motor não lê nada
+ * disso) — o nome novo tem de sair assim mesmo, e igual ao que a gaveta
+ * mostra. Só a cópia é do item: ela é a posição no risco.
  */
 export function marcasDoRisco(r, pecas) {
   if (!r || !Array.isArray(r.posicoes) || r.posicoes.length === 0) return null;
@@ -101,11 +103,11 @@ export function marcasDoRisco(r, pecas) {
   r.posicoes.forEach((p, i) => {
     const fonte = daLista(p);
     const texto = textoDaSigla({
-      pedido: doRisco[i], sigla: fonte.sigla, nome: p.item.nome, qtd: p.item.qtd, copia: p.item.copia,
+      pedido: doRisco[i], sigla: fonte.sigla, nome: fonte.nome, qtd: fonte.qtd, copia: p.item.copia,
     });
     const lugar = lugarDaSigla(p, texto);
     marcas.push(lugar ? { texto, ...lugar } : null);
-    if (!lugar) semSigla.push(`${p.item.nome}${p.item.qtd > 1 ? ` ${p.item.copia}` : ""}`);
+    if (!lugar) semSigla.push(`${fonte.nome}${fonte.qtd > 1 ? ` ${p.item.copia}` : ""}`);
     contagem.set(doRisco[i], (contagem.get(doRisco[i]) || 0) + 1);
   });
   const legenda = [...contagem].map(([pedido, quantas]) => ({ pedido, cor: corDoPedido(pedido), quantas }));

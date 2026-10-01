@@ -4097,7 +4097,8 @@ const btnSelecaoLimpar = document.getElementById("btn-selecao-limpar");
  */
 function visaoDosPedidos(r) {
   if (!r) return null;
-  const chave = pecasEncaixe.map((p) => `${pedidoDe(p)}/${p.sigla || ""}`).join("|");
+  // O nome e a quantidade entram na chave: a sigla automática sai do nome de agora.
+  const chave = pecasEncaixe.map((p) => `${pedidoDe(p)}/${p.sigla || ""}/${p.nome}/${p.qtd}`).join("|");
   if (!r._pedidos || r._pedidos.chave !== chave) {
     r._pedidos = { chave, valor: marcasDoRisco(r, pecasEncaixe) };
   }

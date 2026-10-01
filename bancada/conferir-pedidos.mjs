@@ -286,6 +286,30 @@ caso("marcas do risco: nada com um pedido; pedido de AGORA, não o do item", () 
   assert.deepEqual(outra.semSigla, ["VIVO 2"]);
 });
 
+caso("peça renomeada depois do encaixe: a sigla é a do nome novo, a mesma da gaveta", () => {
+  const pecas = [
+    { nome: "COSTAS Tam G", qtd: 2, pedido: "P1" },
+    { nome: "LATERAL Tam M", qtd: 1, pedido: "P2" },
+  ];
+  const pos = (indice, copia, x) => ({
+    item: { ...pecas[indice], indice, copia }, x, y: 0, largura: 30, altura: 40, passo: 0.2,
+  });
+  const r = { posicoes: [pos(0, 1, 0), pos(0, 2, 40), pos(1, 1, 80)] };
+  // Renomeada na lista; os itens do risco ainda dizem "COSTAS Tam G".
+  pecas[0].nome = "FRENTE Tam GG";
+  const visao = marcasDoRisco(r, pecas);
+  assert.equal(siglaDaPeca(pecas[0].nome), "FRGG");
+  assert.deepEqual(visao.marcas.map((m) => m.texto), ["P1 FRGG1", "P1 FRGG2", "P2 LAM"]);
+});
+
+caso("a gaveta e o desenho guardam a visão pelo nome da peça também", () => {
+  const codigo = fs.readFileSync(path.join(RAIZ, "src", "producao", "controlador.js"), "utf8");
+  const funcao = codigo.indexOf("function visaoDosPedidos(");
+  const linha = codigo.slice(codigo.indexOf("const chave = ", funcao)).split("\n")[0];
+  assert.ok(funcao >= 0);
+  assert.match(linha, /\bp\.nome\b/, "o nome da peça tem de estar na chave da visão");
+});
+
 caso("a marca desce com a bancada, e sem marca não vai nada", () => {
   const marca = { texto: "P2 COG3", x: 12.3, y: 1054.3, largura: 2.5, altura: 0.4 };
   assert.deepEqual(marcaParaOPdf(marca, 1000), { texto: "P2 COG3", x: 12.3, y: 54.3, alturaCm: 0.4 });
