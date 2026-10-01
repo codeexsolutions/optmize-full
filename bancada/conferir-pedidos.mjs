@@ -240,6 +240,17 @@ caso("a marca desce com a bancada, e sem marca não vai nada", () => {
   assert.equal(marcaParaOPdf(null, 0), undefined);
 });
 
+caso("o PDF manda a marca de cada peça (a linha está no daPeca da exportação)", () => {
+  const codigo = fs.readFileSync(path.join(RAIZ, "src", "producao", "controlador.js"), "utf8");
+  const usos = [...codigo.matchAll(/marcaParaOPdf\(/g)].map((m) => m.index);
+  assert.equal(usos.length, 1, "marcaParaOPdf( deve aparecer uma vez só");
+  const funcao = codigo.indexOf("function baixarEncaixeEmPdf(");
+  const daPeca = codigo.indexOf("const daPeca = ", funcao);
+  const primeiroPdf = codigo.indexOf("encaixeApi.pdf(", funcao);
+  assert.ok(funcao >= 0 && daPeca > funcao && primeiroPdf > daPeca);
+  assert.ok(usos[0] > daPeca && usos[0] < primeiroPdf, "a marca tem de estar no daPeca da exportação");
+});
+
 // ---------- 4. O motor não enxerga o pedido ----------
 const { PARA_A_BANCADA } = require("../empacotar/modulos-do-motor");
 caso("nenhum módulo do motor lê o pedido ou a sigla da peça", () => {

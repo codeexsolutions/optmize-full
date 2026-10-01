@@ -2280,7 +2280,6 @@ async function usarEncaixeGuardado(guardado) {
       mascara: p.comMascara && mascaras ? mascaras.rotacoes[p.rot] : null,
       passo,
       bancada: p.bancada || 0,
-      marca: visao ? marcaParaOPdf(visao.marcas[indiceDa.get(p)], deslocamento) : undefined,
     });
   }
 
@@ -3807,6 +3806,7 @@ async function baixarEncaixeEmPdf() {
       // A bancada vai junto: é ela que vira página no servidor
       // (`paginasDoEncaixe`, em encaixe-pdf.js).
       bancada: p.bancada || 0,
+      marca: visao ? marcaParaOPdf(visao.marcas[indiceDa.get(p)], deslocamento) : undefined,
     });
 
     if (!emPedacos) {
