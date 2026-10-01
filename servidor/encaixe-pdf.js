@@ -447,6 +447,10 @@ function conferirFonteDaSigla(fonte = FONTE_DA_SIGLA) {
  * Limpa a marca que chegou pela rede. Devolve a marca boa, ou `undefined` se
  * ela não presta (texto vazio, número que não é número, fora do tecido, letra
  * grande demais) — a peça então sai sem sigla.
+ *
+ * O texto vai até 20 caracteres: pedido de 6, espaço, sigla de 6 e a cópia
+ * (até 4 algarismos, rolo de 9999 cópias) dão 17 — com folga, e sem cortar o
+ * número da cópia.
  */
 function marcaLimpa(m, larguraTecido, consumo) {
   if (!m || typeof m !== "object") return undefined;
@@ -457,7 +461,7 @@ function marcaLimpa(m, larguraTecido, consumo) {
   };
   const texto = String(m.texto || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase().replace(/[^A-Z0-9 ]/g, "").slice(0, 16);
+    .toUpperCase().replace(/[^A-Z0-9 ]/g, "").slice(0, 20);
   const x = numero(m.x);
   const y = numero(m.y);
   const alturaCm = numero(m.alturaCm);

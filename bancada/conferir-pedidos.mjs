@@ -412,6 +412,9 @@ const peca = (x, marca) => ({ chave: "0-0", x, y: 5, largura: 40, altura: 50, ba
     assert.equal(marcaLimpa({ ...ok, alturaCm: 5 }, 100, 60), undefined);
     assert.equal(marcaLimpa({ ...ok, texto: "!!!" }, 100, 60), undefined);
     assert.deepEqual(marcaLimpa({ ...ok, x: "3" }, 100, 60).x, 3);
+    // Pedido de 6, sigla de 6 e a cópia 1000: o número da cópia não pode ser cortado.
+    assert.equal(marcaLimpa({ ...ok, texto: "JOAOSI COSTAS1000" }, 100, 60).texto, "JOAOSI COSTAS1000");
+    assert.equal(marcaLimpa({ ...ok, texto: "A".repeat(30) }, 100, 60).texto.length, 20);
   });
 }
 
