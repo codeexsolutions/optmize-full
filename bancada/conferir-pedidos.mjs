@@ -363,4 +363,22 @@ const peca = (x, marca) => ({ chave: "0-0", x, y: 5, largura: 40, altura: 50, ba
   });
 }
 
+// ---------- 6. O tempo sugerido ----------
+const tempo = await carregarModulo("src/producao/tempoSugerido.js");
+caso("tempo: peça pequena fica no teto de sempre; peça grande sobe", () => {
+  const { tempoSugerido, TEMPO_MIN_S, TEMPO_MAX_S, TEMPO_MAX_PECA_GRANDE_S } = tempo;
+  assert.equal(tempoSugerido([]), TEMPO_MIN_S);
+  assert.equal(tempoSugerido([{ qtd: 5, largura: 12, altura: 20 }]), TEMPO_MIN_S);
+  assert.equal(tempoSugerido([{ qtd: 300, largura: 12, altura: 60 }]), TEMPO_MAX_S);
+  assert.equal(tempoSugerido([{ qtd: 300, largura: 60, altura: 90 }]), TEMPO_MAX_PECA_GRANDE_S);
+  // A área real da silhueta vale mais que a caixa: arte em prancheta 100 x 100
+  // com uma tira dentro é tira.
+  assert.equal(tempoSugerido([{ qtd: 300, largura: 100, altura: 100, _cacheMascaras: { areaReal: 700 } }]), TEMPO_MAX_S);
+  // Camisas misturadas com tiras ainda é rolo de peça grande (spec, seção 6):
+  // média (195·5400 + 200·240) / 395 ≈ 2787 cm².
+  assert.equal(tempoSugerido([
+    { qtd: 195, largura: 60, altura: 90 }, { qtd: 200, largura: 12, altura: 20 },
+  ]), TEMPO_MAX_PECA_GRANDE_S);
+});
+
 console.log(`\nbancada:pedidos — ${casos} casos ok`);

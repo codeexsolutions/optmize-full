@@ -44,6 +44,7 @@ import {
   renomearPedido, temVariosPedidos, ultimoPedido,
 } from "./pedidos";
 import { normalizarSigla, siglaDaPeca } from "../motores/siglaDoPedido";
+import { tempoSugerido } from "./tempoSugerido";
 export function montarProducao(raiz, irPara) {
 const escopo = criarEscopo(raiz);
 try {
@@ -1744,21 +1745,6 @@ function renderPecasEncaixe() {
 }
 
 /**
- * Quanto tempo de busca sugerir para um lote deste tamanho.
- *
- * Medido nos arquivos de um teste real desta tela: um lote de 23 peças já
- * não melhorava mais depois de uns 20s (rodou até 60s sem ganho); um de 57
- * ainda estava melhorando aos 40s. A conta abaixo é a reta que passa perto
- * dos dois pontos — não é ciência exata, é uma sugestão que erra para mais
- * tempo, nunca para menos, porque sobrar segundo custa paciência e faltar
- * custa tecido. O teto de 60s evita que um lote enorme sugira um número que
- * ninguém pediu; quem quiser mais digita à mão.
- */
-function tempoSugerido(copias) {
-  return Math.max(10, Math.min(60, Math.round(copias * 0.9)));
-}
-
-/**
  * O que a coluna e a faixa de status mostram ANTES de existir encaixe.
  *
  * Contagem de arquivos, de cópias e a largura do tecido não dependem de
@@ -1775,7 +1761,7 @@ function atualizarPainelDoTrabalho() {
   if (btnLimparPecas && !carregamentoAtivo) btnLimparPecas.disabled = arquivos === 0;
 
   if (!tempoAjustadoPeloUsuario && copias > 0) {
-    encaixeTempoInput.value = tempoSugerido(copias);
+    encaixeTempoInput.value = tempoSugerido(pecasEncaixe);
   }
 
   // Com resultado na tela, quem manda na faixa é o resultado.
@@ -2850,6 +2836,9 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
     }
     pecasEncaixe.forEach((peca) => { peca.ocupacao = peca._cacheMascaras.ocupacao; });
     itens.forEach((item) => { item.mascaras = pecasEncaixe[item.indice]._cacheMascaras; });
+    // Agora a área é a da silhueta: a sugestão pode mudar (arte em prancheta
+    // grande que era tira). Ver src/producao/tempoSugerido.js.
+    if (!tempoAjustadoPeloUsuario) encaixeTempoInput.value = tempoSugerido(pecasEncaixe);
 
     const assinatura = assinaturaDoTrabalho(pecasEncaixe, larguraTecido);
     // O mesmo formato que vira a assinatura, mas sem arredondar para caber
