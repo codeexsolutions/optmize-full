@@ -291,4 +291,59 @@ const peca = (x, marca) => ({ chave: "0-0", x, y: 5, largura: 40, altura: 50, ba
 }
 
 
+// ---------- 6. A sigla não sai pela metade: fonte, balanço do PDF e limpeza ----------
+{
+  const { marcaLimpa } = require("../servidor/encaixe-pdf");
+  const zlib = require("node:zlib");
+  await assert.rejects(
+    () => montarPdf({
+      larguraTecido: 100, consumo: 60, buffers: new Map(),
+      posicoes: [peca(2, { texto: "P1", x: 2, y: 54, alturaCm: 0.4 })],
+      fonteDaSigla: path.join(RAIZ, "estatico", "fontes", "nao-existe.ttf"),
+    }, new stream.PassThrough()),
+    /fonte da sigla/,
+  );
+  {
+    const png = await sharp({ create: { width: 40, height: 40, channels: 4, background: "#3366cc" } }).png().toBuffer();
+    const destino = new stream.PassThrough();
+    const pedacos = [];
+    destino.on("data", (b) => pedacos.push(b));
+    const fim = new Promise((ok) => destino.on("end", ok));
+    await montarPdf({
+      larguraTecido: 100, consumo: 60, buffers: new Map([["0-0", png]]),
+      posicoes: [peca(2, { texto: "P1 CO1", x: 2.3, y: 54.3, alturaCm: 0.4 }), peca(50, { texto: "P2 LAM", x: 50.3, y: 54.3, alturaCm: 0.4 })],
+    }, destino);
+    await fim;
+    const bruto = Buffer.concat(pedacos);
+    let conteudo = "";
+    let i = 0;
+    while ((i = bruto.indexOf("stream\n", i)) >= 0) {
+      const ini = i + 7;
+      const f = bruto.indexOf("endstream", ini);
+      try { conteudo += zlib.inflateSync(bruto.subarray(ini, f)).toString("latin1") + "\n"; } catch { /* imagem ou fonte */ }
+      i = f + 9;
+    }
+    const q = (conteudo.match(/^q$/gm) || []).length;
+    const Q = (conteudo.match(/^Q$/gm) || []).length;
+    caso("q e Q em equilíbrio, e nenhum BT aberto", () => {
+      assert.ok(q > 0, "achou o conteúdo da página");
+      assert.equal(q, Q);
+      assert.equal((conteudo.match(/^BT$/gm) || []).length, (conteudo.match(/^ET$/gm) || []).length);
+    });
+  }
+  caso("marcaLimpa: o que presta passa, o que não presta cai", () => {
+    const ok = { texto: "p2 cog3", x: 3, y: 10, alturaCm: 0.5 };
+    assert.deepEqual(marcaLimpa(ok, 100, 60), { texto: "P2 COG3", x: 3, y: 10, alturaCm: 0.5 });
+    assert.equal(marcaLimpa({ ...ok, texto: "joão" }, 100, 60).texto, "JOAO");
+    assert.equal(marcaLimpa({ ...ok, x: NaN }, 100, 60), undefined);
+    assert.equal(marcaLimpa({ ...ok, x: null }, 100, 60), undefined);
+    assert.equal(marcaLimpa({ ...ok, y: "" }, 100, 60), undefined);
+    assert.equal(marcaLimpa({ ...ok, x: 1e300 }, 100, 60), undefined);
+    assert.equal(marcaLimpa({ ...ok, y: 61 }, 100, 60), undefined);
+    assert.equal(marcaLimpa({ ...ok, alturaCm: 5 }, 100, 60), undefined);
+    assert.equal(marcaLimpa({ ...ok, texto: "!!!" }, 100, 60), undefined);
+    assert.deepEqual(marcaLimpa({ ...ok, x: "3" }, 100, 60).x, 3);
+  });
+}
+
 console.log(`\nbancada:pedidos — ${casos} casos ok`);
