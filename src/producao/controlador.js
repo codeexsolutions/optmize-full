@@ -40,7 +40,7 @@ import { carregarImagem } from "../utils/arquivoDeImagem";
 import { respirarNaTela } from "../utils/respirar";
 import { criarEscopo } from "./escopo";
 import {
-  PEDIDO_PADRAO, corDoPedido, marcarLote, normalizarPedido, pedidoDe, proximoPedido,
+  PEDIDO_PADRAO, corDoPedido, marcarLote, marcasDoRisco, normalizarPedido, pedidoDe, proximoPedido,
   renomearPedido, temVariosPedidos, ultimoPedido,
 } from "./pedidos";
 import { normalizarSigla, siglaDaPeca } from "../motores/siglaDoPedido";
@@ -3192,6 +3192,9 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado, guardadoAntes) {
     partes.push(`sem encolher o rolo: ${encolhimento.motivo}`);
   }
 
+  const visao = visaoDosPedidos(resultado);
+  if (visao) partes.push(`${visao.legenda.length} pedidos no mesmo rolo`);
+
   const total = anotado ? anotado.encaixesDoTipo : (aprendido ? aprendido.encaixesDoTipo : 0);
   if (total > 0) partes.push(`memória: ${total} encaixe(s) deste tipo`);
 
@@ -3449,7 +3452,7 @@ function renderResultado() {
 
   encaixeResultado.classList.remove("hidden");
   vistaDoRisco = desenharEncaixe(encaixeCanvas, r,
-    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(r) });
 
   // A barra de rolagem só aparece depois que o desenho entra na caixa, e ela
   // come alguns pixels da medida que decidiu a escala. Deitado quem manda é a
@@ -3459,7 +3462,7 @@ function renderResultado() {
   const sobrou = wrap && (wrap.scrollHeight > wrap.clientHeight + 1);
   if (sobrou) {
     vistaDoRisco = desenharEncaixe(encaixeCanvas, r,
-    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(r) });
   }
 }
 
@@ -3480,9 +3483,11 @@ escopo.ouvir(btnBaixarEncaixe, "click", async () => {
   btnExportarRotulo.textContent = "Gravando…";
   try {
     // 4 px por cm dá um PNG legível para levar para a mesa de corte.
+    const visao = visaoDosPedidos(ultimoResultado);
     const temp = document.createElement("canvas");
-    desenharEncaixe(temp, ultimoResultado, { escala: 4, comLegenda: true });
-    const imagem = await new Promise((pronto) => temp.toBlob(pronto, "image/png"));
+    desenharEncaixe(temp, ultimoResultado, { escala: 4, comLegenda: true, pedidos: visao });
+    const final = visao ? comLegendaDosPedidos(temp, visao.legenda) : temp;
+    const imagem = await new Promise((pronto) => final.toBlob(pronto, "image/png"));
     if (!imagem) throw new Error("o desenho não virou imagem.");
 
     await destino.gravar(imagem);
@@ -4004,7 +4009,7 @@ function redesenharEncaixe() {
     return;
   }
   vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
-    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(ultimoResultado) });
 }
 
 // Redesenha ao mudar o tamanho da janela para o encaixe continuar cabendo.
@@ -4089,10 +4094,49 @@ const selecaoGiro = document.getElementById("encaixe-selecao-giro");
 const btnSelecaoAplicar = document.getElementById("btn-selecao-aplicar");
 const btnSelecaoLimpar = document.getElementById("btn-selecao-limpar");
 
+/**
+ * Os pedidos do risco que está na tela, guardados no próprio resultado: a
+ * conta do lugar da sigla passa por todas as células de cada peça, e o risco é
+ * redesenhado a cada zoom. A chave muda quando um pedido ou uma sigla muda.
+ */
+function visaoDosPedidos(r) {
+  if (!r) return null;
+  const chave = pecasEncaixe.map((p) => `${pedidoDe(p)}/${p.sigla || ""}`).join("|");
+  if (!r._pedidos || r._pedidos.chave !== chave) {
+    r._pedidos = { chave, valor: marcasDoRisco(r, pecasEncaixe) };
+  }
+  return r._pedidos.valor;
+}
+
+/** O PNG da mesa de corte com uma faixa no topo: cor, sigla e quantas peças de cada pedido. */
+function comLegendaDosPedidos(desenho, legenda) {
+  const FAIXA = 30;
+  const saida = document.createElement("canvas");
+  saida.width = desenho.width;
+  saida.height = desenho.height + FAIXA;
+  const ctx = saida.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, saida.width, FAIXA);
+  ctx.drawImage(desenho, 0, FAIXA);
+  ctx.font = "bold 14px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  let x = 10;
+  legenda.forEach(({ pedido, cor, quantas }) => {
+    ctx.fillStyle = cor;
+    ctx.fillRect(x, 8, 14, 14);
+    x += 20;
+    const texto = `${pedido} · ${quantas} peça${quantas === 1 ? "" : "s"}`;
+    ctx.fillStyle = "#111111";
+    ctx.fillText(texto, x, FAIXA / 2);
+    x += ctx.measureText(texto).width + 24;
+  });
+  return saida;
+}
+
 function redesenharRisco() {
   if (ultimoResultado) {
     vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
-      { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
+      { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(ultimoResultado) });
   }
 }
 

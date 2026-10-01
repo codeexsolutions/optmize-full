@@ -38,6 +38,8 @@
  */
 
 import { corDaPeca } from "../utils/coresDePeca";
+import { corDoPedido } from "../producao/pedidos";
+import { CONTORNO_DA_LETRA_CM, tamanhoDaFonteCm } from "./siglaDoPedido";
 
 /** Nada marcado. Uma só, para não criar um Set a cada desenho. */
 const SEM_SELECAO = new Set();
@@ -329,6 +331,8 @@ export function desenharEncaixe(canvas, r, {
   zoom = 1,
   /** Os índices das peças marcadas — só a tela pinta seleção. */
   selecao = SEM_SELECAO,
+  /** O retorno de `marcasDoRisco` (src/producao/pedidos.js), ou null com um pedido só. */
+  pedidos = null,
 } = {}) {
   const REGUA = 34; // faixa com as marcas de metro
   const pai = canvas.parentElement;
@@ -410,12 +414,13 @@ export function desenharEncaixe(canvas, r, {
   }
 
   // Peças
-  r.posicoes.forEach((p) => {
+  r.posicoes.forEach((p, i) => {
     const x = REGUA + p.x * px;
     const y = p.y * px;
     const w = p.largura * px;
     const h = p.altura * px;
-    const cor = corDaPeca(p.item.indice);
+    const pedido = pedidos ? pedidos.pedidos[i] : null;
+    const cor = pedido ? corDoPedido(pedido) : corDaPeca(p.item.indice);
 
     ctx.save();
     ctx.beginPath();
@@ -433,6 +438,14 @@ export function desenharEncaixe(canvas, r, {
       ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5);
     }
 
+    // Com mais de um pedido no risco, a caixa ganha um segundo traço, grosso,
+    // na cor do pedido.
+    if (pedido) {
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+    }
+
     // Seleção: o laranja da marca por cima da peça, só na tela. O hex vem
     // escrito porque canvas não lê variável de CSS; o valor é o do
     // `--accent` (ver `estilo/tokens.css`) e precisa acompanhá-lo.
@@ -444,9 +457,14 @@ export function desenharEncaixe(canvas, r, {
       ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
     }
 
+    // A sigla fica no lugar do rolo em que vai ser impressa; na tela deitada
+    // ela gira junto com o rolo, que é o mesmo desenho visto de lado.
+    const marca = pedidos && pedidos.marcas[i];
+    if (marca) desenharSigla(ctx, marca, REGUA, px);
+
     // Deitado, o nome é escrito depois — dentro do giro ele sairia de lado.
     if (comLegenda && !deitar && w > 46 && h > 18) {
-      escreverNome(ctx, p, x, y, w, h);
+      escreverNome(ctx, p, x, y, w, h, pedido);
     }
   });
 
@@ -516,12 +534,12 @@ export function desenharEncaixe(canvas, r, {
      * o comprimento vira X, e a largura do tecido vira Y de baixo para cima.
      */
     if (comLegenda) {
-      r.posicoes.forEach((p) => {
+      r.posicoes.forEach((p, i) => {
         const x = p.y * px;
         const y = (r.larguraTecido - p.x - p.largura) * px;
         const w = p.altura * px;
         const h = p.largura * px;
-        if (w > 46 && h > 18) escreverNome(ctx, p, x, y, w, h);
+        if (w > 46 && h > 18) escreverNome(ctx, p, x, y, w, h, pedidos ? pedidos.pedidos[i] : null);
       });
     }
   }
@@ -536,8 +554,9 @@ export function desenharEncaixe(canvas, r, {
 }
 
 /** O nome da peça, numa tarja escura para não sumir dentro da arte. */
-export function escreverNome(ctx, p, x, y, w, h) {
-  const texto = `${p.item.nome}${p.item.qtd > 1 ? ` ${p.item.copia}` : ""}`;
+export function escreverNome(ctx, p, x, y, w, h, pedido = null) {
+  const nome = `${p.item.nome}${p.item.qtd > 1 ? ` ${p.item.copia}` : ""}`;
+  const texto = pedido ? `${pedido} · ${nome}` : nome;
   ctx.font = "11px system-ui, sans-serif";
   const largTexto = ctx.measureText(texto).width + 8;
   ctx.fillStyle = "rgba(8, 12, 14, 0.78)";
@@ -548,6 +567,28 @@ export function escreverNome(ctx, p, x, y, w, h) {
   ctx.rect(x + 3, y + 3, Math.min(largTexto, w - 6), 16);
   ctx.clip();
   ctx.fillText(texto, x + 7, y + 12);
+  ctx.restore();
+}
+
+/**
+ * A sigla do pedido, onde e do tamanho que ela sai impressa: preta, com
+ * contorno branco, de pé no sentido do rolo. Na tela deitada ela gira junto
+ * com o rolo — é o mesmo desenho, visto de lado.
+ */
+export function desenharSigla(ctx, marca, REGUA, px) {
+  const corpo = tamanhoDaFonteCm(marca.altura) * px;
+  if (corpo < 4) return; // no zoom de tela viraria borrão
+  const x = REGUA + marca.x * px;
+  const base = (marca.y + marca.altura) * px;
+  ctx.save();
+  ctx.font = `bold ${corpo}px "Liberation Sans", Arial, Helvetica, sans-serif`;
+  ctx.textBaseline = "alphabetic";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(1, 2 * CONTORNO_DA_LETRA_CM * px);
+  ctx.strokeStyle = "#ffffff";
+  ctx.strokeText(marca.texto, x, base);
+  ctx.fillStyle = "#000000";
+  ctx.fillText(marca.texto, x, base);
   ctx.restore();
 }
 
