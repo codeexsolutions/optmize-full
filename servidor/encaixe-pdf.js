@@ -7,6 +7,11 @@
  * papel mede o que a peça mede. E vai só o desenho: nada de régua, nome de peça
  * ou rodapé, porque isso seria impresso junto no tecido.
  *
+ * A exceção é a SIGLA DO PEDIDO (2026-10-01): com dois pedidos ou mais no
+ * mesmo rolo, cada peça leva `P2 COG3` impresso no canto de baixo, dentro da
+ * silhueta, para a separação depois do corte. Quem decide o texto e o lugar
+ * é a tela (src/producao/pedidos.js); aqui ele só é escrito (`escreverMarca`).
+ *
  * Uma página por bancada
  * ----------------------
  * O rolo já saiu repartido em trechos de 10 m, e a repartição foi tirada
@@ -75,6 +80,15 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+
+// A sigla do pedido sai com esta fonte EMBUTIDA no arquivo, e não com a
+// Helvetica "padrão" do PDF: o RIP da produção já mostrou que não se pode
+// contar com o que ele deveria ter (ver `/UserUnit`, acima). A conta da
+// largura do texto, em src/motores/siglaDoPedido.js, usa as medidas desta
+// mesma fonte — trocar uma sem a outra tira a sigla de dentro da peça.
+const FONTE_DA_SIGLA = path.join(__dirname, "fontes", "LiberationSans-Bold.ttf");
+const ALTURA_DE_MAIUSCULA = 0.688; // a mesma de src/motores/siglaDoPedido.js
+const CONTORNO_DA_LETRA_CM = 0.03;
 
 const router = express.Router();
 
@@ -405,6 +419,25 @@ function paginasDoEncaixe(posicoes, consumo) {
 }
 
 /**
+ * A sigla do pedido, impressa: texto vetorial preto com contorno branco, de
+ * pé. Primeiro o contorno (o dobro da grossura, porque metade dele cai para
+ * dentro da letra), depois o preenchimento por cima — assim o contorno não
+ * come a letra.
+ */
+function escreverMarca(doc, marca, topoDaPagina) {
+  const corpo = (marca.alturaCm / ALTURA_DE_MAIUSCULA) * PT_POR_CM;
+  const x = marca.x * PT_POR_CM;
+  const base = (marca.y + marca.alturaCm - topoDaPagina) * PT_POR_CM;
+  doc.save();
+  doc.font("sigla").fontSize(corpo);
+  doc.lineJoin("round").lineWidth(2 * CONTORNO_DA_LETRA_CM * PT_POR_CM).strokeColor("#ffffff");
+  doc.text(marca.texto, x, base, { lineBreak: false, baseline: "alphabetic", stroke: true, fill: false });
+  doc.fillColor("#000000");
+  doc.text(marca.texto, x, base, { lineBreak: false, baseline: "alphabetic", stroke: false, fill: true });
+  doc.restore();
+}
+
+/**
  * Monta o documento e devolve ele já escrevendo em `destino`.
  *
  * Está separado da rota para a bancada conseguir gerar um PDF sem subir o
@@ -451,6 +484,10 @@ async function montarPdf({
     pdfVersion: comAlfa ? "1.4" : "1.3",
   });
   doc.pipe(destino);
+
+  const comMarca = posicoes.some((pos) => pos.marca);
+  if (comMarca) doc.registerFont("sigla", FONTE_DA_SIGLA);
+  let marcas = 0;
 
   /*
    * DEIXAR O CANO ESCOAR ENTRE UMA PEÇA E OUTRA.
@@ -539,6 +576,14 @@ async function montarPdf({
         // uma imagem ruim não pode derrubar o PDF inteiro
         console.warn(`[encaixe-pdf] não deu para desenhar a peça ${pos.chave}:`, err && err.message);
       }
+      if (pos.marca) {
+        try {
+          escreverMarca(doc, pos.marca, pagina.topo);
+          marcas++;
+        } catch (err) {
+          console.warn(`[encaixe-pdf] não deu para escrever a sigla ${pos.marca.texto}:`, err && err.message);
+        }
+      }
       // Ver `escoar`: é aqui que a fila do cano deixa de crescer sem limite.
       await escoar();
     }
@@ -548,6 +593,7 @@ async function montarPdf({
   return {
     unidade,
     desenhadas,
+    marcas,
     paginaPt: tamanhoDa(paginas[0]),
     paginas: paginas.map((p) => ({
       numero: p.numero,
@@ -565,6 +611,17 @@ router.post("/pdf", async (req, res) => {
   if (!(larguraTecido > 0) || !(consumo > 0) || !Array.isArray(posicoes) || posicoes.length === 0) {
     return res.status(400).json({ error: "Encaixe inválido para gerar o PDF." });
   }
+
+  // A sigla do pedido só passa bem formada: texto curto de letras, números e
+  // espaço, e medidas finitas. O resto vira peça sem marca.
+  posicoes.forEach((pos) => {
+    const m = pos && pos.marca;
+    if (!m) return;
+    const texto = String(m.texto || "").toUpperCase().replace(/[^A-Z0-9 ]/g, "").slice(0, 16);
+    const ok = texto && [m.x, m.y, m.alturaCm].every((n) => Number.isFinite(Number(n)))
+      && Number(m.alturaCm) > 0 && Number(m.alturaCm) <= 2;
+    pos.marca = ok ? { texto, x: Number(m.x), y: Number(m.y), alturaCm: Number(m.alturaCm) } : undefined;
+  });
 
   /*
     A METRAGEM DO PLANO, ANTES DE MONTAR QUALQUER COISA.

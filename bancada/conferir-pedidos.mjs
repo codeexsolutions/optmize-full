@@ -12,6 +12,9 @@ import { carregarModulo } from "./carregarModulo.mjs";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
+import stream from "node:stream";
+import sharp from "sharp";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -248,5 +251,44 @@ caso("pedido não desliga o sparrow (não é grupo)", () => {
   assert.equal(motor.motivoDoTrabalho(itens, { comprimentoBancada: 0 }), null);
   assert.equal(motor.motivoDoTrabalho([{ ...itens[0], grupo: "A" }], { comprimentoBancada: 0 }), "grupos marcados");
 });
+
+// ---------- 5. O PDF escreve a sigla, e só quando ela veio ----------
+const { montarPdf } = require("../servidor/encaixe-pdf");
+async function pdfDe(posicoes) {
+  const png = await sharp({ create: { width: 40, height: 40, channels: 4, background: "#3366cc" } }).png().toBuffer();
+  const destino = new stream.PassThrough();
+  const pedacos = [];
+  destino.on("data", (b) => pedacos.push(b));
+  const fim = new Promise((ok, erro) => { destino.on("end", ok); destino.on("error", erro); });
+  const relatorio = await montarPdf({
+    larguraTecido: 100, consumo: 60, posicoes, buffers: new Map([["0-0", png]]),
+  }, destino);
+  await fim;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(Buffer.concat(pedacos)) }).promise;
+  let texto = "";
+  for (let i = 1; i <= doc.numPages; i++) {
+    const conteudo = await (await doc.getPage(i)).getTextContent();
+    texto += conteudo.items.map((it) => it.str).join(" ");
+  }
+  return { texto, relatorio };
+}
+const peca = (x, marca) => ({ chave: "0-0", x, y: 5, largura: 40, altura: 50, bancada: 0, marca });
+{
+  const com = await pdfDe([
+    peca(2, { texto: "P1 CO1", x: 2.3, y: 54.3, alturaCm: 0.4 }),
+    peca(50, { texto: "P2 LAM", x: 50.3, y: 54.3, alturaCm: 0.4 }),
+  ]);
+  const sem = await pdfDe([peca(2), peca(50)]);
+  caso("o PDF com marcas traz o texto de cada uma", () => {
+    assert.match(com.texto, /P1 CO1/);
+    assert.match(com.texto, /P2 LAM/);
+    assert.equal(com.relatorio.marcas, 2);
+  });
+  caso("o PDF sem marca não traz texto nenhum", () => {
+    assert.equal(sem.texto.trim(), "");
+    assert.equal(sem.relatorio.marcas, 0);
+  });
+}
+
 
 console.log(`\nbancada:pedidos — ${casos} casos ok`);
