@@ -53,8 +53,12 @@ const { pedirComToken } = require("./sessao");
  * `permitido: false` só acontece quando o SERVIDOR disse não — ou seja,
  * quando a conta existe, a rede foi, e a metragem do período não cobre este
  * trabalho.
+ *
+ * `metrosCaixa` é a metragem que o mesmo arquivo daria encaixado pela caixa
+ * (ver `metragemPelaCaixa`, no motor). Não decide nada: vai junto só para o
+ * servidor somar a economia da empresa. `null` quando não houve como medir.
  */
-async function permitirExportacao(metrosPedidos) {
+async function permitirExportacao(metrosPedidos, metrosCaixa = null) {
   const metros = Number(metrosPedidos);
   /*
     SEM METRAGEM CONHECIDA, LIBERA.
@@ -71,7 +75,9 @@ async function permitirExportacao(metrosPedidos) {
     resposta = await pedirComToken("/uso/exportacao", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ metros }),
+      body: JSON.stringify(
+        Number.isFinite(metrosCaixa) && metrosCaixa >= metros ? { metros, metrosCaixa } : { metros },
+      ),
     });
   } catch {
     return { permitido: true, offline: true };

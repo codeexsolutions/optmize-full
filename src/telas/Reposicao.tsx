@@ -216,13 +216,10 @@ export function Reposicao() {
       {/* ------------------------------------------------ a lista, à esquerda */}
       <aside className="galeria-lateral flex w-80 shrink-0 flex-col overflow-hidden border-r border-linha">
         <div className="shrink-0 border-b border-linha p-4">
-          <h1 className="m-0 flex items-center gap-2 font-titulo text-lg font-semibold text-tinta">
+          <h1 className="m-0 mb-3 flex items-center gap-2 font-titulo text-lg font-semibold text-tinta">
             <Icone referencia="icones.svg#rotate-ccw" className="size-5 text-ambar" />
             Reposição
           </h1>
-          <p className="mt-1 mb-3 text-[12px] leading-relaxed text-tinta-apagada">
-            Todo encaixe exportado fica guardado aqui. Abra, marque as peças que precisam sair de novo.
-          </p>
           <label className="galeria-vidro flex h-10 items-center gap-2 rounded-full px-4 focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
             <Icone referencia="icones.svg#search" className="size-4 shrink-0 text-tinta-apagada" />
             <input

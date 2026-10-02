@@ -589,7 +589,16 @@ router.post("/pdf", async (req, res) => {
   */
   const comprimentoCm = paginasDoEncaixe(posicoes, consumo)
     .reduce((soma, pagina) => soma + (pagina.fundo - pagina.topo), 0);
-  const cota = await permitirExportacao(comprimentoCm / 100);
+  /*
+    E A MESMA METRAGEM PELA CAIXA, para o relatório de economia da empresa. A
+    tela manda a razão caixa/encaixe do trabalho inteiro (ver `razaoCaixa` em
+    `baixarEncaixeEmPdf`); cada arquivo leva a sua parte. Razão que não for um
+    número >= 1 é ignorada: economia inventada é pior que economia nenhuma.
+  */
+  const razaoCaixa = Number(req.body.razaoCaixa);
+  const metrosCaixa = Number.isFinite(razaoCaixa) && razaoCaixa >= 1
+    ? (comprimentoCm / 100) * razaoCaixa : null;
+  const cota = await permitirExportacao(comprimentoCm / 100, metrosCaixa);
   if (!cota.permitido) {
     return res.status(402).json({
       error: cota.motivo,

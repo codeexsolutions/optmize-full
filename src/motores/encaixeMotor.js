@@ -772,6 +772,41 @@ export function encaixar(itens, config) {
   return { posicoes, naoEncaixadas, consumo: consumo > 0 ? consumo - espaco : 0 };
 }
 
+/*
+ * ===========================================================================
+ * A METRAGEM PELA CAIXA — a régua da economia
+ * ===========================================================================
+ *
+ * Antes de o Optmize encaixar pelo contorno, o mesmo trabalho é encaixado como
+ * se cada peça fosse só o retângulo da arte: é o que a maioria dos programas
+ * faz, e é a metragem que a gráfica gastaria sem a gente. A diferença entre
+ * as duas é o tecido que o Optmize poupou — e é esse número que vai, junto com
+ * a metragem real, para o relatório de cada empresa (ver `uso.routes.ts`, no
+ * backend).
+ *
+ * A CAIXA AQUI É HONESTA: o MESMO MaxRects da receita `retangulo`, com a mesma
+ * folga, o mesmo giro e a mesma bancada, e fica o MELHOR das 16 combinações de
+ * ordem e heurística. Um "pela caixa" de propósito ruim inflaria a economia, e
+ * economia inflada é promessa que a gráfica confere no rolo e não encontra.
+ *
+ * Devolve a MÍDIA (o comprimento do PDF, ver `midiaConsumida`) em centímetros,
+ * a mesma régua da metragem cobrada — ou `null` quando alguma peça não coube
+ * nem pela caixa, porque aí não há com o que comparar.
+ */
+export function metragemPelaCaixa(itens, config) {
+  let melhor = null;
+  for (const ordem of ORDENS_RETANGULO) {
+    const lista = [...itens].sort(ordem.comparar);
+    for (const heuristica of HEURISTICAS_RETANGULO) {
+      const r = encaixar(lista, { ...config, heuristica });
+      if (r.naoEncaixadas.length > 0) continue;
+      const midia = midiaConsumida(r.consumo, config.comprimentoBancada, r.posicoes);
+      if (melhor === null || midia < melhor) melhor = midia;
+    }
+  }
+  return melhor;
+}
+
 /**
  * O tecido é guardado como os intervalos já ocupados de cada coluna, e não
  * como uma altura só por coluna.
