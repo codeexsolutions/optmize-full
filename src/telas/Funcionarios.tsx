@@ -43,6 +43,7 @@ import { api, ErroDaApi } from "../api/cliente";
 import { useDados } from "../api/useDados";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
+import { useCliqueNoVeu } from "../casca/cliqueNoVeu";
 
 interface Rosto {
   id: number;
@@ -134,8 +135,9 @@ function Camera({ aoTirar, aoFechar }: { aoTirar: (foto: Blob) => void; aoFechar
     );
   }
 
+  const veu = useCliqueNoVeu(aoFechar);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={aoFechar}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" {...veu}>
       <div
         className="w-full max-w-2xl rounded-xl border border-linha bg-painel p-5 shadow-[var(--shadow)]"
         onClick={(e) => e.stopPropagation()}
@@ -194,8 +196,9 @@ function Confirmar({
 }) {
   const rostos = quem.rostos?.length ?? 0;
 
+  const veu = useCliqueNoVeu(aoFechar);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={aoFechar}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" {...veu}>
       <div
         className="w-full max-w-md rounded-xl border border-linha bg-painel p-5 shadow-[var(--shadow)]"
         onClick={(e) => e.stopPropagation()}

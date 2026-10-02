@@ -32,6 +32,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCliqueNoVeu } from "./cliqueNoVeu";
 
 interface Pergunta {
   titulo?: string;
@@ -157,6 +158,8 @@ export function ProvedorDeDialogo({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", noEsc);
   }, [aberto, fechar]);
 
+  const veu = useCliqueNoVeu(() => fechar(false));
+
   const dialogo = useRef<Dialogo>({
     async avisar(texto, opcoes = {}) {
       await abrir({
@@ -219,10 +222,8 @@ export function ProvedorDeDialogo({ children }: { children: ReactNode }) {
         <div
           className={`ui-dialog-backdrop${fechando ? " closing" : ""}`}
           role="presentation"
-          onClick={(evento) => {
-            // Clicar fora fecha, pelo mesmo critério do Esc.
-            if (evento.target === evento.currentTarget && aberto.cancelavel) fechar(false);
-          }}
+          // Clicar fora fecha, pelo mesmo critério do Esc.
+          {...(aberto.cancelavel ? veu : {})}
         >
           <section
             className={`ui-dialog${aberto.perigoso ? " danger-dialog" : ""}`}

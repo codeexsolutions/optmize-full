@@ -38,6 +38,7 @@ import { formatarNumero } from "../../utils/numero";
 import { useLigacao } from "../../producao/ligacao";
 import { emCm } from "./vocabulario";
 import { useErroEmAlerta } from "../../casca/Alerta";
+import { useCliqueNoVeu } from "../../casca/cliqueNoVeu";
 
 /** A prévia é pequena de propósito: serve para conferir, não para imprimir. */
 const LADO_DA_PREVIA = 260;
@@ -343,10 +344,12 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
     }
   };
 
+  const veu = useCliqueNoVeu(aoFechar);
+
   return (
     <div
       className="modal-fundo"
-      onClick={(evento) => { if (evento.target === evento.currentTarget) aoFechar(); }}
+      {...veu}
     >
       <div className="modal modal-largo">
         <header className="modal-topo">

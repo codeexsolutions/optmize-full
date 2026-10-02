@@ -44,6 +44,21 @@ const escopo = criarEscopo(raiz);
 try {
 const { document, window, setTimeout, clearTimeout, setInterval, clearInterval, requestAnimationFrame, URL, fetch } = escopo;
 const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+/*
+ * Fechar no clique no véu só quando o clique COMEÇOU e TERMINOU nele. Quem
+ * aperta dentro de um campo, arrasta para selecionar e solta lá fora gera um
+ * `click` no véu (o ancestral comum dos dois pontos) — e a caixa fechava no
+ * meio da seleção. É o `useCliqueNoVeu` da casca, sem React.
+ */
+const fecharNoVeu = (veu, aoFechar) => {
+  let comecouNoVeu = false;
+  escopo.ouvir(veu, "mousedown", (e) => { comecouNoVeu = e.target === veu; });
+  escopo.ouvir(veu, "click", (e) => {
+    const foraDeVerdade = comecouNoVeu && e.target === veu;
+    comecouNoVeu = false;
+    if (foraDeVerdade) aoFechar();
+  });
+};
 /**
  * ===========================================================================
  * UI — a caixa de diálogo do sistema
@@ -190,7 +205,7 @@ const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/<
   escopo.ouvir(campo, "keydown", (event) => {
     if (event.key === "Enter") { event.preventDefault(); close(true); }
   });
-  escopo.ouvir(backdrop, "click", (event) => { if (event.target === backdrop && !cancel.classList.contains("hidden")) close(false); });
+  fecharNoVeu(backdrop, () => { if (!cancel.classList.contains("hidden")) close(false); });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !backdrop.classList.contains("hidden") && !cancel.classList.contains("hidden")) close(false);
   });
@@ -3038,8 +3053,18 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
     if (guardadoAntes && guardadoAntes.consumo < ultimoResultado.consumo - 0.05) {
       const consumoDaBusca = ultimoResultado.consumo;
       const resumoDaBusca = encaixeAndamento.textContent;
+      const daBusca = ultimoResultado;
       const voltou = await usarEncaixeGuardado(guardadoAntes);
-      if (voltou) {
+      if (voltou && voltou.sobreposto) {
+        // O guardado não passou pela trava: trocar um encaixe que sai por um
+        // que não sai não é "ficar com o melhor". A tela volta para o desta
+        // procura, que já tinha passado, e o guardado fica de fora.
+        limparErroEncaixe();
+        guardarResultado(daBusca);
+        renderResultado();
+        encaixeAndamento.textContent = resumoDaBusca;
+        encaixeAndamento.classList.remove("hidden");
+      } else if (voltou) {
         encaixeAndamento.textContent =
           `Esta procura deu ${metrosNaTela(consumoDaBusca)}, e o melhor já conseguido com `
           + `estas peças é ${metrosNaTela(guardadoAntes.consumo)} — a tela ficou com o melhor. · `
@@ -4653,9 +4678,7 @@ escopo.ouvir(btnComplementoRefazer, "click", () => {
   fecharComplemento(false);
   abrirAjustes();
 });
-escopo.ouvir(modalComplemento, "click", (e) => {
-  if (e.target === modalComplemento) fecharComplemento(true);
-});
+fecharNoVeu(modalComplemento, () => fecharComplemento(true));
 // Escrever na meta já escolhe "Completar até": quem digita um número quer usá-lo.
 escopo.ouvir(complementoMeta, "input", () => {
   const ate = modalComplemento.querySelector('input[name="complemento-modo"][value="ate"]');
@@ -4699,11 +4722,9 @@ escopo.ouvir(btnAjustesOptmizar, "click", () => {
 escopo.ouvir(btnFecharAjustes, "click", () => fecharAjustes(true));
 escopo.ouvir(btnAjustesCancelar, "click", () => fecharAjustes(true));
 
-// Clique no véu fecha; clique DENTRO da caixa não. O teste é o alvo ser o
-// próprio fundo — qualquer coisa dentro da caixa tem outro alvo.
-escopo.ouvir(modalAjustes, "click", (e) => {
-  if (e.target === modalAjustes) fecharAjustes(true);
-});
+// Clique no véu fecha; clique DENTRO da caixa — ou que começou dentro dela —
+// não. Ver `fecharNoVeu`, no começo do arquivo.
+fecharNoVeu(modalAjustes, () => fecharAjustes(true));
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && ajustesAberto()) fecharAjustes(true);

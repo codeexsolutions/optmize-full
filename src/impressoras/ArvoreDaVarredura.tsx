@@ -27,6 +27,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Icone } from "../casca/Icone";
+import { useCliqueNoVeu } from "../casca/cliqueNoVeu";
 import type { EstadoDaVarredura, NoDaVarredura } from "./tipos";
 
 const COR: Record<NoDaVarredura["estado"], string> = {
@@ -240,8 +241,9 @@ export function JanelaDaVarredura({ estado, aoFechar, aoParar }: {
   aoParar?: () => void;
 }) {
   const rodando = Boolean(estado?.running);
+  const veu = useCliqueNoVeu(aoFechar);
   return (
-    <div onClick={aoFechar} className="fixed inset-0 z-90 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animar-entrada">
+    <div {...veu} className="fixed inset-0 z-90 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animar-entrada">
       <div
         role="dialog"
         aria-modal="true"
