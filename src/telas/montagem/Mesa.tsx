@@ -4,12 +4,13 @@
  * A MESA — onde a peça é marcada
  * ===========================================================================
  *
- * Um canvas em cima de uma grade de 1 cm. Quatro ferramentas, uma de cada vez:
+ * Um canvas em cima de uma grade de 1 cm. Cinco ferramentas, uma de cada vez:
  *
- *   NÓS    a edição do Digitalizar, as mesmas contas (`motores/edicaoDeNos.js`);
- *   PIQUE  clique no traço põe, clique num pique tira;
- *   PONTO  clique dentro da peça põe, clique num ponto tira;
- *   FIO    arrasta pelo meio, gira pelas pontas.
+ *   NÓS      o editor estilo Corel, o mesmo do Digitalizar (`risco/useEditorDeNos.ts`);
+ *   PIQUE    clique no traço põe, clique num pique tira;
+ *   PONTO    clique dentro da peça põe, clique num ponto tira;
+ *   FIO      arrasta pelo meio, gira pelas pontas;
+ *   GRADUAR  clique num nó abre a regra dele (o bloco da graduação); nada se arrasta.
  *
  * Uma ferramenta por vez, e não um clique que adivinha, porque os alvos se
  * sobrepõem: pique mora em cima do traço, e o traço é onde o nó também mora.
@@ -22,16 +23,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { achatarCurvas } from "../../motores/ajusteDeCurvas";
 import { margemDeCostura } from "../../motores/margemDeCostura";
-import { moverPega, pegaSob, tracoSob } from "../../motores/edicaoDeNos";
+import { pegaSob, tracoSob } from "../../motores/edicaoDeNos";
 import {
-  PROFUNDIDADE_DO_PIQUE, apagarNoDaPeca, arranjar, caixaDe, desenhoDaPeca, inserirNoNaPeca,
-  pecaParaGravar, posicaoDoPique,
+  PROFUNDIDADE_DO_PIQUE, arranjar, caixaDe, desenhoDaPeca, pecaParaGravar, posicaoDoPique,
 } from "../../motores/montagem";
-import { desenharNos, tracarCaminho, type Ponto } from "../risco/desenhoDeNos";
+import { desenharNos, desenharPontosDeGraduacao, desenharRetangulo, tracarCaminho, type Ponto } from "../risco/desenhoDeNos";
+import type { EditorDeNos } from "../risco/useEditorDeNos";
 import { corDaPeca } from "../../utils/coresDePeca";
 import type { PecaEmMontagem } from "./useMoldeEmMontagem";
 
-export type Ferramenta = "nos" | "pique" | "ponto" | "fio";
+export type Ferramenta = "nos" | "pique" | "ponto" | "fio" | "graduar";
 
 /** Pixels de canvas por centímetro enquanto a largura da mesa não é conhecida. */
 const PX_POR_CM = 24;
@@ -44,7 +45,7 @@ const ZOOM_MAX = 12;
 interface Vista { minX: number; minY: number; largura: number; altura: number }
 
 type Arrasto =
-  | { tipo: "no"; no: number; parte: "no" | "entrada" | "saida" }
+  | { tipo: "editor" }
   | { tipo: "fio"; modo: "mover" | "girar" };
 
 interface Props {
@@ -59,6 +60,12 @@ interface Props {
   aoEscolherPeca: (indice: number) => void;
   aoLembrar: () => void;
   aoMudar: (mudar: (peca: PecaEmMontagem) => PecaEmMontagem, lembrarAntes: boolean) => void;
+  /** Os outros tamanhos da peça, desenhados por baixo, cada um na sua cor; `tracejada` na prévia da graduação. */
+  camadas?: { nos: PecaEmMontagem["nos"]; cor: string; tracejada?: boolean }[];
+  /** Na ferramenta Graduar: os nós que têm regra (ganham o losango). */
+  regras?: readonly number[];
+  /** Na ferramenta Nós: o editor estilo Corel (a seleção e o que o ponteiro faz). */
+  editor?: EditorDeNos;
 }
 
 /**
@@ -90,6 +97,8 @@ function desenhoParaVer(p: PecaEmMontagem) {
 
 export function Mesa(props: Props) {
   const { pecas, indice, ferramenta, verTodas, noAtivo, comErro } = props;
+  const camadas = useMemo(() => props.camadas ?? [], [props.camadas]);
+  const regras = useMemo(() => props.regras ?? [], [props.regras]);
   const peca = pecas[indice];
   const tela = useRef<HTMLCanvasElement>(null);
   const moldura = useRef<HTMLDivElement>(null);
@@ -117,10 +126,11 @@ export function Mesa(props: Props) {
       for (const d of todas) { maxX = Math.max(maxX, d.emX + d.largura); maxY = Math.max(maxY, d.emY + d.altura); }
       return { minX: -3, minY: -3, largura: maxX + 6, altura: maxY + 6 };
     }
-    const c = caixaDe(corte ?? risco);
+    // As camadas entram na vista: o G é maior que o M e sairia cortado.
+    const c = caixaDe([...(corte ?? risco), ...camadas.flatMap((k) => achatarCurvas(k.nos))]);
     const folga = 3;
     return { minX: c.minX - folga, minY: c.minY - folga, largura: c.largura + 2 * folga, altura: c.altura + 2 * folga };
-  }, [verTodas, todas, corte, risco]);
+  }, [verTodas, todas, corte, risco, camadas]);
   const vista = vistaCongelada.current ?? vistaCalculada;
   // Um pixel do canvas = um pixel da tela. Com px/cm fixo, peça pequena saía
   // esticada (borrada, traço grosso) e peça grande espremida (nó e texto
@@ -211,6 +221,17 @@ export function Mesa(props: Props) {
       return;
     }
     if (!peca) return;
+    // Os outros tamanhos da peça, por baixo, finos, cada um na sua cor.
+    for (const k of camadas) {
+      tracarCaminho(ctx, k.nos, emTela);
+      ctx.strokeStyle = k.cor;
+      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = 1.25;
+      ctx.setLineDash(k.tracejada ? [6, 4] : []);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
     // A peça escolhida, na posição em que está sendo editada (sem encostar no canto).
     const desenho = desenhoDaPeca({
       ...peca,
@@ -229,8 +250,15 @@ export function Mesa(props: Props) {
       ctx.textAlign = "left";
       ctx.fillText("A margem fecha a peça sobre ela mesma: diminua a margem.", 12 * fator, 22 * fator);
     }
-    if (ferramenta === "nos") desenharNos(ctx, peca.nos, noAtivoValido, emTela);
-  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro]);
+    if (ferramenta === "nos") {
+      desenharNos(ctx, peca.nos, props.editor?.selecionados ?? null, emTela);
+      if (props.editor?.retangulo) desenharRetangulo(ctx, props.editor.retangulo.de, props.editor.retangulo.ate, emTela);
+    }
+    if (ferramenta === "graduar") {
+      desenharNos(ctx, peca.nos, null, emTela);
+      desenharPontosDeGraduacao(ctx, peca.nos, regras, noAtivoValido, emTela);
+    }
+  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro, camadas, regras, props.editor?.selecionados, props.editor?.retangulo]);
 
   // ------------------------------------------------------------ o ponteiro
   const aoApertar = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -245,11 +273,8 @@ export function Mesa(props: Props) {
     const raio = raioCm();
 
     if (ferramenta === "nos") {
-      const sob = pegaSob(peca.nos, alvo, raio, noAtivoValido);
-      if (!sob) { props.aoMarcarNo(null); return; }
-      if (sob.parte === "no") props.aoMarcarNo(sob.no);
-      props.aoLembrar();
-      arrasto.current = { tipo: "no", no: sob.no, parte: sob.parte as "no" | "entrada" | "saida" };
+      if (!props.editor?.apertar(alvo, raio, e.shiftKey)) return;
+      arrasto.current = { tipo: "editor" };
     } else if (ferramenta === "pique") {
       // Mesmo filtro que `desenhoDaPeca` aplica antes de desenhar: um pique
       // cujo `no` não existe mais (dado velho, ou um `apagarNoDaPeca` que não
@@ -289,6 +314,15 @@ export function Mesa(props: Props) {
         marcacoes: { ...p.marcacoes, pontos: [...p.marcacoes.pontos, alvo] },
       }), true);
       return;
+    } else if (ferramenta === "graduar") {
+      // Clicar num nó abre a regra dele no bloco da graduação. Nada se arrasta.
+      // O campo do bloco que estava sendo digitado grava AGORA, no nó de antes:
+      // o blur natural só viria depois deste pointerdown, com o bloco já no nó
+      // novo — e o número cairia nele.
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      const sob = pegaSob(peca.nos, alvo, raio, null);
+      props.aoMarcarNo(sob ? sob.no : null);
+      return;
     } else {
       const f = peca.marcacoes.fio;
       const rad = (f.angulo * Math.PI) / 180;
@@ -308,8 +342,8 @@ export function Mesa(props: Props) {
     if (!a) return;
     const alvo = noCm(e);
     if (!alvo) return;
-    if (a.tipo === "no") {
-      props.aoMudar((p) => ({ ...p, nos: moverPega(p.nos, { no: a.no, parte: a.parte }, alvo) }), false);
+    if (a.tipo === "editor") {
+      props.editor?.mover(alvo);
     } else if (a.modo === "mover") {
       props.aoMudar((p) => ({ ...p, marcacoes: { ...p.marcacoes, fio: { ...p.marcacoes.fio, x: alvo.x, y: alvo.y } } }), false);
     } else {
@@ -323,6 +357,7 @@ export function Mesa(props: Props) {
 
   const aoSoltar = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!arrasto.current) return;
+    if (arrasto.current.tipo === "editor") props.editor?.soltar();
     arrasto.current = null;
     vistaCongelada.current = null;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
@@ -333,19 +368,7 @@ export function Mesa(props: Props) {
   const aoDobrarClique = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (verTodas || ferramenta !== "nos" || !peca) return;
     const alvo = noCm(e);
-    if (!alvo) return;
-    const raio = raioCm();
-    const sob = pegaSob(peca.nos, alvo, raio, null);
-    if (sob) {
-      if (peca.nos.length <= 3) return;
-      props.aoMudar((p) => apagarNoDaPeca(p, sob.no) ?? p, true);
-      props.aoMarcarNo(null);
-      return;
-    }
-    const traco = tracoSob(peca.nos, alvo, raio);
-    if (!traco) return;
-    props.aoMudar((p) => inserirNoNaPeca(p, traco.no, traco.t), true);
-    props.aoMarcarNo(traco.no + 1);
+    if (alvo) props.editor?.dobrarClique(alvo, raioCm());
   };
 
   // A largura da mesa, para o canvas nascer do tamanho em que aparece.
@@ -382,24 +405,6 @@ export function Mesa(props: Props) {
     caixa.addEventListener("wheel", aoRodar, { passive: false });
     return () => caixa.removeEventListener("wheel", aoRodar);
   }, []);
-
-  // Delete/Backspace apaga o nó marcado — menos quando se está digitando num campo.
-  useEffect(() => {
-    const ouvir = (e: KeyboardEvent) => {
-      if (e.key !== "Delete" && e.key !== "Backspace") return;
-      const foco = document.activeElement as HTMLElement | null;
-      if (foco && (["INPUT", "TEXTAREA", "SELECT"].includes(foco.tagName) || foco.isContentEditable)) return;
-      // `noAtivoValido`, não `noAtivo`: um nó marcado antes de um desfazer
-      // pode não existir mais na lista de agora (ver o comentário em cima de
-      // `noAtivoValido`) — apagar por um índice velho mexeria no nó ERRADO.
-      if (ferramenta !== "nos" || noAtivoValido === null || !peca || peca.nos.length <= 3) return;
-      e.preventDefault();
-      props.aoMudar((p) => apagarNoDaPeca(p, noAtivoValido) ?? p, true);
-      props.aoMarcarNo(null);
-    };
-    window.addEventListener("keydown", ouvir);
-    return () => window.removeEventListener("keydown", ouvir);
-  }, [ferramenta, noAtivoValido, peca, props]);
 
   return (
     <div ref={moldura} className="h-full overflow-auto bg-painel-suave">

@@ -38,6 +38,8 @@ function lerNos(brutos) {
       saida: lerPonto(n.saida) || centro,
       canto: !!n.canto,
       retaDepois: !!n.retaDepois,
+      // O tipo simétrico do Corel: só vale em nó que não é canto. Sem ele, o nó é suave.
+      ...(n.simetrico && !n.canto ? { simetrico: true } : {}),
     });
   }
   return nos;
@@ -63,6 +65,53 @@ function lerMarcacoes(bruta, totalDeNos) {
   };
 }
 
+function lerDeslocamento(d) {
+  const dx = numero(d && d.dx);
+  const dy = numero(d && d.dy);
+  if (dx === null || dy === null || Math.abs(dx) > 100 || Math.abs(dy) > 100) return null;
+  return { dx, dy };
+}
+
+/**
+ * A graduação da peça (ver `motores/graduacao.js`), conferida e limpa. Regra
+ * de nó que não existe, número absurdo, modo desconhecido e tamanho sem nome
+ * saem; o que não confere é descartado, não gravado torto.
+ */
+function lerGraduacao(bruta, totalDeNos) {
+  if (!bruta || typeof bruta !== "object") return null;
+  const jeito = bruta.jeito === "pontos" || bruta.jeito === "porcentagem" ? bruta.jeito : null;
+  if (!jeito) return null;
+  const p = numero(bruta.porcentagem);
+  const regras = [];
+  const vistos = new Set();
+  for (const r of Array.isArray(bruta.regras) ? bruta.regras : []) {
+    const no = Math.floor(numero(r && r.no) ?? -1);
+    if (no < 0 || no >= totalDeNos || vistos.has(no)) continue;
+    if (r.modo === "igual") {
+      const passo = lerDeslocamento(r.passo);
+      if (!passo) continue;
+      regras.push({ no, modo: "igual", passo });
+    } else if (r.modo === "porTamanho") {
+      const deslocamentos = {};
+      for (const [tamanho, d] of Object.entries(r.deslocamentos || {})) {
+        const nome = String(tamanho).trim();
+        const valor = lerDeslocamento(d);
+        if (nome && nome.length <= 20 && valor) deslocamentos[nome] = valor;
+      }
+      regras.push({ no, modo: "porTamanho", deslocamentos });
+    } else {
+      continue;
+    }
+    vistos.add(no);
+  }
+  return {
+    jeito,
+    regras,
+    porcentagem: p !== null && p >= -50 && p <= 50 ? p : 0,
+    perdidos: Math.max(0, Math.floor(numero(bruta.perdidos) || 0)),
+  };
+}
+
 /** Confere e limpa uma peça que chegou da tela. `null` quando não tem contorno. */
 function arrumarPeca(bruta, ordem) {
   const contorno = Array.isArray(bruta && bruta.contorno) ? bruta.contorno : null;
@@ -77,6 +126,7 @@ function arrumarPeca(bruta, ordem) {
 
   const nos = lerNos(bruta.nos);
   const marcacoes = nos ? lerMarcacoes(bruta.marcacoes, nos.length) : null;
+  const graduacao = nos ? lerGraduacao(bruta.graduacao, nos.length) : null;
 
   const papel = String(bruta.papel || "outro").trim().toLowerCase();
   return {
@@ -91,8 +141,35 @@ function arrumarPeca(bruta, ordem) {
     origem: String(bruta.origem || "").trim() || null,
     nos: nos ? JSON.stringify(nos) : null,
     marcacoes: marcacoes ? JSON.stringify(marcacoes) : null,
+    graduacao: graduacao ? JSON.stringify(graduacao) : null,
     ordem,
+    // As linhas com o mesmo grupo são a mesma peça em tamanhos diferentes.
+    grupo: bruta.grupo !== null && bruta.grupo !== "" && Number.isInteger(Number(bruta.grupo)) && Number(bruta.grupo) >= 0
+      ? Number(bruta.grupo) : null,
   };
+}
+
+/**
+ * A grade de tamanhos que chegou da tela. `null` quando não veio nada — é o
+ * sinal para o PUT MANTER a grade guardada: o passo a passo antigo regrava as
+ * peças sem saber de tamanhos com cor, e não pode apagá-los.
+ */
+function arrumarTamanhos(brutos) {
+  if (!Array.isArray(brutos)) return null;
+  const vistos = new Set();
+  let temBase = false;
+  const saida = [];
+  for (const b of brutos) {
+    const nome = String((b && b.nome) || "").trim();
+    if (!nome || vistos.has(nome)) continue;
+    vistos.add(nome);
+    const cru = String((b && b.cor) || "").trim().toLowerCase();
+    const hex = cru.startsWith("#") ? cru : `#${cru}`;
+    const base = !!(b && b.base) && !temBase;
+    if (base) temBase = true;
+    saida.push({ nome, cor: /^#[0-9a-f]{6}$/.test(hex) ? hex : null, ordem: saida.length, base });
+  }
+  return saida;
 }
 
 function lerSituacao(valor) {
@@ -107,7 +184,8 @@ function pecaDoBanco(linha) {
     furos: linha.furos ? JSON.parse(linha.furos) : [],
     nos: linha.nos ? JSON.parse(linha.nos) : null,
     marcacoes: linha.marcacoes ? JSON.parse(linha.marcacoes) : null,
+    graduacao: linha.graduacao ? JSON.parse(linha.graduacao) : null,
   };
 }
 
-module.exports = { PAPEIS, arrumarPeca, lerSituacao, pecaDoBanco };
+module.exports = { PAPEIS, arrumarPeca, arrumarTamanhos, lerSituacao, pecaDoBanco };

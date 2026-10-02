@@ -37,6 +37,34 @@ export interface Marcacoes {
   pontos: Ponto[];
 }
 
+/** Um tamanho da grade, com a cor em que a Audaces o desenha. */
+export interface TamanhoDoMolde {
+  nome: string;
+  /** `#rrggbb`. */
+  cor: string;
+  ordem: number;
+  /** O tamanho de onde os outros foram graduados. Um só por molde. */
+  base: boolean;
+}
+
+/** Quanto um ponto anda, em cm (x para a direita, y para baixo). */
+export interface Deslocamento { dx: number; dy: number }
+
+/** A regra de um nó. Ver `motores/graduacao.js`. */
+export type RegraDeGraduacao =
+  | { no: number; modo: "igual"; passo: Deslocamento }
+  | { no: number; modo: "porTamanho"; deslocamentos: Record<string, Deslocamento> };
+
+/** A graduação de uma peça, guardada na linha do tamanho base. */
+export interface Graduacao {
+  jeito: "pontos" | "porcentagem";
+  regras: RegraDeGraduacao[];
+  /** % por tamanho, no jeito "porcentagem". */
+  porcentagem: number;
+  /** Regras perdidas quando nós do base foram apagados (a tela avisa). */
+  perdidos?: number;
+}
+
 /** Uma peça do molde: o contorno de UMA parte, num tamanho. */
 export interface PecaDoMolde {
   id?: number;
@@ -53,6 +81,10 @@ export interface PecaDoMolde {
   nos?: NoDoRisco[] | null;
   marcacoes?: Marcacoes | null;
   ordem?: number;
+  /** Linhas com o mesmo grupo são a mesma peça em tamanhos diferentes. */
+  grupo?: number | null;
+  /** Só na linha do base: a regra que gera os outros tamanhos. */
+  graduacao?: Graduacao | null;
 }
 
 /** O ajuste de uma arte dentro do contorno. Ver `motores/arteMolde.js`. */
@@ -87,6 +119,8 @@ export interface MoldeNaEstante {
   observacoes: string | null;
   situacao: SituacaoDoMolde;
   tamanhos: string[];
+  /** A cor de cada tamanho que tem cor guardada. */
+  cores: Record<string, string>;
   totalPecas: number;
   /** Quantas peças de tecido saem de UMA peça pronta, num tamanho só. */
   pecasPorUnidade: number;
@@ -99,6 +133,8 @@ export interface Molde {
   observacoes: string | null;
   situacao: SituacaoDoMolde;
   pecas: PecaDoMolde[];
+  /** A grade guardada; vazia num molde que nunca teve cor de tamanho. */
+  tamanhos: TamanhoDoMolde[];
   artes: Estampa[];
 }
 
@@ -107,6 +143,8 @@ export interface MoldeParaGravar {
   observacoes: string;
   situacao?: SituacaoDoMolde;
   pecas: Omit<PecaDoMolde, "id">[];
+  /** Sem o campo, o servidor mantém a grade guardada (o passo a passo antigo). */
+  tamanhos?: TamanhoDoMolde[];
 }
 
 export const moldesApi = {

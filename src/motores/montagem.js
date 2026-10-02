@@ -33,7 +33,10 @@
 
 import { achatarCurvas } from "./ajusteDeCurvas";
 import { areaComSinalDe, margemDeCostura } from "./margemDeCostura";
-import { apagarNo, inserirNoNoTraco, pontoNoTrecho } from "./edicaoDeNos";
+import {
+  apagarNo, apagarNos, girarNos, inserirNoNoTraco, moverNos, pontoNoTrecho, reduzirNos,
+} from "./edicaoDeNos";
+import { graduacaoAoApagarNo, graduacaoAoInserirNo, graduacaoGirada, graduacaoPorMapa } from "./graduacao";
 
 /** Meio centímetro: o pique que a tesoura faz sem pensar. */
 export const PROFUNDIDADE_DO_PIQUE = 0.5;
@@ -126,7 +129,13 @@ export function inserirNoNaPeca(peca, i, t) {
     if (p.no > i) return { ...p, no: p.no + 1 };
     return p.t < t ? { ...p, t: p.t / t } : { ...p, no: i + 1, t: (p.t - t) / (1 - t) };
   });
-  return { ...peca, nos, marcacoes: { ...peca.marcacoes, piques } };
+  return {
+    ...peca,
+    nos,
+    marcacoes: { ...peca.marcacoes, piques },
+    // A regra da graduação é presa ao nó, como o pique ao trecho.
+    ...(peca.graduacao ? { graduacao: graduacaoAoInserirNo(peca.graduacao, i) } : {}),
+  };
 }
 
 /**
@@ -150,7 +159,158 @@ export function apagarNoDaPeca(peca, i) {
     if (no > i) no -= 1;
     return { ...p, no, t };
   });
-  return { ...peca, nos, marcacoes: { ...peca.marcacoes, piques } };
+  return {
+    ...peca,
+    nos,
+    marcacoes: { ...peca.marcacoes, piques },
+    ...(peca.graduacao ? { graduacao: graduacaoAoApagarNo(peca.graduacao, i) } : {}),
+  };
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * VÁRIOS NÓS DE UMA VEZ (o editor estilo Corel)
+ * ---------------------------------------------------------------------------
+ *
+ * O motor (`edicaoDeNos.js`) diz, junto com os nós novos, o `mapa` de cada nó
+ * antigo e quais `trechos` viraram outros. Aqui isso leva junto o que depende
+ * do número do nó: os piques (presos a trecho) e as regras da graduação
+ * (presas a nó).
+ */
+
+/** O comprimento aproximado do trecho `i` (dezesseis passos). */
+function comprimentoDoTrecho(nos, i) {
+  let total = 0;
+  let antes = pontoNoTrecho(nos, i, 0);
+  for (let k = 1; k <= 16; k++) {
+    const q = pontoNoTrecho(nos, i, k / 16);
+    total += Math.hypot(q.x - antes.x, q.y - antes.y);
+    antes = q;
+  }
+  return total;
+}
+
+/** O `t` do trecho `i` em que cai a fração `f` (0 a 1) do comprimento dele. */
+function tNaFracao(nos, i, f) {
+  const PASSOS = 32;
+  const acumulado = [0];
+  let antes = pontoNoTrecho(nos, i, 0);
+  for (let k = 1; k <= PASSOS; k++) {
+    const q = pontoNoTrecho(nos, i, k / PASSOS);
+    acumulado.push(acumulado[k - 1] + Math.hypot(q.x - antes.x, q.y - antes.y));
+    antes = q;
+  }
+  const alvo = f * acumulado[PASSOS];
+  for (let k = 1; k <= PASSOS; k++) {
+    if (acumulado[k] >= alvo) {
+      const pedaco = acumulado[k] - acumulado[k - 1];
+      return (k - 1 + (pedaco > 0 ? (alvo - acumulado[k - 1]) / pedaco : 0)) / PASSOS;
+    }
+  }
+  return 1;
+}
+
+/**
+ * Leva os piques para os trechos novos. Trecho que não mudou: o mesmo `t`, no
+ * número novo. Trecho que virou outro(s): a mesma FRAÇÃO DO COMPRIMENTO do
+ * pedaço — o pique fica no mesmo lugar da costura enquanto o pedaço não muda
+ * muito de forma.
+ */
+function piquesNosTrechosNovos(piques, velhos, novos, mapa, trechos) {
+  const pedacoDe = new Map();
+  for (const p of trechos) for (const s of p.velhos) pedacoDe.set(s, p);
+  const soma = (lista) => lista.reduce((a, b) => a + b, 0);
+  return piques.filter((p) => p.no < velhos.length).map((p) => {
+    const pedaco = pedacoDe.get(p.no);
+    if (!pedaco) return { ...p, no: mapa[p.no] };
+    const antes = pedaco.velhos.map((s) => comprimentoDoTrecho(velhos, s));
+    const k = pedaco.velhos.indexOf(p.no);
+    const fracao = (soma(antes.slice(0, k)) + p.t * antes[k]) / (soma(antes) || 1);
+    const depois = pedaco.novos.map((s) => comprimentoDoTrecho(novos, s));
+    let resto = fracao * soma(depois);
+    for (let q = 0; q < pedaco.novos.length; q++) {
+      if (resto <= depois[q] || q === pedaco.novos.length - 1) {
+        return { ...p, no: pedaco.novos[q], t: tNaFracao(novos, pedaco.novos[q], depois[q] > 0 ? Math.min(1, resto / depois[q]) : 0) };
+      }
+      resto -= depois[q];
+    }
+    return p;
+  });
+}
+
+/** A peça com o que saiu de `apagarNos`/`reduzirNos`: piques e regras da graduação vão junto. */
+function comNosNovos(peca, r) {
+  return {
+    ...peca,
+    nos: r.nos,
+    marcacoes: { ...peca.marcacoes, piques: piquesNosTrechosNovos(peca.marcacoes.piques, peca.nos, r.nos, r.mapa, r.trechos) },
+    ...(peca.graduacao ? { graduacao: graduacaoPorMapa(peca.graduacao, r.mapa) } : {}),
+  };
+}
+
+/** Apaga vários nós, refazendo o pedaço (ver `apagarNos`). `{ peca }` ou `{ erro }`. */
+export function apagarNosDaPeca(peca, indices) {
+  const r = apagarNos(peca.nos, indices);
+  return r.erro ? { erro: r.erro } : { peca: comNosNovos(peca, r) };
+}
+
+/**
+ * Reduz os nós da peça (ver `reduzirNos`). Nó com regra de graduação é
+ * âncora: é um ponto que a pessoa escolheu, e tirá-lo perderia a regra.
+ * `{ peca, antes, depois }` ou `{ erro }`.
+ */
+export function reduzirNosDaPeca(peca, indices, folga) {
+  const comRegra = (peca.graduacao?.regras ?? []).map((r) => r.no);
+  const r = reduzirNos(peca.nos, indices, folga, comRegra);
+  return r.erro ? { erro: r.erro } : { peca: comNosNovos(peca, r), antes: r.antes, depois: r.depois };
+}
+
+/**
+ * Um nó em cada ponto `{ no, t }` — um por trecho —, com piques e regras
+ * junto: um `inserirNoNaPeca` por vez, do trecho de número maior para o menor.
+ */
+export function porNosDaPeca(peca, pontos) {
+  const porTrecho = new Map();
+  for (const p of pontos) if (p.no >= 0 && p.no < peca.nos.length && !porTrecho.has(p.no)) porTrecho.set(p.no, p.t);
+  let atual = peca;
+  for (const [no, t] of [...porTrecho].sort((x, y) => y[0] - x[0])) atual = inserirNoNaPeca(atual, no, t);
+  return atual;
+}
+
+/**
+ * Gira a peça em volta do centro da caixa. Nós, pontos, fio e as regras da
+ * graduação vão juntos; os piques acompanham sozinhos, porque são presos ao
+ * trecho (`no`, `t`). O canto de cima à esquerda da caixa volta para onde
+ * estava: a peça não pula na mesa, e 4× 90° devolve a original.
+ *
+ * O fio guarda a direção como `(sen a, cos a)`; girar o desenho de θ leva essa
+ * direção para `(sen(a−θ), cos(a−θ))`, daí o `a − θ`.
+ */
+export function girarPeca(peca, graus) {
+  const antes = caixaDe(achatarCurvas(peca.nos));
+  const centro = { x: antes.minX + antes.largura / 2, y: antes.minY + antes.altura / 2 };
+  const girados = girarNos(peca.nos, graus, centro);
+  const depois = caixaDe(achatarCurvas(girados));
+  const dx = antes.minX - depois.minX;
+  const dy = antes.minY - depois.minY;
+  const nos = moverNos(girados, girados.map((_, i) => i), dx, dy);
+  const leva = (p) => {
+    const [q] = girarNos([{ x: p.x, y: p.y, entrada: p, saida: p }], graus, centro);
+    return { x: q.x + dx, y: q.y + dy };
+  };
+  let angulo = peca.marcacoes.fio.angulo - graus;
+  angulo = ((angulo + 540) % 360) - 180;
+  if (Math.abs(angulo + 180) < 1e-9) angulo = 180;
+  return {
+    ...peca,
+    nos,
+    marcacoes: {
+      ...peca.marcacoes,
+      pontos: peca.marcacoes.pontos.map((p) => ({ ...p, ...leva(p) })),
+      fio: { ...peca.marcacoes.fio, ...leva(peca.marcacoes.fio), angulo },
+    },
+    ...(peca.graduacao ? { graduacao: graduacaoGirada(peca.graduacao, graus) } : {}),
+  };
 }
 
 /**

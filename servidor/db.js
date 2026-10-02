@@ -514,6 +514,26 @@ garantirColuna("moldes", "situacao", "TEXT NOT NULL DEFAULT 'pronto'");
 garantirColuna("molde_pecas", "nos", "TEXT");
 garantirColuna("molde_pecas", "marcacoes", "TEXT");
 
+// Importar da Audaces (docs/superpowers/specs/2026-09-28-importar-da-audaces-design.md):
+// a grade de tamanhos do molde, com a cor em que a Audaces desenha cada um, e
+// o GRUPO de cada peça — as linhas com o mesmo grupo são a mesma peça em
+// tamanhos diferentes. Molde sem linhas aqui continua valendo: os tamanhos
+// saem das peças, como sempre.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS molde_tamanhos (
+    molde_id INTEGER NOT NULL REFERENCES moldes(id) ON DELETE CASCADE,
+    nome TEXT NOT NULL,
+    cor TEXT,
+    ordem INTEGER NOT NULL DEFAULT 0,
+    base INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (molde_id, nome)
+  );
+`);
+garantirColuna("molde_pecas", "grupo", "INTEGER");
+// A graduação da peça (docs/superpowers/specs/2026-09-29-graduacao-design.md),
+// só na linha do tamanho base.
+garantirColuna("molde_pecas", "graduacao", "TEXT");
+
 db.pragma("optimize");
 
 module.exports = db;

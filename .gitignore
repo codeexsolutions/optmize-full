@@ -102,3 +102,5 @@ esp/components/**/.component_hash
 # antigo, nao tem como escorregar para o historico por descuido.
 estatico/ia/
 dist/ia/
+
+bancada/audaces/ver/

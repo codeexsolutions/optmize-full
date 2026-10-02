@@ -10,7 +10,7 @@
  */
 
 export type Ponto = { x: number; y: number };
-export type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean };
+export type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean; simetrico?: boolean };
 
 /** O caminho fechado dos nós. Só traça o caminho: a cor e a grossura são de quem chama. */
 export function tracarCaminho(ctx: CanvasRenderingContext2D, nos: No[], emTela: (p: Ponto) => Ponto) {
@@ -34,18 +34,21 @@ export function tracarCaminho(ctx: CanvasRenderingContext2D, nos: No[], emTela: 
 }
 
 /**
- * As alças do nó ativo (por baixo) e os nós (por cima).
+ * As alças dos nós selecionados (por baixo) e os nós (por cima).
  *
  * Canto é quadrado, curva é redondo: canto é ponto de costura, e tem que dar
- * para reconhecer sem clicar. O nó marcado cresce, muda de cor e ganha halo —
- * é ele que o Delete apaga, então dá para ver o que vai embora antes.
+ * para reconhecer sem clicar. O nó selecionado cresce, muda de cor e ganha
+ * halo — é ele que o Delete apaga, então dá para ver o que vai embora antes.
+ * `selecionados`: um índice, um conjunto (o editor estilo Corel) ou `null`.
  */
 export function desenharNos(
-  ctx: CanvasRenderingContext2D, nos: No[], noAtivo: number | null, emTela: (p: Ponto) => Ponto,
+  ctx: CanvasRenderingContext2D, nos: No[], selecionados: ReadonlySet<number> | number | null, emTela: (p: Ponto) => Ponto,
 ) {
-  if (noAtivo !== null && nos[noAtivo]) {
-    const n = nos[noAtivo]!;
-    const anterior = nos[(noAtivo - 1 + nos.length) % nos.length]!;
+  const sel: ReadonlySet<number> = selecionados === null ? new Set() : typeof selecionados === "number" ? new Set([selecionados]) : selecionados;
+  for (const i of sel) {
+    const n = nos[i];
+    if (!n) continue;
+    const anterior = nos[(i - 1 + nos.length) % nos.length]!;
     const centro = emTela(n);
     for (const parte of ["entrada", "saida"] as const) {
       if (parte === "saida" && n.retaDepois) continue;
@@ -68,7 +71,7 @@ export function desenharNos(
 
   nos.forEach((n, i) => {
     const c = emTela(n);
-    const marcado = i === noAtivo;
+    const marcado = sel.has(i);
     if (marcado) {
       ctx.beginPath();
       ctx.arc(c.x, c.y, 9, 0, Math.PI * 2);
@@ -85,4 +88,54 @@ export function desenharNos(
     ctx.fill();
     ctx.stroke();
   });
+}
+
+/** O retângulo de seleção, tracejado, com um véu azul por dentro. */
+export function desenharRetangulo(ctx: CanvasRenderingContext2D, de: Ponto, ate: Ponto, emTela: (p: Ponto) => Ponto) {
+  const a = emTela(de);
+  const b = emTela(ate);
+  ctx.save();
+  ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = "#4d9dff";
+  ctx.lineWidth = 1.5;
+  ctx.fillStyle = "rgba(77, 157, 255, 0.08)";
+  ctx.beginPath();
+  ctx.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Os pontos de graduação (nós com regra) ganham um losango amarelo; o nó cuja
+ * regra está aberta no bloco ganha um anel. Desenhado por cima dos nós.
+ */
+export function desenharPontosDeGraduacao(
+  ctx: CanvasRenderingContext2D, nos: No[], comRegra: readonly number[], marcado: number | null, emTela: (p: Ponto) => Ponto,
+) {
+  for (const i of comRegra) {
+    const n = nos[i];
+    if (!n) continue;
+    const c = emTela(n);
+    const r = 7;
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y - r);
+    ctx.lineTo(c.x + r, c.y);
+    ctx.lineTo(c.x, c.y + r);
+    ctx.lineTo(c.x - r, c.y);
+    ctx.closePath();
+    ctx.fillStyle = "#f5c518";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(10, 14, 16, 0.95)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  if (marcado !== null && nos[marcado]) {
+    const c = emTela(nos[marcado]!);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 11, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ff7a1a";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  }
 }

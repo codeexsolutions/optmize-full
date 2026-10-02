@@ -5,8 +5,9 @@
  *
  * Larga-se a foto dos moldes na mesa (PNG, BMP, JPG), o sistema acha a volta
  * por fora de CADA peça e desenha os riscos em cima da foto. A pessoa corrige
- * o que quiser — arrastando nós e alças de curva —, mede UMA peça com a fita e
- * diz quanto deu; aí todas ganham centímetro.
+ * o que quiser — com o editor estilo Corel, o mesmo da Montagem —, mede as peças com a fita e
+ * diz quanto deu cada uma. Cada peça medida fica com a sua medida; a que ficar
+ * sem medida segue a média das medidas, então medir uma só ainda basta.
  *
  * Aqui só tem tela. Quem acha os contornos é `motores/moldeDaImagem.js` e quem
  * os transforma em curva é `motores/ajusteDeCurvas.js`, do mesmo jeito que a
@@ -80,16 +81,24 @@ import {
 } from "../motores/moldeDaImagem";
 import { useErroEmAlerta } from "../casca/Alerta";
 import {
-  alternarLado as alternarLadoDosNos, apagarNo as apagarNoDosNos, clonarNos, inserirNoNoTraco,
-  moverPega, pegaSob, tracoSob,
+  apagarNos as apagarNosDoRisco, clonarNos, pegaSob, porNosNoTraco, reduzirNos, tracoSob,
 } from "../motores/edicaoDeNos";
-import { desenharNos, tracarCaminho } from "./risco/desenhoDeNos";
+import { desenharNos, desenharRetangulo, tracarCaminho } from "./risco/desenhoDeNos";
+import { BarraDosNos } from "./risco/BarraDosNos";
+import { useEditorDeNos, type AlvoDoEditor } from "./risco/useEditorDeNos";
 
 type Lado = "largura" | "altura";
+/** A medida de uma peça como a pessoa digitou: o lado e o texto do campo. */
+type MedidaDaPeca = { lado: Lado; texto: string };
+const MEDIDA_VAZIA: MedidaDaPeca = { lado: "altura", texto: "" };
+
+/** O número do campo de medida (vírgula vale ponto); `null` se não é uma medida. */
+function lerCm(texto: string): number | null {
+  const n = Number(texto.trim().replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 type Ponto = { x: number; y: number };
 type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean };
-/** O que o ponteiro pegou: um nó, ou uma das alças dele. */
-type Pega = { peca: number; no: number; parte: "no" | "entrada" | "saida" };
 
 /** As cores dos riscos na prévia, para dar para falar "a peça verde". */
 const CORES = ["#ff7a1a", "#25c2a0", "#4d9dff", "#f45d9c", "#f5c518", "#9d7bff"];
@@ -117,11 +126,10 @@ export function Digitalizar() {
   const [edicao, setEdicao] = useState<No[][]>([]);
   const [desfazer, setDesfazer] = useState<No[][][]>([]);
 
-  const [medida, setMedida] = useState("");
-  const [lado, setLado] = useState<Lado>("altura");
+  /** A medida de cada peça, na ordem de `edicao`. Peça sem entrada = sem medida. */
+  const [medidas, setMedidas] = useState<MedidaDaPeca[]>([]);
+  /** A peça escolhida: destacada na foto, com os nós à mostra. */
   const [qual, setQual] = useState(0);
-  /** O nó cujas alças estão à mostra. */
-  const [noAtivo, setNoAtivo] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [criando, setCriando] = useState(false);
   /** Um arquivo sendo arrastado por cima do cartão. */
@@ -130,8 +138,6 @@ export function Digitalizar() {
   const entrada = useRef<HTMLInputElement>(null);
   const tela = useRef<HTMLCanvasElement>(null);
   const moldura = useRef<HTMLDivElement>(null);
-  /** O que está sendo arrastado agora. `null` quando nada. */
-  const pegando = useRef<{ peca: number; no: number; parte: "no" | "entrada" | "saida" } | null>(null);
 
   // A caixa e a área saem da curva ACHATADA: mover uma alça muda a barriga da
   // curva sem mexer em nó nenhum, e a medida da peça tem que acompanhar isso.
@@ -143,8 +149,16 @@ export function Digitalizar() {
     [edicao],
   );
 
-  const cm = Number(String(medida).replace(",", "."));
-  const emCm = pecas.length > 0 && cm > 0 ? riscosEmCm(pecas, qual, lado, cm) : null;
+  const emCm = pecas.length > 0
+    ? riscosEmCm(pecas, pecas.map((_, i) => {
+      const m = medidas[i];
+      const cm = m ? lerCm(m.texto) : null;
+      return m && cm !== null ? { lado: m.lado, cm } : null;
+    }))
+    : null;
+
+  const mudarMedida = (i: number, parcial: Partial<MedidaDaPeca>) =>
+    setMedidas((antes) => edicao.map((_, k) => (k === i ? { ...(antes[k] ?? MEDIDA_VAZIA), ...parcial } : antes[k] ?? MEDIDA_VAZIA)));
 
   const clonar = (fonte: No[][]): No[][] => fonte.map(clonarNos);
 
@@ -160,6 +174,47 @@ export function Digitalizar() {
       return pilha.slice(0, -1);
     });
   }, []);
+
+  /*
+   * O editor estilo Corel na peça escolhida (`risco/useEditorDeNos.ts`). As
+   * setas e o Reduzir andam em milímetros pela escala da peça — a medida dela,
+   * ou a média (ver a medida por peça); sem medida nenhuma ainda, em células.
+   */
+  const escalaDaPeca: number | null = emCm?.pecas[qual]?.porCelula ?? null;
+  const naEscolhida = (mudar: (nos: No[]) => No[]) =>
+    setEdicao((antes) => antes.map((c, p) => (p === qual ? mudar(c) : c)));
+  const alvoDoEditor: AlvoDoEditor = {
+    nos: edicao[qual] ?? [],
+    mudarNos: (mudar, lembrarAntes) => {
+      if (lembrarAntes) lembrar();
+      naEscolhida(mudar);
+    },
+    apagarNos: (indices) => {
+      const r = apagarNosDoRisco(edicao[qual] ?? [], indices) as { erro: string } | { nos: No[] };
+      if ("erro" in r) return r.erro;
+      lembrar();
+      naEscolhida(() => r.nos);
+      return null;
+    },
+    porNos: (pontos) => {
+      lembrar();
+      naEscolhida((nos) => porNosNoTraco(nos, pontos));
+    },
+    retrato: () => edicao[qual] ?? [],
+    reduzir: (retrato, indices, folga) => {
+      const r = reduzirNos(retrato as No[], indices, folga, []) as { erro: string } | { nos: No[]; antes: number; depois: number };
+      if ("erro" in r) return { erro: r.erro };
+      return { antes: r.antes, depois: r.depois, aplicar: () => naEscolhida(() => r.nos) };
+    },
+    voltar: (retrato) => naEscolhida(() => retrato as No[]),
+    lembrar,
+    passos: escalaDaPeca ? { curto: 0.1 / escalaDaPeca, longo: 1 / escalaDaPeca } : { curto: 1, longo: 10 },
+    folgaEmUnidades: (valor) => (escalaDaPeca ? valor / 10 / escalaDaPeca : valor),
+    comMedida: escalaDaPeca !== null,
+  };
+  const editor = useEditorDeNos(alvoDoEditor, qual);
+  const editorAtual = useRef(editor);
+  editorAtual.current = editor;
 
   /**
    * Reduz a foto à grade e procura os riscos.
@@ -202,8 +257,10 @@ export function Digitalizar() {
           setAchado({ ...saida, cols, rows });
           setEdicao(clonar(saida.riscos.map((r: any) => r.nos)));
           setDesfazer([]);
+          // O Refazer acha as mesmas peças, na mesma ordem: as medidas ficam. Se
+          // o número de peças mudou, elas não valem mais para peça nenhuma.
+          setMedidas((antes) => (antes.length === saida.riscos.length ? antes : []));
           setQual(0);
-          setNoAtivo(null);
         }
       } catch (e: any) {
         setAchado(null);
@@ -225,7 +282,7 @@ export function Digitalizar() {
     setAchado(null);
     setEdicao([]);
     setDesfazer([]);
-    setMedida("");
+    setMedidas([]);
     setZoom(1);
     setNome(file.name.replace(/\.[^.]+$/, ""));
     try {
@@ -286,122 +343,50 @@ export function Digitalizar() {
     return caixa.width > 0 ? achado.cols / caixa.width : 1;
   };
 
-  /** O que está debaixo do ponteiro: alça do nó ativo, nó de qualquer peça, ou nada. */
-  const oQueEstaSob = (alvo: Ponto): Pega | null => {
-    const raio = PEGA * gradePorPixel();
-    let melhor: (Pega & { distancia: number }) | null = null;
-    edicao.forEach((nos, p) => {
-      const sob = pegaSob(nos, alvo, raio, p === qual ? noAtivo : null);
-      if (!sob) return;
-      // Alça ganha sempre (ver o motor); entre nós, o mais perto.
-      if (sob.parte !== "no") {
-        melhor = { peca: p, no: sob.no, parte: sob.parte as Pega["parte"], distancia: -1 };
-        return;
-      }
-      if (!melhor || sob.distancia < melhor.distancia) melhor = { peca: p, no: sob.no, parte: "no", distancia: sob.distancia };
-    });
+  /** A peça (outra que não a escolhida) com nó ou traço debaixo do ponteiro. */
+  const outraPecaSob = (alvo: Ponto, raio: number): number | null => {
+    let melhor: number | null = null;
+    let menor = Infinity;
+    for (let p = 0; p < edicao.length; p++) {
+      if (p === qual) continue;
+      const nos = edicao[p]!;
+      const sob = pegaSob(nos, alvo, raio, null) ?? tracoSob(nos, alvo, raio);
+      if (sob && sob.distancia < menor) { menor = sob.distancia; melhor = p; }
+    }
     return melhor;
   };
 
-  /** Em que trecho de curva o ponteiro caiu, e em que `t`. */
-  const noTracoSob = (alvo: Ponto): { peca: number; no: number; t: number } | null => {
-    const raio = PEGA * gradePorPixel();
-    let melhor: { peca: number; no: number; t: number; distancia: number } | null = null;
-    edicao.forEach((nos, p) => {
-      const sob = tracoSob(nos, alvo, raio);
-      if (sob && (!melhor || sob.distancia < melhor.distancia)) melhor = { peca: p, ...sob };
-    });
-    return melhor;
-  };
-
+  /**
+   * O aperto. A peça escolhida tem a vez (o editor decide: alça, nó, traço ou
+   * retângulo); fora dela, um nó ou traço de outra peça troca de peça, e a
+   * seleção começa de novo nela.
+   */
   const aoApertar = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const alvo = naGrade(e);
     if (!alvo) return;
-    const sob = oQueEstaSob(alvo);
-    if (sob) {
-      setQual(sob.peca);
-      if (sob.parte === "no") setNoAtivo(sob.no);
-      lembrar();
-      pegando.current = sob;
-      e.currentTarget.setPointerCapture(e.pointerId);
-      return;
+    const raio = PEGA * gradePorPixel();
+    const escolhida = edicao[qual] ?? [];
+    if (!pegaSob(escolhida, alvo, raio, editor.selecionados) && !tracoSob(escolhida, alvo, raio)) {
+      const outra = outraPecaSob(alvo, raio);
+      if (outra !== null) { setQual(outra); return; }
     }
-    // Fora de nó e de alça: só escolhe a peça, se clicou perto do traço de uma.
-    const noTraco = noTracoSob(alvo);
-    if (noTraco) {
-      setQual(noTraco.peca);
-      setNoAtivo(null);
-    }
+    if (editor.apertar(alvo, raio, e.shiftKey)) e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const aoMover = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const pega = pegando.current;
-    if (!pega) return;
     const alvo = naGrade(e);
-    if (!alvo) return;
-    setEdicao((antes) => antes.map((nos, p) => (p === pega.peca ? moverPega(nos, pega, alvo) : nos)));
+    if (alvo) editor.mover(alvo);
   };
 
   const aoSoltar = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (pegando.current) {
-      pegando.current = null;
-      e.currentTarget.releasePointerCapture?.(e.pointerId);
-    }
+    editor.soltar();
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
   };
 
-  /**
-   * Apaga um nó.
-   *
-   * Num lugar só porque há dois caminhos até aqui — a tecla Delete e os dois
-   * cliques —, e os dois precisam do mesmo piso de três nós: com dois, não
-   * existe contorno para fechar.
-   */
-  const apagarNo = useCallback((peca: number, no: number) => {
-    const contorno = edicao[peca];
-    const novo = contorno ? apagarNoDosNos(contorno, no) : null;
-    if (!novo) {
-      setErro("A peça ficaria com menos de três nós; não dá para apagar mais.");
-      return;
-    }
-    lembrar();
-    setNoAtivo(null);
-    setEdicao((antes) => antes.map((c, p) => (p === peca ? novo : c)));
-  }, [edicao, lembrar]);
-
-  /**
-   * Troca um lado do nó entre reta e curva.
-   *
-   * `lado` é visto do nó: "depois" é o trecho até o nó seguinte, "antes" é o
-   * que vem do anterior. Quem guarda a informação é sempre o nó que COMEÇA o
-   * trecho, então mexer no lado "antes" mexe no nó anterior — é por isso que
-   * esta função existe em vez de a tela alterar o campo direto.
-   *
-   * Virando curva, as alças nascem a um terço do caminho, que é o palpite que o
-   * próprio ajuste usa: a curva começa idêntica à reta e só muda quando alguém
-   * arrasta. Virando reta, as alças desabam em cima dos nós.
-   */
-  const alternarLado = useCallback((peca: number, no: number, lado: "antes" | "depois") => {
-    lembrar();
-    setEdicao((antes) => antes.map((c, pp) => (pp === peca ? alternarLadoDosNos(c, no, lado) : c)));
-  }, [lembrar]);
-
-  /**
-   * Dois cliques: em cima de um nó, apaga; em cima do traço, põe um nó novo
-   * ali, sem mudar o desenho (ver `inserirNoNoTraco`, no motor).
-   */
+  /** Dois cliques: num nó, apaga; no traço, põe um nó ali sem mudar o desenho. */
   const aoDobrarClique = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const alvo = naGrade(e);
-    if (!alvo) return;
-    const sob = oQueEstaSob(alvo);
-    if (sob && sob.parte === "no") {
-      apagarNo(sob.peca, sob.no);
-      return;
-    }
-    const noTraco = noTracoSob(alvo);
-    if (!noTraco) return;
-    lembrar();
-    setEdicao((antes) => antes.map((nos, p) => (p === noTraco.peca ? inserirNoNoTraco(nos, noTraco.no, noTraco.t) : nos)));
-    setNoAtivo(noTraco.no + 1);
+    if (alvo) editor.dobrarClique(alvo, PEGA * gradePorPixel());
   };
 
   /**
@@ -441,36 +426,23 @@ export function Digitalizar() {
   }, []);
 
   /*
-   * O teclado: Ctrl+Z desfaz, Delete e Backspace apagam o nó marcado.
-   *
-   * A conferência do campo em foco não é frescura: o Backspace é a tecla que a
-   * pessoa usa para corrigir a MEDIDA, e sem isto apagar um dígito errado
-   * apagaria também um nó do molde — um estrago silencioso, porque o traço
-   * muda longe de onde ela está olhando.
+   * O teclado: Ctrl+Z desfaz; Delete, setas, +, Ctrl+A e Esc são do editor
+   * (`teclar`), que não mexe em nada enquanto se digita num campo — o
+   * Backspace é a tecla que a pessoa usa para corrigir a MEDIDA, e sem isso
+   * apagar um dígito errado apagaria também um nó do molde.
    */
   useEffect(() => {
-    const digitando = () => {
-      const foco = document.activeElement;
-      if (!foco) return false;
-      const etiqueta = foco.tagName;
-      return etiqueta === "INPUT" || etiqueta === "TEXTAREA" || etiqueta === "SELECT"
-        || (foco as HTMLElement).isContentEditable;
-    };
     const ouvir = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         voltarUmPasso();
         return;
       }
-      if (e.key !== "Delete" && e.key !== "Backspace") return;
-      if (digitando()) return;
-      if (noAtivo === null) return;
-      e.preventDefault();
-      apagarNo(qual, noAtivo);
+      editorAtual.current.teclar(e);
     };
     window.addEventListener("keydown", ouvir);
     return () => window.removeEventListener("keydown", ouvir);
-  }, [voltarUmPasso, apagarNo, qual, noAtivo]);
+  }, [voltarUmPasso]);
 
   // A prévia: a foto por baixo, os riscos por cima, os nós da peça escolhida
   // por cima de tudo. É a conferência que a pessoa faz antes de confiar em
@@ -525,8 +497,9 @@ export function Digitalizar() {
     const escolhida = edicao[qual];
     if (!escolhida) return;
 
-    desenharNos(ctx, escolhida, noAtivo, emTela);
-  }, [imagem, achado, edicao, qual, noAtivo]);
+    desenharNos(ctx, escolhida, editor.selecionados, emTela);
+    if (editor.retangulo) desenharRetangulo(ctx, editor.retangulo.de, editor.retangulo.ate, emTela);
+  }, [imagem, achado, edicao, qual, editor.selecionados, editor.retangulo]);
 
   /*
    * O risco vira um molde-RASCUNHO na estante, e a tela passa para a
@@ -572,19 +545,6 @@ export function Digitalizar() {
   };
 
   const nosDaEscolhida = edicao[qual]?.length ?? 0;
-
-  /*
-   * Como estão os dois lados do nó marcado.
-   *
-   * O lado que SAI é o `retaDepois` do próprio nó; o que CHEGA é o do nó
-   * anterior — quem guarda a informação é sempre quem começa o trecho.
-   */
-  const ladosDoNo = (() => {
-    const contorno = edicao[qual];
-    if (!contorno || noAtivo === null || !contorno[noAtivo]) return null;
-    const anterior = contorno[(noAtivo - 1 + contorno.length) % contorno.length]!;
-    return { antes: !!anterior.retaDepois, depois: !!contorno[noAtivo]!.retaDepois };
-  })();
 
   return (
     <>
@@ -673,37 +633,18 @@ export function Digitalizar() {
                 <div className="rounded-[10px] border border-linha bg-painel-suave p-3">
                   <p className="mt-0 mb-1 text-[0.85rem] font-semibold">Ajustar o traço à mão</p>
                   <p className="mt-0 mb-2 text-[0.8rem] text-tinta-fraca">
-                    A <strong>peça {qual + 1}</strong> tem {nosDaEscolhida} nós.{" "}
-                    <strong>Arraste</strong> um nó para mover; clique nele e arraste as{" "}
-                    <span className="text-[#4d9dff]">alças azuis</span> para mexer na curva.{" "}
-                    <strong>Clique</strong> num nó para marcá-lo e aperte{" "}
-                    <strong>Delete</strong> ou <strong>Backspace</strong> para apagar — ou{" "}
-                    <strong>dois cliques</strong> em cima dele. Dois cliques no traço põem um nó
-                    novo sem mudar o desenho. Cada lado do nó pode ser <strong>reta</strong> ou{" "}
-                    <strong>curva</strong>, e os botões acima trocam um sem mexer no outro — é o
-                    nó em que a lateral reta encontra a curva do gancho. Nó{" "}
-                    <strong>redondo</strong> é curva, <strong>quadrado</strong> é canto.{" "}
+                    A <strong>peça {qual + 1}</strong> tem {nosDaEscolhida} nós. É o editor do Corel:{" "}
+                    <strong>clique</strong> num nó para selecionar, <strong>Shift</strong> para somar,{" "}
+                    <strong>arraste numa área vazia</strong> para selecionar pelo retângulo; arraste os
+                    nós, as <span className="text-[#4d9dff]">alças azuis</span> ou o próprio{" "}
+                    <strong>traço</strong> para dobrar a curva; <strong>setas</strong> empurram (Shift, dez vezes
+                    mais); <strong>Delete</strong> apaga; <strong>dois cliques</strong> no traço põem um nó.
+                    Nó <strong>redondo</strong> é curva, <strong>quadrado</strong> é canto.{" "}
                     <strong>Roda do mouse</strong> aproxima onde o ponteiro está.
                   </p>
-                  {ladosDoNo && (
-                    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-[8px] border border-linha bg-painel p-2">
-                      <span className="text-[0.8rem] font-semibold">Nó marcado:</span>
-                      {([
-                        ["antes", "lado que chega", ladosDoNo.antes],
-                        ["depois", "lado que sai", ladosDoNo.depois],
-                      ] as const).map(([lado, rotulo, ehReta]) => (
-                        <button
-                          key={lado}
-                          type="button"
-                          className="btn secondary"
-                          onClick={() => noAtivo !== null && alternarLado(qual, noAtivo, lado)}
-                          title={`Trocar o ${rotulo} entre reta e curva`}
-                        >
-                          {rotulo}: <strong className="ml-1">{ehReta ? "reta" : "curva"}</strong>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="mb-2 overflow-hidden rounded-[8px] border border-linha bg-painel">
+                    <BarraDosNos editor={editor} />
+                  </div>
 
                   <div className="flex flex-wrap items-center gap-3">
                     <button
@@ -739,61 +680,75 @@ export function Digitalizar() {
                   </span>
                 </label>
 
-                {/* ------------------------------------------------ a medida */}
+                {/* ------------------------------------------------ as medidas */}
                 <div className="rounded-[10px] border border-linha bg-painel-suave p-3">
                   <p className="mt-0 mb-1 text-[0.85rem] font-semibold">
-                    Meça UMA peça com a fita e diga quanto deu
+                    Meça as peças com a fita e diga quanto deu cada uma
                   </p>
                   <p className="mt-0 mb-2 text-[0.8rem] text-tinta-fraca">
-                    A foto inteira tem uma escala só, então uma medida basta: as outras peças saem
-                    junto. Convém medir a maior — erro de meio centímetro pesa menos nela.
+                    Cada peça medida fica com a sua medida. A que ficar sem medida segue a média das
+                    medidas — numa foto tirada reta de cima, medir uma já basta.
                   </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={qual}
-                      onChange={(e) => { setQual(Number(e.target.value)); setNoAtivo(null); }}
-                      className="w-auto!"
-                      aria-label="Qual peça você mediu"
-                    >
-                      {edicao.map((_, i) => (
-                        <option key={i} value={i}>Peça {i + 1}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={lado}
-                      onChange={(e) => setLado(e.target.value as Lado)}
-                      className="w-auto!"
-                      aria-label="Qual lado você mediu"
-                    >
-                      <option value="altura">altura</option>
-                      <option value="largura">largura</option>
-                    </select>
-                    <input
-                      type="text" inputMode="decimal" value={medida} placeholder="0,0"
-                      onChange={(e) => setMedida(e.target.value)}
-                      className="w-24!" aria-label="Medida em centímetros"
-                    />
-                    <span className="text-[0.85rem] text-tinta-fraca">cm</span>
-                  </div>
-
-                  {emCm ? (
-                    <ul className="mt-2.5 mb-0 grid list-none gap-1 p-0 text-[0.82rem] sm:grid-cols-2">
-                      {emCm.pecas.map((p: any, i: number) => (
-                        <li key={i} className="flex items-center gap-2">
-                          <span
-                            className="size-2.5 shrink-0 rounded-full"
-                            style={{ background: corDa(i) }}
+                  <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[0.82rem]">
+                    {edicao.map((_, i) => {
+                      const m = medidas[i] ?? MEDIDA_VAZIA;
+                      const p = emCm?.pecas[i];
+                      const escolher = () => setQual(i);
+                      return (
+                        <li
+                          key={i}
+                          className={`flex flex-wrap items-center gap-2 rounded-[8px] px-1.5 py-1 ${i === qual ? "bg-[var(--accent-soft)]" : ""}`}
+                        >
+                          <button type="button" className="flex items-center gap-2" onClick={escolher} title="Ver esta peça na foto">
+                            <span className="size-2.5 shrink-0 rounded-full" style={{ background: corDa(i) }} />
+                            <span className={i === qual ? "font-semibold text-ambar" : ""}>Peça {i + 1}</span>
+                          </button>
+                          <select
+                            value={m.lado}
+                            onChange={(e) => mudarMedida(i, { lado: e.target.value as Lado })}
+                            onFocus={escolher}
+                            className="w-auto!"
+                            aria-label={`Lado medido da peça ${i + 1}`}
+                          >
+                            <option value="altura">altura</option>
+                            <option value="largura">largura</option>
+                          </select>
+                          <input
+                            type="text" inputMode="decimal" value={m.texto} placeholder="0,0"
+                            onChange={(e) => mudarMedida(i, { texto: e.target.value })}
+                            onFocus={escolher}
+                            className="w-20!" aria-label={`Medida da peça ${i + 1} em centímetros`}
+                            aria-invalid={m.texto.trim() !== "" && lerCm(m.texto) === null}
                           />
-                          <span className={i === qual ? "font-semibold text-ambar" : ""}>
-                            Peça {i + 1}: {formatarCm(p.largura)} × {formatarCm(p.altura)}
-                          </span>
+                          <span className="text-tinta-fraca">cm</span>
+                          {p && (
+                            <span className={p.medida ? "" : "text-tinta-fraca"}>
+                              → {formatarCm(p.largura)} × {formatarCm(p.altura)}{p.medida ? "" : " (pela média)"}
+                            </span>
+                          )}
                         </li>
-                      ))}
-                    </ul>
-                  ) : (
+                      );
+                    })}
+                  </ul>
+
+                  {emCm && emCm.discordantes.length > 0 && (() => {
+                    // Numa foto só, as escalas batem: medida que foge é número
+                    // errado, ou altura no lugar da largura. Ver `riscosEmCm`.
+                    const nums = emCm.discordantes.map((i: number) => i + 1);
+                    const medidasContadas = emCm.pecas.filter((p: any) => p.medida).length;
+                    const quais = nums.length === 1
+                      ? `A medida da peça ${nums[0]} não bate com as outras`
+                      : `As medidas das peças ${nums.slice(0, -1).join(", ")} e ${nums[nums.length - 1]} não batem ${nums.length === medidasContadas ? "entre si" : "com as outras"}`;
+                    return (
+                      <p className="mt-2 mb-0 text-[0.82rem] text-ambar" role="status">
+                        {quais} — mais de 10% de diferença na escala. Confira o número e se é altura ou largura.
+                      </p>
+                    );
+                  })()}
+                  {!emCm && (
                     <p className="mt-2.5 mb-0 text-[0.82rem] text-tinta-fraca">
-                      Sem essa medida os riscos não têm tamanho — a foto sozinha não diz se o
-                      molde tem 60 cm ou 6 cm.
+                      Sem medida os riscos não têm tamanho — a foto sozinha não diz se o molde tem 60 cm
+                      ou 6 cm.
                     </p>
                   )}
                 </div>

@@ -6,12 +6,19 @@
  * camisa que não coube numa foto só e foi digitalizada em duas. Vêm as peças
  * do primeiro tamanho do outro molde, e entram no tamanho deste. O outro
  * molde fica como estava — apagar é decisão da estante.
+ *
+ * JUNTAR COMO UM TAMANHO NOVO é o caso dos pijamas M e G da fábrica, salvos na
+ * Audaces em dois arquivos: as peças de lá entram como o tamanho G das peças
+ * daqui, casadas pela tabela que a pessoa confirma (`CasamentoDePecas`).
  */
 import { useEffect, useState } from "react";
 import { moldesApi, type MoldeNaEstante } from "../../api/moldes";
 import { achatarCurvas } from "../../motores/ajusteDeCurvas";
 import { caixaDe, pecaParaMontar } from "../../motores/montagem";
 import { corDaPeca } from "../../utils/coresDePeca";
+import { PALETA, casarPecasParaJuntar, gruposDasPecas, juntarComoTamanho } from "../../motores/tamanhos";
+import { CasamentoDePecas } from "./CasamentoDePecas";
+import type { GrupoDePecas } from "./useMoldeEmMontagem";
 import { Icone } from "../../casca/Icone";
 import type { MoldeEmMontagem, PecaEmMontagem } from "./useMoldeEmMontagem";
 
@@ -33,11 +40,12 @@ export const nomeDaPeca = (p: PecaEmMontagem, i: number) =>
 interface Props {
   molde: MoldeEmMontagem;
   moldeId: number;
-  indice: number;
-  aoEscolher: (indice: number) => void;
+  /** O grupo marcado: a mesma peça em todos os tamanhos. */
+  grupo: number;
+  aoEscolherGrupo: (grupo: number) => void;
 }
 
-export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
+export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) {
   const [outros, setOutros] = useState<MoldeNaEstante[]>([]);
   const [deQual, setDeQual] = useState("");
   const [juntando, setJuntando] = useState(false);
@@ -45,28 +53,73 @@ export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
   // juntar()` deixava a rejeição sem tratamento e a pessoa via o botão voltar
   // a "Juntar" sem explicação nenhuma do porquê não juntou nada.
   const [erroDeJuntar, setErroDeJuntar] = useState("");
+  // "pecas": as peças de lá entram como peças novas; "tamanho": como um tamanho novo das daqui.
+  const [comoJuntar, setComoJuntar] = useState<"pecas" | "tamanho">("pecas");
+  const [nomeDoTamanho, setNomeDoTamanho] = useState("");
+  const [corDoTamanho, setCorDoTamanho] = useState("");
+  const [casamento, setCasamento] = useState<{
+    tamanho: string; cor: string; tamanhoDeLa: string;
+    daqui: { grupo: number; peca: PecaEmMontagem }[];
+    dela: PecaEmMontagem[];
+    pares: { grupo: number; indiceDela: number | null }[];
+  } | null>(null);
 
   useEffect(() => {
     moldesApi.estante().then((l) => setOutros(l.filter((m) => m.id !== moldeId))).catch(() => setOutros([]));
   }, [moldeId]);
 
-  const apagar = (i: number) => {
-    molde.mudarPecas((antes) => antes.filter((_, k) => k !== i));
-    aoEscolher(Math.max(0, Math.min(i, molde.pecas.length - 2)));
+  const grupos = gruposDasPecas(molde.pecas) as GrupoDePecas[];
+  const base = molde.tamanhos.find((t) => t.base)?.nome;
+
+  /** Apaga a peça em TODOS os tamanhos: sobrar o P e o G de uma peça sem o M não é molde. */
+  const apagar = (g: number) => {
+    molde.mudarPecas((antes) => antes.filter((p) => p.grupo !== g));
+    aoEscolherGrupo(grupos.find((x) => x.grupo !== g)?.grupo ?? 0);
   };
+
+  /** A primeira cor da paleta que a grade ainda não usa. */
+  const corLivre = () => PALETA.find((c: string) => !molde.tamanhos.some((t) => t.cor === c)) ?? PALETA[0] ?? "#808080";
 
   const juntar = async () => {
     const id = Number(deQual);
     if (!id) return;
+    const tamanhoNovo = nomeDoTamanho.trim().toUpperCase();
+    if (comoJuntar === "tamanho") {
+      if (!tamanhoNovo) { setErroDeJuntar("Dê o nome do tamanho novo (ex.: G)."); return; }
+      // Um tamanho declarado na grade e ainda vazio pode ser preenchido pela
+      // junção; o que já tem desenho, não.
+      if (molde.pecas.some((p) => p.tamanho.toUpperCase() === tamanhoNovo)) {
+        setErroDeJuntar(`Este molde já tem desenho no tamanho ${tamanhoNovo}.`);
+        return;
+      }
+    }
     setJuntando(true);
     setErroDeJuntar("");
     try {
       const outro = await moldesApi.abrir(id);
+      if (comoJuntar === "tamanho") {
+        // De lá vem o tamanho base (ou o primeiro): é a peça "inteira" daquele molde.
+        const deLa = outro.tamanhos?.find((t) => t.base)?.nome ?? outro.pecas[0]?.tamanho;
+        const dela = outro.pecas.filter((p) => p.tamanho === deLa).map((p) => pecaParaMontar(p) as PecaEmMontagem);
+        const base = molde.tamanhos.find((t) => t.base)?.nome;
+        const daqui = grupos.map((g) => ({ grupo: g.grupo, peca: molde.pecas[g.porTamanho[base ?? ""] ?? Object.values(g.porTamanho)[0]!]! }));
+        const medida = (p: PecaEmMontagem) => ({ nome: p.nome || p.papel, papel: p.papel, largura: p.largura, altura: p.altura });
+        const pares = casarPecasParaJuntar(
+          daqui.map((d) => ({ grupo: d.grupo, ...medida(d.peca) })),
+          dela.map(medida),
+        ) as { grupo: number; indiceDela: number | null }[];
+        // O nome como a grade o escreve, se ela já o declara.
+        const tamanhoDaGrade = molde.tamanhos.find((t) => t.nome.toUpperCase() === tamanhoNovo)?.nome ?? tamanhoNovo;
+        setCasamento({ tamanho: tamanhoDaGrade, cor: corDoTamanho || corLivre(), tamanhoDeLa: deLa ?? "", daqui, dela, pares });
+        return;
+      }
       const tamanhoDeLa = outro.pecas[0]?.tamanho;
       const tamanhoDaqui = molde.pecas[0]?.tamanho ?? "base";
+      // Peças NOVAS: grupos novos, acima dos daqui (o grupo de lá colidiria).
+      const proximo = molde.pecas.reduce((m, p) => Math.max(m, p.grupo ?? -1), -1) + 1;
       const vindas = outro.pecas
         .filter((p) => p.tamanho === tamanhoDeLa)
-        .map((p) => ({ ...(pecaParaMontar(p) as PecaEmMontagem), id: undefined, tamanho: tamanhoDaqui }));
+        .map((p, k) => ({ ...(pecaParaMontar(p) as PecaEmMontagem), id: undefined, tamanho: tamanhoDaqui, grupo: proximo + k }));
       molde.mudarPecas((antes) => [...antes, ...vindas]);
       setDeQual("");
     } catch (e) {
@@ -79,19 +132,49 @@ export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
     }
   };
 
+  const confirmarCasamento = () => {
+    if (!casamento) return;
+    const { tamanho, cor, dela, pares } = casamento;
+    // Um passo só no desfazer: as peças e a grade mudam juntas.
+    molde.lembrar();
+    molde.mudarPecas((antes) => juntarComoTamanho(antes, dela, pares, tamanho) as PecaEmMontagem[], false);
+    molde.mudarTamanhos((t) => (t.some((x) => x.nome === tamanho) ? t : [...t, { nome: tamanho, cor, ordem: t.length, base: false }]));
+    setCasamento(null);
+    setDeQual("");
+    setNomeDoTamanho("");
+    setCorDoTamanho("");
+  };
+
   return (
     <aside className="flex h-full w-[220px] shrink-0 flex-col gap-2 overflow-auto border-r border-linha p-3">
+      {casamento && (
+        <CasamentoDePecas
+          tamanho={casamento.tamanho}
+          tamanhoDeLa={casamento.tamanhoDeLa}
+          daqui={casamento.daqui}
+          dela={casamento.dela}
+          pares={casamento.pares}
+          aoTrocar={(grupo, indiceDela) => setCasamento((c) => c && {
+            ...c,
+            pares: c.pares.map((p) => (p.grupo === grupo ? { ...p, indiceDela } : p)),
+          })}
+          aoConfirmar={confirmarCasamento}
+          aoCancelar={() => setCasamento(null)}
+        />
+      )}
       <p className="m-0 text-[0.8rem] font-semibold text-tinta-fraca">Peças</p>
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-        {molde.pecas.map((p, i) => {
-          const comErro = molde.problema?.peca === i;
+        {grupos.map((g, i) => {
+          // A peça que representa o grupo na lista: a do tamanho base, ou a primeira.
+          const p = molde.pecas[g.porTamanho[base ?? ""] ?? Object.values(g.porTamanho)[0]!]!;
+          const comErro = Object.values(g.porTamanho).includes(molde.problema?.peca ?? -1);
           return (
-            <li key={i}>
+            <li key={g.grupo}>
               <button
                 type="button"
-                onClick={() => aoEscolher(i)}
+                onClick={() => aoEscolherGrupo(g.grupo)}
                 className={`flex w-full items-center gap-2 rounded-[8px] border p-1.5 text-left ${
-                  i === indice ? "border-ambar bg-[var(--accent-soft)]" : "border-linha"
+                  g.grupo === grupo ? "border-ambar bg-[var(--accent-soft)]" : "border-linha"
                 } ${comErro ? "outline outline-2 outline-[#ff4d4d]" : ""}`}
               >
                 <Miniatura peca={p} cor={comErro ? "#ff4d4d" : corDaPeca(i)} />
@@ -106,8 +189,8 @@ export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
           );
         })}
       </ul>
-      {molde.pecas.length > 1 && (
-        <button type="button" className="btn ghost-danger btn-sm" onClick={() => apagar(indice)}>
+      {grupos.length > 1 && (
+        <button type="button" className="btn ghost-danger btn-sm" onClick={() => apagar(grupo)}>
           <Icone referencia="icones.svg#trash-2" className="size-4" />
           Apagar a peça marcada
         </button>
@@ -122,6 +205,28 @@ export function ListaDePecas({ molde, moldeId, indice, aoEscolher }: Props) {
           <option value="">Escolha um molde…</option>
           {outros.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
         </select>
+        <label className="flex items-center gap-1.5 text-[0.78rem]">
+          <input type="radio" name="comoJuntar" checked={comoJuntar === "pecas"} onChange={() => setComoJuntar("pecas")} />
+          como peças novas
+        </label>
+        <label className="flex items-center gap-1.5 text-[0.78rem]">
+          <input type="radio" name="comoJuntar" checked={comoJuntar === "tamanho"} onChange={() => setComoJuntar("tamanho")} />
+          como um tamanho novo
+        </label>
+        {comoJuntar === "tamanho" && (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text" value={nomeDoTamanho} placeholder="G"
+              onChange={(e) => { setNomeDoTamanho(e.target.value); setErroDeJuntar(""); }}
+              aria-label="Nome do tamanho novo" className="w-16!"
+            />
+            <input
+              type="color" value={corDoTamanho || corLivre()}
+              onChange={(e) => setCorDoTamanho(e.target.value)}
+              aria-label="Cor do tamanho novo" className="h-8 w-10 p-0"
+            />
+          </div>
+        )}
         <button type="button" className="btn secondary btn-sm" disabled={!deQual || juntando} onClick={() => void juntar()}>
           {juntando ? "Juntando…" : "Juntar"}
         </button>

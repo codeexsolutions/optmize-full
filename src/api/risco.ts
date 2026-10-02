@@ -23,6 +23,8 @@ export interface NoDoRisco {
   canto?: boolean;
   /** O trecho deste nó até o seguinte é reta, e não curva. */
   retaDepois?: boolean;
+  /** Nó simétrico (as duas alças do mesmo tamanho). Sem o campo, e sem `canto`, o nó é suave. */
+  simetrico?: boolean;
 }
 
 export interface PecaDoRisco {
