@@ -93,16 +93,18 @@ com `null`) e devolve uma lista nova.
 agora dão. Vira automático, **sem mudar o desenho**:
 
 - o nó **não canto** com curva dos dois lados, alças com tamanho e na mesma
-  reta (dentro de 0,5°): `giro` = o ângulo entre a direção atual e a
-  automática; `antes`/`depois` = o tamanho de cada alça ÷ (distância ao vizinho
-  ÷ 3);
+  reta (dentro de 10⁻⁶ rad — o suave e o simétrico de hoje estão sempre assim):
+  `giro` = o ângulo entre a direção atual e a automática; `antes`/`depois` = o
+  tamanho de cada alça ÷ (distância ao vizinho ÷ 3), dentro dos limites de 1.2.
+  O desenho refeito fica a menos de 0,001 mm do de antes;
 - o nó entre **uma reta e uma curva** (canto ou não) cuja alça do lado curvo
-  está alinhada com a reta (dentro de 2°): `antes` ou `depois` do lado curvo,
-  `giro` 0, e deixa de ser canto. É ele que dava o bico;
+  está a até 2° da direção da reta: `antes` ou `depois` do lado curvo, `giro`
+  0, e deixa de ser canto. Aqui o começo da curva gira até 2° para sair da reta
+  sem quebra — é a correção do bico, e só acontece quando a pessoa mexe ali
+  (ver 1.5);
 - os outros ficam como estão: canto entre duas curvas (é quina de propósito),
-  alças fora de linha, alça zerada, reta dos dois lados.
-
-O desenho refeito com os números derivados fica a menos de 0,001 mm do de antes.
+  alças fora de linha, alça zerada, abertura fora dos limites, reta dos dois
+  lados.
 
 ### 1.5 Quando a conta roda
 
