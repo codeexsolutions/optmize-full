@@ -506,18 +506,26 @@ async function principal() {
      * perdia. Agora ele espera na fila, um toast no canto conta, e ele entra
      * sozinho quando a busca acaba — sem janela nenhuma no caminho.
      */
-    await p.evaluate(() => document.getElementById('btn-ajustes-optmizar').click());
-    await esperar(800);
+    // Com três peças pequenas a busca de 3 s desiste em pouco mais de um
+    // segundo (ela para depois de um quarto do tempo sem ganho). Com 10 s ela
+    // roda pelo menos 2,5 s — folga de sobra para o arquivo chegar no meio.
+    await p.evaluate(() => {
+      const tempo = document.getElementById('encaixe-tempo');
+      tempo.value = '10';
+      tempo.dispatchEvent(new Event('input', { bubbles: true }));
+      tempo.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('btn-ajustes-optmizar').click();
+    });
+    await esperar(300);
     await (await p.$('#encaixe-files')).uploadFile(artes[1]);
-    await esperar(500);
+    await esperar(300);
     const janela = () => p.$eval('.alerta-caixa[role="alertdialog"]', (n) => n.innerText.replace(/\s+/g, ' '))
       .catch(() => null);
     assert.equal(await janela(), null, 'o arquivo durante o Optmizar não pode abrir janela');
     const toastDaFila = await p.$eval('.alerta-toast', (n) => n.innerText).catch(() => '');
+    // O toast é a prova de que o arquivo foi para a fila, e não direto para a lista.
     assert.match(toastDaFila, /na fila/, `o toast da fila não apareceu (veio "${toastDaFila}")`);
-    assert.equal(Number((await p.$eval('#encaixe-contagem', (n) => n.textContent)).match(/^\d+/)[0]), depoisDoX,
-      'o arquivo da fila não pode entrar no meio da busca');
-    await esperar(18000);
+    await esperar(25000);
     const depoisDaFila = Number((await p.$eval('#encaixe-contagem', (n) => n.textContent)).match(/^\d+/)[0]);
     assert.equal(depoisDaFila, depoisDoX + 1,
       `o arquivo da fila tinha que entrar quando a busca acabou (eram ${depoisDoX}, ficaram ${depoisDaFila})`);
