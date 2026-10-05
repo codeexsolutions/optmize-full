@@ -136,7 +136,12 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanh
             onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
           />
         </label>
-        <span className={`text-[0.8rem] ${molde.gravacao === "erro" ? "text-[#ff4d4d]" : "text-tinta-fraca"}`}>
+        {/* Largura fixa: "salvo" virando "salvando em instantes…" a cada mexida quebrava a barra em duas
+            linhas, e a mesa embaixo pulava no meio do arrasto de um nó. O texto do erro, que é longo, ganha a dica. */}
+        <span
+          className={`inline-block w-36 shrink-0 truncate text-[0.8rem] ${molde.gravacao === "erro" ? "text-[#ff4d4d]" : "text-tinta-fraca"}`}
+          title={molde.gravacao === "erro" && molde.problema ? molde.problema.texto : undefined}
+        >
           {ROTULO_DA_GRAVACAO[molde.gravacao]}
           {molde.gravacao === "erro" && molde.problema ? ` — ${molde.problema.texto}` : ""}
         </span>
@@ -144,13 +149,14 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanh
           <button type="button" className="btn secondary btn-sm" onClick={() => void molde.gravar()}>Tentar de novo</button>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button type="button" className="btn secondary btn-sm" disabled={!molde.podeDesfazer} onClick={molde.desfazer} title="Desfazer (Ctrl+Z)">
+          {/* Só o ícone: com o Refazer, a barra não cabia numa linha e roubava altura da mesa. */}
+          <button type="button" className="btn secondary btn-sm" disabled={!molde.podeDesfazer} onClick={molde.desfazer}
+            title="Desfazer (Ctrl+Z)" aria-label="Desfazer">
             <Icone referencia="icones.svg#rotate-ccw" className="size-4" />
-            Desfazer
           </button>
-          <button type="button" className="btn secondary btn-sm" disabled={!molde.podeRefazer} onClick={molde.refazer} title="Refazer (Ctrl+Y)">
+          <button type="button" className="btn secondary btn-sm" disabled={!molde.podeRefazer} onClick={molde.refazer}
+            title="Refazer (Ctrl+Y)" aria-label="Refazer">
             <Icone referencia="icones.svg#rotate-cw" className="size-4" />
-            Refazer
           </button>
           {molde.tamanhos.length > 1 && (
             <select

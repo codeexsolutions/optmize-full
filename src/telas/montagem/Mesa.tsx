@@ -125,6 +125,7 @@ export function Mesa(props: Props) {
   const centrarEm = useRef<Ponto | null>(null);
   const arrasto = useRef<Arrasto | null>(null);
   const vistaCongelada = useRef<Vista | null>(null);
+  const ajusteCongelado = useRef<number | null>(null);
   const [, repintar] = useState(0);
 
   const risco = useMemo(() => (peca ? achatarCurvas(peca.nos) : []), [peca]);
@@ -155,9 +156,12 @@ export function Mesa(props: Props) {
   // esticada (borrada, traço grosso) e peça grande espremida (nó e texto
   // minúsculos) — o CSS é que acertava a largura. O zoom 1 cabe na largura E na
   // altura da mesa: a peça inteira à vista.
-  const ajusteNaMesa = moldura_.largura > 0 && moldura_.altura > 0
+  const ajusteCalculado = moldura_.largura > 0 && moldura_.altura > 0
     ? Math.min(moldura_.largura / Math.max(vista.largura, 1), moldura_.altura / Math.max(vista.altura, 1))
     : PX_POR_CM;
+  // Congelado no arrasto, junto com a vista: se a mesa mudar de tamanho no meio do gesto (uma barra que
+  // quebra de linha), a peça não encolhe debaixo do ponteiro.
+  const ajusteNaMesa = ajusteCongelado.current ?? ajusteCalculado;
   const escalaTela = ajusteNaMesa * zoom;
   const escala = Math.min(escalaTela, LADO_MAXIMO_PX / Math.max(vista.largura, vista.altura, 1));
 
@@ -366,6 +370,7 @@ export function Mesa(props: Props) {
       arrasto.current = { tipo: "fio", modo: naPonta ? "girar" : "mover" };
     }
     vistaCongelada.current = vista;
+    ajusteCongelado.current = ajusteNaMesa;
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
@@ -410,6 +415,7 @@ export function Mesa(props: Props) {
     if (arrasto.current.tipo === "editor") props.editor?.soltar();
     arrasto.current = null;
     vistaCongelada.current = null;
+    ajusteCongelado.current = null;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
     repintar((n) => n + 1);
   };
@@ -511,7 +517,10 @@ export function Mesa(props: Props) {
     const descer = (e: KeyboardEvent) => {
       if (e.key === " " && !e.ctrlKey && !e.metaKey) {
         const foco = document.activeElement as HTMLElement | null;
-        if (foco && (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(foco.tagName) || foco.isContentEditable)) return;
+        if (foco && (["INPUT", "TEXTAREA", "SELECT"].includes(foco.tagName) || foco.isContentEditable)) return;
+        // Botão com o foco (o "+" do zoom, uma ferramenta que acabou de ser clicada): o Espaço o
+        // apertaria de novo na soltura. Ele perde o foco, e o Espaço é da mão.
+        if (foco && foco.tagName === "BUTTON") foco.blur();
         e.preventDefault();
         espacoSegurado.current = true;
         setMao((m) => (m === "" ? "pronta" : m));
@@ -541,6 +550,7 @@ export function Mesa(props: Props) {
         <div className="flex min-h-full min-w-full">
           <canvas
             ref={tela}
+            data-mesa
             className="m-auto block h-auto max-w-none touch-none select-none"
             style={{ width: `${Math.round(vista.largura * escalaTela)}px`, cursor: cursorDaMesa }}
             onPointerDown={aoApertar}
