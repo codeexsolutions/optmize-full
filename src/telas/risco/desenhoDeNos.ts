@@ -10,7 +10,11 @@
  */
 
 export type Ponto = { x: number; y: number };
-export type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean; simetrico?: boolean };
+export type No = {
+  x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean; simetrico?: boolean;
+  /** Nó liso automático (ver `motores/edicaoDeNos.js`). */
+  auto?: { antes: number; depois: number; giro: number };
+};
 
 /** O caminho fechado dos nós. Só traça o caminho: a cor e a grossura são de quem chama. */
 export function tracarCaminho(ctx: CanvasRenderingContext2D, nos: No[], emTela: (p: Ponto) => Ponto) {

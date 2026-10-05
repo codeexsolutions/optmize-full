@@ -129,4 +129,24 @@ assert.equal(lerSituacao("x"), null);
   for (const nada of [undefined, null, "", "abc", Number.NaN]) assert.equal(lerLinha(nada), null, String(nada));
 }
 
+// O nó liso automático: o servidor guarda os três números, presos aos limites;
+// número que não é número tira o campo; nó canto não leva `auto`.
+{
+  const comAuto = (auto, extra = {}) => ({ ...no(0, 0), canto: false, retaDepois: false, auto, ...extra });
+  const nos = [
+    comAuto({ antes: 2, depois: 9, giro: 7 }),
+    comAuto({ antes: "x", depois: 1, giro: 0 }),
+    no(10, 10),
+    comAuto({ antes: 1, depois: 1, giro: 0 }, { canto: true }),
+  ];
+  const l = arrumarPeca({ contorno: quadrado, nos }, 0);
+  const volta = pecaDoBanco({ ...l, id: 1 });
+  assert.equal(volta.nos[0].auto.antes, 2);
+  assert.equal(volta.nos[0].auto.depois, 4, "abertura presa em 4");
+  assert.ok(Math.abs(volta.nos[0].auto.giro - (7 - 2 * Math.PI)) < 1e-12, "giro normalizado");
+  assert.equal(volta.nos[1].auto, undefined, "número estragado tira o campo");
+  assert.equal(volta.nos[2].auto, undefined, "nó sem auto continua sem");
+  assert.equal(volta.nos[3].auto, undefined, "nó canto não é automático");
+}
+
 console.log("OK — o servidor guarda nós e marcações sem inventar nem perder.");
