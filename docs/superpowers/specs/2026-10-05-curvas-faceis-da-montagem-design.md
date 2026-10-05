@@ -93,10 +93,12 @@ com `null`) e devolve uma lista nova.
 agora dão. Vira automático, **sem mudar o desenho**:
 
 - o nó **não canto** com curva dos dois lados, alças com tamanho e na mesma
-  reta (dentro de 10⁻⁶ rad — o suave e o simétrico de hoje estão sempre assim):
-  `giro` = o ângulo entre a direção atual e a automática; `antes`/`depois` = o
-  tamanho de cada alça ÷ (distância ao vizinho ÷ 3), dentro dos limites de 1.2.
-  O desenho refeito fica a menos de 0,001 mm do de antes;
+  reta — a alça que gira para o alinhamento anda no máximo 0,002 mm, e nunca
+  mais de 1° (o banco guarda os nós com 4 casas, e o liso de hoje chega
+  desalinhado de até ~0,001 mm; medido nos moldes reais): `giro` = o ângulo
+  entre a direção atual e a automática; `antes`/`depois` = o tamanho de cada
+  alça ÷ (distância ao vizinho ÷ 3), dentro dos limites de 1.2. O desenho
+  refeito fica a até 0,002 mm do de antes;
 - o nó entre **uma reta e uma curva** (canto ou não) cuja alça do lado curvo
   está a até 2° da direção da reta: `antes` ou `depois` do lado curvo, `giro`
   0, e deixa de ser canto. Aqui o começo da curva gira até 2° para sair da reta

@@ -634,7 +634,16 @@ export function girarNos(nos, graus, centro) {
  * -------------------------------------------------------------------------- */
 const ABERTURA_MIN = 0.05;
 const ABERTURA_MAX = 4;
-const EM_LINHA = 1e-6;            // rad: alças "na mesma reta" para virar automático sem mudar o desenho
+/*
+ * "Na mesma reta" para virar automático sem mudar o desenho: a alça que gira
+ * para o alinhamento anda no máximo 0,002 mm (2e-4 nas unidades da Montagem,
+ * cm). Um ângulo fixo não servia: o banco guarda os nós com 4 casas, e um nó
+ * liso de verdade chega desalinhado de até ~0,002° — 0,001 mm na ponta da alça
+ * (medido nos moldes reais, `bancada:curvas-reais`). O teto de 1° é para alça
+ * enorme, em que o deslocamento pequeno já seria ângulo grande.
+ */
+const ALCA_ANDA_NO_MAXIMO = 2e-4;
+const EM_LINHA = (1 * Math.PI) / 180;
 const JUNTO_DA_RETA = (2 * Math.PI) / 180;
 
 const prender = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -740,7 +749,8 @@ function autoDasAlcas(nos, i) {
   const te = tamanho(ve);
   const ts = tamanho(vs);
   if (te < 1e-9 || ts < 1e-9 || distA < 1e-9 || distB < 1e-9) return null;
-  if (Math.abs(normalizarAngulo(anguloDe(vs) - anguloDe(ve))) > EM_LINHA) return null;
+  const desalinho = Math.abs(normalizarAngulo(anguloDe(vs) - anguloDe(ve)));
+  if (desalinho > EM_LINHA || te * desalinho > ALCA_ANDA_NO_MAXIMO) return null;
   const antes = te / (distA / 3);
   const depois = ts / (distB / 3);
   if (!cabe(antes) || !cabe(depois)) return null;
@@ -787,7 +797,8 @@ export function rederivarAuto(nos, indices) {
     lista[i] = semAuto;
     const auto = autoDasAlcas(lista, i);
     if (auto) return { ...no, auto };
-    const linha = Math.abs(normalizarAngulo(anguloDe(menos(no.saida, no)) - anguloDe(menos(no, no.entrada)))) <= EM_LINHA;
+    const desalinho = Math.abs(normalizarAngulo(anguloDe(menos(no.saida, no)) - anguloDe(menos(no, no.entrada))));
+    const linha = desalinho * tamanho(menos(no, no.entrada)) <= ALCA_ANDA_NO_MAXIMO;
     return { ...semAuto, canto: !linha };
   });
   return mudou ? saida : nos;
