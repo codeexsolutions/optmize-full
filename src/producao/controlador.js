@@ -3003,8 +3003,9 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
 
     // Um resultado sem todas as peças parece consumir menos tecido. Guardá-lo
     // como recorde faria as próximas buscas restaurarem um trabalho incompleto.
+    // Peça fora do tecido não abre janela: o texto embaixo do resultado já diz
+    // quais ficaram de fora e o que fazer (ver `renderResultado`).
     if (producaoTravada() || ultimoResultado.naoEncaixadas.length > 0) {
-      if (!producaoTravada()) mostrarErroEncaixe("Há peças fora do tecido. Este resultado não foi guardado como recorde.", "aviso");
       finalizarCarregamento("com-erro");
       return;
     }

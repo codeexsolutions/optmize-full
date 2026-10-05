@@ -44,6 +44,7 @@
     "bancada:envio": "node bancada/conferir-envio-por-tamanho.mjs",
     "bancada:margem": "node bancada/conferir-margem.mjs",
     "bancada:pedidos": "node bancada/conferir-pedidos.mjs",
+    "bancada:janelas": "node bancada/conferir-janelas.mjs",
     "bancada:guardados": "node bancada/medir-guardados.js",
     "bancada:montagem": "node bancada/conferir-montagem.mjs",
     "bancada:moldes-pecas": "node bancada/conferir-moldes-pecas.cjs",
