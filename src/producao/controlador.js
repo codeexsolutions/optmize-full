@@ -361,7 +361,14 @@ function atualizarBotaoPrincipal() {
  * Ver `motores/encaixeSobreposicao.js` para a conta e para o porquê de ela ser
  * por coluna em vez de pintar o rolo.
  */
-function guardarResultado(valor) {
+/*
+ * `semJanela`: trava igual, mas não abre a janela. É a busca que pede (ver
+ * `optmizar`): ela pode refazer o encaixe sozinha quando a conferência pela
+ * arte recusa, e a janela de um problema que já está sendo consertado só
+ * ensina a pessoa a fechar janela sem ler. Quando não refaz, ela mesma abre
+ * a janela com o motivo, uma vez, no fim.
+ */
+function guardarResultado(valor, { semJanela = false } = {}) {
   // O passo vem em cada posição, nos dois caminhos: `posicoesDasColocacoes` o
   // escreve na busca e `usarEncaixeGuardado` o escreve na retomada. Não há
   // fallback a inventar aqui — posição sem passo é encaixe que não dá para
@@ -369,12 +376,12 @@ function guardarResultado(valor) {
   const recusa = valor ? recusarPorSobreposicao(valor) : null;
   if (recusa) {
     valor.sobreposto = recusa;
-    mostrarErroEncaixe(recusa, "aviso");
+    if (!semJanela) mostrarErroEncaixe(recusa, "aviso");
   }
   ultimoResultado = valor;
   // A segunda trava, pela arte, começa já: ela é assíncrona e o Exportar fica
   // apagado até ela responder (ver `conferirPelaArte`).
-  if (valor && !recusa) conferirPelaArte(valor);
+  if (valor && !recusa) conferirPelaArte(valor, semJanela);
   // Todo risco novo começa sem o que desfazer; o complemento guarda o dele
   // logo depois de chamar aqui.
   antesDoComplemento = null;
@@ -403,12 +410,12 @@ function guardarResultado(valor) {
  * `valor.conferido` é a promessa: a busca espera por ela antes de guardar o
  * recorde, e refaz o encaixe quando ela falha (ver `optmizar`).
  */
-function conferirPelaArte(valor) {
+function conferirPelaArte(valor, semJanela = false) {
   const folga = folgaPedida();
   valor.conferencia = { estado: "conferindo" };
   const travar = (motivo) => {
     valor.sobreposto = motivo;
-    mostrarErroEncaixe(motivo, "aviso");
+    if (!semJanela) mostrarErroEncaixe(motivo, "aviso");
     fecharMenuExportar();
     if (btnExportar) btnExportar.disabled = true;
     redesenharRisco();
@@ -2979,7 +2986,7 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
       tentativasPorLote: loteGrande ? 1 : 8,
       deveParar: () => pararBusca,
       aoProgredir: (estado) => mostrarAndamento(estado, aprendido),
-    }));
+    }), { semJanela: true });
     resultadoGeradoNesteCarregamento = true;
 
     ultimoResultado.modoDeEncaixe = modoDeEncaixe;
@@ -3038,7 +3045,14 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     // como recorde faria as próximas buscas restaurarem um trabalho incompleto.
     // Peça fora do tecido não abre janela: o texto embaixo do resultado já diz
     // quais ficaram de fora e o que fazer (ver `renderResultado`).
-    if (producaoTravada() || ultimoResultado.naoEncaixadas.length > 0) {
+    //
+    // A trava, sim: a busca guardou calada (`semJanela`) porque podia refazer
+    // sozinha logo acima. Chegou aqui, não refez — a pessoa parou a busca, é
+    // a segunda rodada, a conferência quebrou ou a conta por coluna recusou
+    // (essa não se refaz) —, e o Exportar travado precisa do seu porquê.
+    const trava = producaoTravada();
+    if (trava) mostrarErroEncaixe(trava, "aviso");
+    if (trava || ultimoResultado.naoEncaixadas.length > 0) {
       finalizarCarregamento("com-erro");
       return;
     }

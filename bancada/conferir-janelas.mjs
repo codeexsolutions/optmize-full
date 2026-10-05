@@ -75,4 +75,28 @@ caso("encaixe que quebra tenta de novo pela caixa, sozinho, antes de abrir janel
   assert.ok(!codigo.includes("Como encaixar"), "ainda há texto citando \"Como encaixar\"");
 });
 
+caso("sobreposição achada na busca não abre janela quando o encaixe vai ser refeito sozinho", () => {
+  // As duas travas (a conta por coluna e a conferência pela arte) aceitam
+  // ficar caladas: travam o Exportar igual, só não abrem a janela.
+  const guardar = corpo("function guardarResultado(");
+  assert.match(guardar, /^function guardarResultado\(valor, \{ semJanela = false \} = \{\}\)/);
+  assert.match(guardar, /if \(!semJanela\) mostrarErroEncaixe\(recusa, "aviso"\);/);
+  assert.match(guardar, /conferirPelaArte\(valor, semJanela\)/);
+  const conferir = corpo("function conferirPelaArte(");
+  assert.match(conferir, /^function conferirPelaArte\(valor, semJanela = false\)/);
+  assert.match(conferir, /if \(!semJanela\) mostrarErroEncaixe\(motivo, "aviso"\);/);
+
+  // A busca guarda calada, e o motivo da trava abre UMA janela no fim — só
+  // quando não vai refazer (o `return` do refazer vem antes).
+  const servico = corpo("async function optmizar(");
+  assert.match(servico, /aoProgredir: \(estado\) => mostrarAndamento\(estado, aprendido\),\s*\}\), \{ semJanela: true \}\);/);
+  const refaz = servico.indexOf("refazer = `Refeito sozinho");
+  const janela = servico.indexOf("if (trava) mostrarErroEncaixe(trava, \"aviso\");");
+  assert.ok(refaz > 0 && janela > refaz, "a janela da trava tinha que vir depois do refazer sozinho");
+  const depoisDaBusca = servico.slice(servico.indexOf("guardarResultado(await buscarMelhorEncaixeEmParalelo"),
+    servico.indexOf("} catch (err) {"));
+  assert.equal(depoisDaBusca.split("mostrarErroEncaixe(").length - 1, 1,
+    "da busca até o fim do try, só a janela da trava");
+});
+
 console.log(`\nbancada:janelas — ${casos} casos ok`);
