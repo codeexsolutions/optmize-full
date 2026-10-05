@@ -51,6 +51,9 @@ const TIPOS_DE_ARTE = ["image/png", "image/jpeg", "image/webp"];
 
 const LADO_DA_MINIATURA = 240;
 
+/** A medida guardada é a exata do arquivo; o campo mostra duas casas (0,1 mm). */
+const noCampo = (cm: number) => Math.round(cm * 100) / 100;
+
 const novoId = (prefixo: string) => `${prefixo}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const urlDaArte = (arte: ArteDaPeca) => `/uploads/projetos/${arte.arquivo}`;
 const corDaPeca = (cor: number) => `var(--peca-${(cor % 10) + 1})`;
@@ -180,8 +183,10 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
         arquivo: nomeNoDisco,
         nome: arquivo.name,
         miniatura: miniaturaDaImagem(img),
-        largura: Math.round((img.naturalWidth / ppcm) * 10) / 10,
-        altura: Math.round((img.naturalHeight / ppcm) * 10) / 10,
+        // Exata, sem arredondar: é esta medida que vai para o Encaixe, e o
+        // PDF imprime a arte nela (ver `montarPecaDaImagem`, no controlador).
+        largura: img.naturalWidth / ppcm,
+        altura: img.naturalHeight / ppcm,
       };
       mexerNaPeca(alvo, (p) => ({ ...p, arte }));
     } catch (e) {
@@ -824,7 +829,7 @@ function CartaoDaPeca({ peca, aoRenomear, aoPorItem, aoMedida, aoApagar, aoEscol
             <div className="flex items-center gap-1 font-mono text-[10px] text-tinta-apagada">
               <input
                 type="number" min="0.1" step="0.1"
-                value={arte.largura}
+                value={noCampo(arte.largura)}
                 onChange={(e) => aoMedida({ largura: Number(e.target.value) })}
                 aria-label="Largura em cm"
                 className={`w-14 rounded border border-linha bg-painel px-1 py-0.5 text-center text-tinta focus:border-[var(--accent-line)] focus:outline-none ${SEM_SETINHAS}`}
@@ -832,7 +837,7 @@ function CartaoDaPeca({ peca, aoRenomear, aoPorItem, aoMedida, aoApagar, aoEscol
               ×
               <input
                 type="number" min="0.1" step="0.1"
-                value={arte.altura}
+                value={noCampo(arte.altura)}
                 onChange={(e) => aoMedida({ altura: Number(e.target.value) })}
                 aria-label="Altura em cm"
                 className={`w-14 rounded border border-linha bg-painel px-1 py-0.5 text-center text-tinta focus:border-[var(--accent-line)] focus:outline-none ${SEM_SETINHAS}`}

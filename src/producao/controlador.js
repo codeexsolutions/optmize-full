@@ -3,7 +3,6 @@
  * Domínio importado de src/nucleo; estado privado por montagem, sem scripts globais.
  * As listas e o canvas são ilhas imperativas: não devem receber children dinâmicos React.
  */
-import { arredondar } from "../utils/geometria";
 import { moldeParaImagem, ehArquivoDeMolde, lerMoldeVetorial } from "../motores/moldes";
 import { ehArquivoPDF, lerArteDoPDF } from "../motores/pdfParaArte";
 import { COR_CMYK, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
@@ -633,8 +632,12 @@ async function montarPecaDaImagem(cru, semFundo, imagemPronta = null) {
     // reduzido (ver `ladoDeTrabalho`), e medir o reduzido daria uma peça menor
     // do que ela é. Foi exatamente esse erro, por outra causa, que fazia uma
     // camiseta de 49,3 cm entrar como 15,2 cm.
-    largura: arredondar(cru.pxOriginal.largura / ppcm),
-    altura: arredondar(cru.pxOriginal.altura / ppcm),
+    //
+    // E vem EXATA, sem arredondar: o PDF imprime a arte na medida da peça, e o
+    // 0,1 cm de antes chegava ao tecido — até 0,5 mm a mais ou a menos, cada
+    // lado para um lado (medido em 2026-10-05). Quem arredonda é só a tela.
+    largura: cru.pxOriginal.largura / ppcm,
+    altura: cru.pxOriginal.altura / ppcm,
     qtd: doNome.qtd,
     qtdDoArquivo: doNome.veioDoArquivo,
     giro: giroPadrao(),
@@ -679,8 +682,9 @@ async function lerArtePDFdoArquivo(file) {
     img: arte.bitmap,
     pxW: arte.bitmap.width,
     pxH: arte.bitmap.height,
-    largura: arredondar(arte.larguraCm),
-    altura: arredondar(arte.alturaCm),
+    // A página do PDF, exata: ver a medida da arte em `montarPecaDaImagem`.
+    largura: arte.larguraCm,
+    altura: arte.alturaCm,
     qtd: doNome.qtd,
     qtdDoArquivo: doNome.veioDoArquivo,
     giro: giroPadrao(),
@@ -731,8 +735,9 @@ async function lerMoldesDoArquivo(file) {
       img,
       pxW: imagem.pxW,
       pxH: imagem.pxH,
-      largura: arredondar(molde.largura),
-      altura: arredondar(molde.altura),
+      // O desenho do molde, exato: o PDF estica a imagem dele até esta caixa.
+      largura: molde.largura,
+      altura: molde.altura,
       qtd: doNome.qtd,
       qtdDoArquivo: doNome.veioDoArquivo,
       giro: giroPadrao(),
@@ -1616,6 +1621,13 @@ function renderAvisosDeCor() {
   encaixeAvisoCor.classList.remove("hidden");
 }
 
+/**
+ * A medida no campo da gaveta: duas casas. A peça guarda a medida exata do
+ * arquivo (30,3022 cm), e o campo mostraria todas as casas; o centésimo de
+ * centímetro (0,1 mm) é o que se lê numa régua.
+ */
+const noCampo = (cm) => Math.round(cm * 100) / 100;
+
 function renderPecasEncaixe() {
   if (ofertaDoGuardado && !ofertaAindaServe(ofertaDoGuardado)) esconderOfertaDoGuardado();
   encaixePecasBody.innerHTML = "";
@@ -1717,10 +1729,10 @@ function renderPecasEncaixe() {
         <p class="mt-0 mb-2 text-[10.5px] leading-snug font-medium break-all text-tinta">${escapeHtml(peca.nome)}</p>
         <div class="grid grid-cols-2 gap-1.5">
           <label class="${CAMPO_MINI}">Largura (cm)
-            <input type="number" min="0.1" step="0.1" value="${peca.largura}" data-campo="largura" data-id="${peca.id}" />
+            <input type="number" min="0.1" step="0.1" value="${noCampo(peca.largura)}" data-campo="largura" data-id="${peca.id}" />
           </label>
           <label class="${CAMPO_MINI}">Altura (cm)
-            <input type="number" min="0.1" step="0.1" value="${peca.altura}" data-campo="altura" data-id="${peca.id}" />
+            <input type="number" min="0.1" step="0.1" value="${noCampo(peca.altura)}" data-campo="altura" data-id="${peca.id}" />
           </label>
         </div>
         <div class="mt-1.5 grid grid-cols-2 gap-1.5">
@@ -1821,20 +1833,24 @@ escopo.ouvir(encaixePecasBody, "input", (e) => {
   if (!peca) return;
 
   const valor = Number(e.target.value);
-  // Os pixels são os da arte como chegou; girada 90° ou 270°, a proporção da
-  // peça é a inversa.
-  const proporcao = rotacaoBaseDe(peca) % 180 ? peca.pxW / peca.pxH : peca.pxH / peca.pxW;
+  // A proporção é a da própria peça, exata — e não a dos pixels do bitmap, que
+  // pode ter sido decodificado reduzido (ver `ladoDeTrabalho`) e perder um
+  // pixel no arredondamento. O giro dado antes do encaixe já trocou largura e
+  // altura, então ela vale para a peça como está.
+  const proporcao = peca.altura / peca.largura;
 
+  // O lado calculado fica exato, para a arte não deformar; o campo mostra duas
+  // casas (ver `noCampo`).
   if (campo === "largura" && valor > 0) {
     peca.largura = valor;
-    peca.altura = arredondar(valor * proporcao);
+    peca.altura = valor * proporcao;
     const inputAltura = encaixePecasBody.querySelector(`input[data-campo="altura"][data-id="${peca.id}"]`);
-    if (inputAltura) inputAltura.value = peca.altura;
+    if (inputAltura) inputAltura.value = noCampo(peca.altura);
   } else if (campo === "altura" && valor > 0) {
     peca.altura = valor;
-    peca.largura = arredondar(valor / proporcao);
+    peca.largura = valor / proporcao;
     const inputLargura = encaixePecasBody.querySelector(`input[data-campo="largura"][data-id="${peca.id}"]`);
-    if (inputLargura) inputLargura.value = peca.largura;
+    if (inputLargura) inputLargura.value = noCampo(peca.largura);
   } else if (campo === "qtd") {
     peca.qtd = Math.max(1, Math.floor(valor) || 1);
     atualizarPainelDoTrabalho();

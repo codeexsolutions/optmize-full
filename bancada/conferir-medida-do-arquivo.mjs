@@ -140,4 +140,31 @@ await caso("EXIF cortado no meio não quebra a leitura", async () => {
   assert.equal(pixelsPorCmDoArquivo(new Uint8Array(inteiro.subarray(0, 30))), null);
 });
 
+/*
+ * A MEDIDA NÃO É ARREDONDADA NA ENTRADA.
+ *
+ * O PDF imprime a arte na medida da peça. Arredondar para 0,1 cm na entrada
+ * mudava o tamanho da arte no tecido; o que chega ao PDF é conferido de ponta
+ * a ponta na `bancada:tela`. Aqui, cada porta por onde a medida entra.
+ */
+const fs = require("node:fs");
+const path = require("node:path");
+const RAIZ = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, "$1")), "..");
+const ler = (relativo) => fs.readFileSync(path.join(RAIZ, relativo), "utf8");
+
+await caso("o Encaixe guarda a medida exata da imagem, do PDF, do molde e da edição", async () => {
+  const controlador = ler("src/producao/controlador.js");
+  assert.ok(!/arredondar\(/.test(controlador), "o controlador voltou a arredondar uma medida");
+  assert.match(controlador, /largura: cru\.pxOriginal\.largura \/ ppcm,/);
+  assert.match(controlador, /largura: arte\.larguraCm,/);
+  assert.match(controlador, /largura: molde\.largura,/);
+  assert.match(controlador, /const proporcao = peca\.altura \/ peca\.largura;/);
+});
+
+await caso("a Galeria guarda a medida exata da arte do projeto", async () => {
+  const editor = ler("src/telas/galeria/EditorDoProjeto.tsx");
+  assert.match(editor, /largura: img\.naturalWidth \/ ppcm,/);
+  assert.ok(!/naturalWidth \/ ppcm\) \* 10\) \/ 10/.test(editor), "a Galeria voltou a arredondar a medida");
+});
+
 console.log(`\nbancada:medida-do-arquivo — ${casos} casos ok`);

@@ -336,6 +336,32 @@ async function principal() {
         ? [operadores.argsArray[i].slice(1, 3).sort((a, b) => a - b).join('x')] : []);
       assert.deepEqual(imagens.sort(), ['200x400', '250x250', '300x400'],
         'o PDF deve desenhar as três artes na resolução original, mesmo quando giradas');
+
+      /*
+       * A ARTE SAI NO TAMANHO DO ARQUIVO, E NÃO NO ARREDONDADO.
+       *
+       * A medida da peça era arredondada para 0,1 cm na entrada, e o PDF
+       * imprimia a arte nela: a de 300 px a 150 dpi (5,080 cm) saía com 5,1, a
+       * de 400 px (6,773 cm) com 6,8 — cada lado errando para um lado. A
+       * medida no PDF é a da matriz que desenha a imagem.
+       */
+      let matriz = null;
+      const desenhadas = [];
+      operadores.fnArray.forEach((op, i) => {
+        if (op === pdfjs.OPS.transform) matriz = operadores.argsArray[i];
+        if (op !== pdfjs.OPS.paintImageXObject || !matriz) return;
+        const [a, b, c, d] = matriz;
+        const [px1, px2] = operadores.argsArray[i].slice(1, 3);
+        desenhadas.push({ px: [px1, px2], cm: [Math.hypot(a, b), Math.hypot(c, d)].map((pt) => pt * 2.54 / 72) });
+      });
+      for (const { px, cm } of desenhadas) {
+        const esperado = px.map((n) => (n / 150) * 2.54);
+        for (let k = 0; k < 2; k++) {
+          assert.ok(Math.abs(cm[k] - esperado[k]) < 0.001,
+            `a arte de ${px.join('x')} px saiu com ${cm.map((v) => v.toFixed(4)).join(' × ')} cm no PDF; `
+            + `o arquivo tem ${esperado.map((v) => v.toFixed(4)).join(' × ')} cm`);
+        }
+      }
     } finally { await leituraPdf.destroy(); }
 
     const recado = await p.$eval('#encaixe-andamento', (n) => n.textContent);
