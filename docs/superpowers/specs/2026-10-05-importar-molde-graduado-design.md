@@ -42,8 +42,9 @@ Medido com sondas sobre os 12 modelos:
   de cada (peça, tamanho): **55 de 67** peças presentes no PLT saem com todos os
   tamanhos, sem medida ambígua (exceto no modelo 16). As outras têm contornos
   que não fecham na leitura (peças na dobra, linhas abertas).
-- **Sem gabarito**, agrupando por forma e sobreposição: **43 de 67**. A forma
-  sozinha confunde frente e costas sobrepostas.
+- **Sem gabarito**, agrupando por forma e sobreposição: **42 de 67**. A forma
+  sozinha confunde frente e costas sobrepostas; o PLT de tamanhos lado a lado
+  não se agrupa (cada tamanho fica avulso na conferência).
 
 ## O que fica igual
 
@@ -85,8 +86,7 @@ area }], unidade, avisos }` ou `{ erro }`:
   os tamanhos que faltaram.
 - `agruparTamanhos(lacos)`: sem gabarito. Cadeias de tamanhos: cada laço liga
   ao "próximo tamanho" — maior (área 60–100%), de forma parecida (Chamfer na
-  caixa normalizada), proporção e salto de área pequenos, e sobreposto de
-  preferência —, por custo crescente, um próximo e um anterior por laço. O
+  caixa normalizada), proporção e salto de área pequenos, e sobreposto —, por custo crescente, um próximo e um anterior por laço. O
   número de tamanhos é o comprimento de cadeia mais comum; cadeia de outro
   comprimento se desfaz em peças avulsas. Devolve as peças com os laços do
   menor para o maior e esse número.
@@ -120,7 +120,7 @@ area }], unidade, avisos }` ou `{ erro }`:
 3. **`bancada:plt-graduado`** (local, como a `bancada:curvas-reais`): os 12
    modelos de `D:\arte\...\molde fitness`; sem a pasta, avisa e sai. Com
    gabarito: **≥ 55 de 67** peças completas, e toda peça casada com as medidas
-   do `data.xml` a 0,1 cm. Sem gabarito: **≥ 43 de 67**. Os números entram no
+   do `data.xml` a 0,1 cm. Sem gabarito: **≥ 42 de 67**. Os números entram no
    log; subir é melhora, cair é reprovação.
 4. **`bancada:tela`** ganha um passo: importar um PLT graduado montado no teste
    com o `.adsx` dele → o molde abre na Montagem com os 4 tamanhos.

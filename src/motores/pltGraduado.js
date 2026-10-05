@@ -122,7 +122,7 @@ function chamfer(A, B) {
 /**
  * Sem gabarito: as cadeias de tamanhos. Cada laço liga ao "próximo tamanho" —
  * maior (área de 60% a 99%), de forma parecida na caixa normalizada, de
- * proporção e salto de área pequenos, e de preferência sobreposto —, pelo
+ * proporção e salto de área pequenos, e sobreposto —, pelo
  * custo menor primeiro, um próximo e um anterior por laço. O número de tamanhos
  * é o comprimento de cadeia mais comum; cadeia de outro comprimento é engano
  * (duas peças avulsas parecidas, uma sobre a outra) e se desfaz.
@@ -142,7 +142,10 @@ export function agruparTamanhos(lacos) {
       const cobre = (ix * iy) / Math.max(A.l.largura * A.l.altura, 1e-9);
       const custo = (chamfer(A.s, B.s) + chamfer(B.s, A.s)) / 2 + Math.abs(Math.log(A.proporcao / B.proporcao))
         + 0.5 * Math.abs(Math.log(razao)) - (cobre > 0.5 ? 0.02 : 0);
-      if (custo <= 0.15) pares.push({ i, j, custo });
+      // Sobrepostos, sim: medido nos 12 modelos reais, exigir dá 42 de 67 peças certas, e não
+      // exigir (para pegar o PLT de tamanhos lado a lado), 40. Lado a lado, cada tamanho fica
+      // avulso na conferência — à vista, e o .adsx resolve.
+      if (custo <= 0.15 && cobre > 0.5) pares.push({ i, j, custo });
     }
   }
   pares.sort((a, b) => a.custo - b.custo);
