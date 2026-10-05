@@ -367,16 +367,21 @@ async function principal() {
 
     await p.evaluate(() => document.getElementById('btn-complemento-procurar').click());
     await esperar(10000);
-    const achados = await p.$$eval('#complemento-lista .complemento-item',
-      (ns) => ns.map((n) => n.innerText.replace(/\s+/g, ' ')));
+    // A linha não diz mais "cabem N" (ver `mostrarCandidatos`): só entra na
+    // lista o que cabe, e a conta vira a quantidade que o campo já traz.
+    const achados = await p.$$eval('#complemento-lista .complemento-item', (ns) => ns.map((n) => {
+      const campo = n.querySelector('input[type="number"]');
+      return `${n.innerText.replace(/\s+/g, ' ')} [${campo ? campo.value : '-'}]`;
+    }));
     const estadoDaProcura = await p.$eval('#complemento-estado', (n) => n.textContent);
-    assert.ok(achados.some((l) => /manguito/.test(l) && /cabem \d+/.test(l)),
+    assert.ok(achados.some((l) => /manguito/.test(l) && /\[[1-9]\d*\]$/.test(l)),
       `a arte da Galeria tinha que caber nos vãos (lista: ${achados.join(' / ')} · ${estadoDaProcura})`);
 
+    // O Complementar põe a arte na lista e refaz o encaixe inteiro (ver
+    // `complementarOtimizando`): a caixa fecha e o Optmizar roda de novo, com
+    // os mesmos 3 s do primeiro.
     await p.evaluate(() => document.getElementById('btn-complemento-aplicar').click());
-    await esperar(1500);
-    const entrou = await p.$eval('#complemento-estado', (n) => n.textContent);
-    assert.match(entrou, /^Entraram \d+ peças?: .*manguito/, `o complemento não entrou (veio "${entrou}")`);
+    await esperar(18000);
     assert.match(await p.$eval('#encaixe-contagem', (n) => n.textContent), /^4 · /,
       'a arte da Galeria tinha que entrar na lista como a quarta peça');
     // O guarda da sobreposição roda em todo risco novo: aceso é sem peça em cima de peça.
