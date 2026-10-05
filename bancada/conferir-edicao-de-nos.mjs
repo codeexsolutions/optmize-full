@@ -344,4 +344,235 @@ const circulo = (() => {
   assert.ok(maior <= 1.3, `afastou ${maior.toFixed(2)} do círculo (ruído 0,3 + folga 1)`);
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * O NÓ LISO AUTOMÁTICO (spec de 2026-10-05, curvas fáceis da Montagem)
+ * ---------------------------------------------------------------------------
+ */
+const roda = (N = 8, R = 10) => {
+  const h = (4 / 3) * Math.tan(((2 * Math.PI) / N) / 4) * R;
+  return Array.from({ length: N }, (_, k) => {
+    const a = (k / N) * 2 * Math.PI;
+    const p = { x: R * Math.cos(a), y: R * Math.sin(a) };
+    const tg = { x: -Math.sin(a), y: Math.cos(a) };
+    return { x: p.x, y: p.y, entrada: { x: p.x - tg.x * h, y: p.y - tg.y * h }, saida: { x: p.x + tg.x * h, y: p.y + tg.y * h } };
+  });
+};
+/** O ângulo entre a alça que entra e a que sai (0 = liso). */
+const quebra = (no) => {
+  const e = { x: no.x - no.entrada.x, y: no.y - no.entrada.y };
+  const s = { x: no.saida.x - no.x, y: no.saida.y - no.y };
+  if (Math.hypot(e.x, e.y) < 1e-12 || Math.hypot(s.x, s.y) < 1e-12) return 0;
+  return Math.abs(Math.atan2(e.x * s.y - e.y * s.x, e.x * s.x + e.y * s.y));
+};
+const semNaN = (nos) => nos.every((n) => [n.x, n.y, n.entrada.x, n.entrada.y, n.saida.x, n.saida.y].every(Number.isFinite));
+const auto1 = { antes: 1, depois: 1, giro: 0 };
+
+// 30. A regra: entre duas curvas, direção = bissetriz, tamanho = distância ÷ 3 × abertura.
+{
+  const nos = [
+    { x: 0, y: 0, entrada: { x: 0, y: 0 }, saida: { x: 0, y: 0 } },
+    { x: 10, y: 0, entrada: { x: 10, y: 0 }, saida: { x: 10, y: 0 }, auto: { antes: 1, depois: 2, giro: 0 } },
+    { x: 10, y: 10, entrada: { x: 10, y: 10 }, saida: { x: 10, y: 10 } },
+  ];
+  const r = m.alcasDoNoAutomatico(nos, 1);
+  const d = { x: Math.SQRT1_2, y: Math.SQRT1_2 };
+  assert.ok(perto(r.entrada, { x: 10 - (d.x * 10) / 3, y: (-d.y * 10) / 3 }, 1e-9), "lado de antes: dist/3");
+  assert.ok(perto(r.saida, { x: 10 + (d.x * 20) / 3, y: (d.y * 20) / 3 }, 1e-9), "lado de depois: dist/3 × 2");
+}
+
+// 31. Reta antes: a curva sai na direção da reta, sem bico, e o giro não vale.
+{
+  const nos = [
+    reto(0, 0),
+    { x: 10, y: 0, entrada: { x: 10, y: 0 }, saida: { x: 12, y: 3 }, auto: { antes: 1, depois: 1, giro: 1 } },
+    { x: 15, y: 10, entrada: { x: 15, y: 10 }, saida: { x: 15, y: 10 } },
+  ];
+  const r = m.alcasDoNoAutomatico(nos, 1);
+  assert.ok(perto(r.entrada, { x: 10, y: 0 }), "lado reto não tem alça");
+  assert.ok(Math.abs(r.saida.y) < 1e-12 && r.saida.x > 10, "a curva sai na direção da reta");
+  // Retas dos dois lados: as alças ficam no nó.
+  const q = [reto(0, 0), { ...reto(10, 0), auto: auto1, canto: false }, reto(10, 10)];
+  const rq = m.alcasDoNoAutomatico(q, 1);
+  assert.ok(perto(rq.entrada, rq) && perto(rq.saida, rq));
+}
+
+// 32. O nó liso de hoje vira automático sem mudar o desenho.
+{
+  const c = roda();
+  const r = m.refazerAlcas(m.derivarAuto(c));
+  assert.ok(r.every((n) => n.auto), "todos viraram automáticos");
+  for (let i = 0; i < c.length; i++) {
+    assert.ok(perto(r[i].entrada, c[i].entrada, 1e-6) && perto(r[i].saida, c[i].saida, 1e-6), `nó ${i} mudou`);
+  }
+}
+
+// 33. O que não pode virar sem mudar o desenho fica como está: canto entre curvas, alças fora de linha.
+{
+  const c = roda();
+  c[2] = { ...c[2], canto: true };
+  c[5] = { ...c[5], saida: { x: c[5].saida.x + 1, y: c[5].saida.y } };
+  const r = m.derivarAuto(c);
+  assert.equal(r[2], c[2]);
+  assert.equal(r[5], c[5]);
+  assert.ok(!r[2].auto && !r[5].auto);
+}
+
+// 34. Junção reta → curva: alça a 1° da reta vira lisa com a reta (o bico some); a 5°, fica quina.
+{
+  const junta = (graus) => {
+    const a = (graus * Math.PI) / 180;
+    return [
+      reto(0, 0),
+      { x: 10, y: 0, entrada: { x: 10, y: 0 }, saida: { x: 10 + 3 * Math.cos(a), y: 3 * Math.sin(a) }, canto: true },
+      { x: 20, y: 10, entrada: { x: 17, y: 10 }, saida: { x: 20, y: 10 }, retaDepois: true, canto: true },
+      reto(0, 10),
+    ];
+  };
+  const um = m.derivarAuto(junta(1), [1]);
+  assert.ok(um[1].auto && !um[1].canto, "a 1°, vira automático");
+  assert.ok(Math.abs(um[1].saida.y) < 1e-12, "e a curva sai na direção da reta");
+  const cinco = m.derivarAuto(junta(5), [1]);
+  assert.ok(!cinco[1].auto && cinco[1].canto, "a 5°, é quina de verdade");
+}
+
+// 35. Arrastar um nó liso: ele e os vizinhos continuam sem bico.
+{
+  const c = m.derivarAuto(roda());
+  const r = m.moverNosLisos(c, [2], 3, -2);
+  for (const i of [1, 2, 3]) assert.ok(quebra(r[i]) < 1e-9, `nó ${i} ganhou bico`);
+  assert.ok(perto(r[2], { x: c[2].x + 3, y: c[2].y - 2 }));
+  // Os de longe não mudam.
+  assert.equal(r[6], c[6]);
+}
+
+// 36. Puxador de um lado: só a abertura daquele lado muda; o ponto continua liso.
+{
+  const c = m.derivarAuto(roda());
+  const no = c[2];
+  const s = { x: no.saida.x - no.x, y: no.saida.y - no.y };
+  const longe = { x: no.x + s.x * 2, y: no.y + s.y * 2 };
+  const r = m.moverPuxador(c, 2, "saida", longe);
+  assert.ok(Math.abs(r[2].auto.depois - c[2].auto.depois * 2) < 1e-9, "a saída dobrou de abertura");
+  assert.ok(Math.abs(r[2].auto.antes - c[2].auto.antes) < 1e-12, "a entrada não mudou de abertura");
+  assert.ok(quebra(r[2]) < 1e-9, "liso");
+  // Girar o puxador gira os dois lados juntos.
+  const girado = m.moverPuxador(c, 2, "saida", { x: no.saida.x, y: no.saida.y + 1 });
+  assert.ok(quebra(girado[2]) < 1e-9, "girou e continuou liso");
+  assert.ok(Math.abs(girado[2].auto.giro - c[2].auto.giro) > 1e-3, "o giro mudou");
+}
+
+// 37. Puxador num nó preso a uma reta: a direção é a da reta, só a abertura muda.
+{
+  const nos = m.derivarAuto([
+    reto(0, 0),
+    { x: 10, y: 0, entrada: { x: 10, y: 0 }, saida: { x: 13, y: 0 }, canto: true },
+    { x: 20, y: 10, entrada: { x: 17, y: 10 }, saida: { x: 20, y: 10 }, retaDepois: true, canto: true },
+    reto(0, 10),
+  ], [1]);
+  assert.ok(nos[1].auto, "a junção alinhada virou automática");
+  const r = m.moverPuxador(nos, 1, "saida", { x: 16, y: 5 });
+  assert.ok(Math.abs(r[1].saida.y) < 1e-12, "continua na direção da reta");
+  assert.ok(Math.abs(r[1].saida.x - 16) < 1e-9, "a abertura é a projeção na reta");
+}
+
+// 38. Alt no puxador: vira quina, e só aquela alça anda.
+{
+  const c = m.derivarAuto(roda());
+  const r = m.moverPuxador(c, 2, "saida", { x: 0, y: 0 }, { quebrar: true });
+  assert.ok(r[2].canto && !r[2].auto);
+  assert.ok(perto(r[2].entrada, c[2].entrada), "a entrada ficou");
+  assert.ok(perto(r[2].saida, { x: 0, y: 0 }));
+}
+
+// 39. Voltar o lado ao natural, e o automático dos dois lados.
+{
+  const c = m.derivarAuto(roda());
+  const puxado = m.moverPuxador(c, 2, "saida", { x: 30, y: 30 });
+  const lado = m.voltarLado(puxado, 2, "saida");
+  assert.equal(lado[2].auto.depois, 1);
+  assert.equal(lado[2].auto.giro, 0);
+  const tudo = m.voltarAoAuto(puxado, [2]);
+  assert.deepEqual(tudo[2].auto, auto1);
+}
+
+// 40. L e Q: quina vira liso (com abertura 1); liso vira quina com as alças no lugar.
+{
+  const c = roda();
+  c[3] = { ...c[3], canto: true, saida: { x: c[3].x, y: c[3].y + 4 } };
+  const liso = m.tornarLiso(c, [3]);
+  assert.ok(liso[3].auto && !liso[3].canto && quebra(liso[3]) < 1e-9);
+  const quina = m.tornarQuina(liso, [3]);
+  assert.ok(quina[3].canto && !quina[3].auto);
+  assert.ok(perto(quina[3].saida, liso[3].saida));
+}
+
+// 41. Puxar a curva no meio do trecho: as pontas lisas continuam lisas.
+{
+  const c = m.derivarAuto(roda());
+  const meio = m.pontoNoTrecho(c, 1, 0.5);
+  const r = m.puxarTrechoLiso(c, 1, 0.5, { x: meio.x + 2, y: meio.y + 2 });
+  assert.ok(r, "puxou");
+  assert.ok(quebra(r[1]) < 1e-9 && quebra(r[2]) < 1e-9, "sem bico nas pontas");
+  assert.ok(r[1].auto && r[2].auto);
+}
+
+// 42. Vizinho em cima do nó, e nó que volta para trás: nada de NaN.
+{
+  const em = m.refazerAlcas([
+    { x: 0, y: 0, entrada: { x: 0, y: 0 }, saida: { x: 0, y: 0 }, auto: auto1 },
+    { x: 0, y: 0, entrada: { x: 0, y: 0 }, saida: { x: 0, y: 0 }, auto: auto1 },
+    { x: 10, y: 0, entrada: { x: 10, y: 0 }, saida: { x: 10, y: 0 }, auto: auto1 },
+  ]);
+  assert.ok(semNaN(em), "vizinho em cima");
+  const volta = m.refazerAlcas([
+    { x: 0, y: 0, entrada: { x: 0, y: 0 }, saida: { x: 0, y: 0 }, auto: auto1 },
+    { x: 10, y: 0, entrada: { x: 10, y: 0 }, saida: { x: 10, y: 0 }, auto: auto1 },
+    { x: 0, y: 0.000001, entrada: { x: 0, y: 0 }, saida: { x: 0, y: 0 }, auto: auto1 },
+  ]);
+  assert.ok(semNaN(volta), "volta para trás");
+  // auto estragado: os números são presos, e a conta não vira NaN.
+  const estragado = m.refazerAlcas([
+    { x: 0, y: 0, entrada: { x: 0, y: 0 }, saida: { x: 0, y: 0 } },
+    { x: 10, y: 0, entrada: { x: 10, y: 0 }, saida: { x: 10, y: 0 }, auto: { antes: "x", depois: 1e9, giro: NaN } },
+    { x: 10, y: 10, entrada: { x: 10, y: 10 }, saida: { x: 10, y: 10 } },
+  ]);
+  assert.ok(semNaN(estragado), "auto estragado");
+}
+
+// 43. Peça de 3 nós automáticos e o quadrado de retas.
+{
+  const tres = m.refazerAlcas(roda(3).map((n) => ({ ...n, auto: auto1 })));
+  assert.ok(semNaN(tres) && tres.every((n) => quebra(n) < 1e-9));
+  assert.deepEqual(m.refazerAlcas(quadrado), quadrado, "o quadrado sem automático não muda");
+  assert.deepEqual(m.derivarAuto(quadrado), quadrado, "retas dos dois lados não viram automático");
+}
+
+// 44. Pôr nó numa curva de automáticos: o desenho não muda, e o nó novo é automático.
+{
+  const c = m.derivarAuto(roda());
+  const antes = [0.1, 0.3, 0.6, 0.9].map((t) => m.pontoNoTrecho(c, 3, t));
+  const r = m.inserirNoNoTraco(c, 3, 0.5);
+  assert.ok(r[4].auto, "o nó novo é automático");
+  assert.ok(perto(m.pontoNoTrecho(r, 3, 0.2), antes[0], 1e-9));
+  assert.ok(perto(m.pontoNoTrecho(r, 4, 0.2), antes[2], 1e-9));
+  assert.ok(r.every((n) => !n.auto || quebra(n) < 1e-9));
+  // E as alças de quem é automático batem com os números.
+  const refeito = m.refazerAlcas(r);
+  for (let i = 0; i < r.length; i++) {
+    assert.ok(perto(refeito[i].saida, r[i].saida, 1e-9) && perto(refeito[i].entrada, r[i].entrada, 1e-9), `nó ${i}`);
+  }
+}
+
+// 45. Apagar e clonar levam o automático junto, coerente com as alças.
+{
+  const c = m.derivarAuto(roda());
+  const ap = m.apagarNos(c, [3]);
+  const refeito = m.refazerAlcas(ap.nos);
+  for (let i = 0; i < ap.nos.length; i++) {
+    assert.ok(perto(refeito[i].saida, ap.nos[i].saida, 1e-9) && perto(refeito[i].entrada, ap.nos[i].entrada, 1e-9), `apagar: nó ${i}`);
+  }
+  assert.deepEqual(m.clonarNos(c)[1].auto, c[1].auto);
+}
+
 console.log("OK — as contas de edição de nós conferem.");

@@ -76,6 +76,7 @@ export function clonarNos(nos) {
   return nos.map((n) => ({
     x: n.x, y: n.y, entrada: { ...n.entrada }, saida: { ...n.saida },
     canto: n.canto, retaDepois: n.retaDepois, ...(n.simetrico ? { simetrico: true } : {}),
+    ...(n.auto ? { auto: { ...n.auto } } : {}),
   }));
 }
 
@@ -169,7 +170,12 @@ export function inserirNoNoTraco(nos, i, t) {
     entrada: corte.entradaDoNovo, saida: corte.saidaDoNovo,
     canto: false, retaDepois: false,
   });
-  return saida;
+  // Numa curva de nós automáticos, o nó novo também é (o corte deixa as alças
+  // dele na mesma reta), e os vizinhos passam a ter os números das alças
+  // encurtadas — o desenho não muda.
+  if (!a.auto && !b.auto) return saida;
+  const depoisDoNovo = (i + 2) % saida.length;
+  return rederivarAuto(derivarAuto(saida, [i + 1]), [i, depoisDoNovo]);
 }
 
 /**
@@ -420,7 +426,9 @@ export function converterTrechos(nos, trechos, jeito) {
       copia[j] = { ...copia[j], entrada: terco(b, a) };
     }
   }
-  return copia;
+  // As pontas automáticas refazem as alças: ao lado de uma reta nova, a curva
+  // passa a sair dela sem quebra.
+  return refazerAlcas(copia, trechos.flatMap((i) => [i, (i + 1) % n]));
 }
 
 /**
@@ -497,8 +505,11 @@ export function apagarNos(nos, indices) {
   const mapa = [];
   let k = 0;
   for (let i = 0; i < n; i++) mapa.push(fora.has(i) ? null : k++);
+  // As pontas de cada pedaço refeito ganharam alças novas: os automáticos
+  // passam a ter os números delas.
+  const pontas = pedacos.flatMap((p) => [mapa[p.a], mapa[(p.velhos[p.velhos.length - 1] + 1) % n]]);
   return {
-    nos: copia.filter((_, i) => !fora.has(i)),
+    nos: rederivarAuto(copia.filter((_, i) => !fora.has(i)), pontas),
     mapa,
     trechos: pedacos.map((p) => ({ velhos: p.velhos, novos: [mapa[p.a]] })),
   };
@@ -593,8 +604,9 @@ export function reduzirNos(nos, indices, folga, ancorasExtras = []) {
     mapa[i] = novos.length;
     novos.push(no);
   }
+  const pontas = trocados.flatMap((t) => [mapa[t.a], mapa[(t.velhos[t.velhos.length - 1] + 1) % n]]);
   return {
-    nos: novos,
+    nos: rederivarAuto(novos, pontas),
     mapa,
     trechos: trocados.map((t) => ({ velhos: t.velhos, novos: [mapa[t.a]] })),
     antes: n,
@@ -615,4 +627,270 @@ export function girarNos(nos, graus, centro) {
     y: centro.y + (p.x - centro.x) * s + (p.y - centro.y) * c,
   });
   return nos.map((n) => ({ ...n, ...gira(n), entrada: gira(n.entrada), saida: gira(n.saida) }));
+}
+
+/* --------------------------------------------------------------------------
+ * O NÓ LISO AUTOMÁTICO — ver docs/superpowers/specs/2026-10-05-curvas-faceis-da-montagem-design.md
+ * -------------------------------------------------------------------------- */
+const ABERTURA_MIN = 0.05;
+const ABERTURA_MAX = 4;
+const EM_LINHA = 1e-6;            // rad: alças "na mesma reta" para virar automático sem mudar o desenho
+const JUNTO_DA_RETA = (2 * Math.PI) / 180;
+
+const prender = (v, a, b) => Math.min(b, Math.max(a, v));
+const anguloDe = (v) => Math.atan2(v.y, v.x);
+const girarVetor = (v, a) => ({ x: v.x * Math.cos(a) - v.y * Math.sin(a), y: v.x * Math.sin(a) + v.y * Math.cos(a) });
+function normalizarAngulo(a) {
+  let r = a % (2 * Math.PI);
+  if (r > Math.PI) r -= 2 * Math.PI;
+  if (r < -Math.PI) r += 2 * Math.PI;
+  return r;
+}
+
+export const ehAutomatico = (no) => !!(no && no.auto);
+
+/** Os números do `auto`, presos aos limites (dado velho ou estragado não vira NaN). */
+function numerosDoAuto(a) {
+  const num = (v, padrao) => (Number.isFinite(v) ? v : padrao);
+  return {
+    antes: prender(num(a && a.antes, 1), ABERTURA_MIN, ABERTURA_MAX),
+    depois: prender(num(a && a.depois, 1), ABERTURA_MIN, ABERTURA_MAX),
+    giro: normalizarAngulo(num(a && a.giro, 0)),
+  };
+}
+
+/** A direção automática do nó `i`, sem o giro, e se ela está presa a uma reta; `null` quando não há. */
+function direcaoAutomatica(nos, i) {
+  const n = nos.length;
+  const no = nos[i];
+  const A = nos[(i - 1 + n) % n];
+  const B = nos[(i + 1) % n];
+  const retaAntes = !!A.retaDepois;
+  const retaDepois = !!no.retaDepois;
+  if (retaAntes && retaDepois) return null;
+  if (retaAntes) { const d = unitario(menos(no, A)); return d ? { d, presa: true } : null; }
+  if (retaDepois) { const d = unitario(menos(B, no)); return d ? { d, presa: true } : null; }
+  const u0 = unitario(menos(no, A));
+  const u1 = unitario(menos(B, no));
+  if (!u0 && !u1) return null;
+  if (!u0 || !u1) return { d: u0 ?? u1, presa: false };
+  return { d: unitario(somar(u0, u1)) ?? u1, presa: false };
+}
+
+/** O nó `i` com as alças da conta automática (o nó sem `auto` volta como está). */
+export function alcasDoNoAutomatico(nos, i) {
+  const no = nos[i];
+  if (!no.auto) return no;
+  const n = nos.length;
+  const A = nos[(i - 1 + n) % n];
+  const B = nos[(i + 1) % n];
+  const aqui = { x: no.x, y: no.y };
+  const dir = direcaoAutomatica(nos, i);
+  if (!dir) return { ...no, entrada: { ...aqui }, saida: { ...aqui } };
+  const { antes, depois, giro } = numerosDoAuto(no.auto);
+  const d = dir.presa ? dir.d : girarVetor(dir.d, giro);
+  const ce = (tamanho(menos(no, A)) / 3) * antes;
+  const cs = (tamanho(menos(B, no)) / 3) * depois;
+  return {
+    ...no,
+    entrada: A.retaDepois ? { ...aqui } : somar(no, vezes(d, -ce)),
+    saida: no.retaDepois ? { ...aqui } : somar(no, vezes(d, cs)),
+  };
+}
+
+/** Refaz as alças dos nós automáticos de `indices` (todos, com `null`) a partir de onde os nós estão. */
+export function refazerAlcas(nos, indices = null) {
+  const alvo = indices === null ? null : new Set(indices);
+  let mudou = false;
+  const saida = nos.map((no, i) => {
+    if (!no.auto || (alvo && !alvo.has(i))) return no;
+    mudou = true;
+    return alcasDoNoAutomatico(nos, i);
+  });
+  return mudou ? saida : nos;
+}
+
+/** Os números que reproduzem as alças de agora do nó `i`, ou `null` se não há como sem mudar o desenho. */
+function autoDasAlcas(nos, i) {
+  const n = nos.length;
+  const no = nos[i];
+  const A = nos[(i - 1 + n) % n];
+  const B = nos[(i + 1) % n];
+  const retaAntes = !!A.retaDepois;
+  const retaDepois = !!no.retaDepois;
+  if (retaAntes && retaDepois) return null;
+  const dir = direcaoAutomatica(nos, i);
+  if (!dir) return null;
+  const distA = tamanho(menos(no, A));
+  const distB = tamanho(menos(B, no));
+  const cabe = (v) => v >= ABERTURA_MIN && v <= ABERTURA_MAX;
+  if (retaAntes || retaDepois) {
+    const v = retaAntes ? menos(no.saida, no) : menos(no, no.entrada);
+    const t = tamanho(v);
+    const dist = retaAntes ? distB : distA;
+    if (t < 1e-9 || dist < 1e-9) return null;
+    if (Math.abs(normalizarAngulo(anguloDe(v) - anguloDe(dir.d))) > JUNTO_DA_RETA) return null;
+    const abertura = t / (dist / 3);
+    if (!cabe(abertura)) return null;
+    return { antes: retaAntes ? 1 : abertura, depois: retaAntes ? abertura : 1, giro: 0 };
+  }
+  if (no.canto) return null;
+  const ve = menos(no, no.entrada);
+  const vs = menos(no.saida, no);
+  const te = tamanho(ve);
+  const ts = tamanho(vs);
+  if (te < 1e-9 || ts < 1e-9 || distA < 1e-9 || distB < 1e-9) return null;
+  if (Math.abs(normalizarAngulo(anguloDe(vs) - anguloDe(ve))) > EM_LINHA) return null;
+  const antes = te / (distA / 3);
+  const depois = ts / (distB / 3);
+  if (!cabe(antes) || !cabe(depois)) return null;
+  return { antes, depois, giro: normalizarAngulo(anguloDe(vs) - anguloDe(dir.d)) };
+}
+
+/** O nó automático, sem as marcas dos tipos de antes. */
+function comAuto(no, auto) {
+  const { simetrico: _s, ...resto } = no;
+  return { ...resto, canto: false, auto };
+}
+
+/**
+ * Converte em automático os nós de `indices` (todos, com `null`) que dá para
+ * converter sem mudar o desenho (ver 1.4 da spec). O que não dá fica como está.
+ */
+export function derivarAuto(nos, indices = null) {
+  const alvo = indices === null ? null : new Set(indices);
+  const convertidos = [];
+  const saida = nos.map((no, i) => {
+    if (no.auto || (alvo && !alvo.has(i))) return no;
+    const auto = autoDasAlcas(nos, i);
+    if (!auto) return no;
+    convertidos.push(i);
+    return comAuto(no, auto);
+  });
+  return convertidos.length ? refazerAlcas(saida, convertidos) : nos;
+}
+
+/**
+ * Os nós de `indices` que JÁ são automáticos e tiveram as alças feitas por outra
+ * conta (pôr nó, apagar, reduzir): os números passam a ser os dessas alças. Não
+ * dá: o nó deixa de ser automático (fica com as alças que tem).
+ */
+export function rederivarAuto(nos, indices) {
+  const alvo = new Set(indices);
+  let mudou = false;
+  const saida = nos.map((no, i) => {
+    if (!no.auto || !alvo.has(i)) return no;
+    mudou = true;
+    const semAuto = { ...no };
+    delete semAuto.auto;
+    const lista = nos.slice();
+    lista[i] = semAuto;
+    const auto = autoDasAlcas(lista, i);
+    if (auto) return { ...no, auto };
+    const linha = Math.abs(normalizarAngulo(anguloDe(menos(no.saida, no)) - anguloDe(menos(no, no.entrada)))) <= EM_LINHA;
+    return { ...semAuto, canto: !linha };
+  });
+  return mudou ? saida : nos;
+}
+
+/** Os índices e os vizinhos deles, na volta fechada. */
+export function comVizinhos(indices, n) {
+  const s = new Set();
+  for (const i of indices) for (const k of [i - 1, i, i + 1]) s.add((k + n) % n);
+  return [...s].sort((a, b) => a - b);
+}
+
+/** Move os nós e deixa a curva seguir: os lisos em volta refazem as alças. */
+export function moverNosLisos(nos, indices, dx, dy) {
+  const roda = comVizinhos(indices, nos.length);
+  return refazerAlcas(moverNos(derivarAuto(nos, roda), indices, dx, dy), roda);
+}
+
+/** `alinharNos`, com a curva seguindo. */
+export function alinharNosLisos(nos, indices, eixo, referencia) {
+  const roda = comVizinhos(indices, nos.length);
+  return refazerAlcas(alinharNos(derivarAuto(nos, roda), indices, eixo, referencia), roda);
+}
+
+/**
+ * O puxador de um lado do nó liso automático `i` foi arrastado até `alvo`: a
+ * distância vira a abertura daquele lado, e a direção vira o giro (os dois
+ * lados giram juntos). Preso a uma reta, só a abertura. `quebrar` (Alt): o nó
+ * vira quina e só aquela alça anda. Nó que não é automático: a alça anda pelo
+ * tipo dele, como sempre.
+ */
+export function moverPuxador(nos, i, parte, alvo, { quebrar = false } = {}) {
+  if (quebrar) return moverPega(tornarQuina(nos, [i]), { no: i, parte }, alvo);
+  const no = nos[i];
+  if (!no.auto) return moverPega(nos, { no: i, parte }, alvo);
+  const n = nos.length;
+  const dir = direcaoAutomatica(nos, i);
+  if (!dir) return nos;
+  const vizinho = parte === "saida" ? nos[(i + 1) % n] : nos[(i - 1 + n) % n];
+  const dist = tamanho(menos(vizinho, no));
+  if (dist < 1e-9) return nos;
+  const v = parte === "saida" ? menos(alvo, no) : menos(no, alvo);
+  const atual = numerosDoAuto(no.auto);
+  const comprimento = dir.presa ? v.x * dir.d.x + v.y * dir.d.y : tamanho(v);
+  const abertura = prender(comprimento / (dist / 3), ABERTURA_MIN, ABERTURA_MAX);
+  const giro = dir.presa || tamanho(v) < 1e-9 ? atual.giro : normalizarAngulo(anguloDe(v) - anguloDe(dir.d));
+  const auto = { ...atual, [parte === "saida" ? "depois" : "antes"]: abertura, giro };
+  const lista = nos.slice();
+  lista[i] = { ...no, auto };
+  lista[i] = alcasDoNoAutomatico(lista, i);
+  return lista;
+}
+
+/** Dois cliques num puxador: aquele lado volta ao natural, e o giro a zero. */
+export function voltarLado(nos, i, parte) {
+  const no = nos[i];
+  if (!no || !no.auto) return nos;
+  const auto = { ...numerosDoAuto(no.auto), [parte === "saida" ? "depois" : "antes"]: 1, giro: 0 };
+  const lista = nos.slice();
+  lista[i] = { ...no, auto };
+  lista[i] = alcasDoNoAutomatico(lista, i);
+  return lista;
+}
+
+/** L: liso automático — sem mudar o desenho quando dá; se não (era quina), com abertura 1 e giro 0. */
+export function tornarLiso(nos, indices) {
+  let lista = derivarAuto(nos, indices);
+  const novos = [];
+  lista = lista.map((no, i) => {
+    if (!indices.includes(i) || no.auto) return no;
+    const n = lista.length;
+    if (lista[(i - 1 + n) % n].retaDepois && no.retaDepois) return no;
+    novos.push(i);
+    return comAuto(no, { antes: 1, depois: 1, giro: 0 });
+  });
+  return novos.length ? refazerAlcas(lista, novos) : lista;
+}
+
+/** Q: quina — sem `auto`, marcado canto; as alças ficam onde estão. */
+export function tornarQuina(nos, indices) {
+  const alvo = new Set(indices);
+  return nos.map((no, i) => {
+    if (!alvo.has(i)) return no;
+    const { auto: _a, simetrico: _s, ...resto } = no;
+    return { ...resto, canto: true };
+  });
+}
+
+/** A: os dois lados ao natural e o giro a zero (o que não é automático vira, como no L). */
+export function voltarAoAuto(nos, indices) {
+  const lista = tornarLiso(nos, indices).map((no, i) => (indices.includes(i) && no.auto ? { ...no, auto: { antes: 1, depois: 1, giro: 0 } } : no));
+  return refazerAlcas(lista, indices);
+}
+
+/** Puxar a curva no meio do trecho, sem bico nas pontas lisas: cada ponta automática vira um puxador. */
+export function puxarTrechoLiso(nos, i, t, alvo) {
+  const n = nos.length;
+  const j = (i + 1) % n;
+  const base = derivarAuto(nos, [i, j]);
+  const puxado = puxarTrecho(base, i, t, alvo);
+  if (!puxado) return null;
+  let r = puxado;
+  if (base[i].auto) r = moverPuxador(r.map((no, k) => (k === i ? { ...no, auto: base[i].auto } : no)), i, "saida", puxado[i].saida);
+  if (base[j].auto) r = moverPuxador(r.map((no, k) => (k === j ? { ...no, auto: r[j].auto ?? base[j].auto } : no)), j, "entrada", puxado[j].entrada);
+  return r;
 }
