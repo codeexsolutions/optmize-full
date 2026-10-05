@@ -269,7 +269,7 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
 
   const gerar = (todas: boolean) => {
     if (!todas && !pecaDaBase?.graduacao) {
-      void dialogo.avisar("Esta peça ainda não tem graduação: marque pontos ou uma porcentagem.");
+      void dialogo.avisar("Esta peça ainda não tem graduação: marque pontos ou quanto a peça inteira cresce.");
       return;
     }
     const alvos: AlvoDeGeracao[] = planejarGeracao(molde.pecas, molde.tamanhos, todas ? null : (pecaDaBase!.grupo ?? -1));
