@@ -143,6 +143,21 @@ async function principal() {
     console.error('conferir-tela: falta o painel compilado. Rode `npm run front` antes.');
     process.exit(1);
   }
+  /*
+   * O painel compilado tem que ser DESTE fonte. O servidor serve o `dist/`, e
+   * um `dist/` velho faz esta bancada passar conferindo código que não é mais
+   * o de hoje. O build carimba o hash do fonte (ver `empacotar/carimbo.cjs`).
+   */
+  const { carimboDoFonte } = require('../empacotar/carimbo.cjs');
+  let carimbado = null;
+  try {
+    carimbado = JSON.parse(fs.readFileSync(path.join(RAIZ, 'dist', 'carimbo.json'), 'utf8')).fonte;
+  } catch { /* dist de antes do carimbo: tão velho quanto um que não bate */ }
+  if (carimbado !== carimboDoFonte(RAIZ)) {
+    console.error('conferir-tela: o painel compilado (dist/) não é deste src/ — '
+      + 'a tela conferida seria a de outro código. Rode `npm run front` antes.');
+    process.exit(1);
+  }
 
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'optimize-tela-'));
   // O painel pede conta para abrir: esta bancada entra pelo arquivo de
