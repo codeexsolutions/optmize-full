@@ -104,6 +104,14 @@ assert.equal(lerSituacao("x"), null);
   assert.equal(arrumarPeca({ contorno: quadrado, graduacao: { jeito: "pontos", regras: [] } }, 0).graduacao, null, "sem nós, sem graduação");
   assert.equal(arrumarPeca({ contorno: quadrado, nos, graduacao: { jeito: "outro" } }, 0).graduacao, null);
   assert.equal(pecaDoBanco({ ...arrumarPeca({ contorno: quadrado }, 0), id: 2 }).graduacao, null);
+  // A peça inteira em cm: o jeito "medida" vai e volta; número fora de −50…50 vira 0.
+  const m = pecaDoBanco({ ...arrumarPeca({ contorno: quadrado, nos, graduacao: {
+    jeito: "medida", regras: [], medida: { largura: 0, altura: 2 } } }, 0), id: 3 }).graduacao;
+  assert.equal(m.jeito, "medida");
+  assert.deepEqual(m.medida, { largura: 0, altura: 2 });
+  const absurda = pecaDoBanco({ ...arrumarPeca({ contorno: quadrado, nos, graduacao: {
+    jeito: "medida", regras: [], medida: { largura: 99, altura: "x" } } }, 0), id: 4 }).graduacao;
+  assert.deepEqual(absurda.medida, { largura: 0, altura: 0 });
 }
 
 // 9. O tipo simétrico do nó é guardado; nó de canto não é simétrico; nó sem o campo volta sem ele.

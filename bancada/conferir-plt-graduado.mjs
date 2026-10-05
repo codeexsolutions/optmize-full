@@ -30,6 +30,8 @@ if (!fs.existsSync(PASTA)) {
 globalThis.document ??= { createElement: () => ({ getContext: () => ({}) }) };
 const g = await carregarModulo("src/motores/pltGraduado.js");
 const a = await carregarModulo("src/motores/audacesAdsx.js");
+const grad = await carregarModulo("src/motores/graduacao.js");
+const mont = await carregarModulo("src/motores/montagem.js");
 
 const PISO_COM_GABARITO = 55;
 const PISO_SEM_GABARITO = 42;
@@ -37,7 +39,7 @@ const PISO_SEM_GABARITO = 42;
 const casa = (l, m) => (Math.abs(l.largura - m.largura) <= 0.1 && Math.abs(l.altura - m.altura) <= 0.1)
   || (Math.abs(l.largura - m.altura) <= 0.1 && Math.abs(l.altura - m.largura) <= 0.1);
 
-let presentes = 0, completas = 0, acertosSem = 0;
+let presentes = 0, completas = 0, acertosSem = 0, graduadas = 0, graduadasCertas = 0;
 for (const nome of fs.readdirSync(PASTA).sort()) {
   const dir = path.join(PASTA, nome);
   if (!fs.statSync(dir).isDirectory()) continue;
@@ -65,6 +67,39 @@ for (const nome of fs.readdirSync(PASTA).sort()) {
   }
   completas += completasAqui;
 
+  // A peça inteira em cm (graduação de 2026-10-05): do contorno base real, com o salto do
+  // data.xml, cada tamanho gerado tem a largura e a altura da Audaces. Só as peças que crescem
+  // por igual a cada tamanho (o salto constante) — é o que a graduação por medida promete.
+  const ib = gab.tamanhos.indexOf(gab.base);
+  const gradeDoModelo = gab.tamanhos.map((nome, ordem) => ({ nome, cor: "#000000", ordem, base: nome === gab.base }));
+  for (const p of casado.pecas) {
+    const doGab = gab.pecas.find((x) => x.nome === p.nome);
+    const bm = doGab.porTamanho[gab.base];
+    const laco = p.porTamanho[gab.base];
+    if (!bm || !laco) continue;
+    const saltos = gab.tamanhos.map((t, i) => (i === ib || !doGab.porTamanho[t] ? null
+      : { dx: (doGab.porTamanho[t].largura - bm.largura) / (i - ib), dy: (doGab.porTamanho[t].altura - bm.altura) / (i - ib) })).filter(Boolean);
+    if (!saltos.length) continue;
+    const constante = saltos.every((sl) => Math.abs(sl.dx - saltos[0].dx) < 0.02 && Math.abs(sl.dy - saltos[0].dy) < 0.02);
+    if (!constante || (Math.abs(saltos[0].dx) < 1e-9 && Math.abs(saltos[0].dy) < 1e-9)) continue;
+    const nosBase = mont.nosDoPoligono(laco.pontos.map((q) => ({ x: q.x - laco.caixa.x0, y: q.y - laco.caixa.y0 })));
+    const base = {
+      tamanho: gab.base, grupo: 0, nos: nosBase, marcacoes: mont.marcacoesPadrao(nosBase),
+      graduacao: { jeito: "medida", porcentagem: 0, regras: [], medida: { largura: saltos[0].dx, altura: saltos[0].dy } },
+    };
+    graduadas++;
+    let certa = true;
+    for (const t of gab.tamanhos) {
+      if (t === gab.base || !doGab.porTamanho[t]) continue;
+      const r = grad.gerarTamanho(base, gradeDoModelo, t);
+      if (!r.peca) { certa = false; continue; }
+      const xs = r.peca.nos.map((n) => n.x), ys = r.peca.nos.map((n) => n.y);
+      const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+      if (!casa({ largura: w, altura: h }, doGab.porTamanho[t])) certa = false;
+    }
+    if (certa) graduadasCertas++;
+  }
+
   // Sem gabarito: a peça do XML acertada quando um grupo tem exatamente os tamanhos dela.
   const agrupado = g.agruparTamanhos(r.lacos);
   let acertos = 0;
@@ -79,5 +114,7 @@ for (const nome of fs.readdirSync(PASTA).sort()) {
 }
 
 console.log(`\nbancada:plt-graduado — ${presentes} peças nos PLT: com gabarito ${completas} completas, sem gabarito ${acertosSem}.`);
+console.log(`graduação por medida: ${graduadasCertas} de ${graduadas} peças de salto constante saem com a largura e a altura da Audaces (a 0,1 cm).`);
+assert.equal(graduadasCertas, graduadas, "a graduação por medida tinha que reproduzir a Audaces em toda peça de salto constante");
 assert.ok(completas >= PISO_COM_GABARITO, `com gabarito caiu: ${completas} < ${PISO_COM_GABARITO}`);
 assert.ok(acertosSem >= PISO_SEM_GABARITO, `sem gabarito caiu: ${acertosSem} < ${PISO_SEM_GABARITO}`);

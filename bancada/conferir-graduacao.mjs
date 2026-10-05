@@ -297,4 +297,53 @@ assert.ok(g.deslocamentosDoTamanho(base, grade, "M").every((d) => d.dx === 0 && 
   });
 }
 
+// A PEÇA INTEIRA EM CENTÍMETROS (2026-10-05): a Audaces gradua centímetros fixos por
+// tamanho, diferentes em largura e altura (a gola: 0 e +2) — a porcentagem única errava
+// mais de 0,5 cm em 39 de 74 peças reais. Aqui a largura e a altura do tamanho são as do
+// base mais k × o salto, exatas.
+{
+  const ret = (w, h) => [reto(0, 0), reto(w, 0), reto(w, h), reto(0, h)];
+  const caixa = (nos) => {
+    const xs = nos.map((n) => n.x), ys = nos.map((n) => n.y);
+    return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  };
+  const comMedida = (nos, largura, altura) => ({
+    ...pecaBase({ jeito: "medida", porcentagem: 0, regras: [], medida: { largura, altura } }), nos,
+    marcacoes: { margem: 0, espelhar: false, fio: { x: 2, y: 20, angulo: 0, comprimento: 6 }, piques: [], pontos: [{ x: 2, y: 10 }] },
+  });
+  const gola = comMedida(ret(5, 43), 0, 2);
+  for (const [t, h] of [["PP", 39], ["P", 41], ["G", 45], ["GG", 47]]) {
+    const r = g.gerarTamanho(gola, grade, t);
+    assert.ok(r.peca, r.erro);
+    const c = caixa(r.peca.nos);
+    assert.ok(Math.abs(c.w - 5) < 1e-9 && Math.abs(c.h - h) < 1e-9, `gola ${t}: ${c.w} × ${c.h}, devia ser 5 × ${h}`);
+  }
+  // A frente cresce +2 e +2: exata nos dois sentidos, e o fio cresce junto (é vertical).
+  const frente = comMedida(ret(40, 60), 2, 2);
+  const gg = g.gerarTamanho(frente, grade, "GG").peca;
+  const cg = caixa(gg.nos);
+  assert.ok(Math.abs(cg.w - 44) < 1e-9 && Math.abs(cg.h - 64) < 1e-9, `frente GG: ${cg.w} × ${cg.h}`);
+  assert.ok(Math.abs(gg.marcacoes.fio.comprimento - 6 * 64 / 60) < 1e-9, "o fio vertical cresce com a altura");
+  // Cresce do centro: o centro da peça fica no lugar.
+  const centro = (nos) => { const xs = nos.map((n) => n.x), ys = nos.map((n) => n.y); return [(Math.max(...xs) + Math.min(...xs)) / 2, (Math.max(...ys) + Math.min(...ys)) / 2]; };
+  assert.deepEqual(centro(gg.nos).map((v) => +v.toFixed(9)), [20, 30]);
+  // Tamanho que sumiria: erro dito, e nada é gerado.
+  const some = g.gerarTamanho(comMedida(ret(5, 43), 0, 30), grade, "PP");
+  assert.ok(some.erro && /some|zero|negativ/i.test(some.erro), `veio: ${JSON.stringify(some)}`);
+  // Os dois zerados: nada muda — avisa, como a porcentagem 0.
+  assert.ok(g.gerarTamanho(comMedida(ret(5, 43), 0, 0), grade, "G").erro);
+  assert.ok(g.avisosDaGraduacao(comMedida(ret(5, 43), 0, 0), grade).some((a) => /0/.test(a)));
+  // A prévia (deslocamentos) bate com o tamanho gerado.
+  const d = g.deslocamentosDoTamanho(gola, grade, "GG");
+  const nosGG = g.gerarTamanho(gola, grade, "GG").peca.nos;
+  gola.nos.forEach((n, i) => assert.ok(Math.abs(n.x + d[i].dx - nosGG[i].x) < 1e-9 && Math.abs(n.y + d[i].dy - nosGG[i].y) < 1e-9, `nó ${i}`));
+  // Girar a peça 90° troca largura e altura do salto.
+  const girada = g.graduacaoGirada({ jeito: "medida", porcentagem: 0, regras: [], medida: { largura: 0, altura: 2 } }, 90);
+  assert.deepEqual(girada.medida, { largura: 2, altura: 0 });
+  assert.deepEqual(g.graduacaoGirada(girada, 180).medida, { largura: 2, altura: 0 });
+  // A porcentagem de antes continua gerando igual.
+  const pct = g.gerarTamanho({ ...pecaBase({ jeito: "porcentagem", porcentagem: 10, regras: [] }), nos: ret(10, 10) }, grade, "G");
+  assert.ok(Math.abs(caixa(pct.peca.nos).w - 11) < 1e-9, "10% por tamanho no G");
+}
+
 console.log("OK — a graduação confere.");
