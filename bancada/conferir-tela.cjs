@@ -577,6 +577,42 @@ async function principal() {
     assert.equal(depoisDoArraste, depoisDaFila + 1,
       `o TIFF arrastado sem tipo tinha que entrar (eram ${depoisDaFila}, ficaram ${depoisDoArraste})`);
 
+    /*
+     * ---- 10. a mesma quantidade em várias peças de uma vez ----
+     *
+     * Cliente manda 50 artes, 40 de cada: digitar 40 em cinquenta linhas era o
+     * jeito. Sem nada marcado, "Qtd de cada" vale para a lista inteira; com
+     * linhas marcadas, só para elas. "Marcar todas" fica na barra da seleção.
+     */
+    const contar = () => p.$eval('#encaixe-contagem', (n) => n.textContent.trim());
+    const botaoQtd = () => p.$eval('#btn-encaixe-qtd-todas', (n) => n.textContent.trim());
+    const aplicarQtd = (n) => p.evaluate((valor) => {
+      const campo = document.getElementById('encaixe-qtd-todas');
+      campo.value = String(valor);
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('btn-encaixe-qtd-todas').click();
+    }, n);
+    const linhasNaLista = depoisDoArraste;
+
+    assert.equal(await botaoQtd(), `Aplicar em todas (${linhasNaLista})`);
+    await aplicarQtd(4);
+    await esperar(300);
+    assert.match(await contar(), new RegExp(`^${linhasNaLista} · ${linhasNaLista * 4} cóp`),
+      `sem nada marcado, a quantidade tinha que ir para todas (veio "${await contar()}")`);
+
+    await p.evaluate(() => document.querySelector('[data-sel-peca]').click());
+    await esperar(300);
+    assert.equal(await botaoQtd(), 'Aplicar na marcada');
+    await aplicarQtd(2);
+    await esperar(300);
+    assert.match(await contar(), new RegExp(`^${linhasNaLista} · ${(linhasNaLista - 1) * 4 + 2} cóp`),
+      `com uma marcada, só ela tinha que mudar (veio "${await contar()}")`);
+
+    await p.evaluate(() => document.getElementById('btn-encaixe-marcar-todas').click());
+    await esperar(300);
+    assert.equal(await botaoQtd(), `Aplicar nas ${linhasNaLista} marcadas`);
+    assert.match(await p.$eval('#encaixe-grupo-conta', (n) => n.textContent), new RegExp(`^${linhasNaLista} peças marcadas`));
+
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
@@ -584,7 +620,8 @@ async function principal() {
       + ` nos vãos e desfez, o TIFF entrou pela conversão`
       + `, o × tirou a peça (${antesDoX} → ${depoisDoX})`
       + `, o arquivo da fila entrou depois da busca (${depoisDoX} → ${depoisDaFila})`
-      + ` e o TIFF arrastado sem tipo entrou (${depoisDaFila} → ${depoisDoArraste}).`);
+      + `, o TIFF arrastado sem tipo entrou (${depoisDaFila} → ${depoisDoArraste})`
+      + ' e a quantidade foi para todas, para a marcada e o "Marcar todas" marcou.');
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();

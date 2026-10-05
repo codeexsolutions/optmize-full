@@ -254,6 +254,10 @@ const encaixeGrupoConta = document.getElementById("encaixe-grupo-conta");
 const btnEncaixeCriarGrupo = document.getElementById("btn-encaixe-criar-grupo");
 const btnEncaixeTirarGrupo = document.getElementById("btn-encaixe-tirar-grupo");
 const btnEncaixeLimparSelecao = document.getElementById("btn-encaixe-limpar-selecao");
+const btnEncaixeMarcarTodas = document.getElementById("btn-encaixe-marcar-todas");
+const encaixeQtdLote = document.getElementById("encaixe-qtd-lote");
+const encaixeQtdTodas = document.getElementById("encaixe-qtd-todas");
+const btnEncaixeQtdTodas = document.getElementById("btn-encaixe-qtd-todas");
 /*
  * O JEITO DE ENCAIXAR E A UNIDADE DO MOLDE SAÍRAM DO CONFERE DO OPTMIZAR.
  *
@@ -1436,11 +1440,59 @@ function corDoGrupo(nome) {
   return CORES_PECA[n % CORES_PECA.length];
 }
 
+/*
+ * A MESMA QUANTIDADE EM VÁRIAS PEÇAS.
+ *
+ * Cliente manda 50 artes, 40 de cada, e o jeito era digitar 40 em cinquenta
+ * linhas. "Qtd de cada" vale para as linhas marcadas; sem nenhuma marcada, para
+ * a lista inteira — o botão diz qual das duas antes do clique. Substitui a
+ * quantidade que veio do nome do arquivo: quem aplica em todas está dizendo
+ * que todas valem isso. Como digitar na linha, não refaz o encaixe da tela.
+ */
+function atualizarQtdDoLote() {
+  if (!encaixeQtdLote) return;
+  const temPecas = pecasEncaixe.length > 0;
+  encaixeQtdLote.classList.toggle("hidden", !temPecas);
+  encaixeQtdLote.classList.toggle("flex", temPecas);
+  const marcadas = selecionadas.size;
+  btnEncaixeQtdTodas.textContent = marcadas === 0 ? `Aplicar em todas (${pecasEncaixe.length})`
+    : marcadas === 1 ? "Aplicar na marcada" : `Aplicar nas ${marcadas} marcadas`;
+}
+
+function aplicarQtdNoLote() {
+  const quantidade = Math.floor(Number(encaixeQtdTodas.value));
+  if (!(quantidade >= 1)) {
+    encaixeQtdTodas.focus();
+    return;
+  }
+  const alvos = selecionadas.size > 0 ? pecasEncaixe.filter((p) => selecionadas.has(p.id)) : pecasEncaixe;
+  alvos.forEach((p) => {
+    p.qtd = quantidade;
+    p.qtdDoArquivo = false;
+  });
+  renderPecasEncaixe();
+  atualizarPainelDoTrabalho();
+}
+
+if (btnEncaixeQtdTodas) escopo.ouvir(btnEncaixeQtdTodas, "click", aplicarQtdNoLote);
+if (encaixeQtdTodas) {
+  escopo.ouvir(encaixeQtdTodas, "keydown", (e) => {
+    if (e.key === "Enter") aplicarQtdNoLote();
+  });
+}
+if (btnEncaixeMarcarTodas) {
+  escopo.ouvir(btnEncaixeMarcarTodas, "click", () => {
+    pecasEncaixe.forEach((p) => selecionadas.add(p.id));
+    renderPecasEncaixe();
+  });
+}
+
 /** A barra só existe quando há o que fazer com ela. */
 function atualizarBarraDeGrupo() {
   // Peça que saiu da lista não pode continuar marcada.
   const vivas = new Set(pecasEncaixe.map((p) => p.id));
   [...selecionadas].forEach((id) => { if (!vivas.has(id)) selecionadas.delete(id); });
+  atualizarQtdDoLote();
 
   const quantas = selecionadas.size;
   encaixeBarraGrupo.classList.toggle("hidden", quantas === 0);
