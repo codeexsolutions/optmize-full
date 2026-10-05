@@ -48,6 +48,7 @@
     "bancada:janelas": "node bancada/conferir-janelas.mjs",
     "bancada:medida-do-arquivo": "node bancada/conferir-medida-do-arquivo.mjs",
     "bancada:curvas-reais": "node bancada/conferir-curvas-reais.mjs",
+    "bancada:plt": "node bancada/conferir-plt.mjs",
     "bancada:montagem-tela": "node bancada/conferir-montagem-tela.cjs",
     "bancada:guardados": "node bancada/medir-guardados.js",
     "bancada:montagem": "node bancada/conferir-montagem.mjs",
