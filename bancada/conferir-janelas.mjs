@@ -99,4 +99,17 @@ caso("sobreposição achada na busca não abre janela quando o encaixe vai ser r
     "da busca até o fim do try, só a janela da trava");
 });
 
+caso("arquivo que chega com trabalho rodando vai para a fila, e a fila espera a segunda rodada", () => {
+  assert.ok(!codigo.includes("Aguarde o trabalho atual terminar antes de adicionar outros arquivos"),
+    "o arquivo durante um trabalho ainda abre a janela");
+  const entrada = corpo("async function adicionarArquivos(");
+  assert.match(entrada, /if \(carregamentoAtivo \|\| rodadaMarcada\) return entrarNaFila\(files\);/);
+  // A fila anda quando o carregamento acaba, e não com outra rodada marcada.
+  assert.match(corpo("function finalizarCarregamento("), /seguirFila\(\);/);
+  assert.match(corpo("function seguirFila("), /if \(carregamentoAtivo \|\| rodadaMarcada \|\| filaDeArquivos\.length === 0\) return;/);
+  const servico = corpo("async function optmizar(");
+  assert.match(servico, /rodadaMarcada = false;/);
+  assert.match(servico, /rodadaMarcada = !!\(refazer \|\| refazerPelaCaixa\);/);
+});
+
 console.log(`\nbancada:janelas — ${casos} casos ok`);

@@ -273,6 +273,14 @@ const btnLimparPecas = document.getElementById("btn-limpar-pecas");
 // carregamento lá embaixo, porque `atualizarPainelDoTrabalho` o lê para
 // decidir a lixeira — e ela pode rodar antes de o código chegar lá.
 let carregamentoAtivo = false;
+/** Arquivos que chegaram com um trabalho rodando; entram quando ele acabar (ver `seguirFila`). */
+let filaDeArquivos = [];
+/**
+ * O `optmizar` já marcou a rodada seguinte (a conferência pediu, ou a busca
+ * quebrou e vai pela caixa). Entre uma e outra não há carregamento ativo, e a
+ * fila não pode se meter ali.
+ */
+let rodadaMarcada = false;
 /** O encaixe guardado que o aviso "Usar o melhor de antes" oferece agora (ver `ofertaAindaServe`). */
 let ofertaDoGuardado = null;
 const encaixePecasBody = document.getElementById("encaixe-pecas-body");
@@ -1077,12 +1085,47 @@ async function emParalelo(quantidade, teto, tarefa) {
   await Promise.all(linhas);
 }
 
+/*
+ * A FILA DE ARQUIVOS.
+ *
+ * Arquivo que chega com um trabalho rodando (a busca, outra leitura) não abre
+ * mais "Aguarde o trabalho atual terminar" — e não se perde: espera aqui, um
+ * toast no canto conta, e ele entra sozinho quando o carregamento acaba
+ * (`finalizarCarregamento` chama `seguirFila`). A promessa de quem mandou só
+ * resolve quando o arquivo entrou de fato: quem entrega por `adicionarArquivos`
+ * espera isso para limpar a própria lista.
+ */
+function entrarNaFila(files) {
+  return new Promise((entrou) => {
+    filaDeArquivos.push({ files, entrou });
+    const quantos = filaDeArquivos.reduce((soma, f) => soma + f.files.length, 0);
+    void window.__alertaOptmize?.mostrar({
+      tipo: "info",
+      toast: true,
+      titulo: `${quantos === 1 ? "1 arquivo" : `${quantos} arquivos`} na fila`,
+      texto: `${quantos === 1 ? "Entra" : "Entram"} na lista quando o trabalho atual terminar.`,
+    });
+  });
+}
+
+function seguirFila() {
+  // Depois do que estiver terminando agora: o `finally` do `optmizar` ainda
+  // vai marcar (ou não) a rodada seguinte.
+  setTimeout(async () => {
+    if (carregamentoAtivo || rodadaMarcada || filaDeArquivos.length === 0) return;
+    const lote = filaDeArquivos;
+    filaDeArquivos = [];
+    try {
+      await adicionarArquivos(lote.flatMap((f) => f.files));
+    } finally {
+      lote.forEach((f) => f.entrou());
+    }
+  }, 0);
+}
+
 async function adicionarArquivos(files) {
   if (!files || files.length === 0) return; // nada a fazer, e o painel nem abre
-  if (carregamentoAtivo) {
-    mostrarErroEncaixe("Aguarde o trabalho atual terminar antes de adicionar outros arquivos.", "aviso");
-    return;
-  }
+  if (carregamentoAtivo || rodadaMarcada) return entrarNaFila(files);
 
   // O Encaixe não pergunta de qual pedido é o lote: entra no do último que
   // entrou (P1 numa lista vazia).
@@ -2593,6 +2636,7 @@ function finalizarCarregamento(tipo = "concluido", mensagem = {}) {
   fecharPrevia();
   if (!carregamentoAtivo) return;
   carregamentoAtivo = false;
+  seguirFila();
   definirPrioridadeDoProcessamento(false, false);
   if (relogioDoCarregamento) clearInterval(relogioDoCarregamento);
   relogioDoCarregamento = null;
@@ -2671,6 +2715,8 @@ function mostrarAndamento(estado, aprendido) {
   if (aprendido && aprendido.encaixesDoTipo > 0) {
     partes.push(`aprendeu com ${aprendido.encaixesDoTipo} encaixe(s) parecido(s)`);
   }
+  const naFila = filaDeArquivos.reduce((soma, f) => soma + f.files.length, 0);
+  if (naFila > 0) partes.push(`${naFila} arquivo(s) na fila`);
   encaixeAndamento.textContent = partes.join(" · ");
   const titulo = estado.fase === "perseguindo" ? "Buscando alcançar o melhor já conhecido"
     : estado.fase === "encolhendo" ? "Encolhendo o rolo"
@@ -2708,6 +2754,10 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
   limparErroEncaixe();
   let refazer = null;
   let refazerPelaCaixa = null;
+  // A rodada marcada é esta. Se ela parar antes de carregar (lista vazia,
+  // largura em branco), a fila não fica presa esperando por ela.
+  rodadaMarcada = false;
+  seguirFila();
 
   // Sem peça não há o que fazer. Não avisa nada porque não há como chegar
   // aqui assim: quem aperta Optmizar com a mesa vazia é levado ao seletor de
@@ -3173,6 +3223,7 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     btnPararBusca.classList.add("hidden");
     // A segunda rodada depois do `finally`, e não dentro do `try`: ela começa
     // com a tela devolvida, como se a pessoa tivesse clicado de novo.
+    rodadaMarcada = !!(refazer || refazerPelaCaixa);
     if (refazer) setTimeout(() => optmizar({ refeito: true, avisoDoRefeito: refazer, modo: modoDeEncaixe }), 0);
     if (refazerPelaCaixa) setTimeout(() => optmizar({ modo: "retangulo", avisoDoRefeito: refazerPelaCaixa }), 0);
   }

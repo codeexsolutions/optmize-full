@@ -484,12 +484,37 @@ async function principal() {
     assert.equal(depoisDoX, antesDoX - 1,
       `o × tinha que tirar a peça da lista (eram ${antesDoX}, ficaram ${depoisDoX})`);
 
+    /*
+     * ---- 8. arquivo que chega com o Optmizar rodando vai para a fila ----
+     *
+     * Antes era a janela "Aguarde o trabalho atual terminar" e o arquivo se
+     * perdia. Agora ele espera na fila, um toast no canto conta, e ele entra
+     * sozinho quando a busca acaba — sem janela nenhuma no caminho.
+     */
+    await p.evaluate(() => document.getElementById('btn-ajustes-optmizar').click());
+    await esperar(800);
+    await (await p.$('#encaixe-files')).uploadFile(artes[1]);
+    await esperar(500);
+    const janela = () => p.$eval('.alerta-caixa[role="alertdialog"]', (n) => n.innerText.replace(/\s+/g, ' '))
+      .catch(() => null);
+    assert.equal(await janela(), null, 'o arquivo durante o Optmizar não pode abrir janela');
+    const toastDaFila = await p.$eval('.alerta-toast', (n) => n.innerText).catch(() => '');
+    assert.match(toastDaFila, /na fila/, `o toast da fila não apareceu (veio "${toastDaFila}")`);
+    assert.equal(Number((await p.$eval('#encaixe-contagem', (n) => n.textContent)).match(/^\d+/)[0]), depoisDoX,
+      'o arquivo da fila não pode entrar no meio da busca');
+    await esperar(18000);
+    const depoisDaFila = Number((await p.$eval('#encaixe-contagem', (n) => n.textContent)).match(/^\d+/)[0]);
+    assert.equal(depoisDaFila, depoisDoX + 1,
+      `o arquivo da fila tinha que entrar quando a busca acabou (eram ${depoisDoX}, ficaram ${depoisDaFila})`);
+    assert.equal(await janela(), null, 'a fila não pode terminar em janela');
+
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
       + ` (${risco}), o PDF foi gravado onde a tela mandou, o complemento pôs a arte da Galeria`
       + ` nos vãos e desfez, o TIFF entrou pela conversão`
-      + ` e o × tirou a peça (${antesDoX} → ${depoisDoX}).`);
+      + `, o × tirou a peça (${antesDoX} → ${depoisDoX})`
+      + ` e o arquivo da fila entrou depois da busca (${depoisDoX} → ${depoisDaFila}).`);
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();
