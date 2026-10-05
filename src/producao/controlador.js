@@ -1329,9 +1329,24 @@ const encaixePage = document.querySelector('.page[data-page="encaixe"]');
     encaixePage.classList.remove("arrastando");
   });
 });
+/*
+ * O ARRASTAR ACEITA O MESMO QUE O SELETOR.
+ *
+ * Filtrava só pelo tipo que o sistema dá ao arquivo (`image/...`). Numa
+ * máquina em que o Windows não conhece o .tif, o tipo vem vazio, e o TIFF
+ * arrastado sumia em silêncio — enquanto o mesmo arquivo entrava pelo botão,
+ * porque o `accept` do seletor olha a extensão. A lista agora é uma só: a do
+ * `accept` do `#encaixe-files`.
+ */
+function aceitaNoEncaixe(f) {
+  if (f.type.startsWith("image/") || ehMoldeVetorial(f)) return true;
+  const nome = f.name.toLowerCase();
+  return encaixeFilesInput.accept.split(",").map((s) => s.trim().toLowerCase())
+    .some((tipo) => tipo.startsWith(".") && nome.endsWith(tipo));
+}
+
 escopo.ouvir(encaixePage, "drop", async (e) => {
-  const files = Array.from((e.dataTransfer && e.dataTransfer.files) || [])
-    .filter((f) => f.type.startsWith("image/") || ehMoldeVetorial(f));
+  const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []).filter(aceitaNoEncaixe);
   if (files.length === 0) return;
   e.preventDefault();
   await adicionarArquivos(files);

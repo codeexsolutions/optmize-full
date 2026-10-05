@@ -531,13 +531,34 @@ async function principal() {
       `o arquivo da fila tinha que entrar quando a busca acabou (eram ${depoisDoX}, ficaram ${depoisDaFila})`);
     assert.equal(await janela(), null, 'a fila não pode terminar em janela');
 
+    /*
+     * ---- 9. TIFF arrastado SEM tipo também entra ----
+     *
+     * O arrastar filtrava pelo tipo que o sistema dá ao arquivo (`image/...`),
+     * e numa máquina em que o Windows não conhece o .tif o tipo vem vazio: o
+     * arquivo sumia em silêncio, sem janela e sem linha. O seletor de arquivos
+     * aceitava o mesmo TIFF, porque ele olha a extensão.
+     */
+    const bytesDoTiff = Array.from(fs.readFileSync(tiff.arquivo));
+    await p.evaluate((bytes) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array(bytes)], 'peca-sem-tipo.tif', { type: '' }));
+      document.querySelector('.page[data-page="encaixe"]').dispatchEvent(
+        new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    }, bytesDoTiff);
+    await esperar(8000);
+    const depoisDoArraste = Number((await p.$eval('#encaixe-contagem', (n) => n.textContent)).match(/^\d+/)[0]);
+    assert.equal(depoisDoArraste, depoisDaFila + 1,
+      `o TIFF arrastado sem tipo tinha que entrar (eram ${depoisDaFila}, ficaram ${depoisDoArraste})`);
+
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
       + ` (${risco}), o PDF foi gravado onde a tela mandou, o complemento pôs a arte da Galeria`
       + ` nos vãos e desfez, o TIFF entrou pela conversão`
       + `, o × tirou a peça (${antesDoX} → ${depoisDoX})`
-      + ` e o arquivo da fila entrou depois da busca (${depoisDoX} → ${depoisDaFila}).`);
+      + `, o arquivo da fila entrou depois da busca (${depoisDoX} → ${depoisDaFila})`
+      + ` e o TIFF arrastado sem tipo entrou (${depoisDaFila} → ${depoisDoArraste}).`);
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();
