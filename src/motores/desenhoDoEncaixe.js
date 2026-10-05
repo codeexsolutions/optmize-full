@@ -38,9 +38,89 @@
  */
 
 import { corDaPeca } from "../utils/coresDePeca";
+import { corDoPedido } from "../producao/pedidos";
+import { CONTORNO_DA_LETRA_CM, tamanhoDaFonteCm } from "./siglaDoPedido";
 
 /** Nada marcado. Uma só, para não criar um Set a cada desenho. */
 const SEM_SELECAO = new Set();
+
+/*
+ * ===========================================================================
+ * A PRÉVIA DA TELA
+ * ===========================================================================
+ *
+ * A arte de trabalho tem milhares de pixels de lado (uma camiseta a 195 dpi
+ * passa de 4.900), e na tela a peça ocupa umas centenas. Desenhá-la assim não
+ * custa a redução — custa SUBIR o bitmap para a placa de vídeo na primeira vez
+ * que ele é desenhado: medido, 570 a 620 ms para seis artes, com a tela
+ * parada logo depois do encaixe, antes mesmo de a conferência começar.
+ *
+ * Então a tela desenha uma prévia de até `LADO_DA_PREVIA` px, feita uma vez por
+ * arte. Seis prévias saem em ~60 ms, e o desenho com elas em ~7 ms.
+ *
+ * A redução é "low" (bilinear), e não "medium": a "medium" trava a tela 5
+ * vezes mais (314 ms contra 60) e a diferença medida foi de 0,09 de média em
+ * 255. O desenho de antes, direto da arte grande, já era bilinear.
+ *
+ * Só a TELA usa prévia, e só quando ela basta para o tamanho em que a peça
+ * está sendo desenhada — com zoom grande, volta a arte de trabalho. O PNG, o
+ * PDF e a conferência pela arte nunca passam por aqui.
+ *
+ * O `WeakMap` é pela arte: arte trocada (o fundo saiu, girou) é outra chave, e
+ * a prévia da velha vai embora junto com ela.
+ */
+const LADO_DA_PREVIA = 1024;
+// arte -> a prévia (ImageBitmap), ou `null` quando ela não tem ou não precisa de uma.
+const previas = new WeakMap();
+// arte -> a promessa da prévia que está sendo feita: quem chega no meio espera
+// a mesma, em vez de cair na arte grande ou fazer outra.
+const fazendo = new WeakMap();
+
+function fazerPrevia(img) {
+  const largura = img.naturalWidth || img.width;
+  const altura = img.naturalHeight || img.height;
+  const maior = Math.max(largura, altura);
+  if (!maior || maior <= LADO_DA_PREVIA || typeof createImageBitmap !== "function") {
+    previas.set(img, null);
+    return Promise.resolve();
+  }
+  const fator = LADO_DA_PREVIA / maior;
+  const promessa = createImageBitmap(img, {
+    resizeWidth: Math.max(1, Math.round(largura * fator)),
+    resizeHeight: Math.max(1, Math.round(altura * fator)),
+    resizeQuality: "low",
+  })
+    .then((previa) => { previas.set(img, previa); })
+    // Sem prévia a tela desenha a arte de trabalho, como sempre desenhou.
+    .catch(() => { previas.set(img, null); })
+    .finally(() => { fazendo.delete(img); });
+  fazendo.set(img, promessa);
+  return promessa;
+}
+
+/** Faz (uma vez) a prévia de cada arte. Devolve quando todas estão prontas. */
+export async function prepararPrevias(imagens) {
+  await Promise.all(imagens.map((img) => {
+    if (!img || previas.has(img)) return null;
+    return fazendo.get(img) || fazerPrevia(img);
+  }));
+}
+
+/** A prévia de `img` já pronta, ou `null`. */
+export function previaDaArte(img) {
+  return (img && previas.get(img)) || null;
+}
+
+/** A prévia de `img`, se ela existe e basta para `lado` pixels de tela. */
+function previaQueServe(img, lado) {
+  if (!img) return null;
+  const previa = previas.get(img);
+  if (previa === undefined) {
+    prepararPrevias([img]); // fica para o próximo desenho
+    return null;
+  }
+  return previa && lado <= Math.max(previa.width, previa.height) ? previa : null;
+}
 
 /**
  * Desenha o rolo em pé (largura na horizontal, comprimento descendo), com a
@@ -52,8 +132,10 @@ const SEM_SELECAO = new Set();
  * Cada rotação tem sua própria origem porque o canvas gira em torno do ponto
  * transladado — errar isso joga a arte para fora do lugar.
  */
-export function desenharArte(ctx, p, x, y, w, h) {
-  const img = p.item.img;
+export function desenharArte(ctx, p, x, y, w, h, fonte = null) {
+  // `fonte` é a mesma arte noutro tamanho (a prévia da tela); o giro e a caixa
+  // são os de sempre, porque o `drawImage` estica a fonte até a caixa.
+  const img = fonte || p.item.img;
   // O giro do encaixe mais o giro que a peça recebeu antes dele (ver "O GIRO
   // DA PEÇA ANTES DO ENCAIXE", em encaixeMascara.js). `w` e `h` já são a caixa
   // da peça no rolo, então só o giro da arte dentro dela muda.
@@ -249,6 +331,8 @@ export function desenharEncaixe(canvas, r, {
   zoom = 1,
   /** Os índices das peças marcadas — só a tela pinta seleção. */
   selecao = SEM_SELECAO,
+  /** O retorno de `marcasDoRisco` (src/producao/pedidos.js), ou null com um pedido só. */
+  pedidos = null,
 } = {}) {
   const REGUA = 34; // faixa com as marcas de metro
   const pai = canvas.parentElement;
@@ -330,18 +414,19 @@ export function desenharEncaixe(canvas, r, {
   }
 
   // Peças
-  r.posicoes.forEach((p) => {
+  r.posicoes.forEach((p, i) => {
     const x = REGUA + p.x * px;
     const y = p.y * px;
     const w = p.largura * px;
     const h = p.altura * px;
-    const cor = corDaPeca(p.item.indice);
+    const pedido = pedidos ? pedidos.pedidos[i] : null;
+    const cor = pedido ? corDoPedido(pedido) : corDaPeca(p.item.indice);
 
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, y, w, h);
     ctx.clip();
-    desenharArte(ctx, p, x, y, w, h);
+    desenharArte(ctx, p, x, y, w, h, escala ? null : previaQueServe(p.item.img, Math.max(w, h) * dpr));
     ctx.restore();
 
     // No contorno, o traço segue a silhueta; no retângulo, a caixa mesmo.
@@ -351,6 +436,14 @@ export function desenharEncaixe(canvas, r, {
       ctx.strokeStyle = cor;
       ctx.lineWidth = 1.5;
       ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5);
+    }
+
+    // Com mais de um pedido no risco, a caixa ganha um segundo traço, grosso,
+    // na cor do pedido.
+    if (pedido) {
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
     }
 
     // Seleção: o laranja da marca por cima da peça, só na tela. O hex vem
@@ -364,9 +457,14 @@ export function desenharEncaixe(canvas, r, {
       ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
     }
 
+    // A sigla fica no lugar do rolo em que vai ser impressa; na tela deitada
+    // ela gira junto com o rolo, que é o mesmo desenho visto de lado.
+    const marca = pedidos && pedidos.marcas[i];
+    if (marca) desenharSigla(ctx, marca, REGUA, px, escala ? 9 : 0);
+
     // Deitado, o nome é escrito depois — dentro do giro ele sairia de lado.
     if (comLegenda && !deitar && w > 46 && h > 18) {
-      escreverNome(ctx, p, x, y, w, h);
+      escreverNome(ctx, p, x, y, w, h, pedido);
     }
   });
 
@@ -436,12 +534,12 @@ export function desenharEncaixe(canvas, r, {
      * o comprimento vira X, e a largura do tecido vira Y de baixo para cima.
      */
     if (comLegenda) {
-      r.posicoes.forEach((p) => {
+      r.posicoes.forEach((p, i) => {
         const x = p.y * px;
         const y = (r.larguraTecido - p.x - p.largura) * px;
         const w = p.altura * px;
         const h = p.largura * px;
-        if (w > 46 && h > 18) escreverNome(ctx, p, x, y, w, h);
+        if (w > 46 && h > 18) escreverNome(ctx, p, x, y, w, h, pedidos ? pedidos.pedidos[i] : null);
       });
     }
   }
@@ -456,8 +554,9 @@ export function desenharEncaixe(canvas, r, {
 }
 
 /** O nome da peça, numa tarja escura para não sumir dentro da arte. */
-export function escreverNome(ctx, p, x, y, w, h) {
-  const texto = `${p.item.nome}${p.item.qtd > 1 ? ` ${p.item.copia}` : ""}`;
+export function escreverNome(ctx, p, x, y, w, h, pedido = null) {
+  const nome = `${p.item.nome}${p.item.qtd > 1 ? ` ${p.item.copia}` : ""}`;
+  const texto = pedido ? `${pedido} · ${nome}` : nome;
   ctx.font = "11px system-ui, sans-serif";
   const largTexto = ctx.measureText(texto).width + 8;
   ctx.fillStyle = "rgba(8, 12, 14, 0.78)";
@@ -468,6 +567,34 @@ export function escreverNome(ctx, p, x, y, w, h) {
   ctx.rect(x + 3, y + 3, Math.min(largTexto, w - 6), 16);
   ctx.clip();
   ctx.fillText(texto, x + 7, y + 12);
+  ctx.restore();
+}
+
+/**
+ * A sigla do pedido, onde e do tamanho que ela sai impressa: preta, com
+ * contorno branco, de pé no sentido do rolo. Na tela deitada ela gira junto
+ * com o rolo — é o mesmo desenho, visto de lado.
+ */
+export function desenharSigla(ctx, marca, REGUA, px, corpoMinimo = 0) {
+  const corpoReal = tamanhoDaFonteCm(marca.altura) * px;
+  // No PNG (escala fixa) a sigla é o que separa os pedidos na mesa de corte:
+  // a 4 px/cm ela sairia com ~2 px, então ganha um corpo mínimo, um pouco
+  // maior que o real. Na tela, abaixo de 4 px viraria borrão e a tarja do nome
+  // já leva o pedido.
+  const corpo = Math.max(corpoReal, corpoMinimo);
+  if (corpo < 4) return;
+  const proporcao = corpoReal > 0 ? corpo / corpoReal : 1;
+  const x = REGUA + marca.x * px;
+  const base = (marca.y + marca.altura) * px;
+  ctx.save();
+  ctx.font = `bold ${corpo}px "Liberation Sans", Arial, Helvetica, sans-serif`;
+  ctx.textBaseline = "alphabetic";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(1, 2 * CONTORNO_DA_LETRA_CM * px * proporcao);
+  ctx.strokeStyle = "#ffffff";
+  ctx.strokeText(marca.texto, x, base);
+  ctx.fillStyle = "#000000";
+  ctx.fillText(marca.texto, x, base);
   ctx.restore();
 }
 

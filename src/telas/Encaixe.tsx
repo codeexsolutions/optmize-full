@@ -31,6 +31,20 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 
+<div id="encaixe-qtd-lote" className="hidden shrink-0 items-center gap-1.5 border-b border-linha px-3 py-1.5">
+
+<label htmlFor="encaixe-qtd-todas" className="shrink-0 text-[10px] text-tinta-apagada">
+{"Qtd de cada"}
+</label>
+
+<input type="number" id="encaixe-qtd-todas" min="1" step="1" placeholder="40" className="w-14! shrink-0 rounded border border-linha bg-painel px-1! py-0.5! text-center font-mono text-[11px] text-tinta focus:border-[var(--accent-line)] focus:outline-none" />
+
+<button type="button" id="btn-encaixe-qtd-todas" className="btn secondary btn-sm flex-1 whitespace-nowrap">
+{"Aplicar em todas"}
+</button>
+
+</div>
+
 <div id="encaixe-aviso-cor" className="hidden">
 
 </div>
@@ -42,6 +56,10 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 <span id="encaixe-grupo-conta" className="min-w-0 flex-1 truncate text-[10px] text-tinta-apagada">
 
 </span>
+
+<button type="button" id="btn-encaixe-marcar-todas" className="btn secondary btn-sm" title="Marcar todas as peças">
+{"Todas"}
+</button>
 
 <button type="button" id="btn-encaixe-criar-grupo" className="btn secondary btn-sm">
 {"Criar grupo"}

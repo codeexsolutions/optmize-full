@@ -14,6 +14,7 @@ import {
 } from "../../motores/graduacao";
 import { apagarNosDaPeca, girarPeca, pecaParaGravar, porNosDaPeca, reduzirNosDaPeca } from "../../motores/montagem";
 import { BarraDosNos } from "../risco/BarraDosNos";
+import { JanelaDeAtalhos } from "../risco/JanelaDeAtalhos";
 import { useEditorDeNos, type AlvoDoEditor } from "../risco/useEditorDeNos";
 import { useDialogo } from "../../casca/Dialogo";
 import { JanelaDeSubstituir } from "./JanelaDeSubstituir";
@@ -29,12 +30,13 @@ import { BarraDaMontagem } from "./BarraDaMontagem";
 
 interface Props { id: number; aoTrocar: () => void; aoEscolherOutro: (id: number) => void }
 
-const FERRAMENTAS: { qual: Ferramenta; rotulo: string; icone: string; dica: string }[] = [
-  { qual: "nos", rotulo: "Nós", icone: "icones.svg#spline", dica: "Clique, Shift e retângulo selecionam; arraste nós, alças ou a curva; setas movem; dois cliques põem ou tiram nó" },
-  { qual: "pique", rotulo: "Pique", icone: "icones.svg#scissors", dica: "Clique no traço para pôr um pique; num pique, para tirar" },
-  { qual: "ponto", rotulo: "Ponto", icone: "icones.svg#crosshair", dica: "Clique dentro da peça para marcar pence ou bolso" },
-  { qual: "fio", rotulo: "Fio", icone: "icones.svg#move-vertical", dica: "Arraste o meio para mover, uma ponta para girar" },
-  { qual: "graduar", rotulo: "Graduar", icone: "icones.svg#ruler", dica: "Clique num nó para ver ou pôr a regra de graduação; os outros tamanhos aparecem tracejados" },
+/** As ferramentas, com a tecla de cada uma (spec de 2026-10-05). */
+const FERRAMENTAS: { qual: Ferramenta; rotulo: string; icone: string; tecla: string; dica: string }[] = [
+  { qual: "nos", rotulo: "Nós", icone: "icones.svg#spline", tecla: "n", dica: "Nós (N): arraste o ponto e a curva segue; os puxadores abrem cada lado; dois cliques põem ou tiram nó; ? mostra os atalhos" },
+  { qual: "pique", rotulo: "Pique", icone: "icones.svg#scissors", tecla: "p", dica: "Pique (P): clique no traço para pôr um pique; num pique, para tirar" },
+  { qual: "ponto", rotulo: "Ponto", icone: "icones.svg#crosshair", tecla: "m", dica: "Ponto (M): clique dentro da peça para marcar pence ou bolso" },
+  { qual: "fio", rotulo: "Fio", icone: "icones.svg#move-vertical", tecla: "f", dica: "Fio (F): arraste o meio para mover, uma ponta para girar" },
+  { qual: "graduar", rotulo: "Graduar", icone: "icones.svg#ruler", tecla: "g", dica: "Graduar (G): clique num nó para ver ou pôr a regra; os outros tamanhos aparecem tracejados" },
 ];
 
 type AlvoDeGeracao = {
@@ -189,10 +191,12 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
     if (noAtivo !== null && (!peca || noAtivo >= peca.nos.length)) setNoAtivo(null);
   }, [peca, noAtivo]);
 
-  // Ctrl+Z desfaz, fora de campo de texto (lá ele desfaz o texto).
+  // Ctrl+Z desfaz; Ctrl+Y e Ctrl+Shift+Z refazem — fora de campo de texto (lá eles são do texto).
   useEffect(() => {
     const ouvir = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k !== "z" && k !== "y") return;
       // Só campo de texto: rádio e caixa de marcar (o bloco da graduação) não
       // têm texto para desfazer, e o foco fica neles depois do clique.
       const foco = document.activeElement as HTMLElement | null;
@@ -200,11 +204,31 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
         && !["radio", "checkbox", "button", "color", "range"].includes((foco as HTMLInputElement).type)));
       if (digitando) return;
       e.preventDefault();
-      molde.desfazer();
+      if (k === "y" || e.shiftKey) molde.refazer();
+      else molde.desfazer();
     };
     window.addEventListener("keydown", ouvir);
     return () => window.removeEventListener("keydown", ouvir);
   }, [molde]);
+
+  // As teclas das ferramentas (N P M F G V) e o girar da peça ([ e ]), fora de campo de texto e de janela.
+  const girarAtual = useRef<(graus: number) => void>(() => {});
+  girarAtual.current = (graus) => { if (peca && !semDesenho && !verTodas) mudarEsta((p) => girarPeca(p, graus), true); };
+  useEffect(() => {
+    const ouvir = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const foco = document.activeElement as HTMLElement | null;
+      if (foco && (["INPUT", "TEXTAREA", "SELECT"].includes(foco.tagName) || foco.isContentEditable)) return;
+      if ([...document.querySelectorAll('[aria-modal="true"]')].some((el) => el.getClientRects().length > 0)) return;
+      const k = e.key.toLowerCase();
+      const f = FERRAMENTAS.find((x) => x.tecla === k);
+      if (f) { e.preventDefault(); setFerramenta(f.qual); setVerTodas(false); return; }
+      if (k === "v") { e.preventDefault(); setVerTodas((v) => !v); return; }
+      if (e.key === "[" || e.key === "]") { e.preventDefault(); girarAtual.current(e.key === "[" ? -90 : 90); }
+    };
+    window.addEventListener("keydown", ouvir);
+    return () => window.removeEventListener("keydown", ouvir);
+  }, []);
 
   if (molde.carregando) return <p className="p-6 text-sm text-tinta-apagada">Abrindo o molde…</p>;
   if (molde.naoAchado) return <EscolhaDoMolde sumiu aoEscolher={aoEscolherOutro} />;
@@ -279,26 +303,7 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
   return (
     <div className="flex h-full flex-col">
       <BarraDaMontagem molde={molde} moldeId={id} aoTrocar={aoTrocar} aoIrParaPeca={irParaPeca} tamanhoAtivo={tamanhoMostrado} />
-      <div className="flex items-center gap-1 border-b border-linha px-3 py-1.5">
-        {FERRAMENTAS.map((f) => (
-          <button
-            key={f.qual} type="button" title={f.dica}
-            className={`btn btn-sm ${ferramenta === f.qual && !verTodas ? "primary" : "secondary"}`}
-            onClick={() => { setFerramenta(f.qual); setVerTodas(false); }}
-          >
-            <Icone referencia={f.icone} className="size-4" />
-            {f.rotulo}
-          </button>
-        ))}
-        <span className="mx-2 h-5 w-px bg-linha" />
-        <button type="button" className={`btn btn-sm ${verTodas ? "primary" : "secondary"}`} onClick={() => setVerTodas((v) => !v)}>
-          <Icone referencia="icones.svg#layers" className="size-4" />
-          Ver todas
-        </button>
-        <span className="ml-auto text-[0.78rem] text-tinta-fraca">
-          {FERRAMENTAS.find((f) => f.qual === ferramenta)?.dica}. Roda do mouse aproxima.
-        </span>
-      </div>
+      <JanelaDeAtalhos aberto={editor.atalhosAbertos} aoFechar={() => editor.abrirAtalhos(false)} comMontagem />
       {ferramenta === "nos" && !verTodas && !semDesenho && peca && (
         <BarraDosNos editor={editor} aoGirar={(graus) => mudarEsta((p) => girarPeca(p, graus), true)} />
       )}
@@ -331,6 +336,26 @@ export function MesaDeMontagem({ id, aoTrocar, aoEscolherOutro }: Props) {
       )}
       <div className="flex min-h-0 flex-1">
         <ListaDePecas molde={molde} moldeId={id} grupo={doGrupo?.grupo ?? 0} aoEscolherGrupo={setGrupo} />
+        {/* A caixa de ferramentas, encostada à esquerda da mesa, como no Corel: a faixa de cima fica para a barra dos nós. */}
+        <div className="flex w-16 shrink-0 flex-col items-stretch gap-1 border-r border-linha bg-painel p-1.5" role="toolbar" aria-label="Ferramentas" aria-orientation="vertical">
+          {FERRAMENTAS.map((f) => (
+            <button
+              key={f.qual} type="button" title={f.dica} aria-pressed={ferramenta === f.qual && !verTodas}
+              className={`btn btn-sm flex-col! gap-0.5! px-1! py-1.5! text-[10px]! ${ferramenta === f.qual && !verTodas ? "primary" : "secondary"}`}
+              onClick={() => { setFerramenta(f.qual); setVerTodas(false); }}
+            >
+              <Icone referencia={f.icone} className="size-4" />
+              {f.rotulo}
+            </button>
+          ))}
+          <span className="my-1 h-px bg-linha" />
+          <button type="button" title="Ver todas as peças do tamanho (V)" aria-pressed={verTodas}
+            className={`btn btn-sm flex-col! gap-0.5! px-1! py-1.5! text-[10px]! ${verTodas ? "primary" : "secondary"}`}
+            onClick={() => setVerTodas((v) => !v)}>
+            <Icone referencia="icones.svg#layers" className="size-4" />
+            Todas
+          </button>
+        </div>
         <div className="min-w-0 flex-1">
           {semDesenho ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-tinta-fraca">

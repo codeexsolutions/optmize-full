@@ -1002,7 +1002,10 @@ export function comandosPLT(texto) {
     comandos.push({
       nome,
       bruto,
-      numeros: bruto.split(/[,\s]+/).map(Number).filter((n) => Number.isFinite(n)),
+      // `trim` antes: "PD 1200,13951" (a Audaces escreve assim) começava com uma
+      // string vazia, e `Number("")` é 0 — um número a mais na frente, e cada
+      // par de coordenadas escorregava uma casa.
+      numeros: bruto.trim().split(/[,\s]+/).filter(Boolean).map(Number).filter((n) => Number.isFinite(n)),
     });
   }
   return comandos;
@@ -1046,6 +1049,19 @@ export function valorPEParaNumero(valor, fracao) {
  * manda no arquivo quando o chute automático sair errado.
  */
 export function lerMoldesPLT(texto, unidadeForcada, modo) {
+  const r = tracosDoPLT(texto, unidadeForcada);
+  if (r.erro) return r;
+  return montarMoldes(r.linhas, r.textos, r.unidade, r.avisos, "PLT", true, modo);
+}
+
+/**
+ * Os traços do PLT, ainda na posição em que o arquivo os desenhou, e a unidade.
+ * É a primeira metade de `lerMoldesPLT`; a outra (`montarMoldes`) os junta em
+ * peças e furos. O molde graduado (`motores/pltGraduado.js`) precisa da
+ * posição original: os tamanhos de uma peça vêm uns sobre os outros, e virar
+ * "peça e furos" perderia os de dentro.
+ */
+export function tracosDoPLT(texto, unidadeForcada) {
   const comandos = comandosPLT(texto);
   if (comandos.length === 0) {
     return { erro: "Não consegui ler esse PLT: não achei nenhum comando de plotter no arquivo." };
@@ -1166,7 +1182,7 @@ export function lerMoldesPLT(texto, unidadeForcada, modo) {
     avisos.push("O arquivo define escala própria (SC/IP), que eu não aplico — confira as medidas.");
   }
 
-  return montarMoldes(linhas, textos, unidade, avisos, "PLT", true, modo);
+  return { linhas, textos, unidade, avisos };
 }
 
 /** Percorre o conteúdo de um PE montando os traços. */

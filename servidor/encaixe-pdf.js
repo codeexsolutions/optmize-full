@@ -7,6 +7,11 @@
  * papel mede o que a peça mede. E vai só o desenho: nada de régua, nome de peça
  * ou rodapé, porque isso seria impresso junto no tecido.
  *
+ * A exceção é a SIGLA DO PEDIDO (2026-10-01): com dois pedidos ou mais no
+ * mesmo rolo, cada peça leva `P2 COG3` impresso no canto de baixo, dentro da
+ * silhueta, para a separação depois do corte. Quem decide o texto e o lugar
+ * é a tela (src/producao/pedidos.js); aqui ele só é escrito (`escreverMarca`).
+ *
  * Uma página por bancada
  * ----------------------
  * O rolo já saiu repartido em trechos de 10 m, e a repartição foi tirada
@@ -75,6 +80,24 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+
+// A sigla do pedido sai com esta fonte EMBUTIDA no arquivo, e não com a
+// Helvetica "padrão" do PDF: o RIP da produção já mostrou que não se pode
+// contar com o que ele deveria ter (ver `/UserUnit`, acima). A conta da
+// largura do texto, em src/motores/siglaDoPedido.js, usa as medidas desta
+// mesma fonte — trocar uma sem a outra tira a sigla de dentro da peça.
+//
+// É a Liberation Sans Bold 1.x (a que vem no pdfjs-dist), sob a GPLv2 com a
+// exceção de fonte, que permite embuti-la em documentos como este PDF; a
+// licença acompanha o arquivo (LICENSE_LIBERATION).
+//
+// Mora em `estatico/fontes/`, e não ao lado do código: o instalado apaga tudo
+// de `servidor/` menos o servidor compilado (ver empacotar/compilar.js), e
+// `estatico/` segue irmã dele — o mesmo caminho vale no repositório e no app.
+const { PASTA_DO_APP } = require("./caminhos");
+const FONTE_DA_SIGLA = path.join(PASTA_DO_APP, "estatico", "fontes", "LiberationSans-Bold.ttf");
+const ALTURA_DE_MAIUSCULA = 0.688; // a mesma de src/motores/siglaDoPedido.js
+const CONTORNO_DA_LETRA_CM = 0.03;
 
 const router = express.Router();
 
@@ -405,6 +428,72 @@ function paginasDoEncaixe(posicoes, consumo) {
 }
 
 /**
+ * Confere, ANTES de abrir qualquer resposta ou documento, que a fonte da sigla
+ * existe e carrega. Sigla que some em silêncio é PDF errado indo para o RIP:
+ * é melhor não sair PDF nenhum.
+ */
+function conferirFonteDaSigla(fonte = FONTE_DA_SIGLA) {
+  try {
+    fs.accessSync(fonte, fs.constants.R_OK);
+    const teste = new PDFDocument({ margin: 0 });
+    teste.registerFont("sigla", fonte);
+    teste.font("sigla");
+  } catch (err) {
+    throw new Error(`A fonte da sigla do pedido não foi encontrada (${fonte}): o PDF não sai sem as siglas.`);
+  }
+}
+
+/**
+ * Limpa a marca que chegou pela rede. Devolve a marca boa, ou `undefined` se
+ * ela não presta (texto vazio, número que não é número, fora do tecido, letra
+ * grande demais) — a peça então sai sem sigla.
+ *
+ * O texto vai até 20 caracteres: pedido de 6, espaço, sigla de 6 e a cópia
+ * (até 4 algarismos, rolo de 9999 cópias) dão 17 — com folga, e sem cortar o
+ * número da cópia.
+ */
+function marcaLimpa(m, larguraTecido, consumo) {
+  if (!m || typeof m !== "object") return undefined;
+  const numero = (n) => {
+    if (typeof n === "number") return n;
+    if (typeof n === "string" && n.trim() !== "") return Number(n);
+    return NaN;
+  };
+  const texto = String(m.texto || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase().replace(/[^A-Z0-9 ]/g, "").slice(0, 20);
+  const x = numero(m.x);
+  const y = numero(m.y);
+  const alturaCm = numero(m.alturaCm);
+  const ok = texto && [x, y, alturaCm].every(Number.isFinite)
+    && x >= 0 && x <= larguraTecido && y >= 0 && y <= consumo
+    && alturaCm > 0 && alturaCm <= 2;
+  return ok ? { texto, x, y, alturaCm } : undefined;
+}
+
+/**
+ * A sigla do pedido, impressa: texto vetorial preto com contorno branco, de
+ * pé. Primeiro o contorno (o dobro da grossura, porque metade dele cai para
+ * dentro da letra), depois o preenchimento por cima — assim o contorno não
+ * come a letra.
+ */
+function escreverMarca(doc, marca, topoDaPagina) {
+  const corpo = (marca.alturaCm / ALTURA_DE_MAIUSCULA) * PT_POR_CM;
+  const x = marca.x * PT_POR_CM;
+  const base = (marca.y + marca.alturaCm - topoDaPagina) * PT_POR_CM;
+  doc.save();
+  try {
+    doc.font("sigla").fontSize(corpo);
+    doc.lineJoin("round").lineWidth(2 * CONTORNO_DA_LETRA_CM * PT_POR_CM).strokeColor("#ffffff");
+    doc.text(marca.texto, x, base, { lineBreak: false, baseline: "alphabetic", stroke: true, fill: false });
+    doc.fillColor("#000000");
+    doc.text(marca.texto, x, base, { lineBreak: false, baseline: "alphabetic", stroke: false, fill: true });
+  } finally {
+    doc.restore();
+  }
+}
+
+/**
  * Monta o documento e devolve ele já escrevendo em `destino`.
  *
  * Está separado da rota para a bancada conseguir gerar um PDF sem subir o
@@ -419,7 +508,7 @@ function paginasDoEncaixe(posicoes, consumo) {
  * erro só aparece com o tecido já impresso.
  */
 async function montarPdf({
-  larguraTecido, consumo, posicoes, buffers, lerArte, podeTerTransparencia,
+  larguraTecido, consumo, posicoes, buffers, lerArte, podeTerTransparencia, fonteDaSigla = FONTE_DA_SIGLA,
 }, destino) {
   const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
@@ -445,12 +534,19 @@ async function montarPdf({
     ? podeTerTransparencia
     : !!(buffers && [...buffers.values()].some(pngComAlfa));
 
+  // Antes de abrir o documento: sem a fonte, nenhum byte sai.
+  const comMarca = posicoes.some((pos) => pos.marca);
+  if (comMarca) conferirFonteDaSigla(fonteDaSigla);
+
   const doc = new PDFDocument({
     size: tamanhoDa(paginas[0]),
     margin: 0,
     pdfVersion: comAlfa ? "1.4" : "1.3",
   });
   doc.pipe(destino);
+
+  if (comMarca) doc.registerFont("sigla", fonteDaSigla);
+  let marcas = 0;
 
   /*
    * DEIXAR O CANO ESCOAR ENTRE UMA PEÇA E OUTRA.
@@ -539,6 +635,14 @@ async function montarPdf({
         // uma imagem ruim não pode derrubar o PDF inteiro
         console.warn(`[encaixe-pdf] não deu para desenhar a peça ${pos.chave}:`, err && err.message);
       }
+      if (pos.marca) {
+        try {
+          escreverMarca(doc, pos.marca, pagina.topo);
+          marcas++;
+        } catch (err) {
+          console.warn(`[encaixe-pdf] não deu para escrever a sigla ${pos.marca.texto}:`, err && err.message);
+        }
+      }
       // Ver `escoar`: é aqui que a fila do cano deixa de crescer sem limite.
       await escoar();
     }
@@ -548,6 +652,7 @@ async function montarPdf({
   return {
     unidade,
     desenhadas,
+    marcas,
     paginaPt: tamanhoDa(paginas[0]),
     paginas: paginas.map((p) => ({
       numero: p.numero,
@@ -564,6 +669,20 @@ router.post("/pdf", async (req, res) => {
 
   if (!(larguraTecido > 0) || !(consumo > 0) || !Array.isArray(posicoes) || posicoes.length === 0) {
     return res.status(400).json({ error: "Encaixe inválido para gerar o PDF." });
+  }
+
+  // A sigla do pedido só passa bem formada (ver `marcaLimpa`); a que não
+  // presta vira peça sem marca.
+  posicoes.forEach((pos) => {
+    if (pos && pos.marca) pos.marca = marcaLimpa(pos.marca, larguraTecido, consumo);
+  });
+  if (posicoes.some((pos) => pos && pos.marca)) {
+    try {
+      conferirFonteDaSigla();
+    } catch (err) {
+      console.error("[encaixe-pdf]", err.message);
+      return res.status(500).json({ error: err.message });
+    }
   }
 
   /*
@@ -692,6 +811,8 @@ module.exports = router;
 // A montagem do documento sai junto com o roteador para a bancada conseguir
 // conferir o PDF sem subir o Express (ver `bancada/conferir-pdf.js`).
 module.exports.montarPdf = montarPdf;
+module.exports.marcaLimpa = marcaLimpa;
+module.exports.conferirFonteDaSigla = conferirFonteDaSigla;
 module.exports.paginasDoEncaixe = paginasDoEncaixe;
 module.exports.unidadeDaPagina = unidadeDaPagina;
 module.exports.PT_POR_CM = PT_POR_CM;

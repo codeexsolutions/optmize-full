@@ -257,4 +257,44 @@ assert.ok(g.deslocamentosDoTamanho(base, grade, "M").every((d) => d.dx === 0 && 
   assert.equal(g.graduacaoPorMapa(null, [0]), null);
 }
 
+// O nó liso automático na graduação: no tamanho gerado, a curva é refeita lisa
+// a partir dos nós no lugar novo; sem deslocamento nenhum, sai igual ao base.
+{
+  const e = await carregarModulo("src/motores/edicaoDeNos.js");
+  const N = 8;
+  const h = (4 / 3) * Math.tan(((2 * Math.PI) / N) / 4) * 10;
+  const circulo = Array.from({ length: N }, (_, k) => {
+    const a = (k / N) * 2 * Math.PI;
+    const p = { x: 20 + 10 * Math.cos(a), y: 20 + 10 * Math.sin(a) };
+    const tg = { x: -Math.sin(a), y: Math.cos(a) };
+    return { x: p.x, y: p.y, entrada: { x: p.x - tg.x * h, y: p.y - tg.y * h }, saida: { x: p.x + tg.x * h, y: p.y + tg.y * h } };
+  });
+  const nosAuto = e.derivarAuto(circulo);
+  const quebra = (n) => {
+    const a = { x: n.x - n.entrada.x, y: n.y - n.entrada.y };
+    const b = { x: n.saida.x - n.x, y: n.saida.y - n.y };
+    return Math.abs(Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y));
+  };
+  const comRegras = (regras) => ({ ...pecaBase({ jeito: "pontos", porcentagem: 0, regras }), nos: nosAuto });
+  const esticado = g.gerarTamanho(comRegras([
+    { no: 0, modo: "igual", passo: { dx: 2, dy: 0 } },
+    { no: 4, modo: "igual", passo: { dx: -2, dy: 0 } },
+  ]), grade, "G");
+  assert.ok(esticado.peca, esticado.erro);
+  assert.ok(esticado.peca.nos.every((n) => n.auto && quebra(n) < 1e-9), "no G, todos lisos");
+  // E a curva foi REFEITA nos nós do lugar novo — não são as alças duras do base.
+  const refeita = e.refazerAlcas(esticado.peca.nos);
+  esticado.peca.nos.forEach((n, i) => {
+    assert.ok(Math.hypot(n.saida.x - refeita[i].saida.x, n.saida.y - refeita[i].saida.y) < 1e-9, `nó ${i}: alças refeitas`);
+  });
+  const parado = g.gerarTamanho(comRegras([
+    { no: 0, modo: "igual", passo: { dx: 0, dy: 0 } },
+    { no: 4, modo: "igual", passo: { dx: 0, dy: 0 } },
+  ]), grade, "G");
+  parado.peca.nos.forEach((n, i) => {
+    const b = nosAuto[i];
+    assert.ok(Math.hypot(n.saida.x - b.saida.x, n.saida.y - b.saida.y) < 1e-9, `nó ${i}: graduação zero igual ao base`);
+  });
+}
+
 console.log("OK — a graduação confere.");

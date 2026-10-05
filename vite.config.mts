@@ -31,10 +31,30 @@
  */
 
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwind from "@tailwindcss/vite";
+
+const { carimboDoFonte } = createRequire(import.meta.url)("./empacotar/carimbo.cjs");
+
+/*
+  O CARIMBO. O build grava em `dist/carimbo.json` o hash do fonte de que saiu,
+  e a `bancada:tela` se recusa a conferir um `dist/` de outro fonte. Ver
+  `empacotar/carimbo.cjs`.
+*/
+function carimbo(): Plugin {
+  return {
+    name: "carimbo-do-fonte",
+    apply: "build",
+    generateBundle() {
+      const fonte = carimboDoFonte(fileURLToPath(new URL(".", import.meta.url)));
+      this.emitFile({ type: "asset", fileName: "carimbo.json", source: `${JSON.stringify({ fonte })}\n` });
+    },
+  };
+}
 
 export default defineConfig({
   /*
@@ -52,7 +72,7 @@ export default defineConfig({
   },
   base: "/",
   publicDir: "estatico",
-  plugins: [react(), tailwind()],
+  plugins: [react(), tailwind(), carimbo()],
   build: {
     outDir: "dist",
     emptyOutDir: true,

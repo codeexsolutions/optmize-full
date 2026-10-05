@@ -19,6 +19,12 @@
  * caixa muda enquanto se arrasta um nó para fora dela; se a vista seguisse,
  * o nó fugiria de baixo do ponteiro. A vista é congelada no aperto e refeita
  * na soltura.
+ *
+ * A PEÇA ABRE INTEIRA (spec de 2026-10-05): o zoom 1 cabe na largura E na
+ * altura da mesa — antes era só a largura, e peça comprida saía cortada. A
+ * roda aproxima em volta do ponteiro; os botões do canto, o 0 (ajusta) e o Z
+ * (aproxima nos nós selecionados) também; Espaço+arrastar ou o botão do meio
+ * andam pela peça.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { achatarCurvas } from "../../motores/ajusteDeCurvas";
@@ -37,8 +43,8 @@ export type Ferramenta = "nos" | "pique" | "ponto" | "fio" | "graduar";
 /** Pixels de canvas por centímetro enquanto a largura da mesa não é conhecida. */
 const PX_POR_CM = 24;
 const LADO_MAXIMO_PX = 4096;
-/** Raio de pega, em pixels da tela. */
-const PEGA = 10;
+/** Raio de pega, em pixels da tela (era 10: o nó era difícil de acertar). */
+const PEGA = 16;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 12;
 
@@ -46,7 +52,16 @@ interface Vista { minX: number; minY: number; largura: number; altura: number }
 
 type Arrasto =
   | { tipo: "editor" }
-  | { tipo: "fio"; modo: "mover" | "girar" };
+  | { tipo: "fio"; modo: "mover" | "girar" }
+  | { tipo: "mao"; x: number; y: number; esquerda: number; topo: number };
+
+/** Uma tecla que é da mesa? Não dentro de um campo de texto nem com uma janela aberta na frente. */
+function teclaDaMesa(e: KeyboardEvent): boolean {
+  const foco = document.activeElement as HTMLElement | null;
+  if (foco && (["INPUT", "TEXTAREA", "SELECT"].includes(foco.tagName) || foco.isContentEditable)) return false;
+  if ([...document.querySelectorAll('[aria-modal="true"]')].some((el) => el.getClientRects().length > 0)) return false;
+  return !e.ctrlKey && !e.metaKey && !e.altKey;
+}
 
 interface Props {
   pecas: PecaEmMontagem[];
@@ -103,9 +118,14 @@ export function Mesa(props: Props) {
   const tela = useRef<HTMLCanvasElement>(null);
   const moldura = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
-  const [larguraDaMoldura, setLarguraDaMoldura] = useState(0);
+  const [moldura_, setMoldura] = useState({ largura: 0, altura: 0 });
+  const [cursor, setCursor] = useState("crosshair");
+  const [mao, setMao] = useState<"" | "pronta" | "andando">("");
+  /** Depois de um Z: o ponto (em cm) que tem de ficar no meio da mesa quando o zoom novo assentar. */
+  const centrarEm = useRef<Ponto | null>(null);
   const arrasto = useRef<Arrasto | null>(null);
   const vistaCongelada = useRef<Vista | null>(null);
+  const ajusteCongelado = useRef<number | null>(null);
   const [, repintar] = useState(0);
 
   const risco = useMemo(() => (peca ? achatarCurvas(peca.nos) : []), [peca]);
@@ -134,11 +154,16 @@ export function Mesa(props: Props) {
   const vista = vistaCongelada.current ?? vistaCalculada;
   // Um pixel do canvas = um pixel da tela. Com px/cm fixo, peça pequena saía
   // esticada (borrada, traço grosso) e peça grande espremida (nó e texto
-  // minúsculos) — o CSS é que acertava a largura.
-  const escala = Math.min(
-    larguraDaMoldura > 0 ? (larguraDaMoldura * zoom) / Math.max(vista.largura, 1) : PX_POR_CM,
-    LADO_MAXIMO_PX / Math.max(vista.largura, vista.altura, 1),
-  );
+  // minúsculos) — o CSS é que acertava a largura. O zoom 1 cabe na largura E na
+  // altura da mesa: a peça inteira à vista.
+  const ajusteCalculado = moldura_.largura > 0 && moldura_.altura > 0
+    ? Math.min(moldura_.largura / Math.max(vista.largura, 1), moldura_.altura / Math.max(vista.altura, 1))
+    : PX_POR_CM;
+  // Congelado no arrasto, junto com a vista: se a mesa mudar de tamanho no meio do gesto (uma barra que
+  // quebra de linha), a peça não encolhe debaixo do ponteiro.
+  const ajusteNaMesa = ajusteCongelado.current ?? ajusteCalculado;
+  const escalaTela = ajusteNaMesa * zoom;
+  const escala = Math.min(escalaTela, LADO_MAXIMO_PX / Math.max(vista.largura, vista.altura, 1));
 
   // `noAtivo` chega do pai, e pode estar velho: um desfazer troca `peca.nos`
   // inteiro e não necessariamente encolhe até esbarrar no índice marcado, mas
@@ -251,17 +276,28 @@ export function Mesa(props: Props) {
       ctx.fillText("A margem fecha a peça sobre ela mesma: diminua a margem.", 12 * fator, 22 * fator);
     }
     if (ferramenta === "nos") {
-      desenharNos(ctx, peca.nos, props.editor?.selecionados ?? null, emTela);
+      desenharNos(ctx, peca.nos, props.editor?.selecionados ?? null, emTela, { sob: props.editor?.sob ?? null, alcas: props.editor?.alcas });
       if (props.editor?.retangulo) desenharRetangulo(ctx, props.editor.retangulo.de, props.editor.retangulo.ate, emTela);
     }
     if (ferramenta === "graduar") {
       desenharNos(ctx, peca.nos, null, emTela);
       desenharPontosDeGraduacao(ctx, peca.nos, regras, noAtivoValido, emTela);
     }
-  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro, camadas, regras, props.editor?.selecionados, props.editor?.retangulo]);
+  }, [vista, escala, verTodas, todas, peca, indice, corte, risco, ferramenta, noAtivoValido, comErro, camadas, regras,
+    props.editor?.selecionados, props.editor?.retangulo, props.editor?.sob, props.editor?.alcas]);
 
   // ------------------------------------------------------------ o ponteiro
   const aoApertar = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Espaço segurado, ou o botão do meio: a mão anda pela peça, e nada se edita.
+    if (mao === "pronta" || e.button === 1) {
+      const caixa = moldura.current;
+      if (!caixa) return;
+      e.preventDefault();
+      arrasto.current = { tipo: "mao", x: e.clientX, y: e.clientY, esquerda: caixa.scrollLeft, topo: caixa.scrollTop };
+      setMao("andando");
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
     const alvo = noCm(e);
     if (!alvo) return;
     if (verTodas) {
@@ -273,7 +309,7 @@ export function Mesa(props: Props) {
     const raio = raioCm();
 
     if (ferramenta === "nos") {
-      if (!props.editor?.apertar(alvo, raio, e.shiftKey)) return;
+      if (!props.editor?.apertar(alvo, raio, e.shiftKey, e.altKey)) return;
       arrasto.current = { tipo: "editor" };
     } else if (ferramenta === "pique") {
       // Mesmo filtro que `desenhoDaPeca` aplica antes de desenhar: um pique
@@ -334,14 +370,27 @@ export function Mesa(props: Props) {
       arrasto.current = { tipo: "fio", modo: naPonta ? "girar" : "mover" };
     }
     vistaCongelada.current = vista;
+    ajusteCongelado.current = ajusteNaMesa;
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const aoMover = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const a = arrasto.current;
-    if (!a) return;
+    if (a && a.tipo === "mao") {
+      const caixa = moldura.current;
+      if (caixa) {
+        caixa.scrollLeft = a.esquerda - (e.clientX - a.x);
+        caixa.scrollTop = a.topo - (e.clientY - a.y);
+      }
+      return;
+    }
     const alvo = noCm(e);
     if (!alvo) return;
+    if (!a) {
+      // Sem apertar: o editor guarda o que está debaixo do ponteiro e diz o cursor.
+      if (ferramenta === "nos" && !verTodas && props.editor) setCursor(props.editor.passar(alvo, raioCm()));
+      return;
+    }
     if (a.tipo === "editor") {
       props.editor?.mover(alvo);
     } else if (a.modo === "mover") {
@@ -357,9 +406,16 @@ export function Mesa(props: Props) {
 
   const aoSoltar = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!arrasto.current) return;
+    if (arrasto.current.tipo === "mao") {
+      arrasto.current = null;
+      setMao((m) => (m === "andando" ? (espacoSegurado.current ? "pronta" : "") : m));
+      e.currentTarget.releasePointerCapture?.(e.pointerId);
+      return;
+    }
     if (arrasto.current.tipo === "editor") props.editor?.soltar();
     arrasto.current = null;
     vistaCongelada.current = null;
+    ajusteCongelado.current = null;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
     repintar((n) => n + 1);
   };
@@ -371,53 +427,152 @@ export function Mesa(props: Props) {
     if (alvo) props.editor?.dobrarClique(alvo, raioCm());
   };
 
-  // A largura da mesa, para o canvas nascer do tamanho em que aparece.
+  // A largura e a altura da mesa, para o canvas nascer do tamanho em que aparece.
   useEffect(() => {
     const caixa = moldura.current;
     if (!caixa) return;
-    const medir = () => setLarguraDaMoldura(caixa.clientWidth);
+    const medir = () => setMoldura({ largura: caixa.clientWidth, altura: caixa.clientHeight });
     medir();
     const observador = new ResizeObserver(medir);
     observador.observe(caixa);
     return () => observador.disconnect();
   }, []);
 
+  /**
+   * Muda o zoom mantendo o ponto `(cx, cy)` da mesa (em pixels da moldura) parado
+   * debaixo dele. Sem ponto: o meio da mesa.
+   */
+  const mudarZoom = (fator: number, cx?: number, cy?: number) => {
+    const caixa = moldura.current;
+    const canvas = tela.current;
+    if (!caixa || !canvas) return;
+    const r = caixa.getBoundingClientRect();
+    const c = canvas.getBoundingClientRect();
+    const mx = cx ?? r.width / 2;
+    const my = cy ?? r.height / 2;
+    const px = (r.left + mx - c.left) / Math.max(1, c.width);
+    const py = (r.top + my - c.top) / Math.max(1, c.height);
+    setZoom((z) => {
+      const novo = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * fator));
+      requestAnimationFrame(() => {
+        if (!tela.current) return;
+        caixa.scrollLeft = tela.current.offsetLeft + px * tela.current.clientWidth - mx;
+        caixa.scrollTop = tela.current.offsetTop + py * tela.current.clientHeight - my;
+      });
+      return novo;
+    });
+  };
+  const ajustar = () => {
+    setZoom(1);
+    requestAnimationFrame(() => { if (moldura.current) { moldura.current.scrollLeft = 0; moldura.current.scrollTop = 0; } });
+  };
+
   // Zoom pela roda, ancorado no ponteiro — o mesmo do Digitalizar.
+  const zoomPelaRoda = useRef(mudarZoom);
+  zoomPelaRoda.current = mudarZoom;
   useEffect(() => {
     const caixa = moldura.current;
     if (!caixa) return;
     const aoRodar = (e: WheelEvent) => {
-      if (!tela.current) return;
       e.preventDefault();
-      const antes = caixa.getBoundingClientRect();
-      const px = (caixa.scrollLeft + (e.clientX - antes.left)) / Math.max(1, tela.current.clientWidth);
-      const py = (caixa.scrollTop + (e.clientY - antes.top)) / Math.max(1, tela.current.clientHeight);
-      setZoom((z) => {
-        const novo = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
-        requestAnimationFrame(() => {
-          if (!tela.current) return;
-          caixa.scrollLeft = px * tela.current.clientWidth - (e.clientX - antes.left);
-          caixa.scrollTop = py * tela.current.clientHeight - (e.clientY - antes.top);
-        });
-        return novo;
-      });
+      const r = caixa.getBoundingClientRect();
+      zoomPelaRoda.current(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top);
     };
     caixa.addEventListener("wheel", aoRodar, { passive: false });
     return () => caixa.removeEventListener("wheel", aoRodar);
   }, []);
 
+  // Depois do Z: o centro da seleção no meio da mesa, já no zoom novo.
+  useEffect(() => {
+    const ponto = centrarEm.current;
+    const caixa = moldura.current;
+    const canvas = tela.current;
+    if (!ponto || !caixa || !canvas) return;
+    centrarEm.current = null;
+    caixa.scrollLeft = canvas.offsetLeft + (ponto.x - vista.minX) * escalaTela - caixa.clientWidth / 2;
+    caixa.scrollTop = canvas.offsetTop + (ponto.y - vista.minY) * escalaTela - caixa.clientHeight / 2;
+  }, [zoom, escalaTela, vista]);
+
+  /** Z: os nós selecionados (com 15% de folga) ocupando a mesa. */
+  const aproximarNaSelecao = () => {
+    const sel = props.editor?.selecionados;
+    if (!peca || !sel || sel.size === 0 || ajusteNaMesa <= 0) return;
+    const pts = [...sel].map((i) => peca.nos[i]).filter(Boolean) as Ponto[];
+    if (pts.length === 0) return;
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    const largura = Math.max(2, (Math.max(...xs) - Math.min(...xs)) * 1.3);
+    const altura = Math.max(2, (Math.max(...ys) - Math.min(...ys)) * 1.3);
+    const porCm = Math.min(moldura_.largura / largura, moldura_.altura / altura);
+    centrarEm.current = { x: (Math.max(...xs) + Math.min(...xs)) / 2, y: (Math.max(...ys) + Math.min(...ys)) / 2 };
+    setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, porCm / ajusteNaMesa)));
+  };
+
+  // As teclas da vista: 0 ajusta, Z aproxima na seleção, Espaço segurado vira mão.
+  const espacoSegurado = useRef(false);
+  const teclasDaVista = useRef({ ajustar, aproximarNaSelecao });
+  teclasDaVista.current = { ajustar, aproximarNaSelecao };
+  useEffect(() => {
+    if (verTodas) return;
+    const descer = (e: KeyboardEvent) => {
+      if (e.key === " " && !e.ctrlKey && !e.metaKey) {
+        const foco = document.activeElement as HTMLElement | null;
+        if (foco && (["INPUT", "TEXTAREA", "SELECT"].includes(foco.tagName) || foco.isContentEditable)) return;
+        // Botão com o foco (o "+" do zoom, uma ferramenta que acabou de ser clicada): o Espaço o
+        // apertaria de novo na soltura. Ele perde o foco, e o Espaço é da mão.
+        if (foco && foco.tagName === "BUTTON") foco.blur();
+        e.preventDefault();
+        espacoSegurado.current = true;
+        setMao((m) => (m === "" ? "pronta" : m));
+        return;
+      }
+      if (!teclaDaMesa(e)) return;
+      if (e.key === "0") { e.preventDefault(); teclasDaVista.current.ajustar(); }
+      else if (e.key.toLowerCase() === "z") { e.preventDefault(); teclasDaVista.current.aproximarNaSelecao(); }
+    };
+    const subir = (e: KeyboardEvent) => {
+      if (e.key !== " ") return;
+      espacoSegurado.current = false;
+      setMao((m) => (m === "pronta" ? "" : m));
+    };
+    window.addEventListener("keydown", descer);
+    window.addEventListener("keyup", subir);
+    return () => { window.removeEventListener("keydown", descer); window.removeEventListener("keyup", subir); };
+  }, [verTodas]);
+
+  const cursorDaMesa = verTodas ? "pointer" : mao === "andando" ? "grabbing" : mao === "pronta" ? "grab"
+    : ferramenta === "nos" ? cursor : "crosshair";
+
   return (
-    <div ref={moldura} className="h-full overflow-auto bg-painel-suave">
-      <canvas
-        ref={tela}
-        className="block h-auto max-w-none touch-none select-none"
-        style={{ width: `${zoom * 100}%`, cursor: verTodas ? "pointer" : "crosshair" }}
-        onPointerDown={aoApertar}
-        onPointerMove={aoMover}
-        onPointerUp={aoSoltar}
-        onPointerCancel={aoSoltar}
-        onDoubleClick={aoDobrarClique}
-      />
+    <div className="relative h-full">
+      <div ref={moldura} className="h-full overflow-auto bg-painel-suave">
+        {/* `margin: auto` centraliza a peça menor que a mesa sem esconder nada quando ela é maior. */}
+        <div className="flex min-h-full min-w-full">
+          <canvas
+            ref={tela}
+            data-mesa
+            className="m-auto block h-auto max-w-none touch-none select-none"
+            style={{ width: `${Math.round(vista.largura * escalaTela)}px`, cursor: cursorDaMesa }}
+            onPointerDown={aoApertar}
+            onPointerMove={aoMover}
+            onPointerUp={aoSoltar}
+            onPointerCancel={aoSoltar}
+            onPointerLeave={() => { if (!arrasto.current) props.editor?.sair(); }}
+            onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}
+            onDoubleClick={aoDobrarClique}
+          />
+        </div>
+      </div>
+      {!verTodas && (
+        <div className="absolute right-3 bottom-3 flex items-center gap-1 rounded-lg border border-linha bg-painel/90 p-1 shadow-lg shadow-black/40">
+          <button type="button" className="btn secondary btn-sm" title="Afastar (roda do mouse)" aria-label="Afastar"
+            onClick={() => mudarZoom(1 / 1.25)}>−</button>
+          <span className="w-12 text-center font-mono text-[11px] text-tinta-fraca">{Math.round(zoom * 100)}%</span>
+          <button type="button" className="btn secondary btn-sm" title="Aproximar (roda do mouse)" aria-label="Aproximar"
+            onClick={() => mudarZoom(1.25)}>+</button>
+          <button type="button" className="btn secondary btn-sm" title="A peça inteira na mesa (0)" onClick={ajustar}>Ajustar</button>
+        </div>
+      )}
     </div>
   );
 }

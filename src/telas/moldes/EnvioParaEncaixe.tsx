@@ -31,7 +31,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDialogo } from "../../casca/Dialogo";
 import { moldesApi, type AjusteDaArte, type Estampa, type Molde, type PecaDoMolde } from "../../api/moldes";
-import { pecasParaOEncaixe } from "../../motores/montagem";
+import { COR_DA_LINHA, pecaComLinha, pecasParaOEncaixe } from "../../motores/montagem";
+import { corDaPeca } from "../../utils/coresDePeca";
 import {
   AJUSTE_PADRAO, MODOS_DE_ARTE, TIPOS_DE_ARTE, ajusteNovo, desenharArteNoMolde, ppcmDaArte, tamanhoDoRapport,
 } from "../../motores/arteMolde";
@@ -82,6 +83,8 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
 
   // A grade: uma coluna por tamanho, uma linha por estampa (ver `envioPorTamanho.ts`).
   const colunas = useMemo(() => colunasDaGrade(molde), [molde]);
+  // A linha em volta da peça, em cm. Molde de servidor antigo não traz o campo: sem linha.
+  const linhaCm = (molde.linha ?? 0) / 10;
   const [quantidades, setQuantidades] = useState<Quantidades>({});
   const [mexidas, setMexidas] = useState<Mexidas>({});
   const [aberta, setAberta] = useState<string | null>(null);
@@ -352,15 +355,23 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
         const artesDaCelula = await artesDaLinha(celula.linha, guardadas);
         const estampa = celula.linha === LINHA_SEM_ESTAMPA ? "" : nomeDaLinha(celula.linha);
 
-        // A arte grande só é desenhada agora, na hora de mandar.
-        const comArte = celula.pecas.map((peca) => {
+        // A arte grande só é desenhada agora, na hora de mandar. Com linha em volta, TODA peça vai
+        // desenhada — a sem arte também (a silhueta pintada e a linha): se ela fosse só contorno, o
+        // Encaixe a pintaria sozinho, sem o traço.
+        const comArte = celula.pecas.map((peca, k) => {
           const arte = artesDaCelula[peca.papel];
-          if (!arte) return { ...peca, estampa };
-          const ppcm = ppcmDaArte(peca.largura, peca.altura, alvo);
+          if (!arte && !(linhaCm > 0)) return { ...peca, estampa };
+          const ppcm = ppcmDaArte(peca.largura + linhaCm, peca.altura + linhaCm, alvo);
           const desenho = desenharArteNoMolde(
             { contorno: peca.contorno, furos: peca.furos || [], largura: peca.largura, altura: peca.altura },
-            arte.img, arte.ajuste, ppcm, { margem: 0 });
-          return { ...peca, desenho, arte: arte.nome, estampa };
+            arte ? arte.img : null, arte ? arte.ajuste : null, ppcm,
+            {
+              // A peça fica meia linha para dentro da imagem: é onde `pecaComLinha` põe o contorno.
+              margem: (linhaCm / 2) * ppcm,
+              ...(linhaCm > 0 ? { linha: COR_DA_LINHA, linhaGrossura: linhaCm * ppcm } : {}),
+              ...(arte ? {} : { fundo: corDaPeca(k) }),
+            });
+          return { ...pecaComLinha(peca, linhaCm), desenho, ...(arte ? { arte: arte.nome } : {}), estampa };
         });
 
         // `unidades: 1` com a quantidade final em cada peça, e só as > 0: o Encaixe faz
@@ -511,6 +522,7 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
                   key={`${peca.tamanho}-${peca.papel}-${peca.id ?? peca.ordem}-${i}`}
                   peca={peca}
                   arte={artes[peca.papel]}
+                  linhaCm={linhaCm}
                   aoMandarArte={(arquivo) => void mandarArteParaPapel(peca.papel, arquivo)}
                   aoMexer={(mudanca) => mexerNoAjuste(peca.papel, mudanca)}
                   aoTirar={() => tirarArte(peca.papel)}
@@ -533,9 +545,11 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
 }
 
 /** Uma peça do tamanho aberto: a prévia, a arte dela e os ajustes. */
-function ParteComArte({ peca, arte, aoMandarArte, aoMexer, aoTirar }: {
+function ParteComArte({ peca, arte, linhaCm, aoMandarArte, aoMexer, aoTirar }: {
   peca: PecaDoMolde;
   arte: ArteNaMao | undefined;
+  /** A linha em volta da peça, em cm (0 = sem): a prévia a mostra na grossura de verdade. */
+  linhaCm: number;
   aoMandarArte: (arquivo: File) => void;
   aoMexer: (mudanca: Partial<AjusteDaArte>) => void;
   aoTirar: () => void;
@@ -548,19 +562,26 @@ function ParteComArte({ peca, arte, aoMandarArte, aoMexer, aoTirar }: {
    * e deslocamento, que é justamente onde o custo apareceria.
    */
   const previa = useMemo(() => {
-    const ppcm = LADO_DA_PREVIA / Math.max(peca.largura, peca.altura, 1);
+    const ppcm = LADO_DA_PREVIA / Math.max(peca.largura + linhaCm, peca.altura + linhaCm, 1);
     return desenharArteNoMolde(
       { contorno: peca.contorno, furos: peca.furos || [], largura: peca.largura, altura: peca.altura },
       arte ? arte.img : null,
       arte ? arte.ajuste : null,
       ppcm,
-      {
-        fundo: arte ? null : "rgba(140, 152, 158, 0.22)",
-        linha: "rgba(226, 236, 240, 0.9)",
-        linhaGrossura: 1,
-      },
+      linhaCm > 0
+        ? {
+          fundo: arte ? null : "rgba(140, 152, 158, 0.22)",
+          margem: (linhaCm / 2) * ppcm,
+          linha: COR_DA_LINHA,
+          linhaGrossura: Math.max(1, linhaCm * ppcm),
+        }
+        : {
+          fundo: arte ? null : "rgba(140, 152, 158, 0.22)",
+          linha: "rgba(226, 236, 240, 0.9)",
+          linhaGrossura: 1,
+        },
     ).src;
-  }, [peca, arte, ajuste.tipo, ajuste.modo, ajuste.escala, ajuste.giro, ajuste.x, ajuste.y]);
+  }, [peca, arte, linhaCm, ajuste.tipo, ajuste.modo, ajuste.escala, ajuste.giro, ajuste.x, ajuste.y]);
 
   const medidaDoRapport = () => {
     const t = tamanhoDoRapport(arte!.img, ajuste);

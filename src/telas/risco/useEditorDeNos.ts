@@ -13,10 +13,11 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  alinharNos, converterTrechos, moverNos, moverPega, mudarTipoDosNos, nosNoRetangulo, pegaSob, puxarTrecho,
-  tipoDoNo, tracoSob, trechosDaSelecao,
+  alinharNosLisos, comVizinhos, converterTrechos, derivarAuto, moverNos, moverNosLisos, moverPega, moverPuxador,
+  mudarTipoDosNos, nosNoRetangulo, pegaSob, pontoNoTrecho, puxarTrechoLiso, refazerAlcas, tipoDoNo, tornarLiso,
+  tornarQuina, tracoSob, trechosDaSelecao, voltarAoAuto, voltarLado,
 } from "../../motores/edicaoDeNos";
-import type { No, Ponto } from "./desenhoDeNos";
+import type { No, Ponto, SobOPonteiro } from "./desenhoDeNos";
 
 export type TipoDeNo = "canto" | "suave" | "simetrico";
 
@@ -49,8 +50,9 @@ export interface AlvoDoEditor {
 }
 
 type Arrasto =
-  | { tipo: "nos"; base: No[]; indices: number[]; de: Ponto; mexeu: boolean; soEle: number | null }
-  | { tipo: "alca"; no: number; parte: "entrada" | "saida"; mexeu: boolean }
+  | { tipo: "nos"; base: No[]; indices: number[]; roda: number[]; de: Ponto; mexeu: boolean; soEle: number | null }
+  | { tipo: "alca"; no: number; parte: "entrada" | "saida"; mexeu: boolean; tirarAuto: boolean }
+  | { tipo: "puxador"; base: No[]; no: number; parte: "entrada" | "saida"; quebrar: boolean; mexeu: boolean }
   | { tipo: "trecho"; base: No[]; no: number; t: number; de: Ponto; mexeu: boolean }
   | { tipo: "retangulo"; de: Ponto; ate: Ponto; somar: boolean; antes: Set<number> };
 
@@ -60,6 +62,18 @@ const MEXEU = 0.3;
 const SETAS_SEGUIDAS_MS = 1000;
 /** Sem peça, as telas mandam um `[]` novo a cada render; este fica sempre o mesmo. */
 const SEM_NOS: No[] = [];
+
+/** O nó sem o `auto`: a alça mexida à mão (o ajuste fino) tira o nó do automático. */
+function semAuto(nos: No[], i: number): No[] {
+  const no = nos[i];
+  if (!no || !no.auto) return nos;
+  const { auto: _a, ...resto } = no;
+  const lista = nos.slice();
+  lista[i] = resto;
+  return lista;
+}
+
+const mesmoSob = (a: SobOPonteiro, b: SobOPonteiro) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Há uma janela aberta na frente? Então as teclas são dela, não do editor. */
 function janelaAberta(): boolean {
@@ -75,6 +89,11 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
   const [aviso, setAviso] = useState("");
   const [folga, setFolga] = useState(0.5);
   const [contagem, setContagem] = useState<{ antes: number; depois: number } | null>(null);
+  /** O que está debaixo do ponteiro (ver `passar`). */
+  const [sob, setSob] = useState<SobOPonteiro>(null);
+  /** O ajuste fino: as alças do Corel no lugar dos puxadores. */
+  const [alcas, setAlcas] = useState(false);
+  const [atalhosAbertos, setAtalhosAbertos] = useState(false);
   const arrasto = useRef<Arrasto | null>(null);
   const raioDoArrasto = useRef(0);
   const ultimaSeta = useRef(0);
@@ -111,6 +130,7 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     setReferencia(null);
     setContagem(null);
     setAviso("");
+    setSob(null);
   });
 
   // Outra peça: seleção nova.
@@ -129,6 +149,10 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
 
   const lista = useMemo(() => [...selecionados].sort((a, b) => a - b), [selecionados]);
   const trechos: number[] = useMemo(() => (lista.length > 0 ? trechosDaSelecao(nos, lista) : []), [nos, lista]);
+  /** Liso ou quina, como a barra mostra (o suave e o simétrico de antes contam como liso). */
+  const formaComum: "liso" | "quina" | null = lista.length > 0 && lista.every((i) => nos[i])
+    ? (lista.every((i) => nos[i]!.canto) ? "quina" : lista.every((i) => !nos[i]!.canto) ? "liso" : null)
+    : null;
   const tipoComum: TipoDeNo | null = lista.length > 0 && nos[lista[0]!]
     && lista.every((i) => nos[i] && tipoDoNo(nos[i]) === tipoDoNo(nos[lista[0]!]!))
     ? (tipoDoNo(nos[lista[0]!]!) as TipoDeNo)
@@ -139,14 +163,25 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
 
   // ------------------------------------------------------------ o ponteiro
 
-  /** Aperto do ponteiro, nas unidades dos nós. `true` quando começou um arrasto (a tela captura o ponteiro). */
-  const apertar = (ponto: Ponto, raio: number, shift: boolean): boolean => {
+  /**
+   * Aperto do ponteiro, nas unidades dos nós. `true` quando começou um arrasto (a tela captura o ponteiro).
+   * `alt`: no puxador de um nó liso, quebra o nó em quina e só aquele lado anda.
+   */
+  const apertar = (ponto: Ponto, raio: number, shift: boolean, alt = false): boolean => {
     setAviso("");
     outraMexida();
     raioDoArrasto.current = raio;
     const sob = pegaSob(nos, ponto, raio, selecionados);
     if (sob && sob.parte !== "no") {
-      arrasto.current = { tipo: "alca", no: sob.no, parte: sob.parte as "entrada" | "saida", mexeu: false };
+      const parte = sob.parte as "entrada" | "saida";
+      const doNo = nos[sob.no];
+      // O liso de hoje vira automático ao ser pego (sem mudar o desenho), e ganha o puxador.
+      const base = alcas ? nos : derivarAuto(nos, [sob.no]);
+      if (base[sob.no]?.auto && !alcas) {
+        arrasto.current = { tipo: "puxador", base, no: sob.no, parte, quebrar: alt, mexeu: false };
+      } else {
+        arrasto.current = { tipo: "alca", no: sob.no, parte, mexeu: false, tirarAuto: !!doNo?.auto };
+      }
       return true;
     }
     if (sob) {
@@ -162,7 +197,10 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
       setReferencia(i);
       // Clique (sem arrastar) num nó de uma seleção de vários: ao soltar, fica só ele.
       const soEle = !shift && selecionados.has(i) && selecionados.size > 1 ? i : null;
-      arrasto.current = { tipo: "nos", base: nos, indices: [...s], de: ponto, mexeu: false, soEle };
+      // A curva segue o ponto: os lisos em volta viram automáticos já aqui (sem mudar o desenho), e
+      // cada movimento refaz as alças deles (`refazerAlcas`).
+      const roda = comVizinhos([...s], nos.length);
+      arrasto.current = { tipo: "nos", base: derivarAuto(nos, roda), indices: [...s], roda, de: ponto, mexeu: false, soEle };
       return true;
     }
     const traco = tracoSob(nos, ponto, raio);
@@ -192,7 +230,13 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     if (a.tipo === "alca") {
       const primeiro = !a.mexeu;
       a.mexeu = true;
-      mudarNos((atuais) => moverPega(atuais, { no: a.no, parte: a.parte }, ponto), primeiro);
+      mudarNos((atuais) => moverPega(a.tirarAuto ? semAuto(atuais, a.no) : atuais, { no: a.no, parte: a.parte }, ponto), primeiro);
+      return;
+    }
+    if (a.tipo === "puxador") {
+      const primeiro = !a.mexeu;
+      a.mexeu = true;
+      mudarNos(() => moverPuxador(a.base, a.no, a.parte, ponto, { quebrar: a.quebrar }), primeiro);
       return;
     }
     const dx = ponto.x - a.de.x;
@@ -201,12 +245,33 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     const primeiro = !a.mexeu;
     a.mexeu = true;
     if (a.tipo === "nos") {
-      mudarNos(() => moverNos(a.base, a.indices, dx, dy), primeiro);
+      mudarNos(() => refazerAlcas(moverNos(a.base, a.indices, dx, dy), a.roda), primeiro);
       return;
     }
-    const puxado = puxarTrecho(a.base, a.no, a.t, ponto);
+    const puxado = puxarTrechoLiso(a.base, a.no, a.t, ponto);
     if (puxado) mudarNos(() => puxado, primeiro);
   };
+
+  /**
+   * O ponteiro passou (sem apertar): guarda o que está debaixo dele, para o desenho
+   * mostrar antes do clique, e diz o cursor. Nó, puxador e alça: "move"; o traço,
+   * onde dois cliques poriam um nó: "copy"; o vazio: "crosshair".
+   */
+  const passar = (ponto: Ponto, raio: number): "move" | "copy" | "crosshair" => {
+    if (arrasto.current) return arrasto.current.tipo === "retangulo" ? "crosshair" : "move";
+    const pego = pegaSob(nos, ponto, raio, selecionados);
+    let novo: SobOPonteiro = null;
+    if (pego) {
+      novo = pego.parte === "no" ? { tipo: "no", no: pego.no } : { tipo: "alca", no: pego.no, parte: pego.parte as "entrada" | "saida" };
+    } else {
+      const traco = tracoSob(nos, ponto, raio);
+      if (traco) novo = { tipo: "traco", ponto: pontoNoTrecho(nos, traco.no, traco.t) };
+    }
+    if (!mesmoSob(novo, sob)) setSob(novo);
+    return novo === null ? "crosshair" : novo.tipo === "traco" ? "copy" : "move";
+  };
+  /** O ponteiro saiu da mesa. */
+  const sair = () => { if (sob !== null) setSob(null); };
 
   const soltar = () => {
     const a = arrasto.current;
@@ -222,9 +287,16 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     }
   };
 
-  /** Dois cliques: num nó, apaga; no traço, põe um nó ali sem mudar o desenho. */
+  /** Dois cliques: num puxador, aquele lado volta ao natural; num nó, apaga; no traço, põe um nó ali sem mudar o desenho. */
   const dobrarClique = (ponto: Ponto, raio: number) => {
     outraMexida();
+    const naAlca = pegaSob(nos, ponto, raio, selecionados);
+    if (naAlca && naAlca.parte !== "no") {
+      const no: number = naAlca.no;
+      const parte = naAlca.parte as "entrada" | "saida";
+      if (nos[no]?.auto) mudarNos((atuais) => voltarLado(atuais, no, parte), true);
+      return;
+    }
     const sob = pegaSob(nos, ponto, raio, null);
     if (sob) {
       const erro = apagarNos([sob.no]);
@@ -277,7 +349,21 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
       x: lista.reduce((s, i) => s + nos[i]!.x, 0) / lista.length,
       y: lista.reduce((s, i) => s + nos[i]!.y, 0) / lista.length,
     };
-    mudarNos((atuais) => alinharNos(atuais, lista, eixo, ref), true);
+    mudarNos((atuais) => alinharNosLisos(atuais, lista, eixo, ref), true);
+  };
+
+  /** L, Q e A: liso automático, quina, e os dois lados de volta ao natural. */
+  const deixarLiso = () => { outraMexida(); if (lista.length) mudarNos((atuais) => tornarLiso(atuais, lista), true); };
+  const deixarQuina = () => { outraMexida(); if (lista.length) mudarNos((atuais) => tornarQuina(atuais, lista), true); };
+  const deixarAutomatico = () => { outraMexida(); if (lista.length) mudarNos((atuais) => voltarAoAuto(atuais, lista), true); };
+
+  /** Tab / Shift+Tab: a seleção anda para o nó seguinte ou o anterior. */
+  const andarNaSelecao = (passo: 1 | -1) => {
+    if (nos.length === 0) return;
+    const de = referencia !== null && selecionados.has(referencia) ? referencia : lista.length ? lista[lista.length - 1]! : passo === 1 ? -1 : 0;
+    const para = (de + passo + nos.length) % nos.length;
+    setSelecionados(new Set([para]));
+    setReferencia(para);
   };
 
   const selecionarTodos = () => {
@@ -346,7 +432,48 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
       selecionarTodos();
       return true;
     }
-    if (e.ctrlKey || e.metaKey || e.altKey) return false;
+    if (e.ctrlKey || e.metaKey) return false;
+    const setasAlt: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (e.altKey && !setasAlt[e.key]) return false;
+    if (e.key === "Tab") {
+      if (nos.length === 0) return false;
+      e.preventDefault();
+      andarNaSelecao(e.shiftKey ? -1 : 1);
+      return true;
+    }
+    if (e.key === "?") {
+      e.preventDefault();
+      setAtalhosAbertos(true);
+      return true;
+    }
+    const letra = e.key.length === 1 ? e.key.toLowerCase() : "";
+    const comSelecao = (fazer: () => void) => {
+      if (lista.length === 0) return false;
+      e.preventDefault();
+      fazer();
+      return true;
+    };
+    if (letra === "l") return comSelecao(deixarLiso);
+    if (letra === "q") return comSelecao(deixarQuina);
+    if (letra === "a") return comSelecao(deixarAutomatico);
+    if (letra === "r" || letra === "c") {
+      if (trechos.length === 0) return false;
+      e.preventDefault();
+      converter(letra === "r" ? "linha" : "curva");
+      return true;
+    }
+    if (letra === "h") {
+      if (lista.length < 2) return false;
+      e.preventDefault();
+      alinhar(e.shiftKey ? "vertical" : "horizontal");
+      return true;
+    }
+    if (letra === "e") {
+      if (nos.length <= 3) return false;
+      e.preventDefault();
+      reduzirUmaVez();
+      return true;
+    }
     if (e.key === "Escape") {
       if (selecionados.size === 0) return false;
       setSelecionados(new Set());
@@ -368,17 +495,24 @@ export function useEditorDeNos(alvo: AlvoDoEditor, chave: unknown) {
     const d = setas[e.key];
     if (!d || selecionados.size === 0) return false;
     e.preventDefault();
-    const passo = e.shiftKey ? alvo.passos.longo : alvo.passos.curto;
+    // Alt: um décimo do passo curto (0,1 mm na Montagem).
+    const passo = e.altKey ? alvo.passos.curto / 10 : e.shiftKey ? alvo.passos.longo : alvo.passos.curto;
     const agora = Date.now();
     const seguida = agora - ultimaSeta.current < SETAS_SEGUIDAS_MS;
     ultimaSeta.current = agora;
-    mudarNos((atuais) => moverNos(atuais, lista, d[0] * passo, d[1] * passo), !seguida);
+    mudarNos((atuais) => moverNosLisos(atuais, lista, d[0] * passo, d[1] * passo), !seguida);
     return true;
   };
 
   return {
-    selecionados, retangulo, aviso, folga, contagem, tipoComum, total: nos.length,
+    selecionados, retangulo, aviso, folga, contagem, tipoComum, formaComum, total: nos.length,
     comMedida: alvo.comMedida,
+    sob, alcas, alternarAlcas: () => setAlcas((v) => !v),
+    atalhosAbertos, abrirAtalhos: (aberto: boolean) => setAtalhosAbertos(aberto),
+    passar, sair,
+    tornarLiso: deixarLiso, tornarQuina: deixarQuina, voltarAoAuto: deixarAutomatico,
+    podeLiso: lista.length > 0,
+    podeQuina: lista.length > 0,
     podeApagar: lista.length > 0,
     podePor: trechos.length > 0,
     podeLinha: trechos.some((i) => !nos[i]?.retaDepois),

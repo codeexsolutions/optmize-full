@@ -39,6 +39,7 @@ import {
   type ArteDaPeca, type CategoriaDoSubprojeto, type EstruturaDoProjeto, type PecaDaCategoria,
   type Projeto, type Subprojeto,
 } from "../../api/projetos";
+import { prepararArteParaONavegador } from "../../api/arte";
 import { medidasDoArquivo, pixelsPorCmDoArquivo, PPCM_PADRAO } from "../../motores/medidaDoArquivo";
 import { useLigacao } from "../../producao/ligacao";
 import { carregarImagem } from "../../utils/arquivoDeImagem";
@@ -48,8 +49,19 @@ const CATEGORIAS_COMUNS = ["PP", "P", "M", "G", "GG", "XG"] as const;
 
 /** O que entra como arte: o que o Encaixe sabe desenhar. */
 const TIPOS_DE_ARTE = ["image/png", "image/jpeg", "image/webp"];
+/*
+ * O TIFF entra também, convertido ANTES de subir: o servidor do projeto só
+ * guarda o que o navegador abre, e o convertido é o que depois vai para o
+ * Encaixe sem conversão nenhuma. Só ele: o JPEG CMYK continua subindo como
+ * chegou, porque é do arquivo de origem que o Encaixe tira a cor direta.
+ */
+const ehTiff = (arquivo: File) => arquivo.type === "image/tiff" || /\.tiff?$/i.test(arquivo.name);
+const ACEITA_NO_SELETOR = [...TIPOS_DE_ARTE, "image/tiff", ".tif", ".tiff"].join(",");
 
 const LADO_DA_MINIATURA = 240;
+
+/** A medida guardada é a exata do arquivo; o campo mostra duas casas (0,1 mm). */
+const noCampo = (cm: number) => Math.round(cm * 100) / 100;
 
 const novoId = (prefixo: string) => `${prefixo}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const urlDaArte = (arte: ArteDaPeca) => `/uploads/projetos/${arte.arquivo}`;
@@ -166,22 +178,30 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
    * deixaria o projeto citando um arquivo que talvez não exista.
    */
   const anexar = async (alvo: Alvo, arquivo: File) => {
-    if (!TIPOS_DE_ARTE.includes(arquivo.type)) {
-      setErro(`"${arquivo.name}" não entra: a arte precisa ser PNG, JPG ou WEBP.`);
+    if (!TIPOS_DE_ARTE.includes(arquivo.type) && !ehTiff(arquivo)) {
+      setErro(`"${arquivo.name}" não entra: a arte precisa ser PNG, JPG, WEBP ou TIFF.`);
       return;
     }
     setSubindo((n) => n + 1);
     try {
-      const bytes = new Uint8Array(await arquivo.arrayBuffer());
+      let pronto = arquivo;
+      if (ehTiff(arquivo)) {
+        const preparada = await prepararArteParaONavegador(arquivo);
+        if (!preparada.convertida) throw new Error(preparada.erro || "o servidor não converteu o TIFF.");
+        pronto = preparada.file;
+      }
+      const bytes = new Uint8Array(await pronto.arrayBuffer());
       const ppcm = pixelsPorCmDoArquivo(bytes) || PPCM_PADRAO;
-      const { arquivo: nomeNoDisco, url } = await projetosApi.mandarImagem(projeto.id, arquivo);
+      const { arquivo: nomeNoDisco, url } = await projetosApi.mandarImagem(projeto.id, pronto);
       const img = await carregarImagem(url);
       const arte: ArteDaPeca = {
         arquivo: nomeNoDisco,
         nome: arquivo.name,
         miniatura: miniaturaDaImagem(img),
-        largura: Math.round((img.naturalWidth / ppcm) * 10) / 10,
-        altura: Math.round((img.naturalHeight / ppcm) * 10) / 10,
+        // Exata, sem arredondar: é esta medida que vai para o Encaixe, e o
+        // PDF imprime a arte nela (ver `montarPecaDaImagem`, no controlador).
+        largura: img.naturalWidth / ppcm,
+        altura: img.naturalHeight / ppcm,
       };
       mexerNaPeca(alvo, (p) => ({ ...p, arte }));
     } catch (e) {
@@ -481,7 +501,7 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
       <input
         ref={entrada}
         type="file"
-        accept={TIPOS_DE_ARTE.join(",")}
+        accept={ACEITA_NO_SELETOR}
         className="hidden"
         onChange={(e) => {
           const arquivo = e.target.files?.[0];
@@ -824,7 +844,7 @@ function CartaoDaPeca({ peca, aoRenomear, aoPorItem, aoMedida, aoApagar, aoEscol
             <div className="flex items-center gap-1 font-mono text-[10px] text-tinta-apagada">
               <input
                 type="number" min="0.1" step="0.1"
-                value={arte.largura}
+                value={noCampo(arte.largura)}
                 onChange={(e) => aoMedida({ largura: Number(e.target.value) })}
                 aria-label="Largura em cm"
                 className={`w-14 rounded border border-linha bg-painel px-1 py-0.5 text-center text-tinta focus:border-[var(--accent-line)] focus:outline-none ${SEM_SETINHAS}`}
@@ -832,7 +852,7 @@ function CartaoDaPeca({ peca, aoRenomear, aoPorItem, aoMedida, aoApagar, aoEscol
               ×
               <input
                 type="number" min="0.1" step="0.1"
-                value={arte.altura}
+                value={noCampo(arte.altura)}
                 onChange={(e) => aoMedida({ altura: Number(e.target.value) })}
                 aria-label="Altura em cm"
                 className={`w-14 rounded border border-linha bg-painel px-1 py-0.5 text-center text-tinta focus:border-[var(--accent-line)] focus:outline-none ${SEM_SETINHAS}`}

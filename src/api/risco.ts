@@ -25,6 +25,8 @@ export interface NoDoRisco {
   retaDepois?: boolean;
   /** Nó simétrico (as duas alças do mesmo tamanho). Sem o campo, e sem `canto`, o nó é suave. */
   simetrico?: boolean;
+  /** Nó liso automático: a abertura de cada lado e o giro (ver `motores/edicaoDeNos.js`). */
+  auto?: { antes: number; depois: number; giro: number };
 }
 
 export interface PecaDoRisco {

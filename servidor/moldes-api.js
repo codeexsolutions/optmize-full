@@ -18,7 +18,7 @@ const db = require("./db");
 const {
   extensaoDaImagem, nomeDeArquivo, nomeDeImagemValido, limparImagensSoltas, pastaDeUploads,
 } = require("./uploads-arquivos");
-const { PAPEIS, arrumarPeca, arrumarTamanhos, lerSituacao, pecaDoBanco } = require("./moldes-pecas");
+const { PAPEIS, arrumarPeca, arrumarTamanhos, lerLinha, lerSituacao, pecaDoBanco } = require("./moldes-pecas");
 
 const router = express.Router();
 const agora = () => new Date().toISOString();
@@ -64,7 +64,12 @@ router.get("/", (req, res) => {
 router.get("/:id", (req, res) => {
   const molde = db.prepare("SELECT * FROM moldes WHERE id = ?").get(req.params.id);
   if (!molde) return res.status(404).json({ error: "Molde não encontrado." });
-  res.json({ ...molde, pecas: pecasDoMolde(molde.id), tamanhos: tamanhosDoMolde(molde.id), artes: artesDoMolde(molde.id) });
+  // A tela recebe `linha` (mm), e não o nome da coluna.
+  const { linha_mm: linhaMm, ...resto } = molde;
+  res.json({
+    ...resto, linha: linhaMm ?? 0,
+    pecas: pecasDoMolde(molde.id), tamanhos: tamanhosDoMolde(molde.id), artes: artesDoMolde(molde.id),
+  });
 });
 
 router.post("/", (req, res) => {
@@ -79,8 +84,9 @@ router.post("/", (req, res) => {
 
   const salvar = db.transaction(() => {
     const info = db.prepare(
-      "INSERT INTO moldes (nome, observacoes, situacao, criado_em) VALUES (?, ?, ?, ?)")
-      .run(String(nome).trim(), String(observacoes || "").trim() || null, lerSituacao(situacao) || "pronto", agora());
+      "INSERT INTO moldes (nome, observacoes, situacao, linha_mm, criado_em) VALUES (?, ?, ?, ?, ?)")
+      .run(String(nome).trim(), String(observacoes || "").trim() || null, lerSituacao(situacao) || "pronto",
+        lerLinha(req.body.linha) ?? 0, agora());
     const inserir = db.prepare(`
       INSERT INTO molde_pecas
         (molde_id, tamanho, papel, nome, quantidade, largura, altura, contorno, furos, origem, nos, marcacoes, ordem, grupo, graduacao)
@@ -108,9 +114,10 @@ router.put("/:id", (req, res) => {
   }
 
   const salvar = db.transaction(() => {
-    db.prepare("UPDATE moldes SET nome = ?, observacoes = ?, situacao = ?, atualizado_em = ? WHERE id = ?")
+    // Sem `linha` no pedido (o passo a passo antigo, o Digitalizar), a guardada fica.
+    db.prepare("UPDATE moldes SET nome = ?, observacoes = ?, situacao = ?, linha_mm = ?, atualizado_em = ? WHERE id = ?")
       .run(String(nome || molde.nome).trim(), String(observacoes || "").trim() || null,
-        lerSituacao(situacao) || molde.situacao, agora(), molde.id);
+        lerSituacao(situacao) || molde.situacao, lerLinha(req.body.linha) ?? molde.linha_mm ?? 0, agora(), molde.id);
     db.prepare("DELETE FROM molde_pecas WHERE molde_id = ?").run(molde.id);
     const inserir = db.prepare(`
       INSERT INTO molde_pecas

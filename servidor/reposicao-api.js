@@ -61,6 +61,19 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_reposicao_pecas_trabalho ON reposicao_pecas(trabalho_id);
 `);
 
+// O pedido e a sigla de cada peça (2026-10-01): com dois pedidos no mesmo
+// rolo, reimprimir uma peça precisa saber de qual pedido ela era. A tabela é
+// criada aqui, e não em db.js, então a coluna nova também nasce aqui.
+for (const coluna of ["pedido", "sigla"]) {
+  const existe = db.prepare("PRAGMA table_info(reposicao_pecas)").all().some((c) => c.name === coluna);
+  if (!existe) db.exec(`ALTER TABLE reposicao_pecas ADD COLUMN ${coluna} TEXT`);
+}
+const siglaLimpa = (v) => {
+  const s = String(v == null ? "" : v).normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  return s || null;
+};
+
 const PEGAR_TRABALHO = db.prepare("SELECT * FROM reposicao_trabalhos WHERE id = ?");
 const PEGAR_PECA = db.prepare("SELECT * FROM reposicao_pecas WHERE id = ?");
 
@@ -90,6 +103,8 @@ function pecaParaTela(p) {
     qtd: p.qtd,
     giro: p.giro,
     miniatura: p.miniatura,
+    pedido: p.pedido || null,
+    sigla: p.sigla || null,
     // Sem arte (o envio dela falhou), a peça aparece mas não vai ao Encaixe.
     url: p.arquivo ? `/api/reposicao/pecas/${p.id}/arte` : null,
   };
@@ -142,8 +157,8 @@ router.post("/trabalhos", (req, res) => {
     ).lastInsertRowid;
 
     const inserir = db.prepare(`
-      INSERT INTO reposicao_pecas (trabalho_id, ordem, nome, largura, altura, qtd, giro, miniatura)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO reposicao_pecas (trabalho_id, ordem, nome, largura, altura, qtd, giro, miniatura, pedido, sigla)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const idsDasPecas = pecas.map((p, i) => inserir.run(
       id, i,
@@ -153,6 +168,8 @@ router.post("/trabalhos", (req, res) => {
       Math.max(1, Math.round(numero(p.qtd, 1, 100000) || 1)),
       ["180", "fixa", "livre"].includes(p.giro) ? p.giro : null,
       miniaturaValida(p.miniatura),
+      siglaLimpa(p.pedido),
+      siglaLimpa(p.sigla),
     ).lastInsertRowid);
     return { id, pecas: idsDasPecas };
   });

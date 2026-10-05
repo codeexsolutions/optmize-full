@@ -26,6 +26,22 @@ function lerPonto(p) {
   return x === null || y === null ? null : { x, y };
 }
 
+/**
+ * O nó liso automático (spec de 2026-10-05): a abertura de cada lado, presa
+ * entre 0,05 e 4, e o giro entre −π e π. Número que não é número tira o campo —
+ * o nó volta como suave, com as alças que já tem.
+ */
+function autoLido(a) {
+  if (!a || typeof a !== "object") return null;
+  const { antes, depois, giro } = a;
+  if (![antes, depois, giro].every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+  const prender = (v) => Math.min(4, Math.max(0.05, v));
+  let g = giro % (2 * Math.PI);
+  if (g > Math.PI) g -= 2 * Math.PI;
+  if (g < -Math.PI) g += 2 * Math.PI;
+  return { antes: prender(antes), depois: prender(depois), giro: g };
+}
+
 function lerNos(brutos) {
   if (!Array.isArray(brutos) || brutos.length < 3) return null;
   const nos = [];
@@ -40,6 +56,10 @@ function lerNos(brutos) {
       retaDepois: !!n.retaDepois,
       // O tipo simétrico do Corel: só vale em nó que não é canto. Sem ele, o nó é suave.
       ...(n.simetrico && !n.canto ? { simetrico: true } : {}),
+      ...(() => {
+        const auto = n.canto ? null : autoLido(n.auto);
+        return auto ? { auto } : {};
+      })(),
     });
   }
   return nos;
@@ -176,6 +196,17 @@ function lerSituacao(valor) {
   return valor === "rascunho" || valor === "pronto" ? valor : null;
 }
 
+/**
+ * A grossura da linha em volta da peça, em mm: de 0 a 10, com um décimo. `null` quando não veio
+ * ou não é número — quem chama decide (o POST usa 0; o PUT mantém a guardada).
+ */
+function lerLinha(valor) {
+  if (valor === undefined || valor === null || valor === "") return null;
+  const n = Number(valor);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(10, Math.max(0, Math.round(n * 10) / 10));
+}
+
 /** A linha de `molde_pecas` como a tela a recebe. */
 function pecaDoBanco(linha) {
   return {
@@ -188,4 +219,4 @@ function pecaDoBanco(linha) {
   };
 }
 
-module.exports = { PAPEIS, arrumarPeca, arrumarTamanhos, lerSituacao, pecaDoBanco };
+module.exports = { PAPEIS, arrumarPeca, arrumarTamanhos, lerLinha, lerSituacao, pecaDoBanco };

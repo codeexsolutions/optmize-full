@@ -27,6 +27,7 @@ async function principal() {
   app.use("/api/projetos", require("../servidor/projetos-api"));
   app.use("/api/encaixe", require("../servidor/encaixe-pdf"));
   app.use("/api/encaixe", require("../servidor/encaixe-memoria"));
+  app.use("/api/reposicao", require("../servidor/reposicao-api"));
   servidor = await new Promise((resolve) => {
     const atual = app.listen(0, "127.0.0.1", () => resolve(atual));
   });
@@ -61,6 +62,23 @@ async function principal() {
   const parcial = await api("POST", "/api/encaixe/guardado", { ...recorde, totalItens: 2 });
   conferir("recorde que declara peças ausentes é recusado", () => assert.equal(parcial.status, 400));
   const molde = (await api("POST", "/api/moldes", { nome: "Molde", pecas: [peca] })).dados.id;
+  // A linha em volta da peça (docs/superpowers/specs/2026-09-30-linha-em-volta-da-peca-design.md):
+  // molde sem o campo lê 0; gravada volta igual; PUT sem o campo mantém; fora de 0–10 é limitada.
+  const semLinha = (await api("GET", `/api/moldes/${molde}`)).dados;
+  const comLinha = (await api("POST", "/api/moldes", { nome: "Com linha", pecas: [peca], linha: 2.5 })).dados.id;
+  const lidoComLinha = (await api("GET", `/api/moldes/${comLinha}`)).dados;
+  await api("PUT", `/api/moldes/${comLinha}`, { nome: "Com linha", pecas: [peca] });
+  const linhaMantida = (await api("GET", `/api/moldes/${comLinha}`)).dados;
+  await api("PUT", `/api/moldes/${comLinha}`, { nome: "Com linha", pecas: [peca], linha: 99 });
+  const limitada = (await api("GET", `/api/moldes/${comLinha}`)).dados;
+  await api("DELETE", `/api/moldes/${comLinha}`);
+  conferir("a linha em volta da peça: 0 sem o campo, grava, PUT sem o campo mantém, limita a 10 mm", () => {
+    assert.equal(semLinha.linha, 0);
+    assert.equal(lidoComLinha.linha, 2.5);
+    assert.equal(linhaMantida.linha, 2.5);
+    assert.equal(limitada.linha, 10);
+    assert.equal("linha_mm" in lidoComLinha, false, "a tela recebe `linha`, não o nome da coluna");
+  });
   const cliente = (await api("POST", "/api/projetos/clientes", { nome: "Cliente" })).dados.id;
   const projeto = (await api("POST", "/api/projetos", { nome: "Projeto", clienteId: cliente })).dados.id;
   const original = { nome: "Projeto", pecas: [{ ...peca, arquivo: "original.png" }] };
@@ -187,6 +205,22 @@ async function principal() {
     assert.equal(typeof quebrada.erro, "string");
     assert.equal(semRosto.erro, "Não achei nenhum rosto nesta foto.");
   });
+  const criado = await api("POST", "/api/reposicao/trabalhos", {
+    nome: "teste-pedidos", larguraTecido: 178, consumoCm: 100,
+    pecas: [
+      { nome: "COSTAS G", largura: 50, altura: 70, qtd: 2, giro: "180", pedido: "joão", sigla: "xy" },
+      { nome: "TIRA", largura: 12, altura: 60, qtd: 1, giro: "180" },
+    ],
+  });
+  const lido = await api("GET", `/api/reposicao/trabalhos/${criado.dados.id}`);
+  conferir("a reposição guarda o pedido e a sigla de cada peça, e devolve igual", () => {
+    assert.equal(criado.status, 200);
+    assert.equal(lido.dados.pecas[0].pedido, "JOAO");
+    assert.equal(lido.dados.pecas[0].sigla, "XY");
+    assert.equal(lido.dados.pecas[1].pedido, null);
+    assert.equal(lido.dados.pecas[1].sigla, null);
+  });
+
   console.log(`OK — ${passou} regressões do backend.`);
 }
 

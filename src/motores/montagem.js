@@ -52,6 +52,19 @@ export function lerCm(texto) {
   return Math.max(0, n);
 }
 
+/**
+ * A grossura da linha em volta da peça, como a pessoa escreve no campo: mm, com vírgula. Vazio é
+ * "sem linha" (0). Fora de 0–10, ou o que não for número, é `null`: o campo fica marcado e o molde
+ * não muda.
+ */
+export function lerLinhaMm(texto) {
+  const t = String(texto ?? "").trim().replace(",", ".");
+  if (t === "") return 0;
+  const n = Number(t);
+  if (!Number.isFinite(n) || n < 0 || n > 10) return null;
+  return Math.round(n * 10) / 10;
+}
+
 export function caixaDe(pontos) {
   let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
   for (const p of pontos) {
@@ -371,6 +384,32 @@ export function pecasParaOEncaixe(pecas) {
   });
 }
 
+/** A linha em volta da peça é tinta de impressão, não cor de tema: preta sempre. */
+export const COR_DA_LINHA = "#000000";
+
+/**
+ * A peça como o Encaixe a recebe quando o molde tem linha em volta.
+ *
+ * Metade da linha fica FORA da peça, então a peça impressa é maior: o contorno é
+ * afastado meia linha (a mesma conta da margem de costura) e tudo volta a ficar
+ * encostado no canto — no mesmo lugar em que `desenharArteNoMolde`, com
+ * `margem` de meia linha, põe a peça na imagem. A caixa cresce uma linha
+ * inteira. É isso que faz o Encaixe reservar o espaço do traço.
+ */
+export function pecaComLinha(peca, linhaCm) {
+  if (!(linhaCm > 0)) return peca;
+  const meia = linhaCm / 2;
+  const mover = (p) => ({ x: arredondar(p.x + meia), y: arredondar(p.y + meia) });
+  const afastado = margemDeCostura(peca.contorno, meia) ?? peca.contorno;
+  return {
+    ...peca,
+    contorno: afastado.map(mover),
+    furos: (peca.furos || []).map((f) => f.map(mover)),
+    largura: arredondar(peca.largura + linhaCm, 2),
+    altura: arredondar(peca.altura + linhaCm, 2),
+  };
+}
+
 /**
  * O que se desenha de uma peça no PDF, no SVG e na mesa.
  *
@@ -379,8 +418,11 @@ export function pecasParaOEncaixe(pecas) {
  *
  * Aceita peça gravada (encostada no canto) ou peça em edição — é por isso que
  * o texto se centra pela caixa do contorno, e não por `largura / 2`.
+ *
+ * `linhaCm`: a linha preta em volta da peça, centrada no corte (o PDF e o SVG a
+ * pintam; a mesa não passa nada, e fica sem).
  */
-export function desenhoDaPeca(peca) {
+export function desenhoDaPeca(peca, linhaCm = 0) {
   const margem = peca.marcacoes.margem;
   const corte = margem > 0 ? nosDoPoligono(peca.contorno) : peca.nos;
   const piques = peca.marcacoes.piques
@@ -417,6 +459,7 @@ export function desenhoDaPeca(peca) {
   return {
     largura: peca.largura,
     altura: peca.altura,
+    linha: linhaCm > 0 ? linhaCm : 0,
     corte,
     costura: margem > 0 ? peca.nos : null,
     piques,
@@ -469,17 +512,25 @@ function caminhoDosNos(nos, dx, dy) {
  * traço: no Corel, esconder os textos ou os piques é um clique na camada.
  */
 export function svgDaMontagem(arranjados, nome = "molde") {
+  // A linha em volta é centrada no corte: meia linha fica FORA da peça. A folha cresce isso em cada
+  // borda (uma vez, pela maior linha) e tudo se desloca para dentro, senão a borda cortaria o traço.
+  const borda = Math.max(0, ...arranjados.map((d) => (d.linha > 0 ? d.linha / 2 : 0)));
   let largura = 0;
   let altura = 0;
   for (const d of arranjados) {
     largura = Math.max(largura, d.emX + d.largura);
     altura = Math.max(altura, d.emY + d.altura);
   }
+  largura += 2 * borda;
+  altura += 2 * borda;
   const linha = (a, b, dx, dy) => `<line x1="${casas(a.x + dx)}" y1="${casas(a.y + dy)}" x2="${casas(b.x + dx)}" y2="${casas(b.y + dy)}"/>`;
   const corte = []; const costura = []; const piques = []; const pontos = []; const fio = []; const textos = [];
   for (const d of arranjados) {
-    const { emX: dx, emY: dy } = d;
-    corte.push(`<path d="${caminhoDosNos(d.corte, dx, dy)}"/>`);
+    const dx = d.emX + borda;
+    const dy = d.emY + borda;
+    corte.push(d.linha > 0
+      ? `<path d="${caminhoDosNos(d.corte, dx, dy)}" stroke-width="${casas(d.linha)}" stroke-linejoin="miter" stroke-miterlimit="2"/>`
+      : `<path d="${caminhoDosNos(d.corte, dx, dy)}"/>`);
     if (d.costura) costura.push(`<path d="${caminhoDosNos(d.costura, dx, dy)}"/>`);
     for (const p of d.piques) piques.push(linha(p.de, p.ate, dx, dy));
     for (const p of d.pontos) {

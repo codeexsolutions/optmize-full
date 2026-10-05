@@ -48,6 +48,8 @@ interface Peca {
   qtd: number;
   giro: string | null;
   miniatura: string | null;
+  pedido: string | null;
+  sigla: string | null;
   url: string | null;
 }
 
@@ -156,6 +158,8 @@ export function Reposicao() {
         altura: p.altura,
         quantidade: escolhidas.get(p.id)!,
         giro: p.giro,
+        pedido: p.pedido ?? undefined,
+        sigla: p.sigla ?? undefined,
       }));
     setLevando(true);
     // A troca de tela vem ANTES: o andamento do Encaixe mora naquela tela.

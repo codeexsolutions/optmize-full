@@ -26,6 +26,14 @@ assert.equal(m.lerCm(""), 0);
 assert.equal(m.lerCm("-1"), 0);
 assert.equal(m.lerCm("abc"), null);
 
+// 1b. lerLinhaMm: a linha em volta da peça, em mm, de 0 a 10, com vírgula; vazio é sem linha.
+assert.equal(m.lerLinhaMm("0,5"), 0.5);
+assert.equal(m.lerLinhaMm("2"), 2);
+assert.equal(m.lerLinhaMm(" 10 "), 10);
+assert.equal(m.lerLinhaMm(""), 0);
+assert.equal(m.lerLinhaMm("1,25"), 1.3);
+for (const ruim of ["abc", "12", "-1", "1,5,2"]) assert.equal(m.lerLinhaMm(ruim), null, ruim);
+
 // 2. Peça de DXF (só polígono) volta com o mesmo contorno, se ninguém mexer.
 {
   const p = pecaQuadrada();
@@ -155,6 +163,47 @@ for (const volta of [quadrado, [...quadrado].reverse()]) {
   assert.match(svg, /width="22cm"/);
   for (const id of ["corte", "costura", "piques", "pontos", "fio", "textos"]) assert.match(svg, new RegExp(`<g id="${id}"`));
   assert.ok(!svg.includes("<teste>"), "nome escapado");
+}
+
+// 12b. A linha em volta da peça: o desenho leva a grossura (cm); o SVG cresce meia linha em cada
+//      borda UMA vez (não por peça), e o corte sai com a grossura, quinas vivas.
+{
+  const d = m.desenhoDaPeca(m.pecaParaGravar(pecaQuadrada()).peca, 0.4);
+  assert.equal(d.linha, 0.4);
+  assert.equal(m.desenhoDaPeca(m.pecaParaGravar(pecaQuadrada()).peca).linha, 0, "sem o argumento, sem linha");
+  const svg = m.svgDaMontagem(m.arranjar([d, d]), "camisa");
+  assert.match(svg, /width="22\.4cm"/, "22 cm das duas peças com a folga, mais meia linha de cada lado");
+  assert.match(svg, /height="10\.4cm"/);
+  assert.match(svg, /<path d="M0\.2 0\.2 [^"]*" stroke-width="0\.4" stroke-linejoin="miter" stroke-miterlimit="2"\/>/);
+  // Com margem de costura, a linha vai no CORTE (o contorno de fora), e a costura continua tracejada.
+  const p = pecaQuadrada();
+  p.marcacoes = { ...p.marcacoes, margem: 1 };
+  const comMargem = m.desenhoDaPeca(m.pecaParaGravar(p).peca, 0.4);
+  assert.equal(comMargem.linha, 0.4);
+  assert.equal(comMargem.corte.length, 4);
+  assert.ok(comMargem.corte.some((q) => perto(q, { x: 12, y: 12 })), "o corte é o contorno de 12 cm");
+  // Sem linha, o SVG é o de sempre.
+  const semLinha = m.desenhoDaPeca(m.pecaParaGravar(pecaQuadrada()).peca);
+  const svgSem = m.svgDaMontagem(m.arranjar([semLinha, semLinha]), "camisa");
+  assert.match(svgSem, /width="22cm"/);
+  assert.ok(!svgSem.includes("stroke-linejoin"), "sem linha, nada muda no corte");
+}
+
+// 12c. pecaComLinha: a peça como vai ao Encaixe com linha em volta — o contorno afastado meia linha,
+//      tudo de novo encostado no canto, a caixa uma linha inteira maior. Sem linha, a mesma peça.
+{
+  const furo = [{ x: 4, y: 4 }, { x: 6, y: 4 }, { x: 6, y: 6 }];
+  const peca = { papel: "frente", largura: 10, altura: 10, contorno: quadrado, furos: [furo], quantidade: 1 };
+  const r = m.pecaComLinha(peca, 0.4);
+  assert.equal(r.largura, 10.4);
+  assert.equal(r.altura, 10.4);
+  const xs = r.contorno.map((q) => q.x);
+  const ys = r.contorno.map((q) => q.y);
+  assert.ok(Math.abs(Math.min(...xs)) < 1e-6 && Math.abs(Math.max(...xs) - 10.4) < 1e-6, `x ${xs}`);
+  assert.ok(Math.abs(Math.min(...ys)) < 1e-6 && Math.abs(Math.max(...ys) - 10.4) < 1e-6, `y ${ys}`);
+  assert.ok(perto(r.furos[0][0], { x: 4.2, y: 4.2 }), "o furo anda junto");
+  assert.equal(m.pecaComLinha(peca, 0), peca);
+  assert.equal(m.COR_DA_LINHA, "#000000");
 }
 
 // Graduação presa aos nós: inserir e apagar nó levam as regras junto.

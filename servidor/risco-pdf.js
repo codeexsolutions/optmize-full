@@ -99,6 +99,13 @@ function lerPontoEm(p, emX, emY) {
  * A conferência é chata de propósito: este PDF vira gabarito de corte, e é
  * melhor recusar um pedido estranho do que gravar um arquivo torto.
  */
+/** A linha em volta da peça, em cm (a Montagem manda o mm ÷ 10): de 0 a 1. Texto ou negativo: sem linha. */
+function lerLinha(valor) {
+  const n = numero(valor);
+  if (!(n > 0)) return 0;
+  return Math.min(1, n);
+}
+
 function lerPecas(corpo) {
   if (!corpo || typeof corpo !== "object") return { erro: "Não veio nada no pedido." };
   const cruas = Array.isArray(corpo.pecas) ? corpo.pecas : null;
@@ -106,10 +113,12 @@ function lerPecas(corpo) {
 
   let totalDeNos = 0;
   const pecas = [];
+  // Meia linha fica FORA da peça: todas se deslocam isso para dentro da página (ver `medir`).
+  const borda = Math.max(0, ...cruas.map((c) => lerLinha(c && c.linha) / 2));
   for (let i = 0; i < cruas.length; i++) {
     const crua = cruas[i] || {};
-    const emX = numero(crua.emX) || 0;
-    const emY = numero(crua.emY) || 0;
+    const emX = (numero(crua.emX) || 0) + borda;
+    const emY = (numero(crua.emY) || 0) + borda;
     const corte = lerNos(crua.corte || crua.nos, emX, emY);
     if (!corte) return { erro: `A peça ${i + 1} não tem contorno (precisa de pelo menos 2 nós).` };
     const costura = crua.costura ? lerNos(crua.costura, emX, emY) : null;
@@ -137,7 +146,7 @@ function lerPecas(corpo) {
         texto = { ...onde, tamanho: Math.min(tamanho, 5), linhas: crua.texto.linhas.slice(0, 4).map((l) => String(l).slice(0, 80)) };
       }
     }
-    pecas.push({ corte, costura, piques, pontos, fio, texto });
+    pecas.push({ corte, costura, piques, pontos, fio, texto, linha: lerLinha(crua.linha) });
   }
   return { pecas };
 }
@@ -177,7 +186,10 @@ function medir(pecas) {
     }
     for (const p of piques) { olhar(p.de); olhar(p.ate); }
   }
-  return { largura, altura };
+  // A página cresce a meia linha da borda de baixo e da direita (a de cima e a da esquerda já
+  // entraram no deslocamento de `lerPecas`).
+  const borda = Math.max(0, ...pecas.map((p) => (p.linha > 0 ? p.linha / 2 : 0)));
+  return { largura: largura + borda, altura: altura + borda };
 }
 
 const pt = (v) => v * PT_POR_CM;
@@ -208,7 +220,9 @@ function desenharPdf(doc, pecas) {
   doc.addPage = () => doc;
   try {
     for (const p of pecas) {
-      doc.lineWidth(0.05 * PT_POR_CM).undash();
+      // Com a linha em volta, o corte sai na grossura dela, quinas vivas; sem, o traço fino de gabarito.
+      if (p.linha > 0) doc.lineWidth(p.linha * PT_POR_CM).lineJoin("miter").miterLimit(2).undash();
+      else doc.lineWidth(0.05 * PT_POR_CM).undash();
       caminho(doc, p.corte);
       doc.stroke();
       if (p.costura) {

@@ -3,7 +3,6 @@
  * Domínio importado de src/nucleo; estado privado por montagem, sem scripts globais.
  * As listas e o canvas são ilhas imperativas: não devem receber children dinâmicos React.
  */
-import { arredondar } from "../utils/geometria";
 import { moldeParaImagem, ehArquivoDeMolde, lerMoldeVetorial } from "../motores/moldes";
 import { ehArquivoPDF, lerArteDoPDF } from "../motores/pdfParaArte";
 import { COR_CMYK, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
@@ -27,7 +26,7 @@ import {
 import { lerQuantidadeDoNome } from "../motores/nomeDeArquivo";
 import {
   bancadasDoResultado, cortesEntreBancadas, desenharEncaixe, desenharMidiaVazia,
-  desenharRascunho,
+  desenharRascunho, prepararPrevias, previaDaArte,
 } from "../motores/desenhoDoEncaixe";
 import { prepararArtes } from "../motores/exportarEncaixe";
 import { DPI_PREVIA } from "../motores/resolucaoDaArte";
@@ -39,6 +38,12 @@ import { coresDePeca } from "../utils/coresDePeca";
 import { carregarImagem } from "../utils/arquivoDeImagem";
 import { respirarNaTela } from "../utils/respirar";
 import { criarEscopo } from "./escopo";
+import {
+  corDoPedido, marcaParaOPdf, marcarLote, marcasDoRisco, pedidoDe, pedidosDaReposicao,
+  renomearPedido, temVariosPedidos, ultimoPedido,
+} from "./pedidos";
+import { normalizarSigla, siglaDaPeca } from "../motores/siglaDoPedido";
+import { tempoSugerido } from "./tempoSugerido";
 export function montarProducao(raiz, irPara) {
 const escopo = criarEscopo(raiz);
 try {
@@ -264,6 +269,10 @@ const encaixeGrupoConta = document.getElementById("encaixe-grupo-conta");
 const btnEncaixeCriarGrupo = document.getElementById("btn-encaixe-criar-grupo");
 const btnEncaixeTirarGrupo = document.getElementById("btn-encaixe-tirar-grupo");
 const btnEncaixeLimparSelecao = document.getElementById("btn-encaixe-limpar-selecao");
+const btnEncaixeMarcarTodas = document.getElementById("btn-encaixe-marcar-todas");
+const encaixeQtdLote = document.getElementById("encaixe-qtd-lote");
+const encaixeQtdTodas = document.getElementById("encaixe-qtd-todas");
+const btnEncaixeQtdTodas = document.getElementById("btn-encaixe-qtd-todas");
 /*
  * O JEITO DE ENCAIXAR E A UNIDADE DO MOLDE SAÍRAM DO CONFERE DO OPTMIZAR.
  *
@@ -282,6 +291,16 @@ const btnLimparPecas = document.getElementById("btn-limpar-pecas");
 // carregamento lá embaixo, porque `atualizarPainelDoTrabalho` o lê para
 // decidir a lixeira — e ela pode rodar antes de o código chegar lá.
 let carregamentoAtivo = false;
+/** Arquivos que chegaram com um trabalho rodando; entram quando ele acabar (ver `seguirFila`). */
+let filaDeArquivos = [];
+/**
+ * O `optmizar` já marcou a rodada seguinte (a conferência pediu, ou a busca
+ * quebrou e vai pela caixa). Entre uma e outra não há carregamento ativo, e a
+ * fila não pode se meter ali.
+ */
+let rodadaMarcada = false;
+/** O encaixe guardado que o aviso "Usar o melhor de antes" oferece agora (ver `ofertaAindaServe`). */
+let ofertaDoGuardado = null;
 const encaixePecasBody = document.getElementById("encaixe-pecas-body");
 const encaixeContagem = document.getElementById("encaixe-contagem");
 const encaixeNumeros = document.getElementById("encaixe-numeros");
@@ -402,7 +421,14 @@ function medirPelaCaixa(itens, larguraTecido, espaco, comprimentoBancada) {
   }
 }
 
-function guardarResultado(valor) {
+/*
+ * `semJanela`: trava igual, mas não abre a janela. É a busca que pede (ver
+ * `optmizar`): ela pode refazer o encaixe sozinha quando a conferência pela
+ * arte recusa, e a janela de um problema que já está sendo consertado só
+ * ensina a pessoa a fechar janela sem ler. Quando não refaz, ela mesma abre
+ * a janela com o motivo, uma vez, no fim.
+ */
+function guardarResultado(valor, { semJanela = false } = {}) {
   // O passo vem em cada posição, nos dois caminhos: `posicoesDasColocacoes` o
   // escreve na busca e `usarEncaixeGuardado` o escreve na retomada. Não há
   // fallback a inventar aqui — posição sem passo é encaixe que não dá para
@@ -410,12 +436,12 @@ function guardarResultado(valor) {
   const recusa = valor ? recusarPorSobreposicao(valor) : null;
   if (recusa) {
     valor.sobreposto = recusa;
-    mostrarErroEncaixe(recusa, "aviso");
+    if (!semJanela) mostrarErroEncaixe(recusa, "aviso");
   }
   ultimoResultado = valor;
   // A segunda trava, pela arte, começa já: ela é assíncrona e o Exportar fica
   // apagado até ela responder (ver `conferirPelaArte`).
-  if (valor && !recusa) conferirPelaArte(valor);
+  if (valor && !recusa) conferirPelaArte(valor, semJanela);
   // Todo risco novo começa sem o que desfazer; o complemento guarda o dele
   // logo depois de chamar aqui.
   antesDoComplemento = null;
@@ -444,12 +470,12 @@ function guardarResultado(valor) {
  * `valor.conferido` é a promessa: a busca espera por ela antes de guardar o
  * recorde, e refaz o encaixe quando ela falha (ver `optmizar`).
  */
-function conferirPelaArte(valor) {
+function conferirPelaArte(valor, semJanela = false) {
   const folga = folgaPedida();
   valor.conferencia = { estado: "conferindo" };
   const travar = (motivo) => {
     valor.sobreposto = motivo;
-    mostrarErroEncaixe(motivo, "aviso");
+    if (!semJanela) mostrarErroEncaixe(motivo, "aviso");
     fecharMenuExportar();
     if (btnExportar) btnExportar.disabled = true;
     redesenharRisco();
@@ -605,8 +631,16 @@ async function lerImagemCrua(file) {
   const teto = m ? ladoDeTrabalho(Math.max(m.largura, m.altura) / ppcm) : 0;
   const img = await criarBitmapOuImagem(file, endereco, teto)
     .catch(() => { throw new Error(`"${file.name}" não parece ser uma imagem válida.`); });
+  // De onde o worker que tira o fundo tira a MESMA arte: o arquivo e as mesmas
+  // opções de redução (ver `opcoesDaReducao`). Mandar o bitmap custava ~50 ms
+  // de tela parada por arte, que é o Chrome copiando os pixels no postMessage.
+  // Só vale se a página abriu mesmo um bitmap por esse caminho — o `<img>` de
+  // reserva não dá a garantia de pixel igual, e aí vai o bitmap como antes.
+  const fonteDoFundo = typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap
+    ? { blob: file, opcoes: opcoesDaReducao(m, teto), largura: img.width, altura: img.height }
+    : null;
   return {
-    file, img, endereco, ppcm, ppcmDoArquivo,
+    file, img, endereco, ppcm, ppcmDoArquivo, fonteDoFundo,
     pxOriginal: m || { largura: img.naturalWidth || img.width, altura: img.naturalHeight || img.height },
   };
 }
@@ -643,7 +677,7 @@ async function montarPecaDaImagem(cru, semFundo, imagemPronta = null) {
     src: endereco,
     arquivoOriginal: file,
     fundoNaExportacao: semFundo ? "auto" : null,
-    miniatura: miniaturaDaArte(img),
+    miniatura: await miniaturaDaArte(img),
     img,
     pxW: img.naturalWidth || img.width,
     pxH: img.naturalHeight || img.height,
@@ -651,8 +685,12 @@ async function montarPecaDaImagem(cru, semFundo, imagemPronta = null) {
     // reduzido (ver `ladoDeTrabalho`), e medir o reduzido daria uma peça menor
     // do que ela é. Foi exatamente esse erro, por outra causa, que fazia uma
     // camiseta de 49,3 cm entrar como 15,2 cm.
-    largura: arredondar(cru.pxOriginal.largura / ppcm),
-    altura: arredondar(cru.pxOriginal.altura / ppcm),
+    //
+    // E vem EXATA, sem arredondar: o PDF imprime a arte na medida da peça, e o
+    // 0,1 cm de antes chegava ao tecido — até 0,5 mm a mais ou a menos, cada
+    // lado para um lado (medido em 2026-10-05). Quem arredonda é só a tela.
+    largura: cru.pxOriginal.largura / ppcm,
+    altura: cru.pxOriginal.altura / ppcm,
     qtd: doNome.qtd,
     qtdDoArquivo: doNome.veioDoArquivo,
     giro: giroPadrao(),
@@ -693,12 +731,13 @@ async function lerArtePDFdoArquivo(file) {
     nome: doNome.nome,
     src: arte.endereco,
     pdfOriginal: file,
-    miniatura: miniaturaDaArte(arte.bitmap),
+    miniatura: await miniaturaDaArte(arte.bitmap),
     img: arte.bitmap,
     pxW: arte.bitmap.width,
     pxH: arte.bitmap.height,
-    largura: arredondar(arte.larguraCm),
-    altura: arredondar(arte.alturaCm),
+    // A página do PDF, exata: ver a medida da arte em `montarPecaDaImagem`.
+    largura: arte.larguraCm,
+    altura: arte.alturaCm,
     qtd: doNome.qtd,
     qtdDoArquivo: doNome.veioDoArquivo,
     giro: giroPadrao(),
@@ -745,12 +784,13 @@ async function lerMoldesDoArquivo(file) {
       id: proximoIdPeca++,
       nome: doNome.nome,
       src: imagem.src,
-      miniatura: miniaturaDaArte(img),
+      miniatura: await miniaturaDaArte(img),
       img,
       pxW: imagem.pxW,
       pxH: imagem.pxH,
-      largura: arredondar(molde.largura),
-      altura: arredondar(molde.altura),
+      // O desenho do molde, exato: o PDF estica a imagem dele até esta caixa.
+      largura: molde.largura,
+      altura: molde.altura,
       qtd: doNome.qtd,
       qtdDoArquivo: doNome.veioDoArquivo,
       giro: giroPadrao(),
@@ -771,6 +811,9 @@ async function lerMoldesDoArquivo(file) {
  */
 async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
+
+  // Vários tamanhos de uma vez são vários envios, e todos caem no mesmo pedido.
+  const pedido = ultimoPedido(pecasEncaixe);
 
   const totalAntes = pecasEncaixe.length;
   iniciarCarregamentoArquivos(pecas.length, "molde salvo");
@@ -809,6 +852,7 @@ async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
       });
       concluirCarregamentoArquivo(indice, pecas.length);
     }
+    marcarLote(pecasEncaixe, totalAntes, pedido);
     renderPecasEncaixe();
     const adicionadas = pecasEncaixe.length - totalAntes;
     finalizarCarregamento("concluido", {
@@ -830,6 +874,36 @@ async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
 }
 
 /**
+ * As opções com que a arte é decodificada reduzida, ou `undefined` quando ela
+ * entra inteira. Uma conta só, a partir das medidas do cabeçalho: a página
+ * decodifica com elas, e o worker que tira o fundo decodifica o mesmo arquivo
+ * com as MESMAS — e aí os pixels saem idênticos (conferido byte a byte, nas
+ * duas qualidades), sem a página precisar mandar o bitmap.
+ */
+function opcoesDaReducao(m, tetoDeLado) {
+  // Com teto e medidas conhecidas, o navegador já **decodifica reduzido**:
+  // a arte de 67 megapixels nunca chega inteira à memória. Reduzir só para
+  // baixo — ampliar não inventa detalhe, só custa.
+  if (!(tetoDeLado > 0) || !m || !(m.largura > 0) || !(m.altura > 0)) return undefined;
+  const maior = Math.max(m.largura, m.altura);
+  if (maior <= tetoDeLado) return undefined;
+  const fator = tetoDeLado / maior;
+  return {
+    resizeWidth: Math.max(1, Math.round(m.largura * fator)),
+    resizeHeight: Math.max(1, Math.round(m.altura * fator)),
+    // O "high" custava mais que a própria decodificação: seis artes
+    // de 7677 px levavam 6 s para entrar, contra 2,8 s no "low" — que
+    // é o mesmo tempo de não reduzir nada (o "medium" do Chrome é o
+    // "high", byte a byte). Até a metade do tamanho, o bilinear do
+    // "low" não pula pixel, e a diferença medida foi só na borda
+    // antisserrilhada (0,09% dos bytes, no máximo 26 de 255). Abaixo
+    // da metade ele serrilharia, e aí o "high" volta a valer a espera.
+    // A impressão não passa por aqui: ela reabre o arquivo original.
+    resizeQuality: fator >= 0.5 ? "low" : "high",
+  };
+}
+
+/**
  * Decodifica uma arte fora da thread da tela.
  *
  * Volta um `ImageBitmap` quando o navegador tem `createImageBitmap` (todos os
@@ -841,25 +915,9 @@ async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
 async function criarBitmapOuImagem(blob, endereco, tetoDeLado = 0) {
   if (typeof createImageBitmap === "function" && blob) {
     try {
-      // Com teto e medidas conhecidas, o navegador já **decodifica reduzido**:
-      // a arte de 67 megapixels nunca chega inteira à memória. Reduzir só para
-      // baixo — ampliar não inventa detalhe, só custa.
-      let opcoes;
-      if (tetoDeLado > 0) {
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        const m = medidasDoArquivo(bytes);
-        if (m && m.largura > 0 && m.altura > 0) {
-          const maior = Math.max(m.largura, m.altura);
-          if (maior > tetoDeLado) {
-            const fator = tetoDeLado / maior;
-            opcoes = {
-              resizeWidth: Math.max(1, Math.round(m.largura * fator)),
-              resizeHeight: Math.max(1, Math.round(m.altura * fator)),
-              resizeQuality: "high",
-            };
-          }
-        }
-      }
+      const opcoes = tetoDeLado > 0
+        ? opcoesDaReducao(medidasDoArquivo(new Uint8Array(await blob.arrayBuffer())), tetoDeLado)
+        : undefined;
       return await createImageBitmap(blob, opcoes);
     } catch (e) {
       // formato que o bitmap não abre: segue pelo caminho antigo
@@ -878,10 +936,16 @@ async function criarBitmapOuImagem(blob, endereco, tetoDeLado = 0) {
  *
  * Desenhar uma vez num canvas de 96 px resolve de vez: o custo é uma redução só,
  * e daí em diante a tabela é de graça.
+ *
+ * E a redução sai da PRÉVIA da tela, não da arte de trabalho. Desenhar a arte
+ * de 4.900 px no canvas da miniatura a subia inteira para a placa de vídeo —
+ * 790 ms de tela parada para seis artes, no meio da leitura dos arquivos. A
+ * prévia (ver "A PRÉVIA DA TELA", em desenhoDoEncaixe.js) sai do bitmap em
+ * ~10 ms, e fica pronta para o risco que vier depois.
  */
 const LADO_DA_MINIATURA = 96;
 
-function miniaturaDaArte(img) {
+async function miniaturaDaArte(img) {
   const largura = img.naturalWidth || img.width;
   const altura = img.naturalHeight || img.height;
   if (!largura || !altura) return null;
@@ -891,7 +955,18 @@ function miniaturaDaArte(img) {
     canvas.width = Math.max(1, Math.round(largura * fator));
     canvas.height = Math.max(1, Math.round(altura * fator));
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    await prepararPrevias([img]);
+    // A redução de 1.024 para 96 px sai do bitmap, e não do canvas: desenhar a
+    // prévia no canvas a subia para a placa de vídeo, e o `toDataURL` esperava
+    // por isso. Nesse tamanho a "high" é barata e evita a miniatura serrilhada.
+    const fonte = previaDaArte(img) || img;
+    const pequena = typeof createImageBitmap === "function"
+      ? await createImageBitmap(fonte, {
+        resizeWidth: canvas.width, resizeHeight: canvas.height, resizeQuality: "high",
+      }).catch(() => null)
+      : null;
+    ctx.drawImage(pequena || fonte, 0, 0, canvas.width, canvas.height);
+    if (pequena) pequena.close();
     return canvas.toDataURL("image/png");
   } catch (e) {
     return null; // canvas bloqueado: a tabela cai na arte inteira, como antes
@@ -908,8 +983,9 @@ function miniaturaDaArte(img) {
  *
  * `pecas` vem da tela de Projetos: { nome, url, largura, altura, quantidade }.
  * `unidades` multiplica a quantidade de cada uma: é a repetição do pedido.
+ * `pedidos` é o pedido de cada peça (ver `mandarProjeto`).
  */
-async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
+async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos) {
   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
 
   const totalAntes = pecasEncaixe.length;
@@ -988,7 +1064,7 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
         src: endereco,
         arquivoOriginal: blobs[indice],
         fundoNaExportacao: cortada ? "auto" : null,
-        miniatura: miniaturaDaArte(img),
+        miniatura: await miniaturaDaArte(img),
         img,
         pxW: img.naturalWidth || img.width,
         pxH: img.naturalHeight || img.height,
@@ -1003,6 +1079,8 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades) {
         giro: ["180", "fixa", "livre"].includes(p.giro) ? p.giro : giroPadrao(),
         contorno: "auto",
         origem: `projeto ${nomeDoProjeto}${cortada ? " · fundo removido" : ""}`,
+        pedido: pedidos[indice],
+        sigla: p.sigla ? normalizarSigla(p.sigla) : undefined,
       });
       concluirCarregamentoArquivo(indice, pecas.length);
       await respirarNaTela();
@@ -1065,15 +1143,58 @@ async function emParalelo(quantidade, teto, tarefa) {
   await Promise.all(linhas);
 }
 
+/*
+ * A FILA DE ARQUIVOS.
+ *
+ * Arquivo que chega com um trabalho rodando (a busca, outra leitura) não abre
+ * mais "Aguarde o trabalho atual terminar" — e não se perde: espera aqui, um
+ * toast no canto conta, e ele entra sozinho quando o carregamento acaba
+ * (`finalizarCarregamento` chama `seguirFila`). A promessa de quem mandou só
+ * resolve quando o arquivo entrou de fato: quem entrega por `adicionarArquivos`
+ * espera isso para limpar a própria lista.
+ */
+function entrarNaFila(files) {
+  return new Promise((entrou) => {
+    filaDeArquivos.push({ files, entrou });
+    const quantos = filaDeArquivos.reduce((soma, f) => soma + f.files.length, 0);
+    void window.__alertaOptmize?.mostrar({
+      tipo: "info",
+      toast: true,
+      titulo: `${quantos === 1 ? "1 arquivo" : `${quantos} arquivos`} na fila`,
+      texto: `${quantos === 1 ? "Entra" : "Entram"} na lista quando o trabalho atual terminar.`,
+    });
+  });
+}
+
+function seguirFila() {
+  // Depois do que estiver terminando agora: o `finally` do `optmizar` ainda
+  // vai marcar (ou não) a rodada seguinte.
+  setTimeout(async () => {
+    if (carregamentoAtivo || rodadaMarcada || filaDeArquivos.length === 0) return;
+    const lote = filaDeArquivos;
+    filaDeArquivos = [];
+    try {
+      await adicionarArquivos(lote.flatMap((f) => f.files));
+    } finally {
+      lote.forEach((f) => f.entrou());
+    }
+  }, 0);
+}
+
 async function adicionarArquivos(files) {
   if (!files || files.length === 0) return; // nada a fazer, e o painel nem abre
-  if (carregamentoAtivo) {
-    mostrarErroEncaixe("Aguarde o trabalho atual terminar antes de adicionar outros arquivos.", "aviso");
-    return;
-  }
+  if (carregamentoAtivo || rodadaMarcada) return entrarNaFila(files);
+
+  // O Encaixe não pergunta de qual pedido é o lote: entra no do último que
+  // entrou (P1 numa lista vazia).
+  const pedido = ultimoPedido(pecasEncaixe);
 
   limparErroEncaixe();
+  // Dois tipos de recado, e a janela muda de título por eles: o arquivo que
+  // entrou com uma observação (aviso do PDF, do molde, da conversão de cor) é
+  // "Atenção"; "Não deu certo" é só para o que não entrou.
   const recados = [];
+  const naoEntraram = [];
   const totalAntes = pecasEncaixe.length;
   const labelArquivos = encaixeFilesInput.closest(".file-label");
   iniciarCarregamentoArquivos(files.length, "arquivo");
@@ -1155,7 +1276,7 @@ async function adicionarArquivos(files) {
           pecasComFundo.set(indice, peca);
         }
       } catch (err) {
-        recados.push(err.message);
+        naoEntraram.push(err.message);
       }
       lidos++;
       atualizarCarregamentoArquivo(lidos, files.length, file.name);
@@ -1167,6 +1288,7 @@ async function adicionarArquivos(files) {
       if (lista) lista.forEach((p) => pecasEncaixe.push(p));
       else concluirCarregamentoArquivo(indice, files.length);
     });
+    marcarLote(pecasEncaixe, totalAntes, pedido);
 
     // Passada 3: o fundo sai DEPOIS, com as peças já na tela. Não se espera por
     // ela aqui — é justamente esse `await` que fazia a tabela demorar.
@@ -1176,7 +1298,8 @@ async function adicionarArquivos(files) {
       preparoDeFundo = preparoDeFundo.then(() => tirarFundoDepois(lote, desteLote));
     }
   } finally {
-    if (recados.length > 0) mostrarErroEncaixe(recados.join(" "));
+    if (naoEntraram.length > 0) mostrarErroEncaixe([...naoEntraram, ...recados].join(" "));
+    else if (recados.length > 0) mostrarErroEncaixe(recados.join(" "), "aviso");
     renderPecasEncaixe();
 
     const adicionadas = pecasEncaixe.length - totalAntes;
@@ -1264,9 +1387,24 @@ const encaixePage = document.querySelector('.page[data-page="encaixe"]');
     encaixePage.classList.remove("arrastando");
   });
 });
+/*
+ * O ARRASTAR ACEITA O MESMO QUE O SELETOR.
+ *
+ * Filtrava só pelo tipo que o sistema dá ao arquivo (`image/...`). Numa
+ * máquina em que o Windows não conhece o .tif, o tipo vem vazio, e o TIFF
+ * arrastado sumia em silêncio — enquanto o mesmo arquivo entrava pelo botão,
+ * porque o `accept` do seletor olha a extensão. A lista agora é uma só: a do
+ * `accept` do `#encaixe-files`.
+ */
+function aceitaNoEncaixe(f) {
+  if (f.type.startsWith("image/") || ehMoldeVetorial(f)) return true;
+  const nome = f.name.toLowerCase();
+  return encaixeFilesInput.accept.split(",").map((s) => s.trim().toLowerCase())
+    .some((tipo) => tipo.startsWith(".") && nome.endsWith(tipo));
+}
+
 escopo.ouvir(encaixePage, "drop", async (e) => {
-  const files = Array.from((e.dataTransfer && e.dataTransfer.files) || [])
-    .filter((f) => f.type.startsWith("image/") || ehMoldeVetorial(f));
+  const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []).filter(aceitaNoEncaixe);
   if (files.length === 0) return;
   e.preventDefault();
   await adicionarArquivos(files);
@@ -1351,11 +1489,59 @@ function corDoGrupo(nome) {
   return CORES_PECA[n % CORES_PECA.length];
 }
 
+/*
+ * A MESMA QUANTIDADE EM VÁRIAS PEÇAS.
+ *
+ * Cliente manda 50 artes, 40 de cada, e o jeito era digitar 40 em cinquenta
+ * linhas. "Qtd de cada" vale para as linhas marcadas; sem nenhuma marcada, para
+ * a lista inteira — o botão diz qual das duas antes do clique. Substitui a
+ * quantidade que veio do nome do arquivo: quem aplica em todas está dizendo
+ * que todas valem isso. Como digitar na linha, não refaz o encaixe da tela.
+ */
+function atualizarQtdDoLote() {
+  if (!encaixeQtdLote) return;
+  const temPecas = pecasEncaixe.length > 0;
+  encaixeQtdLote.classList.toggle("hidden", !temPecas);
+  encaixeQtdLote.classList.toggle("flex", temPecas);
+  const marcadas = selecionadas.size;
+  btnEncaixeQtdTodas.textContent = marcadas === 0 ? `Aplicar em todas (${pecasEncaixe.length})`
+    : marcadas === 1 ? "Aplicar na marcada" : `Aplicar nas ${marcadas} marcadas`;
+}
+
+function aplicarQtdNoLote() {
+  const quantidade = Math.floor(Number(encaixeQtdTodas.value));
+  if (!(quantidade >= 1)) {
+    encaixeQtdTodas.focus();
+    return;
+  }
+  const alvos = selecionadas.size > 0 ? pecasEncaixe.filter((p) => selecionadas.has(p.id)) : pecasEncaixe;
+  alvos.forEach((p) => {
+    p.qtd = quantidade;
+    p.qtdDoArquivo = false;
+  });
+  renderPecasEncaixe();
+  atualizarPainelDoTrabalho();
+}
+
+if (btnEncaixeQtdTodas) escopo.ouvir(btnEncaixeQtdTodas, "click", aplicarQtdNoLote);
+if (encaixeQtdTodas) {
+  escopo.ouvir(encaixeQtdTodas, "keydown", (e) => {
+    if (e.key === "Enter") aplicarQtdNoLote();
+  });
+}
+if (btnEncaixeMarcarTodas) {
+  escopo.ouvir(btnEncaixeMarcarTodas, "click", () => {
+    pecasEncaixe.forEach((p) => selecionadas.add(p.id));
+    renderPecasEncaixe();
+  });
+}
+
 /** A barra só existe quando há o que fazer com ela. */
 function atualizarBarraDeGrupo() {
   // Peça que saiu da lista não pode continuar marcada.
   const vivas = new Set(pecasEncaixe.map((p) => p.id));
   [...selecionadas].forEach((id) => { if (!vivas.has(id)) selecionadas.delete(id); });
+  atualizarQtdDoLote();
 
   const quantas = selecionadas.size;
   encaixeBarraGrupo.classList.toggle("hidden", quantas === 0);
@@ -1536,7 +1722,15 @@ function renderAvisosDeCor() {
   encaixeAvisoCor.classList.remove("hidden");
 }
 
+/**
+ * A medida no campo da gaveta: duas casas. A peça guarda a medida exata do
+ * arquivo (30,3022 cm), e o campo mostraria todas as casas; o centésimo de
+ * centímetro (0,1 mm) é o que se lê numa régua.
+ */
+const noCampo = (cm) => Math.round(cm * 100) / 100;
+
 function renderPecasEncaixe() {
+  if (ofertaDoGuardado && !ofertaAindaServe(ofertaDoGuardado)) esconderOfertaDoGuardado();
   encaixePecasBody.innerHTML = "";
 
   if (pecasEncaixe.length === 0) {
@@ -1556,6 +1750,8 @@ function renderPecasEncaixe() {
     renderAvisosDeCor();
     return;
   }
+
+  const variosPedidos = temVariosPedidos(pecasEncaixe);
 
   pecasEncaixe.forEach((peca, i) => {
     const cor = CORES_PECA[i % CORES_PECA.length];
@@ -1592,6 +1788,10 @@ function renderPecasEncaixe() {
             ${peca.grupo ? `<span class="shrink-0 rounded px-1 font-mono text-[8px] font-semibold uppercase leading-[1.4]"
                    style="background: ${corDoGrupo(peca.grupo)}22; color: ${corDoGrupo(peca.grupo)}; border: 1px solid ${corDoGrupo(peca.grupo)}66;"
                    title="Grupo ${escapeHtml(peca.grupo)}: estas peças saem perto umas das outras no rolo">${escapeHtml(peca.grupo)}</span>` : ""}
+            ${variosPedidos ? `<span data-pedido="${escapeHtml(pedidoDe(peca))}"
+                   class="shrink-0 cursor-pointer rounded px-1 font-mono text-[8px] font-semibold uppercase leading-[1.4] text-white"
+                   style="background: ${corDoPedido(pedidoDe(peca))};"
+                   title="Pedido ${escapeHtml(pedidoDe(peca))} — clique para renomear">${escapeHtml(pedidoDe(peca))}</span>` : ""}
           </span>
           <span class="block truncate font-mono text-[9px] text-tinta-apagada">${formatarNumero(peca.largura, 1)} × ${formatarNumero(peca.altura, 1)} cm${peca.qtdDoArquivo ? " · qtd do nome" : ""}</span>
         </span>
@@ -1630,10 +1830,10 @@ function renderPecasEncaixe() {
         <p class="mt-0 mb-2 text-[10.5px] leading-snug font-medium break-all text-tinta">${escapeHtml(peca.nome)}</p>
         <div class="grid grid-cols-2 gap-1.5">
           <label class="${CAMPO_MINI}">Largura (cm)
-            <input type="number" min="0.1" step="0.1" value="${peca.largura}" data-campo="largura" data-id="${peca.id}" />
+            <input type="number" min="0.1" step="0.1" value="${noCampo(peca.largura)}" data-campo="largura" data-id="${peca.id}" />
           </label>
           <label class="${CAMPO_MINI}">Altura (cm)
-            <input type="number" min="0.1" step="0.1" value="${peca.altura}" data-campo="altura" data-id="${peca.id}" />
+            <input type="number" min="0.1" step="0.1" value="${noCampo(peca.altura)}" data-campo="altura" data-id="${peca.id}" />
           </label>
         </div>
         <div class="mt-1.5 grid grid-cols-2 gap-1.5">
@@ -1652,6 +1852,13 @@ function renderPecasEncaixe() {
             </select>
           </label>
         </div>
+        ${variosPedidos ? `
+        <div class="mt-1.5 grid grid-cols-2 gap-1.5">
+          <label class="${CAMPO_MINI}">Sigla no tecido
+            <input type="text" maxlength="6" value="${escapeHtml(normalizarSigla(peca.sigla) || siglaDaPeca(peca.nome))}"
+                   data-campo="sigla" data-id="${peca.id}" />
+          </label>
+        </div>` : ""}
         <!-- Gira a PEÇA, antes do encaixe: é para arte que chegou deitada ou de
              cabeça para baixo. O "Girar" de cima é outra coisa — são os giros
              que o encaixe pode usar a partir daqui. -->
@@ -1684,21 +1891,6 @@ function renderPecasEncaixe() {
 }
 
 /**
- * Quanto tempo de busca sugerir para um lote deste tamanho.
- *
- * Medido nos arquivos de um teste real desta tela: um lote de 23 peças já
- * não melhorava mais depois de uns 20s (rodou até 60s sem ganho); um de 57
- * ainda estava melhorando aos 40s. A conta abaixo é a reta que passa perto
- * dos dois pontos — não é ciência exata, é uma sugestão que erra para mais
- * tempo, nunca para menos, porque sobrar segundo custa paciência e faltar
- * custa tecido. O teto de 60s evita que um lote enorme sugira um número que
- * ninguém pediu; quem quiser mais digita à mão.
- */
-function tempoSugerido(copias) {
-  return Math.max(10, Math.min(60, Math.round(copias * 0.9)));
-}
-
-/**
  * O que a coluna e a faixa de status mostram ANTES de existir encaixe.
  *
  * Contagem de arquivos, de cópias e a largura do tecido não dependem de
@@ -1715,7 +1907,7 @@ function atualizarPainelDoTrabalho() {
   if (btnLimparPecas && !carregamentoAtivo) btnLimparPecas.disabled = arquivos === 0;
 
   if (!tempoAjustadoPeloUsuario && copias > 0) {
-    encaixeTempoInput.value = tempoSugerido(copias);
+    encaixeTempoInput.value = tempoSugerido(pecasEncaixe);
   }
 
   // Com resultado na tela, quem manda na faixa é o resultado.
@@ -1742,20 +1934,24 @@ escopo.ouvir(encaixePecasBody, "input", (e) => {
   if (!peca) return;
 
   const valor = Number(e.target.value);
-  // Os pixels são os da arte como chegou; girada 90° ou 270°, a proporção da
-  // peça é a inversa.
-  const proporcao = rotacaoBaseDe(peca) % 180 ? peca.pxW / peca.pxH : peca.pxH / peca.pxW;
+  // A proporção é a da própria peça, exata — e não a dos pixels do bitmap, que
+  // pode ter sido decodificado reduzido (ver `ladoDeTrabalho`) e perder um
+  // pixel no arredondamento. O giro dado antes do encaixe já trocou largura e
+  // altura, então ela vale para a peça como está.
+  const proporcao = peca.altura / peca.largura;
 
+  // O lado calculado fica exato, para a arte não deformar; o campo mostra duas
+  // casas (ver `noCampo`).
   if (campo === "largura" && valor > 0) {
     peca.largura = valor;
-    peca.altura = arredondar(valor * proporcao);
+    peca.altura = valor * proporcao;
     const inputAltura = encaixePecasBody.querySelector(`input[data-campo="altura"][data-id="${peca.id}"]`);
-    if (inputAltura) inputAltura.value = peca.altura;
+    if (inputAltura) inputAltura.value = noCampo(peca.altura);
   } else if (campo === "altura" && valor > 0) {
     peca.altura = valor;
-    peca.largura = arredondar(valor / proporcao);
+    peca.largura = valor / proporcao;
     const inputLargura = encaixePecasBody.querySelector(`input[data-campo="largura"][data-id="${peca.id}"]`);
-    if (inputLargura) inputLargura.value = peca.largura;
+    if (inputLargura) inputLargura.value = noCampo(peca.largura);
   } else if (campo === "qtd") {
     peca.qtd = Math.max(1, Math.floor(valor) || 1);
     atualizarPainelDoTrabalho();
@@ -1809,7 +2005,7 @@ async function alternarCorDireta(id) {
     peca.img = cru.img;
     peca.src = cru.endereco;
     peca.arquivoOriginal = preparada.file;
-    peca.miniatura = miniaturaDaArte(cru.img);
+    peca.miniatura = await miniaturaDaArte(cru.img);
     peca.corDireta = ligando && preparada.direta;
     peca.cor = preparada.convertida ? corDaArteConvertida(preparada) : peca.cor;
     // A silhueta sai dos pixels, e os pixels mudaram: o contorno é refeito no
@@ -1859,6 +2055,26 @@ function alternarMarca(linha, id) {
   atualizarBarraDeGrupo();
 }
 
+/** Renomeia o pedido em todas as peças dele. Não refaz o encaixe: o motor não lê o pedido. */
+async function renomearPedidoNaTela(atual) {
+  const escrito = await uiPergunta({
+    titulo: `Renomear o pedido ${atual}`,
+    texto: "Até 6 letras ou números. É a sigla que sai impressa em cada peça deste pedido.",
+    valor: atual,
+    exemplo: "JOAO",
+    confirmar: "Renomear",
+  });
+  if (escrito == null) return;
+  const r = renomearPedido(pecasEncaixe, atual, escrito);
+  if (!r.ok) {
+    mostrarErroEncaixe("O nome do pedido precisa de pelo menos uma letra ou número.", "aviso");
+    return;
+  }
+  renderPecasEncaixe();
+  if (ultimoResultado) redesenharRisco();
+  if (r.juntou) mostrarErroEncaixe(`O pedido ${atual} entrou no ${r.pedido}, que já existia.`, "aviso");
+}
+
 /* Enter e Espaço na linha marcam, como o navegador faria num botão de
    verdade. O Espaço também rolaria a lista, daí o `preventDefault`. */
 escopo.ouvir(encaixePecasBody, "keydown", (e) => {
@@ -1871,10 +2087,17 @@ escopo.ouvir(encaixePecasBody, "keydown", (e) => {
 
 escopo.ouvir(encaixePecasBody, "change", (e) => {
   const campo = e.target.dataset.campo;
-  if (campo !== "girar" && campo !== "contorno") return;
+  if (campo !== "girar" && campo !== "contorno" && campo !== "sigla") return;
   const peca = pecasEncaixe.find((p) => p.id === Number(e.target.dataset.id));
   if (!peca) return;
   if (campo === "girar") peca.giro = e.target.value;
+  if (campo === "sigla") {
+    const escrita = normalizarSigla(e.target.value);
+    // Igual à automática, ou vazia: volta a valer a automática.
+    peca.sigla = escrita && escrita !== siglaDaPeca(peca.nome) ? escrita : undefined;
+    e.target.value = normalizarSigla(peca.sigla) || siglaDaPeca(peca.nome);
+    if (ultimoResultado) redesenharRisco();
+  }
   if (campo === "contorno") {
     peca.contorno = e.target.value;
     peca.ocupacao = null; // a silhueta muda: o percentual só volta no próximo encaixe
@@ -1916,7 +2139,8 @@ let preparoDeFundo = Promise.resolve();
 async function tirarFundoDepois(pecasPorIndice, crus) {
   const indices = [...pecasPorIndice.keys()];
   try {
-    const semFundos = await tirarFundoEmParalelo(indices.map((i) => crus[i].img));
+    const semFundos = await tirarFundoEmParalelo(indices.map((i) => crus[i].img), false, null,
+      indices.map((i) => crus[i].fonteDoFundo));
     let trocadas = 0;
     for (let k = 0; k < indices.length; k++) {
       const semFundo = semFundos[k];
@@ -1931,7 +2155,7 @@ async function tirarFundoDepois(pecasPorIndice, crus) {
         peca.img = img;
         peca.src = semFundo.src;
         peca.fundoNaExportacao = "auto";
-        peca.miniatura = miniaturaDaArte(peca.img);
+        peca.miniatura = await miniaturaDaArte(peca.img);
         peca._cacheMascaras = null; // a silhueta muda: será refeita no encaixe
         trocadas++;
       }
@@ -1965,7 +2189,7 @@ async function tirarFundoAForca(peca) {
   peca.img = img;
   peca.src = semFundo.src;
   peca.fundoNaExportacao = "forcar";
-  peca.miniatura = miniaturaDaArte(peca.img);
+  peca.miniatura = await miniaturaDaArte(peca.img);
   peca._cacheMascaras = null;
   renderPecasEncaixe();
 }
@@ -2037,6 +2261,12 @@ escopo.ouvir(encaixePecasBody, "click", (e) => {
   if (abrir) {
     const gaveta = encaixePecasBody.querySelector(`[data-detalhes="${abrir.dataset.abrirPeca}"]`);
     if (gaveta) gaveta.classList.toggle("hidden");
+    return;
+  }
+
+  const chipDoPedido = e.target.closest("[data-pedido]");
+  if (chipDoPedido) {
+    void renomearPedidoNaTela(chipDoPedido.dataset.pedido);
     return;
   }
 
@@ -2236,7 +2466,23 @@ async function usarEncaixeGuardado(guardado) {
   return ultimoResultado;
 }
 
+/*
+ * A OFERTA SÓ FICA NA TELA ENQUANTO SERVE.
+ *
+ * Ela nasce valendo (ver o fim de `optmizar`), mas a pessoa pode mexer na
+ * lista depois: tirar uma peça, mudar uma quantidade. Aí o encaixe guardado
+ * não remonta mais, e um botão que vai falhar ao ser apertado é pior que a
+ * ausência dele. `renderPecasEncaixe` roda em toda mudança da lista e
+ * pergunta aqui — é a mesma conta que `usarEncaixeGuardado` faz. A oferta da
+ * vez mora em `ofertaDoGuardado`, lá em cima com o resto do estado.
+ */
+function ofertaAindaServe(guardado) {
+  const paraHoje = traduzirIndicesDoGuardado(guardado.pecas, pecasEncaixe);
+  return !!paraHoje && posicoesGuardadasValidas(guardado.posicoes, pecasEncaixe, paraHoje);
+}
+
 function mostrarOfertaDoGuardado(guardado, consumoAgora) {
+  ofertaDoGuardado = guardado;
   encaixeGuardadoAviso.innerHTML = "";
   const texto = document.createElement("span");
   texto.textContent =
@@ -2248,17 +2494,17 @@ function mostrarOfertaDoGuardado(guardado, consumoAgora) {
   botao.textContent = "Usar o melhor de antes";
   escopo.ouvir(botao, "click", async () => {
     botao.disabled = true;
+    // Não deu: a lista mudou de um jeito que a conferência da oferta não
+    // pegou. A oferta só some — não há o que a pessoa fazer com um erro aqui.
     const deu = await usarEncaixeGuardado(guardado);
-    if (!deu) {
-      botao.disabled = false;
-      mostrarErroEncaixe("As peças da tabela mudaram desde aquele encaixe; não dá para trazer de volta.", "aviso");
-    }
+    if (!deu) esconderOfertaDoGuardado();
   });
   encaixeGuardadoAviso.append(texto, botao);
   encaixeGuardadoAviso.classList.remove("hidden");
 }
 
 function esconderOfertaDoGuardado() {
+  ofertaDoGuardado = null;
   encaixeGuardadoAviso.classList.add("hidden");
   encaixeGuardadoAviso.innerHTML = "";
 }
@@ -2460,7 +2706,10 @@ function iniciarCarregamento(totalPecas, modo) {
   atualizarCarregamento({
     etapa: "Iniciando",
     titulo: "Preparando o encaixe",
-    detalhe: modo === "auto" ? "O sistema vai escolher o método mais adequado." : "Carregando o método escolhido.",
+    // Fora do "auto" só há a rodada pela caixa que o `optmizar` faz sozinho
+    // quando a busca quebra — ninguém escolheu método nenhum.
+    detalhe: modo === "auto" ? "O sistema vai escolher o método mais adequado."
+      : "Refazendo pela caixa em volta de cada peça.",
     progresso: 3,
   });
   atualizarTempoDoCarregamento();
@@ -2519,6 +2768,7 @@ function finalizarCarregamento(tipo = "concluido", mensagem = {}) {
   fecharPrevia();
   if (!carregamentoAtivo) return;
   carregamentoAtivo = false;
+  seguirFila();
   definirPrioridadeDoProcessamento(false, false);
   if (relogioDoCarregamento) clearInterval(relogioDoCarregamento);
   relogioDoCarregamento = null;
@@ -2597,6 +2847,8 @@ function mostrarAndamento(estado, aprendido) {
   if (aprendido && aprendido.encaixesDoTipo > 0) {
     partes.push(`aprendeu com ${aprendido.encaixesDoTipo} encaixe(s) parecido(s)`);
   }
+  const naFila = filaDeArquivos.reduce((soma, f) => soma + f.files.length, 0);
+  if (naFila > 0) partes.push(`${naFila} arquivo(s) na fila`);
   encaixeAndamento.textContent = partes.join(" · ");
   const titulo = estado.fase === "perseguindo" ? "Buscando alcançar o melhor já conhecido"
     : estado.fase === "encolhendo" ? "Encolhendo o rolo"
@@ -2624,10 +2876,20 @@ function mostrarAndamento(estado, aprendido) {
  * `refeito` é a segunda rodada que a conferência pela arte pede (ver o fim da
  * busca): ela não pede uma terceira. `avisoDoRefeito` conta, no resumo, o que
  * mudou de uma para a outra.
+ *
+ * `modo` é o jeito de encaixar. A tela não oferece mais a escolha — é sempre
+ * "auto", todos os encaixadores disputando —, mas quando a busca quebra no
+ * meio o encaixe é refeito sozinho pela caixa ("retangulo"), o caminho mais
+ * simples do motor, antes de a janela de erro abrir (ver o `catch`).
  */
-async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
+async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_ENCAIXE } = {}) {
   limparErroEncaixe();
   let refazer = null;
+  let refazerPelaCaixa = null;
+  // A rodada marcada é esta. Se ela parar antes de carregar (lista vazia,
+  // largura em branco), a fila não fica presa esperando por ela.
+  rodadaMarcada = false;
+  seguirFila();
 
   // Sem peça não há o que fazer. Não avisa nada porque não há como chegar
   // aqui assim: quem aperta Optmizar com a mesa vazia é levado ao seletor de
@@ -2666,7 +2928,7 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
     }
   }
 
-  const modoDeEncaixe = MODO_DE_ENCAIXE;
+  const modoDeEncaixe = modo;
 
   // O aviso de "procurando" aparece JÁ AQUI, antes da espera do fundo logo
   // abaixo — não depois dela. Quando alguma arte ainda estava com o fundo
@@ -2694,6 +2956,11 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
   // morria em "The image source is detached", e só às vezes: quando o fundo
   // terminava antes do clique, passava.
   await preparoDeFundo;
+  // As prévias da tela saem agora, enquanto a busca ainda nem começou: sem
+  // elas, o primeiro desenho do risco sobe cada arte inteira para a placa de
+  // vídeo e trava a tela uns 600 ms (ver "A PRÉVIA DA TELA", em
+  // desenhoDoEncaixe.js). Não se espera por elas: a busca leva mais.
+  prepararPrevias(pecasEncaixe.map((peca) => peca.img));
 
   // Expande pela quantidade: cada cópia é uma peça independente no encaixe.
   const itens = [];
@@ -2751,6 +3018,9 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
     }
     pecasEncaixe.forEach((peca) => { peca.ocupacao = peca._cacheMascaras.ocupacao; });
     itens.forEach((item) => { item.mascaras = pecasEncaixe[item.indice]._cacheMascaras; });
+    // Agora a área é a da silhueta: a sugestão pode mudar (arte em prancheta
+    // grande que era tira). Ver src/producao/tempoSugerido.js.
+    if (!tempoAjustadoPeloUsuario) encaixeTempoInput.value = tempoSugerido(pecasEncaixe);
 
     const assinatura = assinaturaDoTrabalho(pecasEncaixe, larguraTecido);
     // O mesmo formato que vira a assinatura, mas sem arredondar para caber
@@ -2913,7 +3183,7 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
       tentativasPorLote: loteGrande ? 1 : 8,
       deveParar: () => pararBusca,
       aoProgredir: (estado) => mostrarAndamento(estado, aprendido),
-    }));
+    }), { semJanela: true });
     resultadoGeradoNesteCarregamento = true;
 
     ultimoResultado.modoDeEncaixe = modoDeEncaixe;
@@ -2973,8 +3243,16 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
 
     // Um resultado sem todas as peças parece consumir menos tecido. Guardá-lo
     // como recorde faria as próximas buscas restaurarem um trabalho incompleto.
-    if (producaoTravada() || ultimoResultado.naoEncaixadas.length > 0) {
-      if (!producaoTravada()) mostrarErroEncaixe("Há peças fora do tecido. Este resultado não foi guardado como recorde.", "aviso");
+    // Peça fora do tecido não abre janela: o texto embaixo do resultado já diz
+    // quais ficaram de fora e o que fazer (ver `renderResultado`).
+    //
+    // A trava, sim: a busca guardou calada (`semJanela`) porque podia refazer
+    // sozinha logo acima. Chegou aqui, não refez — a pessoa parou a busca, é
+    // a segunda rodada, a conferência quebrou ou a conta por coluna recusou
+    // (essa não se refaz) —, e o Exportar travado precisa do seu porquê.
+    const trava = producaoTravada();
+    if (trava) mostrarErroEncaixe(trava, "aviso");
+    if (trava || ultimoResultado.naoEncaixadas.length > 0) {
       finalizarCarregamento("com-erro");
       return;
     }
@@ -3084,9 +3362,17 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
     finalizarCarregamento(pararBusca ? "interrompido" : "concluido");
   } catch (err) {
     console.error("Falha ao fazer o encaixe:", err);
+    // Quebrou com todos os encaixadores disputando: antes de incomodar a
+    // pessoa, refaz pela caixa — o caminho mais simples do motor. Gasta um
+    // pouco mais de tecido que o contorno, e por isso o resumo conta.
+    if (!pararBusca && modoDeEncaixe !== "retangulo") {
+      refazerPelaCaixa = "O encaixe pelo contorno falhou e foi refeito pela caixa em volta de cada peça";
+      finalizarCarregamento("com-erro");
+      return;
+    }
     mostrarErroEncaixe(err && err.message
       ? `Não foi possível concluir o encaixe: ${err.message}`
-      : "Não foi possível concluir o encaixe. Tente de novo com \"Sempre pela caixa\" em Como encaixar.");
+      : "Não foi possível concluir o encaixe.");
     encaixeAndamento.textContent = "O cálculo foi encerrado. Ajuste as peças e tente novamente.";
     encaixeAndamento.classList.remove("hidden");
     finalizarCarregamento("com-erro");
@@ -3097,7 +3383,9 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
     btnPararBusca.classList.add("hidden");
     // A segunda rodada depois do `finally`, e não dentro do `try`: ela começa
     // com a tela devolvida, como se a pessoa tivesse clicado de novo.
-    if (refazer) setTimeout(() => optmizar({ refeito: true, avisoDoRefeito: refazer }), 0);
+    rodadaMarcada = !!(refazer || refazerPelaCaixa);
+    if (refazer) setTimeout(() => optmizar({ refeito: true, avisoDoRefeito: refazer, modo: modoDeEncaixe }), 0);
+    if (refazerPelaCaixa) setTimeout(() => optmizar({ modo: "retangulo", avisoDoRefeito: refazerPelaCaixa }), 0);
   }
 }
 
@@ -3120,6 +3408,9 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado, guardadoAntes) {
   } else if (encolhimento && encolhimento.motivo) {
     partes.push(`sem encolher o rolo: ${encolhimento.motivo}`);
   }
+
+  const visao = visaoDosPedidos(resultado);
+  if (visao) partes.push(`${visao.legenda.length} pedidos no mesmo rolo`);
 
   const total = anotado ? anotado.encaixesDoTipo : (aprendido ? aprendido.encaixesDoTipo : 0);
   if (total > 0) partes.push(`memória: ${total} encaixe(s) deste tipo`);
@@ -3159,7 +3450,7 @@ function comoFoiEncaixado(r) {
   const modo = r.modoDeEncaixe || "auto";
 
   if (modo === "contorno") {
-    return "Encaixe feito pelo contorno das peças, como pedido em \"Como encaixar\".";
+    return "Encaixe feito pelo contorno das peças.";
   }
   if (modo === "retangulo") {
     return "Encaixe feito pela caixa em volta de cada peça — o vazio ao redor do desenho "
@@ -3189,10 +3480,9 @@ function comoFoiEncaixado(r) {
 
   const conta = disputaram
     .map(([motor, consumo]) => `${NOMES[motor] || motor} ${metros(consumo)}`).join(", ");
-  return `Cada jeito de encaixar deu um resultado — ${conta} — e ficou o melhor deles, ${oQueFoi}.`
-    // Só faz sentido oferecer o contorno quando não foi ele que venceu.
-    + (motorVencedor === "contorno" ? "" : ` Para ver as peças entrando uma no vão da outra mesmo `
-      + `assim, troque "Como encaixar" para "sempre pelo contorno".`);
+  // A dica de trocar o modo à mão saiu junto com a escolha do modo, que a
+  // tela não tem mais.
+  return `Cada jeito de encaixar deu um resultado — ${conta} — e ficou o melhor deles, ${oQueFoi}.`;
 }
 
 /**
@@ -3378,7 +3668,7 @@ function renderResultado() {
 
   encaixeResultado.classList.remove("hidden");
   vistaDoRisco = desenharEncaixe(encaixeCanvas, r,
-    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(r) });
 
   // A barra de rolagem só aparece depois que o desenho entra na caixa, e ela
   // come alguns pixels da medida que decidiu a escala. Deitado quem manda é a
@@ -3388,7 +3678,7 @@ function renderResultado() {
   const sobrou = wrap && (wrap.scrollHeight > wrap.clientHeight + 1);
   if (sobrou) {
     vistaDoRisco = desenharEncaixe(encaixeCanvas, r,
-    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(r) });
   }
 }
 
@@ -3409,9 +3699,11 @@ escopo.ouvir(btnBaixarEncaixe, "click", async () => {
   btnExportarRotulo.textContent = "Gravando…";
   try {
     // 4 px por cm dá um PNG legível para levar para a mesa de corte.
+    const visao = visaoDosPedidos(ultimoResultado);
     const temp = document.createElement("canvas");
-    desenharEncaixe(temp, ultimoResultado, { escala: 4, comLegenda: true });
-    const imagem = await new Promise((pronto) => temp.toBlob(pronto, "image/png"));
+    desenharEncaixe(temp, ultimoResultado, { escala: 4, comLegenda: true, pedidos: visao });
+    const final = visao ? comLegendaDosPedidos(temp, visao.legenda) : temp;
+    const imagem = await new Promise((pronto) => final.toBlob(pronto, "image/png"));
     if (!imagem) throw new Error("o desenho não virou imagem.");
 
     await destino.gravar(imagem);
@@ -3555,6 +3847,8 @@ async function guardarParaReposicao(r, nomeDoArquivo) {
           altura: peca.altura,
           qtd: peca.qtd,
           giro: peca.giro,
+          pedido: temVariosPedidos(pecasEncaixe) ? pedidoDe(peca) : null,
+          sigla: peca.sigla || null,
           miniatura: peca.miniatura || null,
         })),
       }),
@@ -3730,6 +4024,8 @@ async function baixarEncaixeEmPdf() {
     }
 
     const imagens = [...artes.keys()].map((chave) => ({ chave }));
+    const visao = visaoDosPedidos(r);
+    const indiceDa = new Map(r.posicoes.map((p, i) => [p, i]));
     const daPeca = (p, deslocamento) => ({
       chave: `${p.item.indice}-${p.rot || (p.girado ? 90 : 0)}`,
       x: p.x,
@@ -3739,6 +4035,7 @@ async function baixarEncaixeEmPdf() {
       // A bancada vai junto: é ela que vira página no servidor
       // (`paginasDoEncaixe`, em encaixe-pdf.js).
       bancada: p.bancada || 0,
+      marca: visao ? marcaParaOPdf(visao.marcas[indiceDa.get(p)], deslocamento) : undefined,
     });
 
     if (!emPedacos) {
@@ -3757,6 +4054,7 @@ async function baixarEncaixeEmPdf() {
       btnExportarRotulo.textContent = "Gravando…";
       await saida.gravar(cano);
       avisarQueSalvou(saida.nome);
+      avisarSemSigla(visao);
       void guardarParaReposicao(r, saida.nome);
       return;
     }
@@ -3795,6 +4093,7 @@ async function baixarEncaixeEmPdf() {
     }
 
     avisarQueSalvou(`${bancadas.length} arquivos em ${saida.onde}`);
+    avisarSemSigla(visao);
     void guardarParaReposicao(r, saida.base);
 
   } catch (err) {
@@ -3946,7 +4245,7 @@ function redesenharEncaixe() {
     return;
   }
   vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
-    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(ultimoResultado) });
 }
 
 // Redesenha ao mudar o tamanho da janela para o encaixe continuar cabendo.
@@ -4031,10 +4330,58 @@ const selecaoGiro = document.getElementById("encaixe-selecao-giro");
 const btnSelecaoAplicar = document.getElementById("btn-selecao-aplicar");
 const btnSelecaoLimpar = document.getElementById("btn-selecao-limpar");
 
+/**
+ * Os pedidos do risco que está na tela, guardados no próprio resultado: a
+ * conta do lugar da sigla passa por todas as células de cada peça, e o risco é
+ * redesenhado a cada zoom. A chave muda quando um pedido ou uma sigla muda.
+ */
+function visaoDosPedidos(r) {
+  if (!r) return null;
+  // O nome e a quantidade entram na chave: a sigla automática sai do nome de agora.
+  const chave = pecasEncaixe.map((p) => `${pedidoDe(p)}/${p.sigla || ""}/${p.nome}/${p.qtd}`).join("|");
+  if (!r._pedidos || r._pedidos.chave !== chave) {
+    r._pedidos = { chave, valor: marcasDoRisco(r, pecasEncaixe) };
+  }
+  return r._pedidos.valor;
+}
+
+/** Peça estreita demais para a sigla sai sem ela; a pessoa precisa saber quais. */
+function avisarSemSigla(visao) {
+  if (!visao || visao.semSigla.length === 0) return;
+  const lista = visao.semSigla.slice(0, 8).join(", ") + (visao.semSigla.length > 8 ? "…" : "");
+  mostrarErroEncaixe(`${visao.semSigla.length} peça(s) saíram sem a sigla do pedido — não cabia `
+    + `dentro delas: ${lista}. Separe essas pela tela ou pelo PNG da mesa.`, "aviso");
+}
+
+/** O PNG da mesa de corte com uma faixa no topo: cor, sigla e quantas peças de cada pedido. */
+function comLegendaDosPedidos(desenho, legenda) {
+  const FAIXA = 30;
+  const saida = document.createElement("canvas");
+  saida.width = desenho.width;
+  saida.height = desenho.height + FAIXA;
+  const ctx = saida.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, saida.width, FAIXA);
+  ctx.drawImage(desenho, 0, FAIXA);
+  ctx.font = "bold 14px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  let x = 10;
+  legenda.forEach(({ pedido, cor, quantas }) => {
+    ctx.fillStyle = cor;
+    ctx.fillRect(x, 8, 14, 14);
+    x += 20;
+    const texto = `${pedido} · ${quantas} peça${quantas === 1 ? "" : "s"}`;
+    ctx.fillStyle = "#111111";
+    ctx.fillText(texto, x, FAIXA / 2);
+    x += ctx.measureText(texto).width + 24;
+  });
+  return saida;
+}
+
 function redesenharRisco() {
   if (ultimoResultado) {
     vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
-      { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco });
+      { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(ultimoResultado) });
   }
 }
 
@@ -4400,7 +4747,7 @@ async function pecasDaGaleria(artes) {
         src: cortada ? cortada.src : arte.url,
         arquivoOriginal: blobs[i],
         fundoNaExportacao: cortada ? "auto" : null,
-        miniatura: arte.miniatura || miniaturaDaArte(img),
+        miniatura: arte.miniatura || await miniaturaDaArte(img),
         img,
         pxW: img.naturalWidth || img.width,
         pxH: img.naturalHeight || img.height,
@@ -4627,7 +4974,12 @@ async function complementarOtimizando(analise, pedidos) {
 
   for (const p of pedidos) {
     if (p.c.daGaleria) {
-      pecasEncaixe.push({ ...p.c.peca, id: proximoIdPeca++, qtd: p.quantidade });
+      // Peça do próprio encaixe já tem pedido (o spread leva); da Galeria,
+      // entra no pedido do último lote.
+      pecasEncaixe.push({
+        ...p.c.peca, id: proximoIdPeca++, qtd: p.quantidade,
+        pedido: p.c.peca.pedido || ultimoPedido(pecasEncaixe),
+      });
     } else {
       const peca = pecasEncaixe[p.c.indice];
       peca.qtd = (Number(peca.qtd) || 0) + p.quantidade;
@@ -4843,6 +5195,10 @@ return {
   * Escrever nos campos com `value` é o que existe enquanto o Encaixe for
   * dirigido por `getElementById`. Quando ele virar React, os ajustes viram
   * estado e esta função some junto com o arquivo.
+  *
+  * A PERGUNTA DO PEDIDO VEM ANTES DOS AJUSTES: quem desiste não pode ficar
+  * com a largura do tecido, a folga e o giro do projeto na lista que já
+  * estava montada — o próximo "Optmizar" sairia na largura errada.
   */
  /*
   * A ponte com a tela de Moldes, que é React.
@@ -4858,6 +5214,12 @@ return {
  },
 
  async mandarProjeto({ nome, pecas, unidades, ajustes }) {
+   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
+   // Sem pergunta: numa lista vazia vale o pedido guardado de cada peça (a
+   // Reposição traz); numa lista com peças, tudo cai no pedido do último lote
+   // — o P1 de um rolo antigo não é o P1 de hoje (`pedidosDaReposicao`).
+   const pedidos = pedidosDaReposicao(pecasEncaixe, pecas, ultimoPedido(pecasEncaixe));
+
    const escrever = (campo, valor) => {
      if (!campo || valor === null || valor === "" || !Number.isFinite(Number(valor))) return;
      campo.value = valor;
@@ -4876,7 +5238,7 @@ return {
     * pendurado para sempre, sem erro nenhum na tela.
     */
    await new Promise((seguir) => setTimeout(seguir, 60));
-   await mandarProjetoParaOEncaixe(nome, pecas, unidades);
+   await mandarProjetoParaOEncaixe(nome, pecas, unidades, pedidos);
  },
 
  navegar(pagina) {

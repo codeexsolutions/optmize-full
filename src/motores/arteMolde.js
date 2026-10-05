@@ -263,6 +263,9 @@ export function desenharArteNoMolde(peca, arte, ajuste, ppcm, opcoes = {}) {
     caminho();
     ctx.strokeStyle = opcoes.linha;
     ctx.lineWidth = opcoes.linhaGrossura || 1.5;
+    // Quina de molde fica quina, mas sem espeto comprido nos ângulos fechados.
+    ctx.lineJoin = "miter";
+    ctx.miterLimit = 2;
     ctx.stroke();
   }
 

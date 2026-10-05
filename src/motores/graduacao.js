@@ -19,7 +19,7 @@
  */
 
 import { achatarCurvas } from "./ajusteDeCurvas";
-import { pontoNoTrecho } from "./edicaoDeNos";
+import { pontoNoTrecho, refazerAlcas } from "./edicaoDeNos";
 
 /** A origem que marca um tamanho feito pela graduação: esse é refeito sem perguntar. */
 export const ORIGEM_GERADA = "graduação";
@@ -356,6 +356,9 @@ export function gerarTamanho(base, grade, tamanho) {
     pontos = mc.pontos.map((q) => ({ ...q, ...anda(q, mediaPelaDistancia(q, base.nos, d)) }));
     fio = { ...mc.fio, ...anda(mc.fio, mediaPelaDistancia(mc.fio, base.nos, d)) };
   }
+  // Os nós lisos automáticos refazem a curva no lugar novo, em vez de levar as
+  // alças duras do base: a curva do GG sai tão lisa quanto a do P.
+  nos = refazerAlcas(nos);
   const { id: _id, ...resto } = base;
   return {
     peca: { ...resto, tamanho, origem: ORIGEM_GERADA, graduacao: null, nos, marcacoes: { ...mc, pontos, fio } },

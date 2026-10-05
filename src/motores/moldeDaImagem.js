@@ -128,8 +128,10 @@ const AREA_MINIMA_DA_MAIOR = 0.08;
 /** O lado menor da peça, em fração do maior lado da foto. */
 const ESPESSURA_MINIMA = 0.03;
 
-export const ehImagemDeMolde = (file) => /\.(png|bmp|jpe?g|webp)$/i.test(file.name);
-export const FORMATOS_DE_IMAGEM = "PNG, BMP, JPG e WEBP";
+// O TIFF o navegador não abre: quem lê precisa passar por
+// `prepararArteParaONavegador` (src/api/arte.ts) antes, como o Digitalizar faz.
+export const ehImagemDeMolde = (file) => /\.(png|bmp|jpe?g|webp|tiff?)$/i.test(file.name);
+export const FORMATOS_DE_IMAGEM = "PNG, BMP, JPG, WEBP e TIFF";
 
 /** O limiar que melhor parte o histograma em dois (Otsu). */
 function limiarDeOtsu(hist, total) {

@@ -85,5 +85,18 @@ function numeroDePaginas(texto) {
   assert.deepEqual(semLixo.pecas[0].pontos, []);
   assert.deepEqual(semLixo.pecas[0].piques, []);
 
+  // 6. A linha em volta da peça (cm): a página cresce meia linha em cada borda, o desenho se
+  //    desloca, e o corte sai com a grossura. Fora de 0–1 cm: o teto; texto ou negativo: sem linha.
+  const comLinha = await gerar({ pecas: [{ emX: 0, emY: 0, corte: quadrado(10), linha: 0.4 }] });
+  assert.ok(Math.abs(comLinha.largura - 10.4) < 1e-9, `largura ${comLinha.largura}`);
+  assert.ok(Math.abs(comLinha.altura - 10.4) < 1e-9);
+  const grossuras = [...comLinha.texto.matchAll(/([\d.]+) w\b/g)].map((x) => Number(x[1]));
+  assert.ok(grossuras.some((w) => Math.abs(w - 0.4 * PT_POR_CM) < 0.01), `grossuras ${grossuras}`);
+  const lida = lerPecas({ pecas: [{ emX: 0, emY: 0, corte: quadrado(10), linha: 0.4 }] });
+  assert.deepEqual({ x: lida.pecas[0].corte[0].x, y: lida.pecas[0].corte[0].y }, { x: 0.2, y: 0.2 });
+  assert.equal(lerPecas({ pecas: [{ corte: quadrado(10), linha: 5 }] }).pecas[0].linha, 1);
+  for (const ruim of ["abc", -2, null]) assert.equal(lerPecas({ pecas: [{ corte: quadrado(10), linha: ruim }] }).pecas[0].linha, 0);
+  const semLinha = await gerar({ pecas: [{ emX: 0, emY: 0, corte: quadrado(10) }] });
+  assert.equal(semLinha.largura, 10, "sem linha, a página é a de sempre");
   console.log("OK — o PDF do risco sai no tamanho do corte, no corpo antigo e no da Montagem.");
 })().catch((e) => { console.error(e); process.exit(1); });

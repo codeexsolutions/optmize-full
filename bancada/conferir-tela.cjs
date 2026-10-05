@@ -143,6 +143,21 @@ async function principal() {
     console.error('conferir-tela: falta o painel compilado. Rode `npm run front` antes.');
     process.exit(1);
   }
+  /*
+   * O painel compilado tem que ser DESTE fonte. O servidor serve o `dist/`, e
+   * um `dist/` velho faz esta bancada passar conferindo código que não é mais
+   * o de hoje. O build carimba o hash do fonte (ver `empacotar/carimbo.cjs`).
+   */
+  const { carimboDoFonte } = require('../empacotar/carimbo.cjs');
+  let carimbado = null;
+  try {
+    carimbado = JSON.parse(fs.readFileSync(path.join(RAIZ, 'dist', 'carimbo.json'), 'utf8')).fonte;
+  } catch { /* dist de antes do carimbo: tão velho quanto um que não bate */ }
+  if (carimbado !== carimboDoFonte(RAIZ)) {
+    console.error('conferir-tela: o painel compilado (dist/) não é deste src/ — '
+      + 'a tela conferida seria a de outro código. Rode `npm run front` antes.');
+    process.exit(1);
+  }
 
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'optimize-tela-'));
   // O painel pede conta para abrir: esta bancada entra pelo arquivo de
@@ -321,6 +336,32 @@ async function principal() {
         ? [operadores.argsArray[i].slice(1, 3).sort((a, b) => a - b).join('x')] : []);
       assert.deepEqual(imagens.sort(), ['200x400', '250x250', '300x400'],
         'o PDF deve desenhar as três artes na resolução original, mesmo quando giradas');
+
+      /*
+       * A ARTE SAI NO TAMANHO DO ARQUIVO, E NÃO NO ARREDONDADO.
+       *
+       * A medida da peça era arredondada para 0,1 cm na entrada, e o PDF
+       * imprimia a arte nela: a de 300 px a 150 dpi (5,080 cm) saía com 5,1, a
+       * de 400 px (6,773 cm) com 6,8 — cada lado errando para um lado. A
+       * medida no PDF é a da matriz que desenha a imagem.
+       */
+      let matriz = null;
+      const desenhadas = [];
+      operadores.fnArray.forEach((op, i) => {
+        if (op === pdfjs.OPS.transform) matriz = operadores.argsArray[i];
+        if (op !== pdfjs.OPS.paintImageXObject || !matriz) return;
+        const [a, b, c, d] = matriz;
+        const [px1, px2] = operadores.argsArray[i].slice(1, 3);
+        desenhadas.push({ px: [px1, px2], cm: [Math.hypot(a, b), Math.hypot(c, d)].map((pt) => pt * 2.54 / 72) });
+      });
+      for (const { px, cm } of desenhadas) {
+        const esperado = px.map((n) => (n / 150) * 2.54);
+        for (let k = 0; k < 2; k++) {
+          assert.ok(Math.abs(cm[k] - esperado[k]) < 0.001,
+            `a arte de ${px.join('x')} px saiu com ${cm.map((v) => v.toFixed(4)).join(' × ')} cm no PDF; `
+            + `o arquivo tem ${esperado.map((v) => v.toFixed(4)).join(' × ')} cm`);
+        }
+      }
     } finally { await leituraPdf.destroy(); }
 
     const recado = await p.$eval('#encaixe-andamento', (n) => n.textContent);
@@ -367,16 +408,21 @@ async function principal() {
 
     await p.evaluate(() => document.getElementById('btn-complemento-procurar').click());
     await esperar(10000);
-    const achados = await p.$$eval('#complemento-lista .complemento-item',
-      (ns) => ns.map((n) => n.innerText.replace(/\s+/g, ' ')));
+    // A linha não diz mais "cabem N" (ver `mostrarCandidatos`): só entra na
+    // lista o que cabe, e a conta vira a quantidade que o campo já traz.
+    const achados = await p.$$eval('#complemento-lista .complemento-item', (ns) => ns.map((n) => {
+      const campo = n.querySelector('input[type="number"]');
+      return `${n.innerText.replace(/\s+/g, ' ')} [${campo ? campo.value : '-'}]`;
+    }));
     const estadoDaProcura = await p.$eval('#complemento-estado', (n) => n.textContent);
-    assert.ok(achados.some((l) => /manguito/.test(l) && /cabem \d+/.test(l)),
+    assert.ok(achados.some((l) => /manguito/.test(l) && /\[[1-9]\d*\]$/.test(l)),
       `a arte da Galeria tinha que caber nos vãos (lista: ${achados.join(' / ')} · ${estadoDaProcura})`);
 
+    // O Complementar põe a arte na lista e refaz o encaixe inteiro (ver
+    // `complementarOtimizando`): a caixa fecha e o Optmizar roda de novo, com
+    // os mesmos 3 s do primeiro.
     await p.evaluate(() => document.getElementById('btn-complemento-aplicar').click());
-    await esperar(1500);
-    const entrou = await p.$eval('#complemento-estado', (n) => n.textContent);
-    assert.match(entrou, /^Entraram \d+ peças?: .*manguito/, `o complemento não entrou (veio "${entrou}")`);
+    await esperar(18000);
     assert.match(await p.$eval('#encaixe-contagem', (n) => n.textContent), /^4 · /,
       'a arte da Galeria tinha que entrar na lista como a quarta peça');
     // O guarda da sobreposição roda em todo risco novo: aceso é sem peça em cima de peça.
@@ -400,7 +446,12 @@ async function principal() {
      */
     const tiff = await arteTiff(pasta);
     await (await p.$('#encaixe-files')).uploadFile(tiff.arquivo);
+    // A lista já tem peças, e o Encaixe NÃO pergunta de qual pedido é o
+    // arquivo: ele entra no pedido do último lote. Nenhuma caixa do `Alerta`
+    // (src/casca/Alerta.tsx) pode aparecer no caminho.
     await esperar(8000);
+    assert.equal(await p.$('.alerta-caixa[role="alertdialog"]'), null,
+      'o arquivo tinha que entrar sem a pergunta do pedido');
 
     const comTiff = await p.$eval('#encaixe-contagem', (n) => n.textContent);
     assert.match(comTiff, /^4 · 4 cóp/, `o TIFF tinha que entrar como a quarta arte (veio "${comTiff}")`);
@@ -474,12 +525,226 @@ async function principal() {
     assert.equal(depoisDoX, antesDoX - 1,
       `o × tinha que tirar a peça da lista (eram ${antesDoX}, ficaram ${depoisDoX})`);
 
+    /*
+     * ---- 8. arquivo que chega com o Optmizar rodando vai para a fila ----
+     *
+     * Antes era a janela "Aguarde o trabalho atual terminar" e o arquivo se
+     * perdia. Agora ele espera na fila, um toast no canto conta, e ele entra
+     * sozinho quando a busca acaba — sem janela nenhuma no caminho.
+     */
+    // Com três peças pequenas a busca de 3 s desiste em pouco mais de um
+    // segundo (ela para depois de um quarto do tempo sem ganho). Com 10 s ela
+    // roda pelo menos 2,5 s — folga de sobra para o arquivo chegar no meio.
+    await p.evaluate(() => {
+      const tempo = document.getElementById('encaixe-tempo');
+      tempo.value = '10';
+      tempo.dispatchEvent(new Event('input', { bubbles: true }));
+      tempo.dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById('btn-ajustes-optmizar').click();
+    });
+    await esperar(300);
+    await (await p.$('#encaixe-files')).uploadFile(artes[1]);
+    await esperar(300);
+    const janela = () => p.$eval('.alerta-caixa[role="alertdialog"]', (n) => n.innerText.replace(/\s+/g, ' '))
+      .catch(() => null);
+    assert.equal(await janela(), null, 'o arquivo durante o Optmizar não pode abrir janela');
+    const toastDaFila = await p.$eval('.alerta-toast', (n) => n.innerText).catch(() => '');
+    // O toast é a prova de que o arquivo foi para a fila, e não direto para a lista.
+    assert.match(toastDaFila, /na fila/, `o toast da fila não apareceu (veio "${toastDaFila}")`);
+    await esperar(25000);
+    const depoisDaFila = Number((await p.$eval('#encaixe-contagem', (n) => n.textContent)).match(/^\d+/)[0]);
+    assert.equal(depoisDaFila, depoisDoX + 1,
+      `o arquivo da fila tinha que entrar quando a busca acabou (eram ${depoisDoX}, ficaram ${depoisDaFila})`);
+    assert.equal(await janela(), null, 'a fila não pode terminar em janela');
+
+    /*
+     * ---- 9. TIFF arrastado SEM tipo também entra ----
+     *
+     * O arrastar filtrava pelo tipo que o sistema dá ao arquivo (`image/...`),
+     * e numa máquina em que o Windows não conhece o .tif o tipo vem vazio: o
+     * arquivo sumia em silêncio, sem janela e sem linha. O seletor de arquivos
+     * aceitava o mesmo TIFF, porque ele olha a extensão.
+     */
+    const bytesDoTiff = Array.from(fs.readFileSync(tiff.arquivo));
+    await p.evaluate((bytes) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array(bytes)], 'peca-sem-tipo.tif', { type: '' }));
+      document.querySelector('.page[data-page="encaixe"]').dispatchEvent(
+        new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    }, bytesDoTiff);
+    await esperar(8000);
+    const depoisDoArraste = Number((await p.$eval('#encaixe-contagem', (n) => n.textContent)).match(/^\d+/)[0]);
+    assert.equal(depoisDoArraste, depoisDaFila + 1,
+      `o TIFF arrastado sem tipo tinha que entrar (eram ${depoisDaFila}, ficaram ${depoisDoArraste})`);
+
+    /*
+     * ---- 10. a mesma quantidade em várias peças de uma vez ----
+     *
+     * Cliente manda 50 artes, 40 de cada: digitar 40 em cinquenta linhas era o
+     * jeito. Sem nada marcado, "Qtd de cada" vale para a lista inteira; com
+     * linhas marcadas, só para elas. "Marcar todas" fica na barra da seleção.
+     */
+    const contar = () => p.$eval('#encaixe-contagem', (n) => n.textContent.trim());
+    const botaoQtd = () => p.$eval('#btn-encaixe-qtd-todas', (n) => n.textContent.trim());
+    const aplicarQtd = (n) => p.evaluate((valor) => {
+      const campo = document.getElementById('encaixe-qtd-todas');
+      campo.value = String(valor);
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('btn-encaixe-qtd-todas').click();
+    }, n);
+    const linhasNaLista = depoisDoArraste;
+
+    assert.equal(await botaoQtd(), `Aplicar em todas (${linhasNaLista})`);
+    await aplicarQtd(4);
+    await esperar(300);
+    assert.match(await contar(), new RegExp(`^${linhasNaLista} · ${linhasNaLista * 4} cóp`),
+      `sem nada marcado, a quantidade tinha que ir para todas (veio "${await contar()}")`);
+
+    await p.evaluate(() => document.querySelector('[data-sel-peca]').click());
+    await esperar(300);
+    assert.equal(await botaoQtd(), 'Aplicar na marcada');
+    await aplicarQtd(2);
+    await esperar(300);
+    assert.match(await contar(), new RegExp(`^${linhasNaLista} · ${(linhasNaLista - 1) * 4 + 2} cóp`),
+      `com uma marcada, só ela tinha que mudar (veio "${await contar()}")`);
+
+    await p.evaluate(() => document.getElementById('btn-encaixe-marcar-todas').click());
+    await esperar(300);
+    assert.equal(await botaoQtd(), `Aplicar nas ${linhasNaLista} marcadas`);
+    assert.match(await p.$eval('#encaixe-grupo-conta', (n) => n.textContent), new RegExp(`^${linhasNaLista} peças marcadas`));
+
+    /*
+     * ---- 11. o Digitalizar abre TIFF ----
+     *
+     * Ele lia a imagem direto no navegador, que não abre TIFF: a foto do molde
+     * em .tif era recusada pelo nome. Agora passa pela mesma conversão do
+     * Encaixe (`prepararArteParaONavegador`).
+     */
+    // Uma peça escura na mesa branca: o Digitalizar procura o contorno logo
+    // que abre, e a arte chapada do Encaixe não tem contorno nenhum para achar.
+    const fotoDoMolde = path.join(pasta, 'molde-na-mesa.tif');
+    await require('sharp')({ create: { width: 600, height: 400, channels: 3, background: { r: 245, g: 245, b: 240 } } })
+      .composite([{
+        input: await require('sharp')({ create: { width: 300, height: 200, channels: 3, background: { r: 30, g: 30, b: 40 } } }).png().toBuffer(),
+        left: 150, top: 100,
+      }])
+      .withMetadata({ density: 150 }).tiff().toFile(fotoDoMolde);
+    await p.goto(`http://127.0.0.1:${porta}/digitalizar`, { waitUntil: 'networkidle2' });
+    await esperar(800);
+    await (await p.$('#digitalizar-imagem')).uploadFile(fotoDoMolde);
+    await esperar(5000);
+    assert.equal(await janela(), null, 'o TIFF no Digitalizar não pode abrir janela de erro');
+    assert.ok(await p.$('#digitalizar-tela'), 'o Digitalizar tinha que abrir o TIFF');
+
+    /*
+     * ---- 12. o projeto da Galeria aceita TIFF ----
+     *
+     * A arte da peça só entrava em PNG, JPG ou WEBP. O TIFF é convertido antes
+     * de subir — o servidor guarda o convertido, que depois entra no Encaixe
+     * sem conversão — e a medida sai do dpi dele: 300 × 400 px a 150 dpi.
+     */
+    await p.goto(`http://127.0.0.1:${porta}/projetos`, { waitUntil: 'networkidle2' });
+    await esperar(900);
+    const clicarNoTexto = (texto) => p.evaluate((t) => {
+      const alvo = [...document.querySelectorAll('button, [role="button"], a')]
+        .find((n) => n.textContent.trim().startsWith(t));
+      if (alvo) alvo.click();
+      return !!alvo;
+    }, texto);
+    assert.ok(await clicarNoTexto('Cliente de teste'), 'a Galeria tinha que listar o cliente do teste');
+    await esperar(600);
+    assert.ok(await clicarNoTexto('Sobras'), 'a Galeria tinha que listar o projeto do teste');
+    await esperar(1200);
+    await p.evaluate((bytes) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array(bytes)], 'peca-d.tif', { type: 'image/tiff' }));
+      const miniatura = document.querySelector('button[title^="Trocar a arte de"], button[title^="Anexar a arte de"]');
+      miniatura.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    }, bytesDoTiff);
+    await esperar(5000);
+    assert.equal(await janela(), null, 'o TIFF no projeto não pode abrir janela de erro');
+    const medidaNoProjeto = await p.evaluate(() => [
+      document.querySelector('input[aria-label="Largura em cm"]'),
+      document.querySelector('input[aria-label="Altura em cm"]'),
+    ].map((n) => (n ? n.value : null)));
+    assert.deepEqual(medidaNoProjeto, ['5.08', '6.77'],
+      `a arte TIFF tinha que entrar no projeto com 5,08 × 6,77 cm (veio ${medidaNoProjeto.join(' × ')})`);
+
+    /*
+     * ---- 13. o molde graduado: o PLT com o .adsx do mesmo modelo ----
+     *
+     * O PLT da Audaces traz o contorno de cada tamanho; o .adsx (um ZIP com o
+     * data.xml) diz a medida de cada peça em cada tamanho, e é por ela que os
+     * contornos são casados. Aqui: frente e costas sobrepostas em 4 tamanhos e
+     * um bolso que não muda. A conferência tem de mostrar as 3 peças, e criar
+     * tem de abrir a Montagem com a grade P/M/G/GG.
+     */
+    const PLU = 400;
+    const grade = ['P', 'M', 'G', 'GG'];
+    const contornos = [];
+    for (let k = 0; k < 4; k++) {
+      const W = 20 + k;
+      const Hf = 30 + k;
+      const Hc = 32 + k;
+      contornos.push([[0, 0], [W, 0], [W, Hf], [0, Hf], [0, Hf * 0.6], [3, Hf * 0.5], [0, Hf * 0.4]]);
+      contornos.push([[0, 0], [W, 0], [W, Hc * 0.4], [W - 3, Hc * 0.5], [W, Hc * 0.6], [W, Hc], [0, Hc]]);
+    }
+    contornos.push([[50, 0], [60, 0], [60, 10], [50, 10]]);
+    let plt = 'IN;SP1;';
+    for (const c of contornos) {
+      const pts = [...c, c[0]].map(([x, y]) => `${Math.round(x * PLU)},${Math.round(y * PLU)}`);
+      plt += `PU${pts[0]};PD ${pts.slice(1).join(' ')};`;
+    }
+    const arquivoPlt = path.join(pasta, 'ARD.TESTE.plt');
+    fs.writeFileSync(arquivoPlt, plt, 'latin1');
+
+    const medida = (nome, w, h) => `<SIZE_P NAME_SP="${nome}"><WIDTH_SP>${w}</WIDTH_SP><HEIGHT_SP>${h}</HEIGHT_SP></SIZE_P>`;
+    const peca = (nome, f) => `<PATTERN NAME_P="${nome}"><DESC_P> </DESC_P><QT_MOD>1</QT_MOD><SIZES_P><BASE_NAME>"M"</BASE_NAME>${grade.map((t, k) => medida(t, ...f(k))).join('')}</SIZES_P></PATTERN>`;
+    const dataXml = `<?xml version="1.0" encoding="iso-8859-1"?><DATA_FILE_AUDACES><MODEL NAME_M="ARD.TESTE"><SIZES_M>${grade.map((t) => `<SIZE_M NAME_SP="${t}"></SIZE_M>`).join('')}</SIZES_M><PATTERNS>`
+      + peca('FRENTE', (k) => [20 + k, 30 + k]) + peca('COSTAS', (k) => [20 + k, 32 + k]) + peca('BOLSO2X', () => [10, 10])
+      + '</PATTERNS></MODEL></DATA_FILE_AUDACES>';
+    const zlib = require('node:zlib');
+    const dados = Buffer.from(dataXml, 'latin1');
+    const comprimido = zlib.deflateRawSync(dados);
+    const nomeZip = Buffer.from('data.xml');
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt32LE(comprimido.length, 18);
+    local.writeUInt32LE(dados.length, 22); local.writeUInt16LE(nomeZip.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(8, 10); central.writeUInt32LE(comprimido.length, 20);
+    central.writeUInt32LE(dados.length, 24); central.writeUInt16LE(nomeZip.length, 28); central.writeUInt32LE(0, 42);
+    const fimZip = Buffer.alloc(22);
+    fimZip.writeUInt32LE(0x06054b50, 0); fimZip.writeUInt16LE(1, 8); fimZip.writeUInt16LE(1, 10);
+    fimZip.writeUInt32LE(46 + nomeZip.length, 12); fimZip.writeUInt32LE(30 + nomeZip.length + comprimido.length, 16);
+    const arquivoAdsx = path.join(pasta, 'ARD.TESTE.adsx');
+    fs.writeFileSync(arquivoAdsx, Buffer.concat([local, nomeZip, comprimido, central, nomeZip, fimZip]));
+
+    await p.goto(`http://127.0.0.1:${porta}/moldes`, { waitUntil: 'networkidle2' });
+    await esperar(900);
+    await (await p.$('input[aria-label="Arquivos do molde graduado"]')).uploadFile(arquivoPlt, arquivoAdsx);
+    await esperar(2500);
+    const naConferencia = await p.$$eval('ul[aria-label="As peças"] li', (ns) => ns.map((n) => n.innerText.replace(/\s+/g, ' ')));
+    assert.equal(naConferencia.length, 3, `a conferência tinha que mostrar 3 peças (veio: ${naConferencia.join(' / ')})`);
+    assert.ok(naConferencia.some((l) => /BOLSO ×2/.test(l)), `o bolso com a quantidade do nome (veio: ${naConferencia.join(' / ')})`);
+    assert.ok(naConferencia.every((l) => /4 tamanhos/.test(l)), `toda peça com os 4 tamanhos (veio: ${naConferencia.join(' / ')})`);
+    await p.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Criar molde').click());
+    await esperar(3000);
+    assert.match(p.url(), /\/montagem\?molde=\d+/, `criar tinha que abrir a Montagem (está em ${p.url()})`);
+    const chips = await p.evaluate(() => document.body.innerText);
+    for (const t of grade) assert.ok(new RegExp(`\\b${t}\\b`).test(chips), `a Montagem tinha que mostrar o tamanho ${t}`);
+    assert.equal(await janela(), null, 'importar o graduado não pode abrir janela de erro');
+
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
       + ` (${risco}), o PDF foi gravado onde a tela mandou, o complemento pôs a arte da Galeria`
       + ` nos vãos e desfez, o TIFF entrou pela conversão`
-      + ` e o × tirou a peça (${antesDoX} → ${depoisDoX}).`);
+      + `, o × tirou a peça (${antesDoX} → ${depoisDoX})`
+      + `, o arquivo da fila entrou depois da busca (${depoisDoX} → ${depoisDaFila})`
+      + `, o TIFF arrastado sem tipo entrou (${depoisDaFila} → ${depoisDoArraste})`
+      + ', a quantidade foi para todas, para a marcada e o "Marcar todas" marcou,'
+      + ', o TIFF abriu no Digitalizar e entrou no projeto da Galeria,'
+      + ' e o PLT graduado com o .adsx virou um molde de 3 peças em P/M/G/GG.');
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();

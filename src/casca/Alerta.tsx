@@ -52,6 +52,8 @@ export interface OpcoesDoAlerta {
   cancelar?: string;
   /** Mostra o botão de cancelar. */
   cancelavel?: boolean;
+  /** Um segundo caminho, ao lado do confirmar. A resposta vem em `alternativa`. */
+  alternativa?: string;
   /** O botão de confirmar vai em vermelho: a ação não tem volta. */
   perigoso?: boolean;
   /** Pede um texto; a resposta vem em `valor`. */
@@ -64,6 +66,8 @@ export interface OpcoesDoAlerta {
 
 export interface RespostaDoAlerta {
   confirmado: boolean;
+  /** O botão da `alternativa` foi o clicado. */
+  alternativa: boolean;
   /** O texto escrito, quando a caixa tinha campo. */
   valor: string;
 }
@@ -129,7 +133,7 @@ const SINAL_DO_TOAST: Record<TipoDeAlerta, string> = {
 /* ------------------------------------------------------------------------- */
 
 function Caixa({
-  opcoes, fechando, valor, setValor, aoConfirmar, aoCancelar,
+  opcoes, fechando, valor, setValor, aoConfirmar, aoCancelar, aoAlternativa,
 }: {
   opcoes: OpcoesDoAlerta;
   fechando: boolean;
@@ -137,6 +141,7 @@ function Caixa({
   setValor: (v: string) => void;
   aoConfirmar: () => void;
   aoCancelar: () => void;
+  aoAlternativa: () => void;
 }) {
   const tipo = opcoes.tipo ?? "info";
   const travado = tipo === "carregando";
@@ -220,6 +225,11 @@ function Caixa({
                 {opcoes.cancelar ?? "Cancelar"}
               </button>
             )}
+            {opcoes.alternativa && (
+              <button type="button" onClick={aoAlternativa} className="alerta-botao secundario">
+                {opcoes.alternativa}
+              </button>
+            )}
             <button
               ref={botao}
               type="button"
@@ -300,13 +310,13 @@ export function ProvedorDeAlerta({ children }: { children: ReactNode }) {
   const contador = useRef(0);
   const atual = useRef(0);
 
-  const concluir = useCallback((id: number, confirmado: boolean) => {
+  const concluir = useCallback((id: number, confirmado: boolean, alternativa = false) => {
     if (atual.current !== id) return;
     if (relogio.current) clearTimeout(relogio.current);
     relogio.current = null;
     const resolve = responder.current;
     responder.current = null;
-    resolve?.({ confirmado, valor: valorAtual.current.trim() });
+    resolve?.({ confirmado, alternativa, valor: valorAtual.current.trim() });
     setFechando(true);
     setTimeout(() => {
       if (atual.current !== id) return; // outro abriu no meio da saída
@@ -319,7 +329,7 @@ export function ProvedorDeAlerta({ children }: { children: ReactNode }) {
     if (relogio.current) clearTimeout(relogio.current);
     relogio.current = null;
     // O de baixo é respondido como dispensado, em vez de esquecido.
-    responder.current?.({ confirmado: false, valor: "" });
+    responder.current?.({ confirmado: false, alternativa: false, valor: "" });
     responder.current = null;
 
     const id = ++contador.current;
@@ -363,6 +373,7 @@ export function ProvedorDeAlerta({ children }: { children: ReactNode }) {
             setValor={setValor}
             aoConfirmar={() => concluir(id, true)}
             aoCancelar={() => concluir(id, false)}
+            aoAlternativa={() => concluir(id, false, true)}
           />
         ),
         document.body,
@@ -384,10 +395,10 @@ export function ProvedorDeAlerta({ children }: { children: ReactNode }) {
 function mostrar(opcoes: OpcoesDoAlerta): Promise<RespostaDoAlerta> {
   if (!abrirAgora) {
     const texto = [opcoes.titulo, typeof opcoes.texto === "string" ? opcoes.texto : ""].filter(Boolean).join("\n\n");
-    if (opcoes.tipo === "carregando") return Promise.resolve({ confirmado: false, valor: "" });
-    if (opcoes.cancelavel) return Promise.resolve({ confirmado: window.confirm(texto), valor: "" });
+    if (opcoes.tipo === "carregando") return Promise.resolve({ confirmado: false, alternativa: false, valor: "" });
+    if (opcoes.cancelavel) return Promise.resolve({ confirmado: window.confirm(texto), alternativa: false, valor: "" });
     window.alert(texto);
-    return Promise.resolve({ confirmado: true, valor: "" });
+    return Promise.resolve({ confirmado: true, alternativa: false, valor: "" });
   }
   return abrirAgora(opcoes).resposta;
 }

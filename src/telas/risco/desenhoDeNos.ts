@@ -10,7 +10,28 @@
  */
 
 export type Ponto = { x: number; y: number };
-export type No = { x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean; simetrico?: boolean };
+export type No = {
+  x: number; y: number; entrada: Ponto; saida: Ponto; canto?: boolean; retaDepois?: boolean; simetrico?: boolean;
+  /** Nó liso automático (ver `motores/edicaoDeNos.js`). */
+  auto?: { antes: number; depois: number; giro: number };
+};
+
+/**
+ * O que está debaixo do ponteiro, para o desenho mostrar ANTES do clique o que
+ * vai ser pego: um nó (ganha anel), uma alça ou puxador (anel), ou um ponto do
+ * traço (o fantasma do nó que dois cliques poriam ali).
+ */
+export type SobOPonteiro =
+  | { tipo: "no"; no: number }
+  | { tipo: "alca"; no: number; parte: "entrada" | "saida" }
+  | { tipo: "traco"; ponto: Ponto }
+  | null;
+
+/** Os tamanhos, em pixels da tela (spec de 2026-10-05: nós maiores, fáceis de acertar). */
+const RAIO_DO_NO = 6;
+const RAIO_DO_SELECIONADO = 7.5;
+const HALO = 11;
+const RAIO_DO_PUXADOR = 6.5;
 
 /** O caminho fechado dos nós. Só traça o caminho: a cor e a grossura são de quem chama. */
 export function tracarCaminho(ctx: CanvasRenderingContext2D, nos: No[], emTela: (p: Ponto) => Ponto) {
@@ -40,32 +61,48 @@ export function tracarCaminho(ctx: CanvasRenderingContext2D, nos: No[], emTela: 
  * para reconhecer sem clicar. O nó selecionado cresce, muda de cor e ganha
  * halo — é ele que o Delete apaga, então dá para ver o que vai embora antes.
  * `selecionados`: um índice, um conjunto (o editor estilo Corel) ou `null`.
+ *
+ * O nó liso automático selecionado mostra PUXADORES — a bolinha grande na ponta
+ * de cada lado, que abre ou fecha só aquele lado (ver `moverPuxador`). Com
+ * `opcoes.alcas` (o ajuste fino), ele mostra as alças finas do Corel, como os
+ * outros nós. `opcoes.sob` é o que está debaixo do ponteiro.
  */
 export function desenharNos(
   ctx: CanvasRenderingContext2D, nos: No[], selecionados: ReadonlySet<number> | number | null, emTela: (p: Ponto) => Ponto,
+  opcoes: { sob?: SobOPonteiro; alcas?: boolean } = {},
 ) {
   const sel: ReadonlySet<number> = selecionados === null ? new Set() : typeof selecionados === "number" ? new Set([selecionados]) : selecionados;
+  const sob = opcoes.sob ?? null;
   for (const i of sel) {
     const n = nos[i];
     if (!n) continue;
     const anterior = nos[(i - 1 + nos.length) % nos.length]!;
     const centro = emTela(n);
+    const puxador = !!n.auto && !opcoes.alcas;
     for (const parte of ["entrada", "saida"] as const) {
       if (parte === "saida" && n.retaDepois) continue;
       if (parte === "entrada" && anterior.retaDepois) continue;
       const a = emTela(n[parte]);
       ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = puxador ? 2 : 1.5;
       ctx.beginPath();
       ctx.moveTo(centro.x, centro.y);
       ctx.lineTo(a.x, a.y);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(a.x, a.y, 4.5, 0, Math.PI * 2);
+      ctx.arc(a.x, a.y, puxador ? RAIO_DO_PUXADOR : 4.5, 0, Math.PI * 2);
       ctx.fillStyle = "#4d9dff";
       ctx.fill();
-      ctx.strokeStyle = "rgba(10, 14, 16, 0.9)";
+      ctx.strokeStyle = puxador ? "#ffffff" : "rgba(10, 14, 16, 0.9)";
+      ctx.lineWidth = puxador ? 2 : 1.5;
       ctx.stroke();
+      if (sob && sob.tipo === "alca" && sob.no === i && sob.parte === parte) {
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, (puxador ? RAIO_DO_PUXADOR : 4.5) + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
     }
   }
 
@@ -74,11 +111,18 @@ export function desenharNos(
     const marcado = sel.has(i);
     if (marcado) {
       ctx.beginPath();
-      ctx.arc(c.x, c.y, 9, 0, Math.PI * 2);
+      ctx.arc(c.x, c.y, HALO, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(255, 122, 26, 0.25)";
       ctx.fill();
     }
-    const raio = marcado ? 5.2 : 3.6;
+    if (sob && sob.tipo === "no" && sob.no === i) {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, HALO, 0, Math.PI * 2);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    const raio = marcado ? RAIO_DO_SELECIONADO : RAIO_DO_NO;
     ctx.fillStyle = marcado ? "#ff7a1a" : "#ffffff";
     ctx.strokeStyle = marcado ? "#ffffff" : "rgba(10, 14, 16, 0.95)";
     ctx.lineWidth = marcado ? 2 : 1.5;
@@ -88,6 +132,18 @@ export function desenharNos(
     ctx.fill();
     ctx.stroke();
   });
+
+  // O fantasma: onde dois cliques poriam um nó.
+  if (sob && sob.tipo === "traco") {
+    const c = emTela(sob.ponto);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 5.5, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([2, 2]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 }
 
 /** O retângulo de seleção, tracejado, com um véu azul por dentro. */
