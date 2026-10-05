@@ -57,4 +57,22 @@ caso("\"Usar o melhor de antes\" some quando as peças mudam, e não abre janela
   assert.match(corpo("function esconderOfertaDoGuardado("), /ofertaDoGuardado = null;/);
 });
 
+caso("encaixe que quebra tenta de novo pela caixa, sozinho, antes de abrir janela", () => {
+  const servico = corpo("async function optmizar(");
+  assert.match(servico, /^async function optmizar\(\{ refeito = false, avisoDoRefeito = "", modo = MODO_DE_ENCAIXE \} = \{\}\)/);
+  assert.match(servico, /const modoDeEncaixe = modo;/);
+  // No catch: sem a pessoa ter parado e sem já ser a rodada pela caixa, só
+  // marca a nova rodada; a janela é para quando nem pela caixa deu.
+  const pegou = servico.slice(servico.indexOf("} catch (err) {"), servico.indexOf("} finally {"));
+  assert.match(pegou, /if \(!pararBusca && modoDeEncaixe !== "retangulo"\) \{\s*refazerPelaCaixa = /);
+  assert.ok(pegou.indexOf("refazerPelaCaixa = ") < pegou.indexOf("mostrarErroEncaixe("),
+    "a nova rodada tinha que vir antes da janela");
+  const fim = servico.slice(servico.indexOf("} finally {"));
+  assert.match(fim, /optmizar\(\{ modo: "retangulo", avisoDoRefeito: refazerPelaCaixa \}\)/);
+  // A segunda rodada da conferência segue no mesmo modo da primeira.
+  assert.match(fim, /optmizar\(\{ refeito: true, avisoDoRefeito: refazer, modo: modoDeEncaixe \}\)/);
+  // "Como encaixar" não existe mais na tela: nenhum texto pode mandar a pessoa lá.
+  assert.ok(!codigo.includes("Como encaixar"), "ainda há texto citando \"Como encaixar\"");
+});
+
 console.log(`\nbancada:janelas — ${casos} casos ok`);

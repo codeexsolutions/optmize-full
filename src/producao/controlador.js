@@ -2524,7 +2524,10 @@ function iniciarCarregamento(totalPecas, modo) {
   atualizarCarregamento({
     etapa: "Iniciando",
     titulo: "Preparando o encaixe",
-    detalhe: modo === "auto" ? "O sistema vai escolher o método mais adequado." : "Carregando o método escolhido.",
+    // Fora do "auto" só há a rodada pela caixa que o `optmizar` faz sozinho
+    // quando a busca quebra — ninguém escolheu método nenhum.
+    detalhe: modo === "auto" ? "O sistema vai escolher o método mais adequado."
+      : "Refazendo pela caixa em volta de cada peça.",
     progresso: 3,
   });
   atualizarTempoDoCarregamento();
@@ -2688,10 +2691,16 @@ function mostrarAndamento(estado, aprendido) {
  * `refeito` é a segunda rodada que a conferência pela arte pede (ver o fim da
  * busca): ela não pede uma terceira. `avisoDoRefeito` conta, no resumo, o que
  * mudou de uma para a outra.
+ *
+ * `modo` é o jeito de encaixar. A tela não oferece mais a escolha — é sempre
+ * "auto", todos os encaixadores disputando —, mas quando a busca quebra no
+ * meio o encaixe é refeito sozinho pela caixa ("retangulo"), o caminho mais
+ * simples do motor, antes de a janela de erro abrir (ver o `catch`).
  */
-async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
+async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_ENCAIXE } = {}) {
   limparErroEncaixe();
   let refazer = null;
+  let refazerPelaCaixa = null;
 
   // Sem peça não há o que fazer. Não avisa nada porque não há como chegar
   // aqui assim: quem aperta Optmizar com a mesa vazia é levado ao seletor de
@@ -2730,7 +2739,7 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
     }
   }
 
-  const modoDeEncaixe = MODO_DE_ENCAIXE;
+  const modoDeEncaixe = modo;
 
   // O aviso de "procurando" aparece JÁ AQUI, antes da espera do fundo logo
   // abaixo — não depois dela. Quando alguma arte ainda estava com o fundo
@@ -3129,9 +3138,17 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
     finalizarCarregamento(pararBusca ? "interrompido" : "concluido");
   } catch (err) {
     console.error("Falha ao fazer o encaixe:", err);
+    // Quebrou com todos os encaixadores disputando: antes de incomodar a
+    // pessoa, refaz pela caixa — o caminho mais simples do motor. Gasta um
+    // pouco mais de tecido que o contorno, e por isso o resumo conta.
+    if (!pararBusca && modoDeEncaixe !== "retangulo") {
+      refazerPelaCaixa = "O encaixe pelo contorno falhou e foi refeito pela caixa em volta de cada peça";
+      finalizarCarregamento("com-erro");
+      return;
+    }
     mostrarErroEncaixe(err && err.message
       ? `Não foi possível concluir o encaixe: ${err.message}`
-      : "Não foi possível concluir o encaixe. Tente de novo com \"Sempre pela caixa\" em Como encaixar.");
+      : "Não foi possível concluir o encaixe.");
     encaixeAndamento.textContent = "O cálculo foi encerrado. Ajuste as peças e tente novamente.";
     encaixeAndamento.classList.remove("hidden");
     finalizarCarregamento("com-erro");
@@ -3142,7 +3159,8 @@ async function optmizar({ refeito = false, avisoDoRefeito = "" } = {}) {
     btnPararBusca.classList.add("hidden");
     // A segunda rodada depois do `finally`, e não dentro do `try`: ela começa
     // com a tela devolvida, como se a pessoa tivesse clicado de novo.
-    if (refazer) setTimeout(() => optmizar({ refeito: true, avisoDoRefeito: refazer }), 0);
+    if (refazer) setTimeout(() => optmizar({ refeito: true, avisoDoRefeito: refazer, modo: modoDeEncaixe }), 0);
+    if (refazerPelaCaixa) setTimeout(() => optmizar({ modo: "retangulo", avisoDoRefeito: refazerPelaCaixa }), 0);
   }
 }
 
@@ -3207,7 +3225,7 @@ function comoFoiEncaixado(r) {
   const modo = r.modoDeEncaixe || "auto";
 
   if (modo === "contorno") {
-    return "Encaixe feito pelo contorno das peças, como pedido em \"Como encaixar\".";
+    return "Encaixe feito pelo contorno das peças.";
   }
   if (modo === "retangulo") {
     return "Encaixe feito pela caixa em volta de cada peça — o vazio ao redor do desenho "
@@ -3237,10 +3255,9 @@ function comoFoiEncaixado(r) {
 
   const conta = disputaram
     .map(([motor, consumo]) => `${NOMES[motor] || motor} ${metros(consumo)}`).join(", ");
-  return `Cada jeito de encaixar deu um resultado — ${conta} — e ficou o melhor deles, ${oQueFoi}.`
-    // Só faz sentido oferecer o contorno quando não foi ele que venceu.
-    + (motorVencedor === "contorno" ? "" : ` Para ver as peças entrando uma no vão da outra mesmo `
-      + `assim, troque "Como encaixar" para "sempre pelo contorno".`);
+  // A dica de trocar o modo à mão saiu junto com a escolha do modo, que a
+  // tela não tem mais.
+  return `Cada jeito de encaixar deu um resultado — ${conta} — e ficou o melhor deles, ${oQueFoi}.`;
 }
 
 /**
