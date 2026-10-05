@@ -62,6 +62,7 @@ import { useDialogo } from "../casca/Dialogo";
 import { moldesApi, type Molde, type MoldeNaEstante } from "../api/moldes";
 import { EditorDeMolde } from "./moldes/EditorDeMolde";
 import { EnvioParaEncaixe } from "./moldes/EnvioParaEncaixe";
+import { ImportarGraduado } from "./moldes/ImportarGraduado";
 import { useErroEmAlerta } from "../casca/Alerta";
 
 /** Qual modal está na frente. `null` = só a estante. */
@@ -160,6 +161,7 @@ export function Moldes() {
               className="w-48 rounded-[9px] border border-linha bg-painel px-3 py-1.5 text-[0.82rem] text-tinta outline-none placeholder:text-tinta-apagada focus:border-[var(--accent-line)]"
             />
           )}
+          <ImportarGraduado />
           <button
             type="button"
             className="btn primary btn-sm"

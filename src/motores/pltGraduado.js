@@ -252,7 +252,7 @@ const arredondar4 = (v) => Math.round(v * 10000) / 10000;
  * as cores da paleta e o base. `papelDe` chuta o papel pelo nome (a tela passa
  * o do vocabulário de Moldes).
  */
-export function moldeGraduado({ nome, tamanhos, pecas, papelDe = () => "outro" }) {
+export function moldeGraduado({ nome, tamanhos, pecas, papelDe = (_nome) => "outro" }) {
   const linhas = [];
   pecas.forEach((p, grupo) => {
     for (const t of tamanhos) {
