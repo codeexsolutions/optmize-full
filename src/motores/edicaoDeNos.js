@@ -707,7 +707,11 @@ export function alcasDoNoAutomatico(nos, i) {
   };
 }
 
-/** Refaz as alças dos nós automáticos de `indices` (todos, com `null`) a partir de onde os nós estão. */
+/**
+ * Refaz as alças dos nós automáticos de `indices` (todos, com `null`) a partir de onde os nós estão.
+ * @param {any[]} nos
+ * @param {number[] | null} [indices]
+ */
 export function refazerAlcas(nos, indices = null) {
   const alvo = indices === null ? null : new Set(indices);
   let mudou = false;
@@ -766,6 +770,8 @@ function comAuto(no, auto) {
 /**
  * Converte em automático os nós de `indices` (todos, com `null`) que dá para
  * converter sem mudar o desenho (ver 1.4 da spec). O que não dá fica como está.
+ * @param {any[]} nos
+ * @param {number[] | null} [indices]
  */
 export function derivarAuto(nos, indices = null) {
   const alvo = indices === null ? null : new Set(indices);
