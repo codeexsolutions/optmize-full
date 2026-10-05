@@ -144,9 +144,13 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanh
           <button type="button" className="btn secondary btn-sm" onClick={() => void molde.gravar()}>Tentar de novo</button>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <button type="button" className="btn secondary btn-sm" disabled={!molde.podeDesfazer} onClick={molde.desfazer}>
+          <button type="button" className="btn secondary btn-sm" disabled={!molde.podeDesfazer} onClick={molde.desfazer} title="Desfazer (Ctrl+Z)">
             <Icone referencia="icones.svg#rotate-ccw" className="size-4" />
             Desfazer
+          </button>
+          <button type="button" className="btn secondary btn-sm" disabled={!molde.podeRefazer} onClick={molde.refazer} title="Refazer (Ctrl+Y)">
+            <Icone referencia="icones.svg#rotate-cw" className="size-4" />
+            Refazer
           </button>
           {molde.tamanhos.length > 1 && (
             <select
@@ -159,7 +163,8 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanh
               <option value="todos">Todos os tamanhos</option>
             </select>
           )}
-          <button type="button" className="btn secondary btn-sm" disabled={!podeSair} onClick={() => void pdf()}>
+          <button type="button" className="btn secondary btn-sm" disabled={!podeSair} onClick={() => void pdf()}
+            title={'O PDF sai em tamanho real: imprima em 100% / "tamanho real", senão o visualizador reduz para caber na folha.'}>
             <Icone referencia="icones.svg#download" className="size-4" />
             {ocupado === "Gerando o PDF…" ? ocupado : "PDF"}
           </button>
@@ -178,9 +183,6 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanh
           )}
         </div>
       </div>
-      <p className="m-0 border-b border-linha px-3 py-1 text-[0.75rem] text-tinta-apagada">
-        O PDF sai em tamanho real: imprima em 100% / "tamanho real", senão o visualizador reduz para caber na folha.
-      </p>
       {envio && (
         <EnvioParaEncaixe molde={envio} aoFechar={() => setEnvio(null)} aoRecarregar={setEnvio} />
       )}

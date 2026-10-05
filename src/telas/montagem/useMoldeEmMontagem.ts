@@ -82,6 +82,9 @@ export interface MoldeEmMontagem {
   podeDesfazer: boolean;
   lembrar(): void;
   desfazer(): void;
+  /** Refaz o que o último desfazer tirou (Ctrl+Y, Ctrl+Shift+Z). Qualquer mexida nova esvazia o refazer. */
+  refazer(): void;
+  podeRefazer: boolean;
   mudarPecas(mudar: (antes: PecaEmMontagem[]) => PecaEmMontagem[], lembrarAntes?: boolean): void;
   mudarPeca(indice: number, mudar: (peca: PecaEmMontagem) => PecaEmMontagem, lembrarAntes?: boolean): void;
   renomear(nome: string): void;
@@ -113,6 +116,8 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   const [gravacao, setGravacao] = useState<EstadoDaGravacao>("salvo");
   const [problema, setProblema] = useState<MoldeEmMontagem["problema"]>(null);
   const [pilha, setPilha] = useState<{ pecas: PecaEmMontagem[]; tamanhos: TamanhoDoMolde[]; linha: number }[]>([]);
+  // O refazer: o que o desfazer tirou, para voltar. Uma mexida nova (`lembrar`) o esvazia.
+  const [refeitos, setRefeitos] = useState<{ pecas: PecaEmMontagem[]; tamanhos: TamanhoDoMolde[]; linha: number }[]>([]);
 
   const versao = useRef(0);
   const gravada = useRef(0);
@@ -177,17 +182,34 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   const lembrar = useCallback(() => {
     setPilha((p) => [...p.slice(-(PASSOS_DE_DESFAZER - 1)),
       { pecas: atual.current.pecas, tamanhos: atual.current.tamanhos, linha: atual.current.linha }]);
+    setRefeitos((r) => (r.length ? [] : r));
   }, []);
 
   const desfazer = useCallback(() => {
     setPilha((p) => {
       if (p.length === 0) return p;
       const topo = p[p.length - 1]!;
+      const agora = { pecas: atual.current.pecas, tamanhos: atual.current.tamanhos, linha: atual.current.linha };
+      setRefeitos((r) => [...r, agora]);
       setPecas(topo.pecas);
       setTamanhos(topo.tamanhos);
       setLinha(topo.linha);
       marcarMexida();
       return p.slice(0, -1);
+    });
+  }, []);
+
+  const refazer = useCallback(() => {
+    setRefeitos((r) => {
+      if (r.length === 0) return r;
+      const topo = r[r.length - 1]!;
+      const agora = { pecas: atual.current.pecas, tamanhos: atual.current.tamanhos, linha: atual.current.linha };
+      setPilha((p) => [...p.slice(-(PASSOS_DE_DESFAZER - 1)), agora]);
+      setPecas(topo.pecas);
+      setTamanhos(topo.tamanhos);
+      setLinha(topo.linha);
+      marcarMexida();
+      return r.slice(0, -1);
     });
   }, []);
 
@@ -331,6 +353,7 @@ export function useMoldeEmMontagem(id: number): MoldeEmMontagem {
   return {
     carregando, naoAchado, erroAoAbrir, nome, situacao, pecas, tamanhos: tamanhosDasPecas, linha, gravacao, problema,
     podeDesfazer: pilha.length > 0,
-    lembrar, desfazer, mudarPecas, mudarPeca, renomear, mudarLinha, mudarTamanhos, gravar, tentarAbrirDeNovo,
+    podeRefazer: refeitos.length > 0,
+    lembrar, desfazer, refazer, mudarPecas, mudarPeca, renomear, mudarLinha, mudarTamanhos, gravar, tentarAbrirDeNovo,
   };
 }
