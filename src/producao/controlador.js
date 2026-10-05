@@ -1080,7 +1080,11 @@ async function adicionarArquivos(files) {
   const pedido = ultimoPedido(pecasEncaixe);
 
   limparErroEncaixe();
+  // Dois tipos de recado, e a janela muda de título por eles: o arquivo que
+  // entrou com uma observação (aviso do PDF, do molde, da conversão de cor) é
+  // "Atenção"; "Não deu certo" é só para o que não entrou.
   const recados = [];
+  const naoEntraram = [];
   const totalAntes = pecasEncaixe.length;
   const labelArquivos = encaixeFilesInput.closest(".file-label");
   iniciarCarregamentoArquivos(files.length, "arquivo");
@@ -1162,7 +1166,7 @@ async function adicionarArquivos(files) {
           pecasComFundo.set(indice, peca);
         }
       } catch (err) {
-        recados.push(err.message);
+        naoEntraram.push(err.message);
       }
       lidos++;
       atualizarCarregamentoArquivo(lidos, files.length, file.name);
@@ -1184,7 +1188,8 @@ async function adicionarArquivos(files) {
       preparoDeFundo = preparoDeFundo.then(() => tirarFundoDepois(lote, desteLote));
     }
   } finally {
-    if (recados.length > 0) mostrarErroEncaixe(recados.join(" "));
+    if (naoEntraram.length > 0) mostrarErroEncaixe([...naoEntraram, ...recados].join(" "));
+    else if (recados.length > 0) mostrarErroEncaixe(recados.join(" "), "aviso");
     renderPecasEncaixe();
 
     const adicionadas = pecasEncaixe.length - totalAntes;

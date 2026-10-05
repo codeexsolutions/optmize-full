@@ -35,4 +35,14 @@ caso("peça fora do tecido não abre janela: o resultado já conta embaixo", () 
   assert.match(corpo("function renderResultado("), /encaixeSobras\.textContent =/);
 });
 
+caso("arquivo que entrou com observação é Atenção; erro é só o que não entrou", () => {
+  const entrada = corpo("async function adicionarArquivos(");
+  // O que cai no catch é o arquivo que não entrou.
+  assert.match(entrada, /catch \(err\) \{\s*naoEntraram\.push\(/, "o catch tinha que contar o arquivo que não entrou");
+  // Sem nenhum que não entrou, os recados saem como aviso ("Atenção").
+  assert.match(entrada, /else if \(recados\.length > 0\) mostrarErroEncaixe\(recados\.join\(" "\), "aviso"\)/);
+  assert.ok(!/if \(recados\.length > 0\) mostrarErroEncaixe\(recados\.join\(" "\)\);/.test(entrada),
+    "os recados não podem sair com o título de erro");
+});
+
 console.log(`\nbancada:janelas — ${casos} casos ok`);
