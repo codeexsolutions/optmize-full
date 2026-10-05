@@ -670,6 +670,70 @@ async function principal() {
     assert.deepEqual(medidaNoProjeto, ['5.08', '6.77'],
       `a arte TIFF tinha que entrar no projeto com 5,08 × 6,77 cm (veio ${medidaNoProjeto.join(' × ')})`);
 
+    /*
+     * ---- 13. o molde graduado: o PLT com o .adsx do mesmo modelo ----
+     *
+     * O PLT da Audaces traz o contorno de cada tamanho; o .adsx (um ZIP com o
+     * data.xml) diz a medida de cada peça em cada tamanho, e é por ela que os
+     * contornos são casados. Aqui: frente e costas sobrepostas em 4 tamanhos e
+     * um bolso que não muda. A conferência tem de mostrar as 3 peças, e criar
+     * tem de abrir a Montagem com a grade P/M/G/GG.
+     */
+    const PLU = 400;
+    const grade = ['P', 'M', 'G', 'GG'];
+    const contornos = [];
+    for (let k = 0; k < 4; k++) {
+      const W = 20 + k;
+      const Hf = 30 + k;
+      const Hc = 32 + k;
+      contornos.push([[0, 0], [W, 0], [W, Hf], [0, Hf], [0, Hf * 0.6], [3, Hf * 0.5], [0, Hf * 0.4]]);
+      contornos.push([[0, 0], [W, 0], [W, Hc * 0.4], [W - 3, Hc * 0.5], [W, Hc * 0.6], [W, Hc], [0, Hc]]);
+    }
+    contornos.push([[50, 0], [60, 0], [60, 10], [50, 10]]);
+    let plt = 'IN;SP1;';
+    for (const c of contornos) {
+      const pts = [...c, c[0]].map(([x, y]) => `${Math.round(x * PLU)},${Math.round(y * PLU)}`);
+      plt += `PU${pts[0]};PD ${pts.slice(1).join(' ')};`;
+    }
+    const arquivoPlt = path.join(pasta, 'ARD.TESTE.plt');
+    fs.writeFileSync(arquivoPlt, plt, 'latin1');
+
+    const medida = (nome, w, h) => `<SIZE_P NAME_SP="${nome}"><WIDTH_SP>${w}</WIDTH_SP><HEIGHT_SP>${h}</HEIGHT_SP></SIZE_P>`;
+    const peca = (nome, f) => `<PATTERN NAME_P="${nome}"><DESC_P> </DESC_P><QT_MOD>1</QT_MOD><SIZES_P><BASE_NAME>"M"</BASE_NAME>${grade.map((t, k) => medida(t, ...f(k))).join('')}</SIZES_P></PATTERN>`;
+    const dataXml = `<?xml version="1.0" encoding="iso-8859-1"?><DATA_FILE_AUDACES><MODEL NAME_M="ARD.TESTE"><SIZES_M>${grade.map((t) => `<SIZE_M NAME_SP="${t}"></SIZE_M>`).join('')}</SIZES_M><PATTERNS>`
+      + peca('FRENTE', (k) => [20 + k, 30 + k]) + peca('COSTAS', (k) => [20 + k, 32 + k]) + peca('BOLSO2X', () => [10, 10])
+      + '</PATTERNS></MODEL></DATA_FILE_AUDACES>';
+    const zlib = require('node:zlib');
+    const dados = Buffer.from(dataXml, 'latin1');
+    const comprimido = zlib.deflateRawSync(dados);
+    const nomeZip = Buffer.from('data.xml');
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt32LE(comprimido.length, 18);
+    local.writeUInt32LE(dados.length, 22); local.writeUInt16LE(nomeZip.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(8, 10); central.writeUInt32LE(comprimido.length, 20);
+    central.writeUInt32LE(dados.length, 24); central.writeUInt16LE(nomeZip.length, 28); central.writeUInt32LE(0, 42);
+    const fimZip = Buffer.alloc(22);
+    fimZip.writeUInt32LE(0x06054b50, 0); fimZip.writeUInt16LE(1, 8); fimZip.writeUInt16LE(1, 10);
+    fimZip.writeUInt32LE(46 + nomeZip.length, 12); fimZip.writeUInt32LE(30 + nomeZip.length + comprimido.length, 16);
+    const arquivoAdsx = path.join(pasta, 'ARD.TESTE.adsx');
+    fs.writeFileSync(arquivoAdsx, Buffer.concat([local, nomeZip, comprimido, central, nomeZip, fimZip]));
+
+    await p.goto(`http://127.0.0.1:${porta}/moldes`, { waitUntil: 'networkidle2' });
+    await esperar(900);
+    await (await p.$('input[aria-label="Arquivos do molde graduado"]')).uploadFile(arquivoPlt, arquivoAdsx);
+    await esperar(2500);
+    const naConferencia = await p.$$eval('ul[aria-label="As peças"] li', (ns) => ns.map((n) => n.innerText.replace(/\s+/g, ' ')));
+    assert.equal(naConferencia.length, 3, `a conferência tinha que mostrar 3 peças (veio: ${naConferencia.join(' / ')})`);
+    assert.ok(naConferencia.some((l) => /BOLSO ×2/.test(l)), `o bolso com a quantidade do nome (veio: ${naConferencia.join(' / ')})`);
+    assert.ok(naConferencia.every((l) => /4 tamanhos/.test(l)), `toda peça com os 4 tamanhos (veio: ${naConferencia.join(' / ')})`);
+    await p.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Criar molde').click());
+    await esperar(3000);
+    assert.match(p.url(), /\/montagem\?molde=\d+/, `criar tinha que abrir a Montagem (está em ${p.url()})`);
+    const chips = await p.evaluate(() => document.body.innerText);
+    for (const t of grade) assert.ok(new RegExp(`\\b${t}\\b`).test(chips), `a Montagem tinha que mostrar o tamanho ${t}`);
+    assert.equal(await janela(), null, 'importar o graduado não pode abrir janela de erro');
+
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
@@ -679,7 +743,8 @@ async function principal() {
       + `, o arquivo da fila entrou depois da busca (${depoisDoX} → ${depoisDaFila})`
       + `, o TIFF arrastado sem tipo entrou (${depoisDaFila} → ${depoisDoArraste})`
       + ', a quantidade foi para todas, para a marcada e o "Marcar todas" marcou,'
-      + ' e o TIFF abriu no Digitalizar e entrou no projeto da Galeria.');
+      + ', o TIFF abriu no Digitalizar e entrou no projeto da Galeria,'
+      + ' e o PLT graduado com o .adsx virou um molde de 3 peças em P/M/G/GG.');
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();
