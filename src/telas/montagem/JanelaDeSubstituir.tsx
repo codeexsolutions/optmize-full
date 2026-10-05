@@ -4,6 +4,7 @@
  * a graduação pode substituir. Os não marcados ficam como estão.
  */
 import { useState } from "react";
+import { useCliqueNoVeu } from "../../casca/cliqueNoVeu";
 
 export interface AlvoParaPerguntar { chave: string; nome: string; tamanho: string; origem: string | null }
 
@@ -21,8 +22,9 @@ export function JanelaDeSubstituir({ alvos, aoConfirmar, aoCancelar }: Props) {
     else n.add(chave);
     return n;
   });
+  const veu = useCliqueNoVeu(aoCancelar);
   return (
-    <div className="modal-fundo" onClick={(e) => { if (e.target === e.currentTarget) aoCancelar(); }}>
+    <div className="modal-fundo" {...veu}>
       <div className="modal" role="dialog" aria-modal="true" aria-label="Substituir tamanhos">
         <header className="modal-topo">
           <h3>Estes tamanhos já têm desenho</h3>

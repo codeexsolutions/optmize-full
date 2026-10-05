@@ -39,6 +39,7 @@
     "bancada:encolher": "node bancada/conferir-encolher.js",
     "bancada:arte-cmyk": "node bancada/conferir-arte-cmyk.cjs",
     "bancada:nomes": "node bancada/conferir-nome-de-arquivo.mjs",
+    "bancada:pela-caixa": "node bancada/conferir-pela-caixa.js",
     "bancada:nos": "node bancada/conferir-edicao-de-nos.mjs",
     "bancada:editor": "node bancada/conferir-editor-de-nos.mjs",
     "bancada:envio": "node bancada/conferir-envio-por-tamanho.mjs",

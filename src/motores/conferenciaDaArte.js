@@ -52,11 +52,12 @@
  */
 
 import { desenharArte } from "./desenhoDoEncaixe";
+import { ALFA_PECA } from "./encaixeMascara";
 
 /** O lado do pixel da conferência, em cm. */
 export const CONFERENCIA_PASSO_CM = 0.05;
-/** A partir de quanto alfa o pixel é tinta. */
-export const ALFA_TINTA = 8;
+/** A partir de quanto alfa o pixel é tinta: o mesmo da silhueta do encaixe. */
+export const ALFA_TINTA = ALFA_PECA;
 /** Soma de alfas acima da qual as duas artes estão no mesmo ponto. */
 export const SOMA_SOBREPOSTA = 255 + 64;
 /** Teto de pixels de uma região; acima dele o passo do par engrossa. */

@@ -8,6 +8,7 @@
  */
 import { useState } from "react";
 import { useDialogo } from "../../casca/Dialogo";
+import { useCliqueNoVeu } from "../../casca/cliqueNoVeu";
 import {
   acrescentarTamanho, marcarBase, moverTamanho, renomearTamanho, tirarTamanho, trocarCor,
 } from "../../motores/tamanhos";
@@ -66,8 +67,9 @@ export function JanelaDaGrade({ molde, aoFechar }: Props) {
     aplicar(tirarTamanho(molde.pecas, molde.tamanhos, nome));
   };
 
+  const veu = useCliqueNoVeu(aoFechar);
   return (
-    <div className="modal-fundo" onClick={(e) => { if (e.target === e.currentTarget) aoFechar(); }}>
+    <div className="modal-fundo" {...veu}>
       <div className="modal" role="dialog" aria-modal="true" aria-label="Grade de tamanhos">
         <header className="modal-topo">
           <h3>Grade de tamanhos</h3>

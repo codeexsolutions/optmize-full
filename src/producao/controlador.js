@@ -9,7 +9,7 @@ import { COR_CMYK, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
 import { prepararArteParaONavegador } from "../api/arte";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
 import { assinaturaDoTrabalho,
-  midiaConsumida, aproveitamentoDaMidia,
+  midiaConsumida, aproveitamentoDaMidia, metragemPelaCaixa,
   prepararComplemento, analisarComplemento } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
 import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
@@ -49,6 +49,21 @@ const escopo = criarEscopo(raiz);
 try {
 const { document, window, setTimeout, clearTimeout, setInterval, clearInterval, requestAnimationFrame, URL, fetch } = escopo;
 const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+/*
+ * Fechar no clique no véu só quando o clique COMEÇOU e TERMINOU nele. Quem
+ * aperta dentro de um campo, arrasta para selecionar e solta lá fora gera um
+ * `click` no véu (o ancestral comum dos dois pontos) — e a caixa fechava no
+ * meio da seleção. É o `useCliqueNoVeu` da casca, sem React.
+ */
+const fecharNoVeu = (veu, aoFechar) => {
+  let comecouNoVeu = false;
+  escopo.ouvir(veu, "mousedown", (e) => { comecouNoVeu = e.target === veu; });
+  escopo.ouvir(veu, "click", (e) => {
+    const foraDeVerdade = comecouNoVeu && e.target === veu;
+    comecouNoVeu = false;
+    if (foraDeVerdade) aoFechar();
+  });
+};
 /**
  * ===========================================================================
  * UI — a caixa de diálogo do sistema
@@ -195,7 +210,7 @@ const escapeHtml = texto => String(texto ?? "").replace(/&/g,"&amp;").replace(/<
   escopo.ouvir(campo, "keydown", (event) => {
     if (event.key === "Enter") { event.preventDefault(); close(true); }
   });
-  escopo.ouvir(backdrop, "click", (event) => { if (event.target === backdrop && !cancel.classList.contains("hidden")) close(false); });
+  fecharNoVeu(backdrop, () => { if (!cancel.classList.contains("hidden")) close(false); });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !backdrop.classList.contains("hidden") && !cancel.classList.contains("hidden")) close(false);
   });
@@ -372,6 +387,40 @@ function atualizarBotaoPrincipal() {
  * Ver `motores/encaixeSobreposicao.js` para a conta e para o porquê de ela ser
  * por coluna em vez de pintar o rolo.
  */
+/**
+ * A metragem que este encaixe daria PELA CAIXA, em centímetros de mídia — a
+ * régua da economia (ver `metragemPelaCaixa`, em motores/encaixeMotor.js).
+ *
+ * Fica guardada no próprio resultado. Quem encaixou já a mediu ANTES da busca;
+ * o encaixe retomado do banco e o desfazer do complemento chegam sem ela, e
+ * são medidos aqui na primeira vez que alguém pergunta.
+ *
+ * As peças são as do risco (`posicoes[].item`), e não as da tabela: é o mesmo
+ * trabalho, peça por peça, encaixado das duas maneiras. Com peça fora do
+ * tecido não há comparação honesta, e a resposta é `null`.
+ */
+function midiaPelaCaixa(r) {
+  if (!r) return null;
+  if (r.midiaCaixa !== undefined) return r.midiaCaixa;
+  r.midiaCaixa = null;
+  if (r.naoEncaixadas.length > 0 || r.posicoes.length === 0) return null;
+  const itens = r.posicoes.map((p) => p.item).filter(Boolean);
+  r.midiaCaixa = medirPelaCaixa(itens, r.larguraTecido, r.folgaPedida || 0, r.comprimentoBancada || 0);
+  return r.midiaCaixa;
+}
+
+function medirPelaCaixa(itens, larguraTecido, espaco, comprimentoBancada) {
+  const alturaMax = itens.reduce((soma, it) => soma + Math.max(it.largura, it.altura) + espaco, 0);
+  try {
+    return metragemPelaCaixa(itens, { larguraTecido, espaco, alturaMax, comprimentoBancada });
+  } catch (erro) {
+    // A régua da economia nunca pode derrubar o encaixe: sem ela, só não há
+    // o que comparar.
+    console.warn("[encaixe] não deu para medir pela caixa:", erro);
+    return null;
+  }
+}
+
 /*
  * `semJanela`: trava igual, mas não abre a janela. É a busca que pede (ver
  * `optmizar`): ela pode refazer o encaixe sozinha quando a conferência pela
@@ -3061,6 +3110,21 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     const motores = modoDeEncaixe === "auto" ? ["contorno", "retangulo", "vaos", "faixas"]
       : modoDeEncaixe === "contorno" ? ["contorno"] : ["retangulo"];
 
+    /*
+     * PRIMEIRO PELA CAIXA, DEPOIS NOS VÃOS.
+     *
+     * Antes da busca, o trabalho é encaixado como se cada peça fosse só o
+     * retângulo da arte — a metragem de quem não tem o Optmize. A busca vem
+     * depois e aproveita os vãos entre as peças; a diferença das duas é o
+     * tecido poupado, que só o painel da CodeEx soma e mostra (ver
+     * `midiaPelaCaixa`, acima, e `uso.routes.ts`, no backend).
+     */
+    /*
+     * SÓ PARA O RELATÓRIO INTERNO: a tela do cliente não mostra esta conta
+     * em lugar nenhum — ela aparece apenas no painel da CodeEx (aba Metragem).
+     */
+    const midiaCaixa = medirPelaCaixa(itens, larguraTecido, espaco, comprimentoBancada);
+
     btnPararBusca.textContent = "Parar e usar este";
     // A busca vai para os workers (encaixe-paralelo.js) e volta com o melhor
     // de todas as fatias. Sem worker disponível, ela mesma cai na busca de uma
@@ -3123,6 +3187,9 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     resultadoGeradoNesteCarregamento = true;
 
     ultimoResultado.modoDeEncaixe = modoDeEncaixe;
+    // Só vale para o risco com todas as peças: com peça de fora, `midiaPelaCaixa`
+    // responde `null` sozinha.
+    if (ultimoResultado.naoEncaixadas.length === 0) ultimoResultado.midiaCaixa = midiaCaixa;
     ultimoResultado.areaReal = ultimoResultado.posicoes.reduce(
       (soma, pos) => soma + pecasEncaixe[pos.item.indice]._cacheMascaras.areaReal, 0);
     ultimoResultado.areaCaixas = ultimoResultado.posicoes.reduce(
@@ -3264,8 +3331,18 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     if (guardadoAntes && guardadoAntes.consumo < ultimoResultado.consumo - 0.05) {
       const consumoDaBusca = ultimoResultado.consumo;
       const resumoDaBusca = encaixeAndamento.textContent;
+      const daBusca = ultimoResultado;
       const voltou = await usarEncaixeGuardado(guardadoAntes);
-      if (voltou) {
+      if (voltou && voltou.sobreposto) {
+        // O guardado não passou pela trava: trocar um encaixe que sai por um
+        // que não sai não é "ficar com o melhor". A tela volta para o desta
+        // procura, que já tinha passado, e o guardado fica de fora.
+        limparErroEncaixe();
+        guardarResultado(daBusca);
+        renderResultado();
+        encaixeAndamento.textContent = resumoDaBusca;
+        encaixeAndamento.classList.remove("hidden");
+      } else if (voltou) {
         encaixeAndamento.textContent =
           `Esta procura deu ${metrosNaTela(consumoDaBusca)}, e o melhor já conseguido com `
           + `estas peças é ${metrosNaTela(guardadoAntes.consumo)} — a tela ficou com o melhor. · `
@@ -3904,6 +3981,17 @@ async function baixarEncaixeEmPdf() {
   const emPedacos = bancadas.length > 1;
 
   /*
+   * QUANTO DA CAIXA CADA METRO DESTE ENCAIXE VALE, para o relatório da
+   * empresa (ver `midiaPelaCaixa`). Vai como razão, e não em metros, porque
+   * com bancada saem vários PDFs e cada um desconta só o seu pedaço: o
+   * servidor multiplica a metragem de cada arquivo por ela, e a soma dos
+   * arquivos fecha com a caixa do trabalho inteiro.
+   */
+  const midia = midiaConsumida(r.consumo, r.comprimentoBancada, r.posicoes);
+  const caixa = midiaPelaCaixa(r);
+  const razaoCaixa = caixa != null && midia > 0 ? Math.max(1, caixa / midia) : null;
+
+  /*
    * PRIMEIRO onde, depois o quê. A caixa do sistema é a primeira coisa que
    * acontece — antes de qualquer `await`, senão ela já não abre (ver
    * `escolherOndeSalvar`) — e desistir nela não custa os vinte segundos de
@@ -3960,6 +4048,7 @@ async function baixarEncaixeEmPdf() {
         consumo: r.consumo,
         nome,
         imagens,
+        razaoCaixa,
         posicoes: r.posicoes.map((p) => daPeca(p, 0)),
       });
       btnExportarRotulo.textContent = "Gravando…";
@@ -3992,6 +4081,7 @@ async function baixarEncaixeEmPdf() {
         consumo: faixa.fundo - faixa.topo,
         nome: arquivo.replace(/\.pdf$/i, ""),
         imagens,
+        razaoCaixa,
         posicoes,
         // As artes ficam no servidor até o último arquivo sair.
         manterSessao: !ultimo,
@@ -4940,9 +5030,7 @@ escopo.ouvir(btnComplementoRefazer, "click", () => {
   fecharComplemento(false);
   abrirAjustes();
 });
-escopo.ouvir(modalComplemento, "click", (e) => {
-  if (e.target === modalComplemento) fecharComplemento(true);
-});
+fecharNoVeu(modalComplemento, () => fecharComplemento(true));
 // Escrever na meta já escolhe "Completar até": quem digita um número quer usá-lo.
 escopo.ouvir(complementoMeta, "input", () => {
   const ate = modalComplemento.querySelector('input[name="complemento-modo"][value="ate"]');
@@ -4986,11 +5074,9 @@ escopo.ouvir(btnAjustesOptmizar, "click", () => {
 escopo.ouvir(btnFecharAjustes, "click", () => fecharAjustes(true));
 escopo.ouvir(btnAjustesCancelar, "click", () => fecharAjustes(true));
 
-// Clique no véu fecha; clique DENTRO da caixa não. O teste é o alvo ser o
-// próprio fundo — qualquer coisa dentro da caixa tem outro alvo.
-escopo.ouvir(modalAjustes, "click", (e) => {
-  if (e.target === modalAjustes) fecharAjustes(true);
-});
+// Clique no véu fecha; clique DENTRO da caixa — ou que começou dentro dela —
+// não. Ver `fecharNoVeu`, no começo do arquivo.
+fecharNoVeu(modalAjustes, () => fecharAjustes(true));
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && ajustesAberto()) fecharAjustes(true);

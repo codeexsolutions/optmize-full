@@ -38,6 +38,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useCliqueNoVeu } from "./cliqueNoVeu";
 
 export type TipoDeAlerta = "sucesso" | "erro" | "aviso" | "info" | "pergunta" | "carregando";
 
@@ -146,7 +147,17 @@ function Caixa({
   const travado = tipo === "carregando";
   const botao = useRef<HTMLButtonElement>(null);
   const campo = useRef<HTMLInputElement>(null);
+  const cancelar = useRef(aoCancelar);
+  cancelar.current = aoCancelar;
+  const veu = useCliqueNoVeu(aoCancelar);
 
+  /*
+    Selecionar o campo SÓ AO ABRIR. O `aoCancelar` chega como função nova a
+    cada desenho; quando ele estava na lista deste efeito, cada letra digitada
+    redesenhava a caixa, o efeito rodava de novo e selecionava o texto todo —
+    a letra seguinte apagava o que já estava escrito. Por isso ele vem por
+    `ref`, e o efeito depende só do alerta em si.
+  */
   useEffect(() => {
     if (travado) return;
     if (opcoes.campo) campo.current?.select();
@@ -157,19 +168,17 @@ function Caixa({
       pelo botão, que é o jeito de garantir que alguém o leu.
     */
     const tecla = (evento: KeyboardEvent) => {
-      if (evento.key === "Escape" && opcoes.cancelavel) aoCancelar();
+      if (evento.key === "Escape" && opcoes.cancelavel) cancelar.current();
     };
     window.addEventListener("keydown", tecla);
     return () => window.removeEventListener("keydown", tecla);
-  }, [travado, opcoes.campo, opcoes.cancelavel, aoCancelar]);
+  }, [travado, opcoes.campo, opcoes.cancelavel]);
 
   return (
     <div
       role="presentation"
       className={`alerta-veu${fechando ? " fechando" : ""}`}
-      onMouseDown={(evento) => {
-        if (!travado && opcoes.cancelavel && evento.target === evento.currentTarget) aoCancelar();
-      }}
+      {...(!travado && opcoes.cancelavel ? veu : {})}
     >
       <div
         role={travado ? "status" : "alertdialog"}

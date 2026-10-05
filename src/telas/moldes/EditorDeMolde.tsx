@@ -38,6 +38,7 @@ import {
   type ParteEmEdicao, type TipoDeMolde,
 } from "./vocabulario";
 import { useErroEmAlerta } from "../../casca/Alerta";
+import { useCliqueNoVeu } from "../../casca/cliqueNoVeu";
 
 /** Uma peça fechada, do jeito que o leitor de DXF/PLT/SVG/PDF a devolve. */
 interface DesenhoLido {
@@ -413,10 +414,12 @@ export function EditorDeMolde({ molde, aoFechar, aoSalvar }: Props) {
 
   const faltandoArquivo = tamanhos.filter((t) => (porTamanho[t] ?? []).some((p) => !p.contorno));
 
+  const veu = useCliqueNoVeu(aoFechar);
+
   return (
     <div
       className="modal-fundo"
-      onClick={(evento) => { if (evento.target === evento.currentTarget) aoFechar(); }}
+      {...veu}
     >
       <div className="modal">
         <header className="modal-topo">

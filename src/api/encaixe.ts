@@ -144,6 +144,8 @@ interface PecaNaChave {
   grupo?: string | null;
   /** O giro dado à peça antes do encaixe (0, 90, 180, 270). */
   rotacaoBase?: number;
+  /** "caixa" quando a conferência pela arte mandou a peça valer a caixa inteira. */
+  reforco?: string;
 }
 
 /**
@@ -162,7 +164,14 @@ interface PecaNaChave {
  * a resposta a ele.
  */
 function impressaoDaPeca(p: PecaNaChave): string {
-  const campos = [p.nome, p.largura, p.altura, p.qtd, p.giro, p.contorno, p.pxW, p.pxH, p.grupo || ""];
+  // O contorno que VALE, e não o escolhido: com o `reforco` a peça vira a
+  // caixa inteira (ver `contornoDaPeca`, em motores/pecaNaGrade.js). Com o
+  // escolhido aqui, o encaixe refeito pela conferência pela arte tinha a mesma
+  // chave do guardado — e a tela trocava sozinha para ele, remontando posições
+  // feitas para o contorno com máscaras de caixa: centenas de pares de peças
+  // uma em cima da outra.
+  const contorno = p.reforco === "caixa" ? "caixa" : p.contorno;
+  const campos = [p.nome, p.largura, p.altura, p.qtd, p.giro, contorno, p.pxW, p.pxH, p.grupo || ""];
   // O giro dado antes do encaixe muda a peça: girada 180°, ela tem a mesma
   // medida e outra silhueta no rolo. Só entra quando existe, para a peça sem
   // giro continuar com a mesma impressão de antes.
@@ -255,7 +264,10 @@ export function chaveDoTrabalho(
   // sub-amostra (ver "A FOLGA É ENTRE QUADRADOS", em motores/encaixeMascara.js):
   // antes dela, 4 mm pedidos davam 1,87 mm num degrau. Um guardado "f2" voltaria
   // com as máscaras de hoje, e a trava o acusaria de peça em cima de peça.
-  return `f3/${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
+  // O "f4/" é a sombra suave na silhueta (ver `ALFA_PECA`, em
+  // motores/encaixeMascara.js): as máscaras engordaram, e um guardado "f3"
+  // voltaria com peças sobrepostas pela régua nova.
+  return `f4/${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
 }
 
 /** O encaixe do jeito que ele vai para o banco: só o essencial de cada peça. */

@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import { useDialogo } from "../../casca/Dialogo";
 import { Icone } from "../../casca/Icone";
+import { useCliqueNoVeu } from "../../casca/cliqueNoVeu";
 import {
   galeriaApi, type ArquivoDaGaleria, type ComOnde, type ConteudoDaPasta, type PastaDaGaleria,
 } from "../../api/galeria";
@@ -944,8 +945,9 @@ function Visualizador({ arquivo, aoFechar }: { arquivo: ArquivoDaGaleria; aoFech
 
   const jeito = comoMostrar(arquivo);
   const tipo = tipoDoArquivo(arquivo);
+  const veu = useCliqueNoVeu(aoFechar);
   return (
-    <div onClick={aoFechar} className="fixed inset-0 z-90 flex flex-col bg-black/75 p-6 backdrop-blur-md animar-entrada">
+    <div {...veu} className="fixed inset-0 z-90 flex flex-col bg-black/75 p-6 backdrop-blur-md animar-entrada">
       <div onClick={(e) => e.stopPropagation()} className="galeria-vidro mx-auto flex w-full max-w-6xl flex-1 flex-col overflow-hidden rounded-3xl shadow-[var(--shadow-lift)]">
         <header className="flex shrink-0 items-center gap-3 border-b border-linha px-5 py-3">
           <span className="galeria-selo grid size-9 shrink-0 place-items-center rounded-xl" style={{ "--cor-do-tipo": `var(${tipo.cor})` } as CSSProperties}>

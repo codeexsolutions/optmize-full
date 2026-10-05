@@ -5,6 +5,7 @@
  * ordem e com nomes diferentes ("PALA SHORT"/"PALA").
  */
 import type { PecaEmMontagem } from "./useMoldeEmMontagem";
+import { useCliqueNoVeu } from "../../casca/cliqueNoVeu";
 
 interface Props {
   tamanho: string;
@@ -24,8 +25,9 @@ export function CasamentoDePecas({ tamanho, tamanhoDeLa, daqui, dela, pares, aoT
   const usados = new Set(pares.map((p) => p.indiceDela).filter((i): i is number => i !== null));
   const semPar = pares.filter((p) => p.indiceDela === null).length;
   const sobrando = dela.filter((_, i) => !usados.has(i));
+  const veu = useCliqueNoVeu(aoCancelar);
   return (
-    <div className="modal-fundo" onClick={(e) => { if (e.target === e.currentTarget) aoCancelar(); }}>
+    <div className="modal-fundo" {...veu}>
       <div className="modal" role="dialog" aria-modal="true" aria-label="Casar as peças">
         <header className="modal-topo">
           <h3>Qual peça é qual? — tamanho {tamanho}</h3>

@@ -15,6 +15,21 @@
 
 import { arredondar } from "../utils/geometria";
 
+/**
+ * A partir de quanto alfa o pixel é peça — na silhueta do encaixe E na
+ * conferência pela arte (`ALFA_TINTA`, em conferenciaDaArte.js, é este mesmo
+ * número). É o que a impressora imprime: no DTF, a sombra e a borda esfumada
+ * da arte levam tinta e branco mesmo bem transparentes.
+ *
+ * Já foi 40 aqui e 8 lá. A faixa entre os dois — a sombra suave que quase todo
+ * TIFF de DTF traz — ficava fora da silhueta, e a folga era medida a partir de
+ * onde ela ACABAVA: a conferência via a sombra encostando na vizinha (3 mm
+ * pedidos, 1 mm medidos), travava o Exportar e o encaixe era refeito com a
+ * caixa inteira. As duas réguas têm de ser a mesma, senão o motor monta um
+ * encaixe que a trava recusa.
+ */
+export const ALFA_PECA = 8;
+
 // ==================== O FUNDO DA ARTE ====================
 
 const FUNDO_TOLERANCIA = 48;   // distância de cor que ainda conta como fundo
@@ -727,8 +742,9 @@ function silhuetaNaGrade(dados, cols, rows) {
 
   if (transparentes > total * 0.02) {
     // Fundo transparente. O limite é baixo de propósito: ao reduzir a imagem
-    // para a grade, a borda vira meio-transparente e não pode ser comida.
-    for (let i = 0, a = 3; i < total; i++, a += 4) bits[i] = dados[a] >= 40 ? 1 : 0;
+    // para a grade, a borda vira meio-transparente e não pode ser comida — e a
+    // sombra suave também é tinta (ver `ALFA_PECA`).
+    for (let i = 0, a = 3; i < total; i++, a += 4) bits[i] = dados[a] >= ALFA_PECA ? 1 : 0;
     const validada = validarSilhueta(bits, total, "alfa");
     // A área sai do alfa, e não do bit: a célula de borda meio transparente é
     // meia peça, e contá-la inteira inflava o aproveitamento.

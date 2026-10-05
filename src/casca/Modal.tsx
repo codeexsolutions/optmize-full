@@ -26,6 +26,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { Icone } from "./Icone";
+import { useCliqueNoVeu } from "./cliqueNoVeu";
 
 interface Props {
   aberto: boolean;
@@ -39,6 +40,7 @@ interface Props {
 }
 
 export function Modal({ aberto, aoFechar, titulo, icone, rodape, children }: Props) {
+  const veu = useCliqueNoVeu(aoFechar);
   useEffect(() => {
     if (!aberto) return;
     const noEsc = (evento: KeyboardEvent) => { if (evento.key === "Escape") aoFechar(); };
@@ -50,7 +52,7 @@ export function Modal({ aberto, aoFechar, titulo, icone, rodape, children }: Pro
 
   return (
     <div
-      onClick={aoFechar}
+      {...veu}
       className="fixed inset-0 z-90 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animar-entrada"
     >
       <div
