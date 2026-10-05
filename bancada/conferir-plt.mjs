@@ -128,4 +128,81 @@ caso("sem gabarito: os tamanhos de cada peça, sem trocar as duas sobrepostas", 
   }
 });
 
+/*
+ * Com o gabarito do `.adsx`: cada (peça, tamanho) pega o laço de mesma largura ×
+ * altura. Aqui as costas são 2 cm mais altas que a frente — como nos arquivos
+ * reais, em que a medida separa as peças sobrepostas.
+ */
+function desenhoComCostasMaisAltas() {
+  const pecas = [];
+  for (let k = 0; k < 4; k++) {
+    pecas.push(entalhada(k, "esquerda"));
+    pecas.push(entalhada(k, "direita").map(([px, py]) => [px, py * (32 + k) / (30 + k)]));
+  }
+  pecas.push([[50, 0], [60, 0], [60, 10], [50, 10]]);
+  return pecas;
+}
+const GRADE = ["P", "M", "G", "GG"];
+const gabarito = {
+  nome: "ARD.TESTE", tamanhos: GRADE, base: "M",
+  pecas: [
+    { nome: "FRENTE", quantidade: 1, porTamanho: Object.fromEntries(GRADE.map((t, k) => [t, { largura: 20 + k, altura: 30 + k }])) },
+    { nome: "COSTAS", quantidade: 1, porTamanho: Object.fromEntries(GRADE.map((t, k) => [t, { largura: 20 + k, altura: 32 + k }])) },
+    { nome: "BOLSO", quantidade: 2, porTamanho: Object.fromEntries(GRADE.map((t) => [t, { largura: 10, altura: 10 }])) },
+    { nome: "GOLA", quantidade: 1, porTamanho: { M: { largura: 40, altura: 4 } } },
+  ],
+};
+
+caso("com o gabarito: cada tamanho no seu laço, e a peça que não muda num laço só", () => {
+  const { lacos } = g.lacosDoPLT(emPD(desenhoComCostasMaisAltas()));
+  const r = g.casarComOGabarito(lacos, gabarito);
+  const frente = r.pecas.find((p) => p.nome === "FRENTE");
+  const costas = r.pecas.find((p) => p.nome === "COSTAS");
+  const bolso = r.pecas.find((p) => p.nome === "BOLSO");
+  GRADE.forEach((t, k) => {
+    assert.ok(Math.abs(frente.porTamanho[t].altura - (30 + k)) < 0.01, `frente ${t}`);
+    assert.ok(Math.abs(costas.porTamanho[t].altura - (32 + k)) < 0.01, `costas ${t}`);
+  });
+  assert.deepEqual(frente.faltam, []);
+  assert.equal(new Set(GRADE.map((t) => bolso.porTamanho[t])).size, 1, "o bolso usa o mesmo laço em todos os tamanhos");
+  // A gola não está no PLT: fica de fora, com aviso.
+  assert.ok(!r.pecas.some((p) => p.nome === "GOLA"));
+  assert.ok(r.avisos.some((a) => a.includes("GOLA")), r.avisos.join(" | "));
+  assert.equal(r.semDono.length, 0);
+});
+
+caso("o molde para gravar: um grupo por peça, uma linha por tamanho, a grade com o base", () => {
+  const { lacos } = g.lacosDoPLT(emPD(desenhoComCostasMaisAltas()));
+  const casado = g.casarComOGabarito(lacos, gabarito);
+  const molde = g.moldeGraduado({
+    nome: "ARD.TESTE",
+    tamanhos: GRADE.map((nome) => ({ nome, base: nome === "M" })),
+    pecas: casado.pecas,
+  });
+  assert.equal(molde.situacao, "rascunho");
+  assert.deepEqual(molde.tamanhos.map((t) => [t.nome, t.base, t.ordem]), [["P", false, 0], ["M", true, 1], ["G", false, 2], ["GG", false, 3]]);
+  assert.equal(molde.pecas.length, 12, "3 peças × 4 tamanhos");
+  assert.deepEqual([...new Set(molde.pecas.map((p) => p.grupo))], [0, 1, 2]);
+  const frenteGG = molde.pecas.find((p) => p.nome === "FRENTE" && p.tamanho === "GG");
+  assert.ok(Math.abs(frenteGG.largura - 23) < 0.01 && Math.abs(frenteGG.altura - 33) < 0.01);
+  assert.equal(Math.min(...frenteGG.contorno.map((q) => q.x)), 0, "o contorno começa no canto da caixa");
+  assert.equal(frenteGG.nos.length, frenteGG.contorno.length);
+  assert.equal(molde.pecas.find((p) => p.nome === "BOLSO").quantidade, 2);
+});
+
+caso("sem gabarito: as peças do agrupamento com os nomes da grade", () => {
+  const { lacos } = g.lacosDoPLT(emPD(desenhoComCostasMaisAltas()));
+  const agrupado = g.agruparTamanhos(lacos);
+  const pecas = g.pecasDoAgrupamento(agrupado, GRADE);
+  assert.equal(pecas.length, 3);
+  const grandes = pecas.filter((p) => new Set(Object.values(p.porTamanho)).size === 4);
+  assert.equal(grandes.length, 2, "frente e costas com os 4 tamanhos");
+  for (const p of grandes) {
+    const areas = GRADE.map((t) => p.porTamanho[t].area);
+    assert.ok(areas.every((a, i) => i === 0 || a > areas[i - 1]), "P é o menor, GG o maior");
+  }
+  const avulsa = pecas.find((p) => new Set(Object.values(p.porTamanho)).size === 1);
+  assert.deepEqual(Object.keys(avulsa.porTamanho), GRADE, "a peça que não muda vale para todos");
+});
+
 console.log(`\nbancada:plt — ${casos} casos ok`);
