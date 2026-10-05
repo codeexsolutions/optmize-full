@@ -86,6 +86,7 @@ import {
 } from "../motores/edicaoDeNos";
 import { desenharNos, desenharRetangulo, tracarCaminho } from "./risco/desenhoDeNos";
 import { BarraDosNos } from "./risco/BarraDosNos";
+import { JanelaDeAtalhos } from "./risco/JanelaDeAtalhos";
 import { useEditorDeNos, type AlvoDoEditor } from "./risco/useEditorDeNos";
 
 type Lado = "largura" | "altura";
@@ -109,7 +110,8 @@ const corDa = (i: number): string => CORES[i % CORES.length] || "#ff7a1a";
 const PASSOS_DE_DESFAZER = 40;
 
 /** Raio de pega, em pixels da tela. */
-const PEGA = 10;
+/** Raio de pega, em pixels da tela (era 10: o nó era difícil de acertar). */
+const PEGA = 16;
 
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 12;
@@ -132,6 +134,8 @@ export function Digitalizar() {
   /** A peça escolhida: destacada na foto, com os nós à mostra. */
   const [qual, setQual] = useState(0);
   const [zoom, setZoom] = useState(1);
+  /** O cursor da foto: o editor diz o que está debaixo do ponteiro (ver `passar`). */
+  const [cursor, setCursor] = useState<"move" | "copy" | "crosshair">("crosshair");
   const [criando, setCriando] = useState(false);
   /** Um arquivo sendo arrastado por cima do cartão. */
   const [arquivoEmCima, setArquivoEmCima] = useState(false);
@@ -379,12 +383,15 @@ export function Digitalizar() {
       const outra = outraPecaSob(alvo, raio);
       if (outra !== null) { setQual(outra); return; }
     }
-    if (editor.apertar(alvo, raio, e.shiftKey)) e.currentTarget.setPointerCapture(e.pointerId);
+    if (editor.apertar(alvo, raio, e.shiftKey, e.altKey)) e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const aoMover = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const alvo = naGrade(e);
-    if (alvo) editor.mover(alvo);
+    if (!alvo) return;
+    editor.mover(alvo);
+    // Sem apertar, o editor guarda o que está debaixo do ponteiro (o anel, o fantasma) e diz o cursor.
+    setCursor(editor.passar(alvo, PEGA * gradePorPixel()));
   };
 
   const aoSoltar = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -506,9 +513,9 @@ export function Digitalizar() {
     const escolhida = edicao[qual];
     if (!escolhida) return;
 
-    desenharNos(ctx, escolhida, editor.selecionados, emTela);
+    desenharNos(ctx, escolhida, editor.selecionados, emTela, { sob: editor.sob, alcas: editor.alcas });
     if (editor.retangulo) desenharRetangulo(ctx, editor.retangulo.de, editor.retangulo.ate, emTela);
-  }, [imagem, achado, edicao, qual, editor.selecionados, editor.retangulo]);
+  }, [imagem, achado, edicao, qual, editor.selecionados, editor.retangulo, editor.sob, editor.alcas]);
 
   /*
    * O risco vira um molde-RASCUNHO na estante, e a tela passa para a
@@ -613,7 +620,8 @@ export function Digitalizar() {
                 ref={tela}
                 id="digitalizar-tela"
                 className="block h-auto max-w-none touch-none select-none"
-                style={{ width: `${zoom * 100}%`, cursor: edicao.length > 0 ? "crosshair" : "default" }}
+                style={{ width: `${zoom * 100}%`, cursor: edicao.length > 0 ? cursor : "default" }}
+                onPointerLeave={() => editor.sair()}
                 onPointerDown={aoApertar}
                 onPointerMove={aoMover}
                 onPointerUp={aoSoltar}
@@ -653,6 +661,7 @@ export function Digitalizar() {
                   </p>
                   <div className="mb-2 overflow-hidden rounded-[8px] border border-linha bg-painel">
                     <BarraDosNos editor={editor} />
+                    <JanelaDeAtalhos aberto={editor.atalhosAbertos} aoFechar={() => editor.abrirAtalhos(false)} comMontagem={false} />
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
