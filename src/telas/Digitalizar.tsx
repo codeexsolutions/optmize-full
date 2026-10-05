@@ -70,6 +70,7 @@ import { useNavigate } from "react-router-dom";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { carregarImagem, lerComoDataURL } from "../utils/arquivoDeImagem";
+import { prepararArteParaONavegador } from "../api/arte";
 import { formatarCm } from "../utils/numero";
 import { aliviarContorno, contornosDasManchas } from "../motores/moldes";
 import { achatarCurvas } from "../motores/ajusteDeCurvas";
@@ -290,9 +291,17 @@ export function Digitalizar() {
       // `utils/arquivoDeImagem`. O endereço de objeto morre quando o `<input>`
       // é limpo logo depois da escolha, e esta tela segura a imagem enquanto
       // durar o ajuste — com ele, a prévia some no meio.
-      const img = await carregarImagem(await lerComoDataURL(file));
-      setImagem(img);
-      procurar(img, erroDeCurva);
+      // O TIFF (e o CMYK sem perfil) passa pelo servidor antes: o navegador
+      // não abre um e pinta o outro errado. O resto segue intacto, sem ida ao
+      // servidor (ver `api/arte.ts`).
+      const preparada = await prepararArteParaONavegador(file);
+      try {
+        const img = await carregarImagem(await lerComoDataURL(preparada.file));
+        setImagem(img);
+        procurar(img, erroDeCurva);
+      } catch {
+        setErro(`Não consegui abrir "${file.name}"${preparada.erro ? `: ${preparada.erro}` : "."}`);
+      }
     } catch {
       setErro(`Não consegui abrir "${file.name}".`);
     }
@@ -569,7 +578,7 @@ export function Digitalizar() {
           ref={entrada}
           id="digitalizar-imagem"
           type="file"
-          accept=".png,.bmp,.jpg,.jpeg,.webp,image/*"
+          accept=".png,.bmp,.jpg,.jpeg,.webp,.tif,.tiff,image/*"
           className="hidden"
           onChange={(e) => { abrir(e.target.files?.[0]); e.target.value = ""; }}
         />

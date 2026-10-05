@@ -613,6 +613,63 @@ async function principal() {
     assert.equal(await botaoQtd(), `Aplicar nas ${linhasNaLista} marcadas`);
     assert.match(await p.$eval('#encaixe-grupo-conta', (n) => n.textContent), new RegExp(`^${linhasNaLista} peças marcadas`));
 
+    /*
+     * ---- 11. o Digitalizar abre TIFF ----
+     *
+     * Ele lia a imagem direto no navegador, que não abre TIFF: a foto do molde
+     * em .tif era recusada pelo nome. Agora passa pela mesma conversão do
+     * Encaixe (`prepararArteParaONavegador`).
+     */
+    // Uma peça escura na mesa branca: o Digitalizar procura o contorno logo
+    // que abre, e a arte chapada do Encaixe não tem contorno nenhum para achar.
+    const fotoDoMolde = path.join(pasta, 'molde-na-mesa.tif');
+    await require('sharp')({ create: { width: 600, height: 400, channels: 3, background: { r: 245, g: 245, b: 240 } } })
+      .composite([{
+        input: await require('sharp')({ create: { width: 300, height: 200, channels: 3, background: { r: 30, g: 30, b: 40 } } }).png().toBuffer(),
+        left: 150, top: 100,
+      }])
+      .withMetadata({ density: 150 }).tiff().toFile(fotoDoMolde);
+    await p.goto(`http://127.0.0.1:${porta}/digitalizar`, { waitUntil: 'networkidle2' });
+    await esperar(800);
+    await (await p.$('#digitalizar-imagem')).uploadFile(fotoDoMolde);
+    await esperar(5000);
+    assert.equal(await janela(), null, 'o TIFF no Digitalizar não pode abrir janela de erro');
+    assert.ok(await p.$('#digitalizar-tela'), 'o Digitalizar tinha que abrir o TIFF');
+
+    /*
+     * ---- 12. o projeto da Galeria aceita TIFF ----
+     *
+     * A arte da peça só entrava em PNG, JPG ou WEBP. O TIFF é convertido antes
+     * de subir — o servidor guarda o convertido, que depois entra no Encaixe
+     * sem conversão — e a medida sai do dpi dele: 300 × 400 px a 150 dpi.
+     */
+    await p.goto(`http://127.0.0.1:${porta}/projetos`, { waitUntil: 'networkidle2' });
+    await esperar(900);
+    const clicarNoTexto = (texto) => p.evaluate((t) => {
+      const alvo = [...document.querySelectorAll('button, [role="button"], a')]
+        .find((n) => n.textContent.trim().startsWith(t));
+      if (alvo) alvo.click();
+      return !!alvo;
+    }, texto);
+    assert.ok(await clicarNoTexto('Cliente de teste'), 'a Galeria tinha que listar o cliente do teste');
+    await esperar(600);
+    assert.ok(await clicarNoTexto('Sobras'), 'a Galeria tinha que listar o projeto do teste');
+    await esperar(1200);
+    await p.evaluate((bytes) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array(bytes)], 'peca-d.tif', { type: 'image/tiff' }));
+      const miniatura = document.querySelector('button[title^="Trocar a arte de"], button[title^="Anexar a arte de"]');
+      miniatura.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    }, bytesDoTiff);
+    await esperar(5000);
+    assert.equal(await janela(), null, 'o TIFF no projeto não pode abrir janela de erro');
+    const medidaNoProjeto = await p.evaluate(() => [
+      document.querySelector('input[aria-label="Largura em cm"]'),
+      document.querySelector('input[aria-label="Altura em cm"]'),
+    ].map((n) => (n ? n.value : null)));
+    assert.deepEqual(medidaNoProjeto, ['5.08', '6.77'],
+      `a arte TIFF tinha que entrar no projeto com 5,08 × 6,77 cm (veio ${medidaNoProjeto.join(' × ')})`);
+
     assert.equal(problemas.length, 0, 'a tela acusou:\n  ' + problemas.slice(0, 5).join('\n  '));
 
     console.log(`OK — três artes entraram, o encaixe saiu (${stats.trim()}), o risco foi desenhado`
@@ -621,7 +678,8 @@ async function principal() {
       + `, o × tirou a peça (${antesDoX} → ${depoisDoX})`
       + `, o arquivo da fila entrou depois da busca (${depoisDoX} → ${depoisDaFila})`
       + `, o TIFF arrastado sem tipo entrou (${depoisDaFila} → ${depoisDoArraste})`
-      + ' e a quantidade foi para todas, para a marcada e o "Marcar todas" marcou.');
+      + ', a quantidade foi para todas, para a marcada e o "Marcar todas" marcou,'
+      + ' e o TIFF abriu no Digitalizar e entrou no projeto da Galeria.');
   } finally {
     if (navegador) await navegador.close().catch(() => {});
     servidor.kill();
