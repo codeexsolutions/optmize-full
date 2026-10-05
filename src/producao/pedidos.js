@@ -32,12 +32,12 @@ export function pedidosDaLista(pecas) {
 
 export const temVariosPedidos = (pecas) => pedidosDaLista(pecas).length > 1;
 
-/** O pedido do último lote que entrou — o "Mesmo pedido" da escolha. */
+/** O pedido do último lote que entrou — é nele que o lote seguinte cai. */
 export function ultimoPedido(pecas) {
   return pecas && pecas.length ? pedidoDe(pecas[pecas.length - 1]) : PEDIDO_PADRAO;
 }
 
-/** O primeiro `Pn` que ninguém usa — o "Novo pedido" da escolha. */
+/** O primeiro `Pn` que ninguém usa. */
 export function proximoPedido(pecas) {
   const usados = new Set(pedidosDaLista(pecas));
   for (let n = 1; ; n++) if (!usados.has(`P${n}`)) return `P${n}`;
@@ -53,8 +53,8 @@ export function marcarLote(pecas, desde, pedido) {
 
 /**
  * O pedido de cada peça de um projeto que entra (a Reposição traz o pedido
- * guardado de cada peça). `escolhido` é o que `pedidoDoLote` devolveu para a
- * lista de agora; `null` é desistência, e aí nada entra (devolve `null`).
+ * guardado de cada peça). `escolhido` é o pedido do lote na lista de agora —
+ * o Encaixe passa o do último lote (`ultimoPedido`); `null` devolve `null`.
  *
  * - Lista vazia: o pedido guardado vale como veio; a peça sem ele é do P1.
  * - "Mesmo pedido" (o escolhido já está na lista): todas ficam nele, por cima

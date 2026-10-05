@@ -405,15 +405,12 @@ async function principal() {
      */
     const tiff = await arteTiff(pasta);
     await (await p.$('#encaixe-files')).uploadFile(tiff.arquivo);
-    // A lista já tem peças: o Encaixe pergunta de qual pedido é o arquivo
-    // (`pedidoDoLote`). A resposta é "Mesmo pedido" — o botão principal da
-    // caixa do `Alerta` (src/casca/Alerta.tsx), que é o do confirmar.
-    const confirmarPedido = '.alerta-caixa[role="alertdialog"] .alerta-botao.principal';
-    await p.waitForSelector(confirmarPedido, { visible: true, timeout: 5000 });
-    assert.match(await p.$eval(confirmarPedido, (n) => n.textContent), /^Mesmo pedido \(P1\)$/,
-      'a pergunta do pedido tinha que oferecer o mesmo pedido da lista');
-    await p.$eval(confirmarPedido, (n) => n.click());
+    // A lista já tem peças, e o Encaixe NÃO pergunta de qual pedido é o
+    // arquivo: ele entra no pedido do último lote. Nenhuma caixa do `Alerta`
+    // (src/casca/Alerta.tsx) pode aparecer no caminho.
     await esperar(8000);
+    assert.equal(await p.$('.alerta-caixa[role="alertdialog"]'), null,
+      'o arquivo tinha que entrar sem a pergunta do pedido');
 
     const comTiff = await p.$eval('#encaixe-contagem', (n) => n.textContent);
     assert.match(comTiff, /^4 · 4 cóp/, `o TIFF tinha que entrar como a quarta arte (veio "${comTiff}")`);

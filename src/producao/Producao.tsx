@@ -158,9 +158,6 @@ export function Producao({ pagina, irPara, children }: {
     async mandarMoldeParaOEncaixe(molde) {
       await (await garantirEditor()).mandarMolde(molde);
     },
-    async escolherPedidoDoLote(quantos) {
-      return (await garantirEditor()).escolherPedidoDoLote(quantos);
-    },
     irPara: (destino) => navegar.current(destino),
   }), [garantirEditor]);
 

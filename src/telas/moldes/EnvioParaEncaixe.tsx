@@ -348,11 +348,6 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
     const guardadas = new Map<string, ArtesPorPapel>();
     const mandadas: CelulaParaMandar[] = [];
     try {
-      // Um clique é um lote: o pedido se escolhe uma vez, antes dos envios por tamanho.
-      const pedido = await ligacao.escolherPedidoDoLote(celulas.reduce((soma, c) => soma + c.pecas.length, 0));
-      if (!pedido) {
-        return setErro("Nenhuma peça entrou: a escolha do pedido foi fechada. Mande as peças de novo.");
-      }
       // Célula por célula: o Encaixe soma o que chega, então vários tamanhos são vários envios.
       for (const [k, celula] of celulas.entries()) {
         setOcupado(`Montando ${rotulo(celula)} (${k + 1} de ${celulas.length})…`);
@@ -380,7 +375,7 @@ export function EnvioParaEncaixe({ molde, aoFechar, aoRecarregar }: Props) {
 
         // `unidades: 1` com a quantidade final em cada peça, e só as > 0: o Encaixe faz
         // `max(1, quantidade × unidades)`, e uma peça em 0 chegaria como 1.
-        await ligacao.mandarMoldeParaOEncaixe({ nome: molde.nome, tamanho: celula.tamanho, pecas: comArte, unidades: 1, pedido });
+        await ligacao.mandarMoldeParaOEncaixe({ nome: molde.nome, tamanho: celula.tamanho, pecas: comArte, unidades: 1 });
         mandadas.push(celula);
       }
 

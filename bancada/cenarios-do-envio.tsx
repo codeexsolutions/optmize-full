@@ -79,7 +79,6 @@ function ligacaoFalsa(falharNa: number | null = null) {
   const ligacao: Qualquer = {
     adicionarArquivos: async () => {},
     mandarProjetoParaOEncaixe: async () => {},
-    escolherPedidoDoLote: async () => "P1",
     async mandarMoldeParaOEncaixe(m: Qualquer) {
       chamadas++;
       if (chamadas === falharNa) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");

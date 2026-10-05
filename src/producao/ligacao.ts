@@ -66,8 +66,6 @@ export interface MoldeParaOEncaixe {
   tamanho: string;
   pecas: PecaDeMoldeParaOEncaixe[];
   unidades: number;
-  /** O pedido já escolhido (`escolherPedidoDoLote`). Sem ele, o Encaixe pergunta. */
-  pedido?: string;
 }
 
 export interface Ligacao {
@@ -96,12 +94,6 @@ export interface Ligacao {
    * o bastante para calcular o encaixe.
    */
   mandarMoldeParaOEncaixe(molde: MoldeParaOEncaixe): Promise<void>;
-
-  /**
-   * Pergunta de qual pedido é o lote que vai entrar (um clique pode virar vários
-   * envios). `null` quer dizer que a pessoa desistiu: nada deve entrar.
-   */
-  escolherPedidoDoLote(quantos: number): Promise<string | null>;
 
   irPara(pagina: NomeDeTela): void;
 }

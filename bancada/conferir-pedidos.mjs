@@ -257,7 +257,7 @@ caso("reposição, mesmo pedido: todas ficam no escolhido, por cima do guardado"
 
 caso("reposição, novo pedido: cada guardado diferente vira um Pn que a lista não usa", () => {
   const lista = [{ pedido: "P1" }, { pedido: "P3" }];
-  // pedidoDoLote devolveu P2 (o primeiro livre).
+  // O escolhido é P2 (o primeiro livre).
   const entrando = [{ pedido: "P1" }, { pedido: "JOAO" }, { pedido: "p1" }, {}, { pedido: "P2" }];
   const r = pedidosDaReposicao(lista, entrando, "P2");
   assert.deepEqual(r, ["P2", "P4", "P2", "P2", "P5"]);
@@ -269,19 +269,17 @@ caso("reposição desistida: nada entra", () => {
   assert.equal(pedidosDaReposicao([{ pedido: "P1" }], [{ pedido: "P1" }], null), null);
 });
 
-caso("mandarProjeto pergunta o pedido antes de mexer na largura, na folga e no giro", () => {
+caso("nenhuma entrada do Encaixe pergunta o pedido: tudo cai no do último lote", () => {
   const codigo = fs.readFileSync(path.join(RAIZ, "src", "producao", "controlador.js"), "utf8");
-  const funcao = codigo.indexOf("async mandarProjeto(");
-  const pergunta = codigo.indexOf("await pedidosDoProjeto(", funcao);
-  const desistiu = codigo.indexOf("if (!pedidos) return;", funcao);
-  const ajuste = codigo.indexOf("escrever(encaixeLarguraInput", funcao);
-  assert.ok(funcao >= 0 && pergunta > funcao && desistiu > pergunta && ajuste > desistiu,
-    "a pergunta e a desistência vêm antes do primeiro ajuste");
-  assert.ok(codigo.indexOf("mandarProjetoParaOEncaixe(nome, pecas, unidades, pedidos)", funcao) > ajuste);
-  // E a função que põe as peças na lista não pergunta de novo.
-  const entrada = codigo.slice(codigo.indexOf("async function mandarProjetoParaOEncaixe("),
-    codigo.indexOf("function juntasNaLeitura("));
-  assert.ok(!entrada.includes("pedidoDoLote("), "mandarProjetoParaOEncaixe não pergunta");
+  for (const resto of ["pedidoDoLote", "pedidoEscolhido", "escolherPedidoDoLote",
+    "De qual pedido são estas peças?", "a escolha do pedido foi fechada"]) {
+    assert.ok(!codigo.includes(resto), `controlador.js ainda tem "${resto}"`);
+  }
+  for (const arquivo of [["src", "producao", "ligacao.ts"], ["src", "producao", "Producao.tsx"],
+    ["src", "telas", "moldes", "EnvioParaEncaixe.tsx"]]) {
+    const texto = fs.readFileSync(path.join(RAIZ, ...arquivo), "utf8");
+    assert.ok(!texto.includes("escolherPedidoDoLote"), `${arquivo.join("/")} ainda escolhe o pedido`);
+  }
 });
 
 caso("renomear: normaliza, junta com aviso, recusa vazio", () => {

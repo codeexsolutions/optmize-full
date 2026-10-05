@@ -40,8 +40,8 @@ import { carregarImagem } from "../utils/arquivoDeImagem";
 import { respirarNaTela } from "../utils/respirar";
 import { criarEscopo } from "./escopo";
 import {
-  PEDIDO_PADRAO, corDoPedido, marcaParaOPdf, marcarLote, marcasDoRisco, pedidoDe, pedidosDaReposicao,
-  proximoPedido, renomearPedido, temVariosPedidos, ultimoPedido,
+  corDoPedido, marcaParaOPdf, marcarLote, marcasDoRisco, pedidoDe, pedidosDaReposicao,
+  renomearPedido, temVariosPedidos, ultimoPedido,
 } from "./pedidos";
 import { normalizarSigla, siglaDaPeca } from "../motores/siglaDoPedido";
 import { tempoSugerido } from "./tempoSugerido";
@@ -734,15 +734,11 @@ async function lerMoldesDoArquivo(file) {
  * peças são acrescentadas, não trocadas: dá para juntar dois moldes no mesmo
  * tecido, que é o que se faz quando sobra espaço no rolo.
  */
-async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades, pedidoEscolhido) {
+async function mandarMoldeParaOEncaixe(nomeDoMolde, tamanho, pecas, unidades) {
   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
 
-  // Quem manda vários tamanhos de uma vez já escolheu o pedido uma vez só.
-  const pedido = pedidoEscolhido || await pedidoDoLote(pecas.length);
-  if (!pedido) {
-    mostrarErroEncaixe("Nenhuma peça entrou: a escolha do pedido foi fechada. Mande as peças de novo.", "aviso");
-    return;
-  }
+  // Vários tamanhos de uma vez são vários envios, e todos caem no mesmo pedido.
+  const pedido = ultimoPedido(pecasEncaixe);
 
   const totalAntes = pecasEncaixe.length;
   iniciarCarregamentoArquivos(pecas.length, "molde salvo");
@@ -912,7 +908,7 @@ async function miniaturaDaArte(img) {
  *
  * `pecas` vem da tela de Projetos: { nome, url, largura, altura, quantidade }.
  * `unidades` multiplica a quantidade de cada uma: é a repetição do pedido.
- * `pedidos` é o pedido de cada peça, já escolhido (ver `pedidosDoProjeto`).
+ * `pedidos` é o pedido de cada peça (ver `mandarProjeto`).
  */
 async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos) {
   if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
@@ -1072,51 +1068,6 @@ async function emParalelo(quantidade, teto, tarefa) {
   await Promise.all(linhas);
 }
 
-/**
- * De qual pedido é o lote que está entrando.
- *
- * Lista vazia: é o primeiro pedido, sem pergunta. Lista com peças: "Mesmo
- * pedido" (Enter) ou "Novo pedido"; Esc desiste da entrada. Sem a caixa nova
- * (o editor fora da casca), fica no mesmo pedido — o jeito de antes.
- * Devolve o pedido, ou `null` se a pessoa desistiu.
- */
-async function pedidoDoLote(quantos) {
-  if (pecasEncaixe.length === 0) return PEDIDO_PADRAO;
-  const mesmo = ultimoPedido(pecasEncaixe);
-  const novo = proximoPedido(pecasEncaixe);
-  const ponte = window.__alertaOptmize;
-  if (!ponte) return mesmo;
-  const r = await ponte.mostrar({
-    tipo: "pergunta",
-    titulo: "De qual pedido são estas peças?",
-    texto: `${quantos === 1 ? "1 arquivo está" : `${quantos} arquivos estão`} entrando numa lista que já tem peças. `
-      + "Pedidos diferentes saem no mesmo rolo, e cada peça leva impressa a sigla do seu pedido.",
-    confirmar: `Mesmo pedido (${mesmo})`,
-    alternativa: `Novo pedido (${novo})`,
-    cancelavel: true,
-  });
-  if (r.alternativa) return novo;
-  return r.confirmado ? mesmo : null;
-}
-
-/**
- * O pedido de cada peça de um projeto que vai entrar — ou `null` se a pessoa
- * desistiu (aí o aviso já foi dado e nada pode mudar na tela).
- *
- * Lista com peças: pergunta SEMPRE, mesmo que as peças tragam pedido
- * guardado (a Reposição traz): o P1 de um rolo antigo não é o P1 de hoje, e
- * sem a pergunta os dois sairiam com a mesma sigla. A conta de quem fica em
- * qual pedido é a de `pedidosDaReposicao`.
- */
-async function pedidosDoProjeto(pecas) {
-  const escolhido = await pedidoDoLote(pecas.length);
-  const pedidos = escolhido ? pedidosDaReposicao(pecasEncaixe, pecas, escolhido) : null;
-  if (!pedidos) {
-    mostrarErroEncaixe("Nenhuma peça entrou: a escolha do pedido foi fechada. Mande as peças de novo.", "aviso");
-  }
-  return pedidos;
-}
-
 async function adicionarArquivos(files) {
   if (!files || files.length === 0) return; // nada a fazer, e o painel nem abre
   if (carregamentoAtivo) {
@@ -1124,11 +1075,9 @@ async function adicionarArquivos(files) {
     return;
   }
 
-  const pedido = await pedidoDoLote(files.length);
-  if (!pedido) {
-    mostrarErroEncaixe("Nenhuma peça entrou: a escolha do pedido foi fechada. Mande as peças de novo.", "aviso");
-    return;
-  }
+  // O Encaixe não pergunta de qual pedido é o lote: entra no do último que
+  // entrou (P1 numa lista vazia).
+  const pedido = ultimoPedido(pecasEncaixe);
 
   limparErroEncaixe();
   const recados = [];
@@ -4984,19 +4933,16 @@ return {
   * entra na lista o que ela montou. A peça que chega sem `desenho` vale como
   * contorno pintado, que é o bastante para calcular o encaixe.
   */
- async mandarMolde({ nome, tamanho, pecas, unidades, pedido = "" }) {
-   await mandarMoldeParaOEncaixe(nome, tamanho, pecas, unidades, pedido);
- },
-
- /** A escolha do pedido de um lote que chega em vários envios (os tamanhos do molde). */
- escolherPedidoDoLote(quantos) {
-   return pedidoDoLote(quantos);
+ async mandarMolde({ nome, tamanho, pecas, unidades }) {
+   await mandarMoldeParaOEncaixe(nome, tamanho, pecas, unidades);
  },
 
  async mandarProjeto({ nome, pecas, unidades, ajustes }) {
    if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
-   const pedidos = await pedidosDoProjeto(pecas);
-   if (!pedidos) return;
+   // Sem pergunta: numa lista vazia vale o pedido guardado de cada peça (a
+   // Reposição traz); numa lista com peças, tudo cai no pedido do último lote
+   // — o P1 de um rolo antigo não é o P1 de hoje (`pedidosDaReposicao`).
+   const pedidos = pedidosDaReposicao(pecasEncaixe, pecas, ultimoPedido(pecasEncaixe));
 
    const escrever = (campo, valor) => {
      if (!campo || valor === null || valor === "" || !Number.isFinite(Number(valor))) return;
