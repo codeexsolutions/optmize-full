@@ -273,6 +273,8 @@ const btnLimparPecas = document.getElementById("btn-limpar-pecas");
 // carregamento lá embaixo, porque `atualizarPainelDoTrabalho` o lê para
 // decidir a lixeira — e ela pode rodar antes de o código chegar lá.
 let carregamentoAtivo = false;
+/** O encaixe guardado que o aviso "Usar o melhor de antes" oferece agora (ver `ofertaAindaServe`). */
+let ofertaDoGuardado = null;
 const encaixePecasBody = document.getElementById("encaixe-pecas-body");
 const encaixeContagem = document.getElementById("encaixe-contagem");
 const encaixeNumeros = document.getElementById("encaixe-numeros");
@@ -1550,6 +1552,7 @@ function renderAvisosDeCor() {
 }
 
 function renderPecasEncaixe() {
+  if (ofertaDoGuardado && !ofertaAindaServe(ofertaDoGuardado)) esconderOfertaDoGuardado();
   encaixePecasBody.innerHTML = "";
 
   if (pecasEncaixe.length === 0) {
@@ -2281,7 +2284,23 @@ async function usarEncaixeGuardado(guardado) {
   return ultimoResultado;
 }
 
+/*
+ * A OFERTA SÓ FICA NA TELA ENQUANTO SERVE.
+ *
+ * Ela nasce valendo (ver o fim de `optmizar`), mas a pessoa pode mexer na
+ * lista depois: tirar uma peça, mudar uma quantidade. Aí o encaixe guardado
+ * não remonta mais, e um botão que vai falhar ao ser apertado é pior que a
+ * ausência dele. `renderPecasEncaixe` roda em toda mudança da lista e
+ * pergunta aqui — é a mesma conta que `usarEncaixeGuardado` faz. A oferta da
+ * vez mora em `ofertaDoGuardado`, lá em cima com o resto do estado.
+ */
+function ofertaAindaServe(guardado) {
+  const paraHoje = traduzirIndicesDoGuardado(guardado.pecas, pecasEncaixe);
+  return !!paraHoje && posicoesGuardadasValidas(guardado.posicoes, pecasEncaixe, paraHoje);
+}
+
 function mostrarOfertaDoGuardado(guardado, consumoAgora) {
+  ofertaDoGuardado = guardado;
   encaixeGuardadoAviso.innerHTML = "";
   const texto = document.createElement("span");
   texto.textContent =
@@ -2293,17 +2312,17 @@ function mostrarOfertaDoGuardado(guardado, consumoAgora) {
   botao.textContent = "Usar o melhor de antes";
   escopo.ouvir(botao, "click", async () => {
     botao.disabled = true;
+    // Não deu: a lista mudou de um jeito que a conferência da oferta não
+    // pegou. A oferta só some — não há o que a pessoa fazer com um erro aqui.
     const deu = await usarEncaixeGuardado(guardado);
-    if (!deu) {
-      botao.disabled = false;
-      mostrarErroEncaixe("As peças da tabela mudaram desde aquele encaixe; não dá para trazer de volta.", "aviso");
-    }
+    if (!deu) esconderOfertaDoGuardado();
   });
   encaixeGuardadoAviso.append(texto, botao);
   encaixeGuardadoAviso.classList.remove("hidden");
 }
 
 function esconderOfertaDoGuardado() {
+  ofertaDoGuardado = null;
   encaixeGuardadoAviso.classList.add("hidden");
   encaixeGuardadoAviso.innerHTML = "";
 }

@@ -45,4 +45,16 @@ caso("arquivo que entrou com observação é Atenção; erro é só o que não e
     "os recados não podem sair com o título de erro");
 });
 
+caso("\"Usar o melhor de antes\" some quando as peças mudam, e não abre janela", () => {
+  assert.ok(!codigo.includes("As peças da tabela mudaram desde aquele encaixe"),
+    "o botão ainda abre a janela quando falha");
+  // A lista mudou: a oferta confere de novo e se esconde se não serve mais.
+  assert.match(corpo("function renderPecasEncaixe("),
+    /if \(ofertaDoGuardado && !ofertaAindaServe\(ofertaDoGuardado\)\) esconderOfertaDoGuardado\(\);/);
+  const serve = corpo("function ofertaAindaServe(");
+  assert.match(serve, /traduzirIndicesDoGuardado\(/);
+  assert.match(serve, /posicoesGuardadasValidas\(/);
+  assert.match(corpo("function esconderOfertaDoGuardado("), /ofertaDoGuardado = null;/);
+});
+
 console.log(`\nbancada:janelas — ${casos} casos ok`);
