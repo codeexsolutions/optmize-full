@@ -237,4 +237,92 @@ const rede = require("../servidor/extrator-rede.js");
     ["Logo", "logo (2)", "Logo (2) (2)", "a-b-c", "elemento"]);
 }
 
-console.log("OK — o Extrator sem rede: a foto, o pedido de máscara, a rede ausente, a ampliação e os motores da foto.");
+// ---------- o jeito Chapado: o vetor, o EPS e o PNG do SVG ----------
+{
+  const { carregarModulo } = await import("./carregarModulo.mjs");
+  const { vetorizarImagem } = await carregarModulo("src/motores/vetor.js");
+  const arq = await carregarModulo("src/motores/vetorParaArquivo.js");
+  const REFERENCIA = new URL("./referencias/vetor-extrator.json", import.meta.url);
+
+  // As imagens da referência, desenhadas aqui pixel a pixel (sem rsvg: o mesmo resultado em qualquer máquina).
+  function escudo() {
+    const L = 160, A = 120, px = new Uint8ClampedArray(L * A * 4);
+    for (let y = 0; y < A; y++) {
+      for (let x = 0; x < L; x++) {
+        const i = (y * L + x) * 4;
+        if (x >= 95 && x < 145 && y >= 25 && y < 95) {
+          px.set(x >= 105 && x < 135 && y >= 35 && y < 55 ? [255, 255, 255, 255] : [31, 79, 163, 255], i);
+          continue;
+        }
+        // 4 × 4 amostras por pixel: a borda do disco sai em meio-tom, como sai numa foto.
+        let dentro = 0;
+        for (let sy = 0; sy < 4; sy++) {
+          for (let sx = 0; sx < 4; sx++) {
+            const dx = x + (sx + 0.5) / 4 - 50, dy = y + (sy + 0.5) / 4 - 60;
+            if (dx * dx + dy * dy <= 36 * 36) dentro++;
+          }
+        }
+        if (dentro) px.set([200, 16, 46, Math.round((255 * dentro) / 16)], i);
+      }
+    }
+    return { data: px, width: L, height: A };
+  }
+  function letras() {
+    // Um "T" e um "L" de traço grosso, com sombra (o tom sobe 30 na metade de baixo), sobre transparente.
+    const L = 120, A = 80, px = new Uint8ClampedArray(L * A * 4);
+    const pintar = (x0, y0, x1, y1) => {
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const s = y > 40 ? 30 : 0; px.set([20 + s, 20 + s, 20 + s, 255], (y * L + x) * 4); }
+    };
+    pintar(10, 10, 50, 20); pintar(25, 20, 35, 70);
+    pintar(65, 10, 75, 70); pintar(75, 60, 110, 70);
+    return { data: px, width: L, height: A };
+  }
+  const casos = { escudo: { imagem: escudo(), opcoes: { cores: 3 } }, letras: { imagem: letras(), opcoes: { cores: 2, juntarSombras: 50 } } };
+  const svgs = Object.fromEntries(Object.entries(casos).map(([nome, c]) => [nome, vetorizarImagem(c.imagem, c.opcoes).svg]));
+  if (process.argv.includes("--gravar-vetor")) {
+    fs.mkdirSync(new URL("./referencias/", import.meta.url), { recursive: true });
+    fs.writeFileSync(REFERENCIA, `${JSON.stringify(svgs, null, 1)}\n`);
+    console.log("referência do vetor gravada");
+  }
+  const referencia = JSON.parse(fs.readFileSync(REFERENCIA, "utf8"));
+  for (const nome of Object.keys(casos)) {
+    assert.equal(svgs[nome], referencia[nome], `o vetor de "${nome}" mudou: o vetor.js deixou de ser o de 0659ecf^`);
+  }
+
+  // O EPS: o cabeçalho, a medida em pontos, uma cor por camada, e nenhum arco sobrando.
+  const r = vetorizarImagem(casos.escudo.imagem, casos.escudo.opcoes);
+  assert.ok(r.camadas.some((c) => c.d.includes("A")), "o escudo tem disco: o vetor desenha arco");
+  const eps = arq.epsDasCamadas(r.camadas, r.largura, r.altura, { larguraCm: 10 });
+  assert.ok(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0\n"));
+  assert.match(eps, /%%HiResBoundingBox: 0 0 283\.465 212\.598\n/, "10 cm de largura, na proporção de 160 × 120");
+  assert.equal((eps.match(/setrgbcolor/g) || []).length, r.camadas.length);
+  assert.ok(/curveto/.test(eps) && !/\d A|^A/m.test(eps), "o arco virou curva");
+  assert.match(eps, /eofill\ngrestore\nshowpage\n%%EOF\n$/);
+
+  // O arco trocado por curvas desenha o mesmo: os dois caminhos pelo sharp, pixel a pixel.
+  const pintarCaminho = (d) => sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="320"><path d="${d}" fill="#000"/></svg>`))
+    .ensureAlpha().extractChannel(3).raw().toBuffer();
+  for (const d of ["M40 150A80 80 0 1 0 200 150Z", "M40 150A80 80 0 1 1 200 150Z", "M40 150A80 80 0 0 1 120 70L120 150Z",
+    "M300 60A60 30 30 1 0 360 120A60 30 30 1 0 300 60Z", "M50 250A40 40 0 0 0 130 250A40 40 0 0 0 50 250Z"]) {
+    const a = await pintarCaminho(d), b = await pintarCaminho(arq.caminhoSemArcos(d));
+    let diferentes = 0;
+    for (let i = 0; i < a.length; i++) if ((a[i] > 127) !== (b[i] > 127)) diferentes++;
+    assert.ok(diferentes <= 2, `"${d}": ${diferentes} pixels diferentes`);
+  }
+
+  // O PNG do SVG, pela conta do /png: na medida pedida, transparente em volta, a cor no lugar.
+  assert.equal(api.svgSeguro(r.svg), true);
+  assert.equal(api.svgSeguro('<svg xmlns="http://www.w3.org/2000/svg"><image href="file:///C:/x.png"/></svg>'), false);
+  assert.equal(api.svgSeguro("<html></html>"), false);
+  const grande = api.svgNoTamanho(r.svg, 800, 600);
+  assert.match(grande, /<svg[^>]* width="800" height="600">/);
+  assert.equal((grande.match(/ width=/g) || []).length, 1, "o width antigo saiu");
+  const { data, info } = await sharp(Buffer.from(grande)).raw().toBuffer({ resolveWithObject: true });
+  assert.deepEqual([info.width, info.height, info.channels], [800, 600, 4]);
+  const px = (x, y) => Array.from(data.subarray((y * 800 + x) * 4, (y * 800 + x) * 4 + 4));
+  assert.equal(px(5, 5)[3], 0, "o canto é transparente");
+  const centro = px(250, 300); // o centro do disco, (50, 60) × 5
+  assert.ok(Math.abs(centro[0] - 200) < 8 && Math.abs(centro[1] - 16) < 8 && centro[3] === 255, `o disco: ${centro}`);
+}
+
+console.log("OK — o Extrator sem rede: a foto, a máscara, a rede ausente, a ampliação, os motores da foto e o Chapado.");

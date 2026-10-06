@@ -182,7 +182,36 @@ router.delete("/ampliar/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+/** O SVG do vetor.js, e só ele: nada de imagem, script ou referência a arquivo de fora — o rsvg do sharp seguiria. */
+function svgSeguro(svg) {
+  return typeof svg === "string" && /^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/.test(svg)
+    && !/<(image|script|foreignObject|use)\b|href\s*=|<!ENTITY|<!DOCTYPE/i.test(svg);
+}
+
+/** O mesmo SVG com a raiz na medida pedida, em pixels: o `viewBox` fica, e o desenho estica junto. */
+function svgNoTamanho(svg, largura, altura) {
+  return svg.replace(/<svg\b([^>]*)>/, (_, atributos) =>
+    `<svg${atributos.replace(/\s(width|height)="[^"]*"/g, "")} width="${largura}" height="${altura}">`);
+}
+
+router.post("/png", express.json({ limit: "30mb" }), async (req, res) => {
+  const { svg, largura, altura } = req.body || {};
+  if (!svgSeguro(svg)) return res.status(400).json({ error: "O desenho que veio não é um SVG do Extrator.", codigo: null });
+  if (![largura, altura].every((v) => Number.isInteger(v) && v > 0 && v <= 20000) || largura * altura > ampliar.TETO_DA_SAIDA) {
+    return res.status(400).json({ error: "A medida do PNG está fora do que o Extrator faz.", codigo: null });
+  }
+  try {
+    const png = await sharp(Buffer.from(svgNoTamanho(svg, largura, altura)), { limitInputPixels: false }).png().toBuffer();
+    res.setHeader("Content-Type", "image/png");
+    res.send(png);
+  } catch (erro) {
+    responder(res, falha(`Não consegui desenhar o PNG: ${erro.message}`, 500));
+  }
+});
+
 module.exports = router;
 module.exports.fotoDoCorpo = fotoDoCorpo;
 module.exports.lerPedidoDeMascara = lerPedidoDeMascara;
 module.exports.lerPedidoDeAmpliar = lerPedidoDeAmpliar;
+module.exports.svgSeguro = svgSeguro;
+module.exports.svgNoTamanho = svgNoTamanho;
