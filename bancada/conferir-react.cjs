@@ -97,6 +97,9 @@ async function main() {
     if(String(url)==='/api/projetos/2/estrutura') return Response.json({ok:true,pecas:1});
     // A lateral da Galeria mostra quanto há guardado (ver `useResumoDaGaleria`).
     if(String(url)==='/api/galeria/resumo') return Response.json({arquivos:0,bytes:0,pastas:0,clientes:1,projetos:1,recentes:[],disco:null});
+    if(String(url)==='/api/extrator/estado') return Response.json({
+      rede:'mobilesam', pronta:false, motivo:'A rede do Extrator não está instalada (bancada).', aceitaCaixa:true, ampliar:null,
+    });
     throw new Error('Requisição inesperada: '+url);
   };
   const React=require('react'); const {act}=React; const {createRoot}=require('react-dom/client');
@@ -307,6 +310,13 @@ async function main() {
   }
   assert.ok(document.querySelector('a[href="/encaixe"]'),
     'o menu nao ficou vazio: o Encaixe continua la');
+
+  // ---------- O Extrator: no menu, e abre esperando a foto ----------
+  assert.ok(document.querySelector('a[href="/extrator"]'), 'o Extrator está no menu');
+  await irPara('extrator');
+  await act(async()=>{ await new Promise(r=>setTimeout(r,0)); });
+  assert.match(document.body.textContent,/Arraste a foto para cá/,'o Extrator abre esperando a foto');
+  assert.match(document.body.textContent,/não está instalada \(bancada\)/,'o Extrator diz que a rede falta');
 
   // A Macros segue trancada por cima disso: fora do menu E com o endereco
   // abrindo o aviso, em vez das macros (ver `trancada`, em rotas.ts).

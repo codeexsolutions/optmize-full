@@ -72,6 +72,7 @@ const Moldes = lazy(() => import("./telas/Moldes").then((m) => ({ default: m.Mol
 const Projetos = lazy(() => import("./telas/Projetos").then((m) => ({ default: m.Projetos })));
 const Digitalizar = lazy(() => import("./telas/Digitalizar").then((m) => ({ default: m.Digitalizar })));
 const Montagem = lazy(() => import("./telas/Montagem").then((m) => ({ default: m.Montagem })));
+const Extrator = lazy(() => import("./telas/Extrator").then((m) => ({ default: m.Extrator })));
 const Impressoras = lazy(() => import("./telas/Impressoras").then((m) => ({ default: m.Impressoras })));
 const Pedidos = lazy(() => import("./telas/Pedidos").then((m) => ({ default: m.Pedidos })));
 const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m.Maquinas })));
@@ -86,7 +87,7 @@ const Conta = lazy(() => import("./telas/Conta").then((m) => ({ default: m.Conta
 const Painel = lazy(() => import("./telas/Painel").then((m) => ({ default: m.Painel })));
 
 export type NomeDeTela =
-  | "moldes" | "projetos" | "encaixe" | "digitalizar" | "montagem" | "macros"
+  | "moldes" | "projetos" | "encaixe" | "digitalizar" | "montagem" | "extrator" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
   | "reposicao" | "historico" | "retrabalho" | "ponto" | "funcionarios"
   // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
@@ -222,6 +223,23 @@ export const TELAS: readonly Tela[] = [
     // Mexe nos moldes da estante: mesma tranca de Moldes e Digitalizar.
     escopo: "moldes",
     Componente: Montagem,
+  },
+  {
+    /*
+     * Depois da Montagem e antes da Galeria: os três de cima começam numa
+     * foto ou num molde e terminam num MOLDE; este começa na foto e termina
+     * na ARTE — cada logo, texto e estampa separados, em vetor ou PNG grande.
+     * Ver docs/superpowers/specs/2026-10-06-extrator-design.md.
+     *
+     * Sem escopo, como a Galeria: é ferramenta de arte, e não de molde.
+     */
+    nome: "extrator",
+    grupo: "producao",
+    rotulo: "Extrator",
+    apoioMenu: "A arte separada da foto",
+    apoioTopo: "Mande a foto da camisa e receba cada logo, texto e estampa separados, em vetor ou PNG grande.",
+    icone: "icones.svg#wand-sparkles",
+    Componente: Extrator,
   },
   {
     nome: "projetos",
