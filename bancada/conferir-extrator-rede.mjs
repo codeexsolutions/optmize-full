@@ -21,6 +21,10 @@ const express = require("express");
 const sharp = require("sharp");
 const rede = require("../servidor/extrator-rede.js");
 
+const { carregarModulo } = await import("./carregarModulo.mjs");
+const rec = await carregarModulo("src/motores/recorte.js");
+const ext = await carregarModulo("src/motores/extrator.js");
+
 const motivo = rede.porqueNaoRoda();
 if (motivo) {
   console.error(`conferir-extrator-rede: ${motivo}`);
@@ -72,19 +76,34 @@ try {
   // 3. as fotos reais
   const fotos = lerGabaritos(PASTA_DAS_FOTOS);
   if (fotos.length === 0) console.log(`  (sem fotos com gabarito em ${PASTA_DAS_FOTOS}: só a foto de mentira)`);
+  const jeitos = { certos: 0, total: 0, errados: [] };
   const falhas = [];
   for (const f of fotos) {
     const foto = await fotoDeTrabalho(f.foto);
     const l = await ler(foto);
     if (l.msTotal > 6000) falhas.push(`${f.nome}: o /ler levou ${l.msTotal} ms (teto 6000)`);
+    const rgba = new Uint8ClampedArray(foto.largura * foto.altura * 4);
+    for (let i = 0; i < foto.largura * foto.altura; i++) rgba.set([foto.rgb[i * 3], foto.rgb[i * 3 + 1], foto.rgb[i * 3 + 2], 255], i * 4);
     for (const e of f.elementos) {
       const r = await mascara(l.id, [{ x: e.clique[0], y: e.clique[1], inclui: true }]);
       const a = avaliarMascara(r.alfa, r.largura, r.altura, e.caixa);
       if (a.iou < 0.7 || a.dentro < 0.85) falhas.push(`${f.nome} / ${e.nome}: IoU ${a.iou.toFixed(2)}, dentro ${a.dentro.toFixed(2)}`);
+      if (e.jeito) {
+        const recorte = rec.aplicarMascara(rgba, foto.largura, foto.altura, r.alfa);
+        const sugerido = recorte ? ext.jeitoSugerido(recorte.rgba) : "nada";
+        jeitos.total++;
+        if (sugerido === e.jeito) jeitos.certos++;
+        else jeitos.errados.push(`${f.nome} / ${e.nome}: sugeriu ${sugerido}, era ${e.jeito}`);
+      }
     }
     console.log(`  ${f.nome}: ${f.elementos.length} elemento(s), /ler ${l.msTotal} ms`);
   }
   assert.deepEqual(falhas, [], falhas.join("\n"));
+
+  if (jeitos.total) {
+    console.log(`  jeito sugerido: ${jeitos.certos} de ${jeitos.total}`);
+    assert.ok(jeitos.certos / jeitos.total >= 0.8, `o jeito sugerido errou demais:\n${jeitos.errados.join("\n")}`);
+  }
 
   // 4. a ampliação de verdade
   const ampliar = require("../servidor/extrator-ampliar.js");
