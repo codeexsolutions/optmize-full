@@ -54,6 +54,8 @@
     "bancada:montagem-tela": "node bancada/conferir-montagem-tela.cjs",
     "bancada:guardados": "node bancada/medir-guardados.js",
     "medir:recorte": "node bancada/medir-recorte.mjs",
+    "bancada:extrator": "node bancada/conferir-extrator.mjs",
+    "bancada:extrator-rede": "node bancada/conferir-extrator-rede.mjs",
     "bancada:montagem": "node bancada/conferir-montagem.mjs",
     "bancada:moldes-pecas": "node bancada/conferir-moldes-pecas.cjs",
     "bancada:risco-pdf": "node bancada/conferir-risco-pdf.js",
