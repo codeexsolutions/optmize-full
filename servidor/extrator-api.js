@@ -25,7 +25,9 @@
 
 const express = require("express");
 const sharp = require("sharp");
+const crypto = require("crypto");
 const rede = require("./extrator-rede");
+const ampliar = require("./extrator-ampliar");
 
 const router = express.Router();
 
@@ -81,7 +83,7 @@ function responder(res, erro) {
   res.status(status).json({ error: erro.message || "O Extrator não conseguiu terminar.", codigo: erro.codigo || null });
 }
 
-router.get("/estado", (req, res) => res.json(rede.estadoDaRede()));
+router.get("/estado", (req, res) => res.json({ ...rede.estadoDaRede(), ampliar: ampliar.porqueNaoAmplia() }));
 
 router.post("/ler", express.raw({ limit: "80mb", type: () => true }), async (req, res) => {
   if (!req.body || !req.body.length) return res.status(400).json({ error: "Não veio foto nenhuma.", codigo: null });
@@ -109,6 +111,78 @@ router.post("/mascara", express.json({ limit: "1mb" }), async (req, res) => {
   }
 });
 
+/** O pedido de ampliação: a medida do elemento, a da saída, e os bytes batendo com a medida. */
+function lerPedidoDeAmpliar(query, bytes) {
+  const largura = Number(query.largura), altura = Number(query.altura);
+  const saidaLargura = Number(query.saidaLargura), saidaAltura = Number(query.saidaAltura);
+  if (![largura, altura, saidaLargura, saidaAltura].every((v) => Number.isInteger(v) && v > 0)) {
+    return { erro: "Faltou a medida do elemento ou da saída." };
+  }
+  if (!bytes || bytes.length !== largura * altura * 4) return { erro: "O elemento não veio inteiro: o tamanho não bate com a medida." };
+  if (saidaLargura * saidaAltura > ampliar.TETO_DA_SAIDA) {
+    return { erro: `A saída pedida passa de ${ampliar.TETO_DA_SAIDA / 1e6} megapixels.` };
+  }
+  return { largura, altura, saidaLargura, saidaAltura };
+}
+
+/**
+ * As ampliações em andamento: id → { feitos, total, png, erro, cancelado, criado }.
+ * Uma de cada vez, na fila: duas ao mesmo tempo dividiriam os mesmos núcleos.
+ * A tela pergunta o andamento a cada 400 ms; a que ninguém buscar some em 30 min.
+ */
+const ampliacoes = new Map();
+const VALIDADE_DA_AMPLIACAO_MS = 30 * 60 * 1000;
+let fila = Promise.resolve();
+
+router.post("/ampliar", express.raw({ limit: "400mb", type: () => true }), (req, res) => {
+  const pedido = lerPedidoDeAmpliar(req.query, req.body);
+  if (pedido.erro) return res.status(400).json({ error: pedido.erro, codigo: null });
+  const { largura, altura, saidaLargura, saidaAltura } = pedido;
+  const comRede = ampliar.precisaDaRede(largura, altura, saidaLargura, saidaAltura);
+  const motivo = comRede ? ampliar.porqueNaoAmplia() : null;
+  if (motivo) return res.status(503).json({ error: motivo, codigo: "sem-rede" });
+
+  const agora = Date.now();
+  for (const [id, a] of ampliacoes) if (agora - a.criado > VALIDADE_DA_AMPLIACAO_MS) ampliacoes.delete(id);
+  const id = crypto.randomUUID();
+  const a = { feitos: 0, total: comRede ? ampliar.ladrilhosDe(largura, altura) : 1, png: null, erro: null, cancelado: false, criado: agora };
+  ampliacoes.set(id, a);
+  const rgba = req.body;
+  fila = fila
+    .then(() => (a.cancelado ? null : ampliar.ampliar(rgba, largura, altura, saidaLargura, saidaAltura, {
+      aoAndar: (feitos, total) => { a.feitos = feitos; a.total = total; },
+      cancelado: () => a.cancelado,
+    })))
+    .then(async (r) => {
+      if (r && !a.cancelado) a.png = await sharp(r.rgba, { raw: { width: r.largura, height: r.altura, channels: 4 } }).png().toBuffer();
+    })
+    .catch((erro) => { a.erro = erro.message; });
+  res.json({ id, total: a.total });
+});
+
+router.get("/ampliar/:id", (req, res) => {
+  const a = ampliacoes.get(req.params.id);
+  if (!a) return res.status(404).json({ error: "Essa ampliação não existe mais: venceu ou foi cancelada.", codigo: null });
+  if (a.erro) {
+    ampliacoes.delete(req.params.id);
+    return res.status(500).json({ error: `A ampliação falhou: ${a.erro}`, codigo: null });
+  }
+  if (!a.png) return res.json({ feitos: a.feitos, total: a.total });
+  ampliacoes.delete(req.params.id);
+  res.setHeader("Content-Type", "image/png");
+  res.send(a.png);
+});
+
+router.delete("/ampliar/:id", (req, res) => {
+  const a = ampliacoes.get(req.params.id);
+  if (a) {
+    a.cancelado = true;
+    ampliacoes.delete(req.params.id);
+  }
+  res.json({ ok: true });
+});
+
 module.exports = router;
 module.exports.fotoDoCorpo = fotoDoCorpo;
 module.exports.lerPedidoDeMascara = lerPedidoDeMascara;
+module.exports.lerPedidoDeAmpliar = lerPedidoDeAmpliar;

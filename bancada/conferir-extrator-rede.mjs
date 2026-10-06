@@ -9,6 +9,8 @@
  *   3. as fotos reais com gabarito (D:/arte/extrator, ou EXTRATOR_FOTOS): cada
  *      elemento com IoU >= 0,7 e dentro >= 0,85, e o /ler em até 6 s por foto.
  *      Sem a pasta, só a foto de mentira.
+ *   4. a ampliação de verdade, pela API: 300 × 200 → 1200 × 800 com as cores
+ *      no lugar, e o cancelamento.
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -83,6 +85,42 @@ try {
     console.log(`  ${f.nome}: ${f.elementos.length} elemento(s), /ler ${l.msTotal} ms`);
   }
   assert.deepEqual(falhas, [], falhas.join("\n"));
+
+  // 4. a ampliação de verdade
+  const ampliar = require("../servidor/extrator-ampliar.js");
+  assert.equal(ampliar.porqueNaoAmplia(), null, ampliar.porqueNaoAmplia() || "");
+  const w = 300, h = 200, rgba = Buffer.alloc(w * h * 4);
+  const cores = [[200, 30, 40], [30, 160, 60], [20, 60, 200], [240, 200, 20]];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4, q = cores[(x < 150 ? 0 : 1) + (y < 100 ? 0 : 2)];
+      rgba[i] = q[0]; rgba[i + 1] = q[1]; rgba[i + 2] = q[2]; rgba[i + 3] = 255;
+    }
+  }
+  const t0 = Date.now();
+  const pedir = (saidaLargura, saidaAltura) => fetch(`${base}/ampliar?${new URLSearchParams({ largura: w, altura: h, saidaLargura, saidaAltura })}`,
+    { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: rgba }).then((r) => r.json());
+  const { id, total } = await pedir(1200, 800);
+  assert.equal(total, 6);
+  let png = null;
+  while (!png) {
+    await new Promise((pronto) => setTimeout(pronto, 200));
+    const g = await fetch(`${base}/ampliar/${id}`);
+    assert.equal(g.status, 200, `o andamento respondeu ${g.status}`);
+    if ((g.headers.get("content-type") || "").startsWith("image/png")) png = Buffer.from(await g.arrayBuffer());
+  }
+  const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+  assert.deepEqual([info.width, info.height, info.channels], [1200, 800, 4]);
+  const cor = (x, y) => Array.from(data.subarray((y * 1200 + x) * 4, (y * 1200 + x) * 4 + 3));
+  for (const [x, y, esperada] of [[300, 200, cores[0]], [900, 200, cores[1]], [300, 600, cores[2]], [900, 600, cores[3]]]) {
+    assert.ok(cor(x, y).every((v, k) => Math.abs(v - esperada[k]) <= 6), `a cor em ${x},${y}: ${cor(x, y)} (esperava ${esperada})`);
+  }
+  // Cancelar: a ampliação some.
+  const grande = await pedir(4096, 2731);
+  await fetch(`${base}/ampliar/${grande.id}`, { method: "DELETE" });
+  assert.equal((await fetch(`${base}/ampliar/${grande.id}`)).status, 404);
+  console.log(`  ampliação: 6 ladrilhos, 1200 × 800, ${Date.now() - t0} ms`);
+
   console.log(`OK — a rede de recorte (${rede.REDE_DO_EXTRATOR}) acha os elementos.`);
 } finally {
   servidor.close();

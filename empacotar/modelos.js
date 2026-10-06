@@ -19,6 +19,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const rede = require("../servidor/extrator-rede");
+const ampliar = require("../servidor/extrator-ampliar");
 
 const DESTINO = path.join(__dirname, "..", "servidor", "modelos");
 const BASE = "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models";
@@ -51,6 +52,11 @@ const MODELOS = [
  * mora lá, num lugar só, junto da medição que escolheu.
  */
 MODELOS.push(...modelosDoExtrator());
+
+MODELOS.push({
+  nome: path.basename(ampliar.ARQUIVO), ...ampliar.ORIGEM,
+  faz: "amplia o jeito Foto do Extrator (Real-ESRGAN x4v3; BSD-3-Clause)",
+});
 
 function modelosDoExtrator() {
   const nome = rede.REDE_DO_EXTRATOR;
