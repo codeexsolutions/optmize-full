@@ -5,7 +5,7 @@
  * anda por ele como uma pessoa andaria: clica, navega, salva. E verifica o que
  * so aparece quando as pecas estao juntas: que o StrictMode nao duplica uma
  * gravacao, que sair de uma tela fecha o que estava aberto nela, e que o
- * trabalho em memoria sobrevive a troca de aba.
+ * editor de producao so fica na pagina enquanto ha o que guardar nele.
  *
  * ANTES ELE MONTAVA SO O `Producao`, e navegava chamando `irPara` na mao. Isso
  * deixou de ser o sistema: quem navega e o `react-router`, e as telas que ja
@@ -14,8 +14,14 @@
  *
  * Os seletores das telas migradas sao por classe e por TEXTO, nunca por `id`:
  * uma tela React nao tem `id` nenhum, e o que uma pessoa enxerga e o rotulo do
- * botao. As duas que ainda sao imperativas (Moldes e Encaixe) continuam sendo
- * achadas por `id`, que e o que o controlador usa.
+ * botao. A que ainda e imperativa (o Encaixe) continua sendo achada por `id`,
+ * que e o que o controlador usa.
+ *
+ * UMA ARMADILHA, para quem acrescentar conferencia: a AUSENCIA de um elemento
+ * se afirma com `assert.ok(!elemento, ...)`, e nao com
+ * `assert.equal(elemento, null, ...)`. Ao falhar, o Node monta o diff do
+ * `assert.equal` mesmo com mensagem, e com um no do DOM do React como `actual`
+ * esse diff nao termina: a bancada trava em vez de acusar.
  */
 
 const assert = require('node:assert/strict');
@@ -55,6 +61,23 @@ async function main() {
   global.IS_REACT_ACT_ENVIRONMENT=true;
   dom.window.HTMLCanvasElement.prototype.getContext = () => null;
   const requests=[];
+  /*
+   * O PROJETO ABERTO, no formato que a API devolve (ver `Projeto`, em
+   * api/projetos.ts). Desde a Galeria nova ele SEMPRE traz a `estrutura` —
+   * subprojeto, categoria, peça e a arte de cada uma (ver `estruturaDoProjeto`,
+   * em servidor/projetos-api.js) —, e é por ela que o editor se desenha. As
+   * `pecas` são as linhas do banco: uma por peça com arte, já multiplicada
+   * (M × 2, uma por item). A miniatura vai pronta, como o servidor a guarda:
+   * sem ela o editor iria buscar a arte no disco para fazê-la, e aqui não há.
+   */
+  const miniatura='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4n8bwHwAGMgJlMwnCZQAAAABJRU5ErkJggg==';
+  const projeto={
+    id:2,nome:'Uniforme',observacoes:null,largura_tecido:160,espaco:5,comprimento_bancada:null,giro:'180',
+    cliente:{id:1,nome:'Cliente de teste'},
+    pecas:[{id:7,nome:'Frente M',arquivo:'frente.png',url:'/uploads/projetos/frente.png',miniatura,largura:30,altura:40,quantidade:2}],
+    estrutura:{subprojetos:[{id:'sp-1',nome:'Camisa',categorias:[{id:'ct-1',rotulo:'M',quantidade:2,
+      pecas:[{id:'pc-1',nome:'Frente',porItem:1,cor:0,arte:{arquivo:'frente.png',nome:'frente.png',miniatura,largura:30,altura:40}}]}]}]},
+  };
   global.fetch=async (url,options={}) => {
     requests.push([String(url),options.method || 'GET',options.body]);
     /*
@@ -67,9 +90,13 @@ async function main() {
       entrou:true, perfil:{nome:'Bancada de Teste',empresa:'CodeEx',papel:'dono',telas:null},
     });
     if(String(url)==='/api/moldes') return Response.json([]);
-    if(String(url)==='/api/projetos/clientes') return Response.json([{id:1,nome:'Cliente de teste',projetos:1}]);
-    if(String(url)==='/api/projetos/clientes/1/projetos') return Response.json({cliente:{id:1,nome:'Cliente de teste'},projetos:[{id:2,nome:'Uniforme',pecas:1,pecasPorUnidade:2}]});
-    if(String(url)==='/api/projetos/2') return Response.json({id:2,nome:'Uniforme',cliente:{id:1,nome:'Cliente de teste'},pecas:[],espaco:5,largura_tecido:160,giro:'180'});
+    if(String(url)==='/api/projetos/clientes') return Response.json([{id:1,nome:'Cliente de teste',observacoes:null,projetos:1}]);
+    if(String(url)==='/api/projetos/clientes/1/projetos') return Response.json({cliente:{id:1,nome:'Cliente de teste'},projetos:[{id:2,nome:'Uniforme',observacoes:null,largura_tecido:160,pecas:1,pecasPorUnidade:2,capa:miniatura}]});
+    if(String(url)==='/api/projetos/2') return Response.json(projeto);
+    // O editor grava sozinho, pela estrutura (ver `gravarEstrutura`, em api/projetos.ts).
+    if(String(url)==='/api/projetos/2/estrutura') return Response.json({ok:true,pecas:1});
+    // A lateral da Galeria mostra quanto há guardado (ver `useResumoDaGaleria`).
+    if(String(url)==='/api/galeria/resumo') return Response.json({arquivos:0,bytes:0,pastas:0,clientes:1,projetos:1,recentes:[],disco:null});
     throw new Error('Requisição inesperada: '+url);
   };
   const React=require('react'); const {act}=React; const {createRoot}=require('react-dom/client');
@@ -104,7 +131,7 @@ async function main() {
     app.render(React.createElement(React.StrictMode,null,React.createElement(App)));
     await new Promise(r=>setTimeout(r,0));
   });
-  const error=document.querySelector('[role="alert"]'); assert.equal(error,null,error?.textContent);
+  const error=document.querySelector('[role="alert"]'); assert.ok(!error,error?.textContent);
 
   // ---------- Moldes: React, desenhada pela rota ----------
   /*
@@ -122,7 +149,7 @@ async function main() {
 
   // ---------- Projetos: React, desenhada pela rota ----------
   await irPara('projetos');
-  assert.equal(document.querySelector('.modal-passo'),null,'sair de Moldes fecha o modal dela');
+  assert.ok(!document.querySelector('.modal-passo'),'sair de Moldes fecha o modal dela');
   // O `modal-aberto` no body é o que segura a rolagem da pagina. Ficando para
   // tras, a tela seguinte simplesmente nao rolava -- ja aconteceu.
   assert.equal(document.body.classList.contains('modal-aberto'),false,
@@ -149,7 +176,7 @@ async function main() {
   assert.match(caixa.textContent,/Novo cliente/);
   await click(botao('Cancelar',caixa));
   await act(async()=>{ await new Promise(r=>setTimeout(r,200)); });
-  assert.equal(document.querySelector('.ui-dialog-backdrop:not([id])'),null,'e fecha no Cancelar');
+  assert.ok(!document.querySelector('.ui-dialog-backdrop:not([id])'),'e fecha no Cancelar');
 
   // Clicar no cliente abre a pasta dele na arvore; o projeto aparece dentro.
   await click(botao('Cliente de teste',arvore()));
@@ -158,61 +185,124 @@ async function main() {
   await click(botao('Uniforme',arvore()));
   await act(async()=>{ await new Promise(r=>setTimeout(r,50)); });
 
-  // O editor e a area principal, e nao mais um modal por cima da lista.
-  // O editor e a secao que tem o nome do projeto no topo -- procurar por
-  // `main section` acharia a bancada do Encaixe, que fica montada escondida.
-  const editor = () => {
-    const campo = document.querySelector('input[aria-label="Nome do projeto"]');
-    return campo ? campo.closest('section') : null;
-  };
+  // O editor é a área principal, e não mais um modal por cima da lista. Quem o
+  // acha é a barra do alto — a seta de voltar, o cliente e o nome do projeto —,
+  // que só existe com o projeto aberto: o nome é um texto que vira campo ao
+  // clicar (`TextoEditavel`), e o `input` dele só aparece enquanto alguém o
+  // edita, então procurar por ele daria "fechado" com o editor aberto. E o
+  // editor é a seção que tem essa barra — procurar por `main section` acharia a
+  // bancada do Encaixe, que fica montada escondida.
+  const barra = () => document.querySelector('button[title="Voltar para os projetos do cliente"]')?.parentElement ?? null;
+  const editor = () => barra()?.closest('section') ?? null;
+  // Não há `<label>` no editor: o campo se acha pelo `aria-label`, que é o
+  // rótulo que a pessoa lê.
+  const campo = rotulo => editor().querySelector(`input[aria-label="${rotulo}"]`);
   assert.ok(editor(),'o editor do projeto abriu');
-  assert.equal(document.querySelector('input[aria-label="Nome do projeto"]').value,'Uniforme',
+  assert.equal(barra().querySelector('button[title="Clique para renomear"]').textContent,'Uniforme',
     'com o nome do projeto no topo');
-  const campoDoRotulo = texto =>
-    [...editor().querySelectorAll('label')].find(l=>l.textContent.includes(texto)).querySelector('input,select');
-  assert.equal(campoDoRotulo('Largura do tecido').value,'160');
-  // A folga saiu da tela: quem a decide e o confere do Optmizar.
-  assert.equal([...editor().querySelectorAll('label')]
-    .some(l=>/Folga entre peças/.test(l.textContent)),false,
-    'a folga nao e mais perguntada aqui');
+  // O que o servidor guardou aparece desenhado — o lugar do que era o campo da
+  // largura do tecido: a categoria com a quantidade pedida, e a peça com a arte.
+  assert.equal(campo('Quantidade da categoria M').value,'2',
+    'a categoria do projeto aparece, com a quantidade guardada');
+  assert.ok(editor().querySelector('img[alt="frente.png"]'),'e a peça dela, com a arte');
+  // Os ajustes do Encaixe saíram da tela: quem decide tecido, bancada, giro e
+  // folga é o confere do Optmizar. A folga foi a primeira a sair, e as outras
+  // acompanharam quando o editor virou o da Galeria.
+  const oQueOEditorDiz = [editor().textContent,
+    ...[...editor().querySelectorAll('[aria-label]')].map(e=>e.getAttribute('aria-label'))].join('\n');
+  assert.doesNotMatch(oQueOEditorDiz,
+    /Ajustes do encaixe|Largura do tecido|Comprimento da bancada|Giro das peças|Folga entre peças/i,
+    'os ajustes do Encaixe não são mais perguntados aqui');
 
-  // "Salvar", e nao "Levar pro Encaixe": os dois comecam com a mesma palavra
-  // em telas diferentes, e o primeiro que casa e o que se quer aqui.
-  await click([...editor().querySelectorAll('button')].find(b=>b.textContent.trim() === 'Salvar'));
-  const gravacoes=requests.filter(r=>r[0]==='/api/projetos/2' && r[1]==='PUT');
-  assert.equal(gravacoes.length,1,'StrictMode não duplica a gravação');
   /*
-   * A folga saiu da TELA, nao do BANCO. Esta linha e a trava disso: gravar um
-   * projeto antigo tem que devolver o numero que ele ja tinha, em milimetro.
-   * Zera-lo seria perder, na primeira gravacao, um valor que alguem escolheu.
+   * Não há mais "Salvar": o editor grava sozinho, meio segundo depois da última
+   * mudança (ver `gravar`, em galeria/EditorDoProjeto.tsx). Então a conferência
+   * muda uma coisa — mais uma unidade na categoria M — e espera a gravação.
+   * Uma mudança, UMA gravação: o StrictMode roda os efeitos duas vezes, e uma
+   * gravação agendada por efeito sairia em dobro.
+   *
+   * A espera é em DOIS `act`, e não num só de 1,4 s: é na saída de cada `act`
+   * que o React desenha o que a gravação acabou de mudar, e uma gravação que
+   * agendasse outra (o laço que o `ref` do `aoMudarOProjeto` evita, no editor)
+   * só agendaria a segunda depois disso.
+   *
+   * Conta-se a partir do clique. Ao montar o editor o próprio StrictMode já
+   * deixa uma gravação agendada, sem mudança nenhuma (o efeito roda duas vezes,
+   * e a guarda `primeiraVez` só segura a primeira); a mudança que vem logo em
+   * seguida a desfaz.
    */
-  assert.equal(JSON.parse(gravacoes[0][2]).espaco,5,
-    'o espacamento guardado sobrevive a saida do campo, e em milimetros');
+  const antes = requests.length;
+  const maisUma = campo('Quantidade da categoria M').parentElement.querySelector('button[aria-label="Aumentar"]');
+  assert.ok(maisUma,'a categoria M tem o botão de mais uma unidade');
+  await click(maisUma);
+  await act(async()=>{ await new Promise(r=>setTimeout(r,700)); });
+  await act(async()=>{ await new Promise(r=>setTimeout(r,700)); });
+  const gravacoes = () => requests.slice(antes)
+    .filter(r=>r[0]==='/api/projetos/2/estrutura' && r[1]==='PUT');
+  assert.equal(gravacoes().length,1,'StrictMode não duplica a gravação');
+  const corpo = JSON.parse(gravacoes()[0][2]);
+  assert.equal(corpo.nome,'Uniforme','a gravação leva o nome do projeto');
+  // A estrutura vai inteira — a arte da peça com ela —, e só a categoria M mudou.
+  const esperada = structuredClone(projeto.estrutura);
+  esperada.subprojetos[0].categorias[0].quantidade = 3;
+  assert.deepEqual(corpo.estrutura,esperada,
+    'e a estrutura inteira, mudando só o que mudou: a categoria M passou de 2 para 3');
+  /*
+   * Os ajustes do Encaixe saíram da TELA e da GRAVAÇÃO, mas não do BANCO: o
+   * projeto guarda a folga de 5 mm (`espaco`) que alguém escolheu, e a gravação
+   * da estrutura leva só o nome e a estrutura — o servidor deixa o resto como
+   * estava (ver `PUT /:id/estrutura`, em servidor/projetos-api.js). Esta linha
+   * é a trava disso: se o editor voltasse a mandar o espaçamento (ou gravasse o
+   * projeto inteiro sem ele), a primeira gravação de um projeto antigo
+   * perderia um valor que ninguém mandou apagar.
+   */
+  for (const ajuste of ['espaco','larguraTecido','comprimentoBancada','giro']) {
+    assert.equal(ajuste in corpo,false,
+      `a gravação do editor não leva o ajuste "${ajuste}": o espaçamento guardado (5 mm) e os outros ficam como estão`);
+  }
 
-  // ---------- Encaixe: o trabalho sobrevive a troca de aba ----------
+  // ---------- Encaixe: o editor de produção nasce quando precisa ----------
   await irPara('encaixe');
-  assert.equal(document.querySelector('input[aria-label="Nome do projeto"]'),null,
-    'sair de Projetos larga o editor');
+  assert.ok(!editor(),'sair de Projetos larga o editor');
+  // O editor grava ao sair só o que ficou pendente; com tudo gravado, não há o
+  // que gravar outra vez.
+  assert.equal(gravacoes().length,1,'e sair com tudo gravado não grava de novo');
   assert.equal(document.body.classList.contains('dialog-open'),false);
   document.getElementById('encaixe-largura').value='179';
 
-  // A tela de Cor, que morava dentro do editor de producao ao lado do
-  // Encaixe e era conferida aqui, saiu do programa em 2026-09-21 (junto com
-  // Vetor e Imagem). O que ela conferia de geral — o editor escondido e o
-  // ajuste do Encaixe sobrevivendo a troca de aba — continua abaixo.
+  /*
+   * O editor de produção já ficou montado, escondido, em toda tela do programa,
+   * e esta conferência guardava isso: o ajuste do Encaixe sobrevivendo à ida a
+   * outra tela (a tela de Cor, que também morava nele, saiu do programa em
+   * 2026-09-21). Desde 2026-09-24 ele só fica quando há trabalho guardado —
+   * peça na lista ou risco pronto — e, sem trabalho, sai da página inteira,
+   * levando o que se digitou nos campos: é a troca aceita (ver `Producao.tsx`).
+   *
+   * Aqui não há trabalho: o jsdom não decodifica arte nenhuma para pôr peça na
+   * lista. Então vale o que o editor promete sem ele — sai da página junto com
+   * o Encaixe e volta, novo, quando o Encaixe abre de novo. O outro lado (com
+   * peça na lista ele fica escondido, e o ajuste sobrevive) não é conferido
+   * aqui.
+   */
   await irPara('impressoras');
-  assert.equal(document.querySelector('.producao').hidden,true);
+  assert.ok(!document.getElementById('encaixe-largura'),
+    'sem trabalho guardado, o editor de produção sai da página junto com o Encaixe');
   await irPara('encaixe');
-  assert.equal(document.getElementById('encaixe-largura').value,'179',
-    'o ajuste do Encaixe sobrevive a ida e volta');
+  assert.ok(document.getElementById('encaixe-largura'),'e volta quando o Encaixe abre de novo');
+  assert.notEqual(document.getElementById('encaixe-largura').value,'179',
+    'sem peça na lista o ajuste digitado não volta: o editor nasce limpo');
 
   // ---------- O que saiu do menu ----------
   // Desde 2026-09-21 o menu do dia a dia mostra so onde se trabalha: saiu o
   // grupo Relatorios inteiro, mais Macros e WhatsApp (ver `foraDoMenu`, em
   // rotas.ts). As telas continuam de pe — o que sai e a linha do menu, e e
   // exatamente essa diferenca que as duas asercoes abaixo guardam.
-  for (const nome of ['macros','whatsapp','historico','ponto','funcionarios','reposicao']) {
-    assert.equal(document.querySelector(`a[href="/${nome}"]`),null,
+  // `reposicao` deixou a lista: desde 2026-09-29 o nome é da tela que guarda
+  // cada encaixe exportado para refazer peças, e ela ESTÁ no menu. A que saiu,
+  // o relatório de quanto foi refeito, é a de antes, que agora se chama
+  // `retrabalho` (ver rotas.ts).
+  for (const nome of ['macros','whatsapp','historico','ponto','funcionarios','retrabalho']) {
+    assert.ok(!document.querySelector(`a[href="/${nome}"]`),
       `a ${nome} saiu do menu`);
   }
   assert.ok(document.querySelector('a[href="/encaixe"]'),
