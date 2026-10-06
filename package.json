@@ -53,6 +53,7 @@
     "bancada:plt-graduado": "node bancada/conferir-plt-graduado.mjs",
     "bancada:montagem-tela": "node bancada/conferir-montagem-tela.cjs",
     "bancada:guardados": "node bancada/medir-guardados.js",
+    "medir:recorte": "node bancada/medir-recorte.mjs",
     "bancada:montagem": "node bancada/conferir-montagem.mjs",
     "bancada:moldes-pecas": "node bancada/conferir-moldes-pecas.cjs",
     "bancada:risco-pdf": "node bancada/conferir-risco-pdf.js",
