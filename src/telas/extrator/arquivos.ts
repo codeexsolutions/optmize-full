@@ -63,6 +63,7 @@ export async function zipDosElementos(
   const arquivos: Zippable = {};
   const bytes = async (b: Blob) => new Uint8Array(await b.arrayBuffer());
   for (let i = 0; i < elementos.length; i++) {
+    sinal?.throwIfAborted();
     const el = elementos[i]!, nome = nomes[i]!;
     aoAndar(`Preparando ${i + 1} de ${elementos.length}: ${nome}…`);
     if (el.jeito === "chapado") {

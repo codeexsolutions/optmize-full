@@ -262,6 +262,27 @@ async function comRede(navegador, pasta) {
     for (const n of ['Logo.svg', 'Logo.eps', 'Logo.png', 'Logo (2).svg', 'Logo (2).eps', 'Logo (2).png']) {
       assert.ok(conteudo.includes(n), `o ZIP tem ${n}`);
     }
+
+    // Cancelar o ZIP no meio (dois elementos na Foto): nada é baixado, e não é erro.
+    for (const i of [1, 2]) {
+      await p.click(`#extrator-elementos li:nth-child(${i}) button`);
+      await p.click('#extrator-jeito-foto');
+    }
+    await p.click('#extrator-zip');
+    await p.waitForSelector('#extrator-zip-cancelar', { timeout: 15000 });
+    await p.click('#extrator-zip-cancelar');
+    await p.waitForFunction(() => !document.querySelector('#extrator-zipando'), { timeout: 15000 });
+    await esperar(3000);
+    assert.equal(await baixados(), 6, 'o ZIP cancelado não baixa nada');
+    assert.equal(await p.$('#extrator-erro'), null, 'cancelar o ZIP não é erro');
+
+    // Trocar de elemento no meio da ampliação a cancela: o PNG do outro não aparece depois.
+    await p.click('#extrator-baixar-png');
+    await p.waitForSelector('#extrator-cancelar', { timeout: 15000 });
+    await p.click('#extrator-elementos li:nth-child(1) button');
+    await esperar(10000);
+    assert.equal(await baixados(), 6, 'trocar de elemento cancela a ampliação');
+    assert.equal(await p.$('#extrator-erro'), null, 'trocar de elemento não é erro');
     console.log('  limpar e baixar: SVG, EPS, PNG 4K e por medida, a foto ampliada, cancelar e o ZIP');
 
     // Endireitar com os cantos de começo (10% de cada lado): a foto fica com 80% de cada medida.

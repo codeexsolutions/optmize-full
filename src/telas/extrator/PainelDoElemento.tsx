@@ -29,6 +29,9 @@ export function PainelDoElemento({ elemento, aoMudar, aoErro, vetorDe }: Props) 
   const [andamento, setAndamento] = useState<{ feitos: number; total: number } | null>(null);
   const controle = useRef<AbortController | null>(null);
 
+  // Trocar de elemento (ou apagar este) desmonta o painel: a ampliação em curso para junto, sem baixar nada.
+  useEffect(() => () => controle.current?.abort(), []);
+
   // O vetor, 300 ms depois da última mexida.
   useEffect(() => {
     if (elemento.jeito !== "chapado") {

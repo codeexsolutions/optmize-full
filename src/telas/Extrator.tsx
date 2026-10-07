@@ -11,7 +11,7 @@
  * O desenho é da spec `docs/superpowers/specs/2026-10-06-extrator-design.md`;
  * o estado mora em `extrator/useExtrator.ts`, a mesa em `extrator/MesaDoExtrator.tsx`.
  */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Botao } from "../casca/Botao";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
@@ -38,14 +38,21 @@ export function Extrator() {
   // O vetor de cada elemento, guardado pelas opções enquanto a tela estiver aberta.
   const vetorDe = useMemo(() => cacheDeVetores(), []);
 
+  const controleDoZip = useRef<AbortController | null>(null);
+  // Sair da tela para o ZIP junto, sem baixar nada.
+  useEffect(() => () => controleDoZip.current?.abort(), []);
+
   const baixarZip = async () => {
+    const c = new AbortController();
+    controleDoZip.current = c;
     setZipando("Preparando o ZIP…");
     try {
-      baixar(await zipDosElementos(x.elementos, vetorDe, setZipando), `${x.nomeDaFoto || "extrator"}.zip`);
+      baixar(await zipDosElementos(x.elementos, vetorDe, setZipando, c.signal), `${x.nomeDaFoto || "extrator"}.zip`);
     } catch (e) {
-      x.setErro((e as Error).message);
+      if ((e as Error).name !== "AbortError") x.setErro((e as Error).message);
     } finally {
       setZipando("");
+      controleDoZip.current = null;
     }
   };
 
@@ -193,7 +200,12 @@ export function Extrator() {
             </Botao>
           ) : undefined}
         >
-          {zipando && <p id="extrator-zipando" className="mt-0 mb-2 text-[0.82rem] text-tinta-fraca">{zipando}</p>}
+          {zipando && (
+            <div className="mb-2 flex items-center gap-2">
+              <p id="extrator-zipando" className="m-0 min-w-0 flex-1 text-[0.82rem] text-tinta-fraca">{zipando}</p>
+              <Botao id="extrator-zip-cancelar" tamanho="pequeno" jeito="fantasma" onClick={() => controleDoZip.current?.abort()}>Cancelar</Botao>
+            </div>
+          )}
           <ListaDeElementos
             elementos={x.elementos}
             escolhido={x.escolhido}
