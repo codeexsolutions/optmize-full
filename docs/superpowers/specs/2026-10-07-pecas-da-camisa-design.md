@@ -1,7 +1,8 @@
 # As peças da camisa — o mockup vira a arte retangular de cada peça
 
-Data: 2026-10-07 · Estado: design aprovado em conversa, parte por parte; falta
-a revisão desta spec escrita. Branch: `Guilherme` (a pessoa pediu para ficar
+Data: 2026-10-07 · Estado: design aprovado em conversa, parte por parte; a
+análise com IA foi acrescentada no mesmo dia, a pedido, depois de ver o
+concorrente por dentro. Branch: `Guilherme` (a pessoa pediu para ficar
 na mesma branch do Extrator).
 
 ## Por que
@@ -41,8 +42,14 @@ redesenha isso no Corel olhando o mockup.
   (algoritmo clássico: repete padrão e deixa costura em buraco grande) e contra
   a difusão local (minutos por peça na CPU, vários GB). PatchMatch fica como
   reserva só se a medição mostrar que a LaMa não roda bem nesta máquina.
-- **Tudo no computador**, como o resto do Extrator: sem nuvem, sem custo por
-  imagem.
+- **Tudo no computador, menos a análise com IA (opcional).** O recorte, o
+  preenchimento e a ampliação continuam locais. Depois de ver o subliai.com por
+  dentro (2026-10-07), a pessoa pediu para usar o crédito que tem na Claude API
+  (US$ 100) na parte que o concorrente faz melhor: **achar e descrever** as
+  peças e os elementos sozinho. Só esse botão manda a foto para a Anthropic;
+  sem chave ou sem crédito, tudo funciona como antes, no modo manual. O Claude
+  lê imagem mas não gera imagem: redesenhar continua sendo a LaMa, o vetor e o
+  Real-ESRGAN, aqui.
 
 A verdade dita em voz alta: o decote, as cavas e o que está fora da silhueta
 **não existem na foto** — essa parte é inventada. Como o molde corta quase
@@ -131,6 +138,84 @@ Real-ESRGAN para chegar ao tamanho final.
 - **`src/telas/extrator/paraOMolde.ts`:** cria a Estampa no molde escolhido,
   com os papéis "frente", "costas", "manga esquerda" e "manga direita".
 
+## A análise com IA (Claude)
+
+### O que o concorrente faz, e o que trazemos
+
+No subliai.com (visto por dentro em 2026-10-07, na demonstração da "camisa de
+interclasse"): a foto é lida por uma IA de visão, que diz o que é a peça
+("Camiseta raglan manga curta · frente, costas"), numera cada arte na foto com
+uma caixa, e organiza a lista **por peça da camisa** — corpo frente, corpo
+costas, manga esquerda, manga direita (estas "vistas frente e costas"). Em cada
+peça, o **fundo** (o tecido ou a estampa de fundo daquela parte) vem separado
+dos **elementos** de cima (escudo, texto, nome, número, logos), cada um com uma
+ficha: o que é, onde está, estilo, cores em hex, o defeito na foto, a
+proporção. Depois a IA generativa redesenha cada um (créditos: 15 o primeiro,
+10 cada um a mais), e sai num ZIP com PNG 4K, SVG, EPS e TIFF.
+
+Trazemos a primeira metade — achar, organizar e descrever —, com o Claude. A
+segunda continua nossa e local.
+
+### Como funciona
+
+1. Na tela, o botão **"Analisar com IA"** (só aparece com a chave
+   configurada). A foto de trabalho (2048 px, a mesma que vai à rede de recorte)
+   sobe **uma vez** ao servidor, que a manda ao Claude.
+2. O Claude devolve, num JSON com esquema fixo (saída estruturada):
+   - **a peça**: o tipo ("camiseta raglan manga curta") e as vistas na foto;
+   - **as caixas das peças**: frente, costas e as quatro vistas das mangas
+     (as mesmas seis marcações do modo "Peças da camisa");
+   - **os elementos de cada peça**, cada um com caixa, nome curto, o que é,
+     as cores em hex e a sugestão de jeito (Chapado ou Foto).
+   As caixas vêm em coordenadas de 0 a 1000 da foto (a imagem pode ser reduzida
+   no caminho; a fração não muda) e viram pixels da foto de trabalho no servidor.
+3. Cada caixa vira máscara **na rede de recorte local** (a MobileSAM, com a
+   caixa como pedido): a caixa do Claude é aproximada, a máscara é exata. No
+   teste da camisa, a caixa foi justamente o pedido que melhor funcionou.
+4. **O operador confere**, como no concorrente: a lista agrupada por peça, cada
+   item com a miniatura, desmarcável. No modo "Peças da camisa", as seis
+   marcações já vêm preenchidas; no modo de elementos, "Extrair os marcados"
+   guarda cada um como elemento (com o nome e a sugestão de jeito do Claude).
+5. **A conta** de cada análise aparece na tela ("Análise: US$ 0,07"), calculada
+   pelos tokens que a API devolve.
+
+### As peças do sistema
+
+- **`servidor/extrator-analise.js`** (novo): o pedido ao Claude pelo SDK
+  oficial (`@anthropic-ai/sdk`, no servidor), o esquema da resposta, a
+  conferência do que voltou (caixa dentro da foto, peça conhecida) e a conta.
+  Modelo `claude-opus-5-5` com esforço `medium`; o fallback do servidor em caso
+  de recusa ligado (`fallbacks: "default"`).
+- **Rota `POST /api/extrator/analisar`** (`{ id }` da leitura da foto já lida —
+  a foto não sobe duas vezes) → `{ peca, marcacoes, elementos, custo }`.
+- **A chave** fica na variável de ambiente `ANTHROPIC_API_KEY` da máquina do
+  servidor — nunca no código, no banco ou no git. Sem ela, `GET /estado` diz
+  `analise: "…"` (o motivo) e a tela esconde o botão.
+- **Tela**: o botão, a lista agrupada por peça com caixas na mesa, e as duas
+  ações (preencher as marcações; extrair os marcados).
+
+### Falhas
+
+- Sem chave: o botão não aparece; o resto funciona.
+- Chave errada, sem crédito, limite de uso, Anthropic fora do ar: a mensagem em
+  português ("A análise com IA não respondeu: …"), sem travar o modo manual.
+- Recusa do modelo (`stop_reason: "refusal"`): "A IA não quis analisar esta
+  foto"; o modo manual continua.
+- Resposta com caixa fora da foto, ou peça que não existe: o item é descartado
+  e contado ("2 itens da análise foram ignorados").
+
+### Custo
+
+Pelo preço do `claude-opus-5-5` (US$ 4 por milhão de tokens de entrada, US$ 20
+de saída), uma foto deve sair entre US$ 0,05 e 0,10 — os US$ 100 dão de mil a
+duas mil análises. A primeira tarefa da análise mede o custo de verdade na foto
+de teste e o grava no plano.
+
+### Privacidade
+
+A foto do cliente sai do computador **só** quando o operador aperta "Analisar
+com IA". O texto do botão diz isso ("manda a foto para a IA da Anthropic").
+
 ## O caminho dos dados (uma peça)
 
 1. A tela já tem a foto de trabalho (2048 px) e a leitura da rede de recorte no
@@ -170,6 +255,13 @@ Mensagens ao operador em português; falha do servidor volta como
   mede o tempo nesta máquina. **A primeira tarefa do plano é essa medição**,
   como foi a da rede de recorte: se a LaMa não couber (tempo ou qualidade), o
   plano troca para o PatchMatch antes de seguir.
+- **Bancada da análise, sem rede:** um cliente de mentira no lugar do SDK
+  devolve um JSON conhecido; confere a conversão das caixas (0–1000 → pixels),
+  o descarte de caixa fora da foto e de peça desconhecida, a conta pelos tokens,
+  e as mensagens de sem chave e de recusa. Entra no Conferir (sem custo).
+- **Bancada da análise de verdade** (fora da CI, custa centavos): a foto de
+  teste vai ao Claude; confere que voltam frente e costas, e que a caixa da
+  frente cobre a frente (IoU ≥ 0,7 com a caixa marcada à mão), e imprime o custo.
 - **Bancada de tela:** o mockup do teste (guardado em `D:\arte\extrator`, fora
   do git, como as outras fotos reais) vira caso: quatro caixas, medidas
   digitadas, quatro PNGs sem transparência, na medida certa a 300 dpi, e a
@@ -177,7 +269,11 @@ Mensagens ao operador em português; falha do servidor volta como
 
 ## Fora do escopo
 
-- Achar as peças sozinho, sem o operador marcar.
+- Redesenhar a arte com IA generativa (o que o concorrente cobra): o Claude não
+  gera imagem; o preenchimento e o vetor seguem locais.
+- Separar o fundo da peça dos elementos de cima (apagar os logos do fundo com a
+  LaMa): fica para depois; a análise já devolve os dois separados, então o
+  passo seguinte é pequeno.
 - Desentortar dobra de tecido de verdade (foto de camisa vestida); o modo é
   pensado para mockup e camisa estendida. A dobra continua na arte.
 - Refazer letra ou rosto cortados pela borda: o inventado é continuação, não
