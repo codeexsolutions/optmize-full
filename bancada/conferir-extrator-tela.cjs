@@ -196,7 +196,16 @@ async function comRede(navegador, pasta) {
     }, { timeout: 20000 });
 
     assert.deepEqual(problemas, [], problemas.join('\n'));
-    console.log('  com a rede: EXIF, clique, cliques seguidos, leitura vencida, guardar e endireitar');
+    // O servidor some no meio do clique: o erro na tela é em português, não o "Failed to fetch" do navegador.
+    await p.setRequestInterception(true);
+    p.on('request', (rq) => (rq.url().includes('/api/extrator/') ? rq.abort('connectionrefused') : rq.continue()));
+    await clicarNaFoto(p, 300, 300);
+    await p.waitForSelector('#extrator-erro', { timeout: 15000 });
+    const textoDoErro = await p.$eval('#extrator-erro', (e) => e.textContent || '');
+    assert.match(textoDoErro, /servidor do Extrator/, 'o servidor fora do ar vira mensagem em português');
+    assert.doesNotMatch(textoDoErro, /Failed to fetch/i, 'o erro do navegador não vaza para a tela');
+
+    console.log('  com a rede: EXIF, clique, cliques seguidos, leitura vencida, guardar, endireitar e servidor fora do ar');
     await p.close();
   } finally {
     s.parar();

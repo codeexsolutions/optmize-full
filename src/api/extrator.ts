@@ -28,6 +28,19 @@ export interface MascaraLida { alfa: Uint8Array; largura: number; altura: number
 
 export class LeituraVencida extends Error {}
 
+/**
+ * O `fetch`, com o "servidor fora do ar" em português. O cancelamento
+ * (`AbortError`) passa intacto: a tela depende dele para não mostrar erro.
+ */
+async function chamar(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new Error("Não consegui falar com o servidor do Extrator. Ele está ligado?");
+  }
+}
+
 async function falhou(resposta: Response, padrao: string): Promise<Error> {
   const corpo = (await resposta.json().catch(() => ({}))) as { error?: string; codigo?: string | null };
   const texto = corpo.error || padrao;
@@ -36,7 +49,12 @@ async function falhou(resposta: Response, padrao: string): Promise<Error> {
 
 /** O PNG cinza da máscara, de volta a um byte por pixel. */
 async function alfaDoPng(png: Blob): Promise<{ alfa: Uint8Array; largura: number; altura: number }> {
-  const bitmap = await createImageBitmap(png, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(png, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+  } catch {
+    throw new Error("O servidor mandou uma máscara que o navegador não conseguiu abrir.");
+  }
   try {
     const tela = new OffscreenCanvas(bitmap.width, bitmap.height);
     const ctx = tela.getContext("2d", { willReadFrequently: true });
@@ -55,13 +73,13 @@ const espera = (ms: number) => new Promise((pronto) => setTimeout(pronto, ms));
 
 export const extratorApi = {
   async estado(): Promise<EstadoDoExtrator> {
-    const r = await fetch("/api/extrator/estado");
+    const r = await chamar("/api/extrator/estado");
     if (!r.ok) throw await falhou(r, "O servidor não respondeu sobre o Extrator.");
     return (await r.json()) as EstadoDoExtrator;
   },
 
   async ler(foto: Blob, sinal?: AbortSignal): Promise<Leitura> {
-    const r = await fetch("/api/extrator/ler", {
+    const r = await chamar("/api/extrator/ler", {
       method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: foto, signal: sinal,
     });
     if (!r.ok) throw await falhou(r, "O servidor não conseguiu ler a foto.");
@@ -69,7 +87,7 @@ export const extratorApi = {
   },
 
   async mascara(id: string, pontos: PontoDoClique[], caixa: CaixaDoClique | null, sinal?: AbortSignal): Promise<MascaraLida> {
-    const r = await fetch("/api/extrator/mascara", {
+    const r = await chamar("/api/extrator/mascara", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, pontos, caixa }), signal: sinal,
     });
     if (!r.ok) throw await falhou(r, "O servidor não conseguiu achar o elemento.");
@@ -78,7 +96,7 @@ export const extratorApi = {
   },
 
   async png(svg: string, largura: number, altura: number): Promise<Blob> {
-    const r = await fetch("/api/extrator/png", {
+    const r = await chamar("/api/extrator/png", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ svg, largura, altura }),
     });
     if (!r.ok) throw await falhou(r, "O servidor não conseguiu desenhar o PNG.");
@@ -96,19 +114,19 @@ export const extratorApi = {
       largura: String(recorte.largura), altura: String(recorte.altura),
       saidaLargura: String(saida.largura), saidaAltura: String(saida.altura),
     });
-    const r = await fetch(`/api/extrator/ampliar?${q}`, {
+    const r = await chamar(`/api/extrator/ampliar?${q}`, {
       method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: recorte.rgba, signal: sinal,
     });
     if (!r.ok) throw await falhou(r, "O servidor não conseguiu começar a ampliação.");
     const { id, total } = (await r.json()) as { id: string; total: number };
     aoAndar(0, total);
-    const cancelar = () => { void fetch(`/api/extrator/ampliar/${id}`, { method: "DELETE" }); };
+    const cancelar = () => { void fetch(`/api/extrator/ampliar/${id}`, { method: "DELETE" }).catch(() => {}); };
     sinal?.addEventListener("abort", cancelar, { once: true });
     try {
       for (;;) {
         await espera(400);
         if (sinal?.aborted) throw new DOMException("cancelado", "AbortError");
-        const g = await fetch(`/api/extrator/ampliar/${id}`, { signal: sinal });
+        const g = await chamar(`/api/extrator/ampliar/${id}`, { signal: sinal });
         if (!g.ok) throw await falhou(g, "A ampliação parou no meio.");
         if ((g.headers.get("Content-Type") || "").startsWith("image/png")) return await g.blob();
         const andamento = (await g.json()) as { feitos: number; total: number };
