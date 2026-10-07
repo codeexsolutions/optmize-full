@@ -186,8 +186,18 @@ segunda continua nossa e local.
   conferência do que voltou (caixa dentro da foto, peça conhecida) e a conta.
   Modelo `claude-opus-5-5` com esforço `medium`; o fallback do servidor em caso
   de recusa ligado (`fallbacks: "default"`).
-- **Rota `POST /api/extrator/analisar`** (`{ id }` da leitura da foto já lida —
-  a foto não sobe duas vezes) → `{ peca, marcacoes, elementos, custo }`.
+- **Rota `POST /api/extrator/analisar`** (a foto de trabalho, crua, como no
+  `/ler`: a leitura guardada no servidor é o que a rede de recorte tirou da
+  foto, e não a foto) → `{ peca, marcacoes, elementos, ignorados, custo }`.
+- **As travas, porque é a única rota que gasta dinheiro** e o servidor escuta
+  a rede inteira da gráfica (apontado pela revisão de segurança):
+  - o pedido precisa do cabeçalho `X-Optimize-Pedido: extrator`, que só a tela
+    põe — uma página de outro site aberta no navegador não consegue mandar
+    cabeçalho próprio sem o servidor permitir (CSRF);
+  - a conta do Optmize precisa estar entrada nesta máquina;
+  - uma análise de cada vez, e um teto de gasto por dia
+    (`OPTIMIZE_ANALISE_LIMITE_DIA`, em US$, 5 por padrão; a conta do dia fica
+    na memória do servidor e recomeça se ele reiniciar).
 - **A chave** fica na variável de ambiente `ANTHROPIC_API_KEY` da máquina do
   servidor — nunca no código, no banco ou no git. Sem ela, `GET /estado` diz
   `analise: "…"` (o motivo) e a tela esconde o botão.
@@ -203,6 +213,8 @@ segunda continua nossa e local.
   foto"; o modo manual continua.
 - Resposta com caixa fora da foto, ou peça que não existe: o item é descartado
   e contado ("2 itens da análise foram ignorados").
+- Teto do dia atingido, ou outra análise rodando: "A análise com IA já gastou o
+  teto de hoje (US$ 5.00); volta amanhã." / "Já há uma análise em andamento".
 
 ### Custo
 
