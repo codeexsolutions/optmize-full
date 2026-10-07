@@ -69,7 +69,7 @@ export function aplicarMascara(rgba, largura, altura, alfa, margem = 2) {
 }
 
 /** Os marcados engordados `raio` pixels numa caixa: um máximo deslizante nas linhas e outro nas colunas. */
-function engordar(marcado, largura, altura, raio) {
+export function engordar(marcado, largura, altura, raio) {
   const meio = new Uint8Array(largura * altura), saida = new Uint8Array(largura * altura);
   for (let y = 0; y < altura; y++) {
     let ultimo = -Infinity;

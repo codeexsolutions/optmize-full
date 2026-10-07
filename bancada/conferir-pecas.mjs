@@ -161,4 +161,90 @@ const require = createRequire(import.meta.url);
   assert.match(api.lerPedidoDePreencher({}, Buffer.alloc(4)).erro, /Faltou a medida/);
 }
 
-console.log("OK — as peças da camisa sem rede: o preenchimento, a fila e o pedido.");
+// ---------- os motores das peças ----------
+{
+  const { carregarModulo } = await import("./carregarModulo.mjs");
+  const m = await carregarModulo("src/motores/pecasDaCamisa.js");
+
+  // Uma camisa de 400 × 300: corpo de 200 × 250 e duas mangas de 60 × 80 encostadas nele.
+  const w = 400, h = 300;
+  const retangulo = (x0, y0, x1, y1) => {
+    const a = new Uint8Array(w * h);
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) a[y * w + x] = 255;
+    return a;
+  };
+  const camisa = retangulo(100, 50, 300, 300);
+  for (let y = 50; y < 130; y++) for (let x = 40; x < 100; x++) camisa[y * w + x] = 255;
+  for (let y = 50; y < 130; y++) for (let x = 300; x < 360; x++) camisa[y * w + x] = 255;
+  const mangaDaFoto = retangulo(40, 50, 100, 130), outraManga = retangulo(300, 50, 360, 130);
+  const longe = retangulo(0, 290, 10, 300);
+  const corpo = m.corpoSemMangas(camisa, [mangaDaFoto, outraManga, null, longe], w, h);
+  assert.equal(corpo.alfa.reduce((n, v) => n + (v >= 128), 0), 200 * 250, "o corpo fica sem as duas mangas");
+  assert.deepEqual(corpo.soltas, [3], "a caixa que não encosta no corpo é avisada, e não tirada");
+
+  assert.deepEqual(m.tamanhoDaMontagem(50, 70), { largura: 1463, altura: 2048 });
+  assert.deepEqual(m.encaixeNaArea(100, 200, { x: 0, y: 0, largura: 50, altura: 50 }), { escala: 0.5, x: 0, y: -25 });
+  assert.deepEqual(m.encaixeNaArea(100, 200, { x: 0, y: 0, largura: 50, altura: 50 }, { zoom: 2, dx: 0.1, dy: 0 }), { escala: 1, x: -20, y: -75 });
+
+  // A frente: 100 × 100 vermelha com um decote de 20 × 20 vazio, num retângulo de 200 × 300.
+  const frente = { rgba: new Uint8ClampedArray(100 * 100 * 4), largura: 100, altura: 100, x0: 0, y0: 0 };
+  for (let i = 0; i < 100 * 100; i++) {
+    const x = i % 100, y = Math.floor(i / 100);
+    const decote = x >= 40 && x < 60 && y < 20;
+    frente.rgba.set([200, 30, 40, decote ? 0 : 255], i * 4);
+    if (x < 5) frente.rgba.set([0, 0, 255, 255], i * 4); // a faixa azul da esquerda
+  }
+  const peca = m.montarPeca(frente, { largura: 200, altura: 300 });
+  const esperado = (200 * 100 + 40 * 40) / (200 * 300);
+  assert.ok(Math.abs(peca.inventado - esperado) < 0.02 * esperado, `a parte inventada: ${peca.inventado} (esperava ${esperado})`);
+  const px = (r, x, y) => Array.from(r.rgba.subarray((y * r.largura + x) * 4, (y * r.largura + x) * 4 + 4));
+  assert.equal(px(peca, 100, 49)[3], 0, "a faixa de cima fica para inventar");
+  assert.deepEqual(px(peca, 100, 200), [200, 30, 40, 255]);
+  assert.deepEqual(px(peca, 4, 150), [0, 0, 255, 255], "a faixa azul de 5 px virou 10: a arte cresceu sem deformar");
+  assert.deepEqual(px(peca, 12, 150), [200, 30, 40, 255]);
+
+  // A manga: a frente com a faixa azul na esquerda; as costas verdes.
+  const verde = { rgba: new Uint8ClampedArray(50 * 100 * 4), largura: 50, altura: 100, x0: 0, y0: 0 };
+  for (let i = 0; i < 50 * 100; i++) verde.rgba.set([20, 160, 60, 255], i * 4);
+  const meiaFrente = { rgba: new Uint8ClampedArray(50 * 100 * 4), largura: 50, altura: 100, x0: 0, y0: 0 };
+  for (let i = 0; i < 50 * 100; i++) meiaFrente.rgba.set(i % 50 < 5 ? [0, 0, 255, 255] : [200, 30, 40, 255], i * 4);
+  const manga = m.montarManga(meiaFrente, verde, { largura: 200, altura: 200 }, m.AJUSTE_INICIAL, "manga esquerda");
+  assert.equal(manga.aviso, null);
+  assert.deepEqual(px(manga, 2, 100), [0, 0, 255, 255], "a frente na metade da esquerda");
+  assert.deepEqual(px(manga, 150, 100), [20, 160, 60, 255], "as costas na da direita");
+  assert.equal(px(manga, 100, 100)[3], 0, "a costura do meio fica para o preenchimento");
+  assert.equal(px(manga, 96, 100)[3], 255);
+  const soFrente = m.montarManga(meiaFrente, null, { largura: 200, altura: 200 }, m.AJUSTE_INICIAL, "manga esquerda");
+  assert.match(soFrente.aviso, /^A manga esquerda só tem a vista da frente/);
+  assert.deepEqual(px(soFrente, 197, 100), [0, 0, 255, 255], "sem as costas, a frente espelhada: a faixa azul vai para a borda da direita");
+  assert.equal(m.montarManga(null, null, { largura: 10, altura: 10 }), null);
+
+  // A sombra: camisa branca escurecendo da esquerda (255) para a direita (178), com um escudo vermelho.
+  const sw = 400, sh = 300;
+  const comSombra = { rgba: new Uint8ClampedArray(sw * sh * 4), largura: sw, altura: sh, x0: 0, y0: 0 };
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const f = 1 - (0.3 * x) / (sw - 1);
+      const escudo = x >= 150 && x < 250 && y >= 100 && y < 200;
+      const cor = escudo ? [200, 30, 40] : [255, 255, 255];
+      comSombra.rgba.set([cor[0] * f, cor[1] * f, cor[2] * f, 255], (y * sw + x) * 4);
+    }
+  }
+  const limpa = m.tirarSombra(comSombra);
+  assert.equal(limpa.clareou, true);
+  for (const [x, y] of [[5, 20], [200, 20], [395, 20], [395, 290], [100, 150]]) {
+    const p = px(limpa, x, y);
+    assert.ok(p[0] > 245 && p[1] > 245 && p[2] > 245, `o branco em ${x},${y} voltou a ${p}`);
+  }
+  const escudo = px(limpa, 240, 150);
+  assert.ok(Math.abs(escudo[0] - 200) <= 20 && escudo[1] < 60, `o escudo do lado escuro voltou a ${escudo}`);
+  assert.equal(comSombra.rgba[(20 * sw + 395) * 4], Math.round(255 * (1 - (0.3 * 395) / 399)), "o recorte de entrada não muda");
+  // Camisa azul-marinho inteira: não há branco para medir a luz, e nada muda.
+  const marinho = { rgba: new Uint8ClampedArray(64 * 64 * 4), largura: 64, altura: 64, x0: 0, y0: 0 };
+  for (let i = 0; i < 64 * 64; i++) marinho.rgba.set([20, 30, 70, 255], i * 4);
+  const igual = m.tirarSombra(marinho);
+  assert.equal(igual.clareou, false);
+  assert.deepEqual(Array.from(igual.rgba), Array.from(marinho.rgba));
+}
+
+console.log("OK — as peças da camisa sem rede: o preenchimento, a fila, o pedido e os motores.");
