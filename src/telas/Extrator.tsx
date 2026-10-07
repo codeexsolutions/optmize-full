@@ -11,12 +11,14 @@
  * O desenho é da spec `docs/superpowers/specs/2026-10-06-extrator-design.md`;
  * o estado mora em `extrator/useExtrator.ts`, a mesa em `extrator/MesaDoExtrator.tsx`.
  */
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Botao } from "../casca/Botao";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
+import { baixar, cacheDeVetores, zipDosElementos } from "./extrator/arquivos";
 import { ListaDeElementos } from "./extrator/ListaDeElementos";
 import { MesaDoExtrator } from "./extrator/MesaDoExtrator";
+import { PainelDoElemento } from "./extrator/PainelDoElemento";
 import type { Ponto } from "./extrator/tipos";
 import { useExtrator } from "./extrator/useExtrator";
 
@@ -32,6 +34,20 @@ export function Extrator() {
   const [modo, setModo] = useState<"separar" | "cantos">("separar");
   const [cantos, setCantos] = useState<Ponto[]>([]);
   const [arquivoEmCima, setArquivoEmCima] = useState(false);
+  const [zipando, setZipando] = useState("");
+  // O vetor de cada elemento, guardado pelas opções enquanto a tela estiver aberta.
+  const vetorDe = useMemo(() => cacheDeVetores(), []);
+
+  const baixarZip = async () => {
+    setZipando("Preparando o ZIP…");
+    try {
+      baixar(await zipDosElementos(x.elementos, vetorDe, setZipando), `${x.nomeDaFoto || "extrator"}.zip`);
+    } catch (e) {
+      x.setErro((e as Error).message);
+    } finally {
+      setZipando("");
+    }
+  };
 
   const comecarCantos = () => {
     if (!x.trabalho) return;
@@ -44,6 +60,7 @@ export function Extrator() {
   };
 
   const semRede = x.estado && !x.estado.pronta ? x.estado.motivo : null;
+  const elemento = x.elementos.find((e) => e.id === x.escolhido) ?? null;
   const temCliques = x.pontos.length > 0 || Boolean(x.caixa);
   const situacao = x.ocupado
     || (modo === "cantos" ? "Arraste os quatro cantos até os cantos da estampa e aperte Aplicar."
@@ -165,7 +182,18 @@ export function Extrator() {
       </div>
 
       <div className="min-w-0">
-        <Cartao titulo="Elementos" icone="icones.svg#layers" apoio="O que você guardou desta foto. Escolha um para limpar e baixar.">
+        <Cartao
+          titulo="Elementos"
+          icone="icones.svg#layers"
+          apoio="O que você guardou desta foto. Escolha um para limpar e baixar."
+          acao={x.elementos.length > 0 ? (
+            <Botao id="extrator-zip" jeito="secundario" tamanho="pequeno" disabled={Boolean(zipando)} onClick={() => void baixarZip()}
+              icone={<Icone referencia="icones.svg#file-archive" className="size-4" />}>
+              Baixar todos (ZIP)
+            </Botao>
+          ) : undefined}
+        >
+          {zipando && <p id="extrator-zipando" className="mt-0 mb-2 text-[0.82rem] text-tinta-fraca">{zipando}</p>}
           <ListaDeElementos
             elementos={x.elementos}
             escolhido={x.escolhido}
@@ -174,6 +202,17 @@ export function Extrator() {
             aoRemover={x.removerElemento}
           />
         </Cartao>
+        {elemento && (
+          <Cartao titulo={elemento.nome} icone="icones.svg#wand-sparkles" apoio="Limpe e baixe este elemento.">
+            <PainelDoElemento
+              key={elemento.id}
+              elemento={elemento}
+              aoMudar={(mudanca) => x.mudarElemento(elemento.id, mudanca)}
+              aoErro={x.setErro}
+              vetorDe={vetorDe}
+            />
+          </Cartao>
+        )}
       </div>
     </div>
   );

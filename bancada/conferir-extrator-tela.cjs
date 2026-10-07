@@ -17,7 +17,11 @@
  *      a foto de celular deitada (EXIF 6) chega em pé; o clique acha o disco;
  *      três cliques seguidos dão a máscara dos três; a leitura vencida é
  *      refeita sem erro na tela; o elemento guardado entra na lista; e o
- *      Endireitar com os cantos de começo corta 10% de cada lado.
+ *      Endireitar com os cantos de começo corta 10% de cada lado. No meio, o
+ *      elemento é limpo e baixado: SVG, EPS e PNG de 4K do chapado (o PNG
+ *      transparente em volta), o PNG por medida (10 cm → 1181 px), a foto
+ *      ampliada com andamento, o cancelar que não baixa nada, e o ZIP de dois
+ *      elementos com o mesmo nome ("Logo" e "Logo (2)").
  *
  * O 410 da leitura vencida é esperado (é ele que a tela refaz); qualquer
  * outra resposta >= 400 da API, ou erro no console, reprova.
@@ -186,6 +190,79 @@ async function comRede(navegador, pasta) {
     await p.click('#extrator-guardar');
     await esperarElementos(p, 1);
     assert.match(await p.$eval('#extrator-elementos li img', (i) => i.src), /^data:image\/png/);
+
+    // ---------- limpar e baixar ----------
+    const baixados = () => p.evaluate(() => window.__baixados.length);
+    const esperarBaixado = async (n) => {
+      await p.waitForFunction((k) => window.__baixados.length >= k, { timeout: 90000 }, n);
+      const b = await p.evaluate((k) => window.__baixados[k - 1], n);
+      return { nome: b.nome, bytes: Buffer.from(b.bytes) };
+    };
+    const medidaDoPng = (bytes) => [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+
+    // O disco guardado é chapado: a prévia vem do vetor, e os três arquivos saem.
+    await p.click('#extrator-elementos li button');
+    await p.waitForSelector('#extrator-painel');
+    assert.match(await p.$eval('#extrator-elementos li', (n) => n.textContent), /chapado/);
+    await p.waitForFunction(() => (document.querySelector('#extrator-previa')?.src || '').startsWith('blob:'), { timeout: 30000 });
+    await p.click('#extrator-baixar-svg');
+    const svg = await esperarBaixado(1);
+    assert.equal(svg.nome, 'Elemento 1.svg');
+    assert.match(svg.bytes.toString('utf8'), /<svg[\s\S]*<path fill="#/);
+    await p.click('#extrator-baixar-eps');
+    const eps = await esperarBaixado(2);
+    assert.equal(eps.nome, 'Elemento 1.eps');
+    assert.ok(eps.bytes.toString('latin1').startsWith('%!PS-Adobe-3.0 EPSF-3.0'));
+    await p.click('#extrator-baixar-png');
+    const png4k = await esperarBaixado(3);
+    assert.equal(Math.max(...medidaDoPng(png4k.bytes)), 4096, 'o PNG do chapado sai em 4K');
+    const canto = await sharp(png4k.bytes).ensureAlpha().extract({ left: 0, top: 0, width: 1, height: 1 }).raw().toBuffer();
+    assert.equal(canto[3], 0, 'o PNG do chapado é transparente em volta');
+
+    // Por medida: 10 cm a 300 dpi são 1181 px de largura.
+    await p.click('#extrator-tamanho-cm');
+    await p.$eval('#extrator-largura-cm', (i) => { i.value = ''; });
+    await p.type('#extrator-largura-cm', '10');
+    await p.waitForFunction(() => /^1181 ×/.test(document.querySelector('#extrator-medida-png')?.textContent || ''));
+    await p.click('#extrator-baixar-png');
+    assert.equal(medidaDoPng((await esperarBaixado(4)).bytes)[0], 1181);
+
+    // O jeito Foto: a ampliação mostra o andamento e sai em 4K.
+    await p.click('#extrator-tamanho-4k');
+    await p.click('#extrator-jeito-foto');
+    await p.click('#extrator-baixar-png');
+    await p.waitForSelector('#extrator-andamento', { timeout: 15000 });
+    assert.equal(Math.max(...medidaDoPng((await esperarBaixado(5)).bytes)), 4096, 'a foto ampliada sai em 4K');
+
+    // Cancelar no meio: nada é baixado, e não é erro.
+    await p.click('#extrator-baixar-png');
+    await p.waitForSelector('#extrator-cancelar', { timeout: 15000 });
+    await p.click('#extrator-cancelar');
+    await esperar(3000);
+    assert.equal(await baixados(), 5, 'o cancelado não baixa nada');
+    assert.equal(await p.$('#extrator-erro'), null, 'cancelar não é erro');
+
+    // O ZIP: dois elementos com o mesmo nome não se sobrescrevem.
+    await p.click('#extrator-jeito-chapado');
+    const nomeDo = (i) => `#extrator-elementos li:nth-child(${i}) input`;
+    await p.$eval(nomeDo(1), (i) => { i.focus(); i.select(); });
+    await p.type(nomeDo(1), 'Logo');
+    await clicarNaFoto(p, 910, 430);
+    await esperarMascara(p, 1);
+    await p.click('#extrator-guardar');
+    await esperarElementos(p, 2);
+    await p.$eval(nomeDo(2), (i) => { i.focus(); i.select(); });
+    await p.type(nomeDo(2), 'Logo');
+    await p.click('#extrator-situacao');
+    await p.click('#extrator-zip');
+    const zip = await esperarBaixado(6);
+    assert.match(zip.nome, /\.zip$/);
+    const conteudo = zip.bytes.toString('latin1');
+    assert.ok(conteudo.startsWith('PK'), 'é um ZIP');
+    for (const n of ['Logo.svg', 'Logo.eps', 'Logo.png', 'Logo (2).svg', 'Logo (2).eps', 'Logo (2).png']) {
+      assert.ok(conteudo.includes(n), `o ZIP tem ${n}`);
+    }
+    console.log('  limpar e baixar: SVG, EPS, PNG 4K e por medida, a foto ampliada, cancelar e o ZIP');
 
     // Endireitar com os cantos de começo (10% de cada lado): a foto fica com 80% de cada medida.
     await p.click('#extrator-endireitar');
