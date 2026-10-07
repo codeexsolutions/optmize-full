@@ -13,6 +13,9 @@
  *   POST   /ampliar       o RGBA cru do elemento → { id, total }
  *   GET    /ampliar/:id   o andamento, ou o PNG pronto
  *   DELETE /ampliar/:id   cancela
+ *   POST   /preencher     o RGBA cru da peça montada → { id, total }
+ *   GET    /preencher/:id o andamento, ou o PNG pronto (sem transparência)
+ *   DELETE /preencher/:id cancela
  *   POST   /png           { svg, largura, altura } → PNG transparente
  *
  * A foto sobe CRUA (`express.raw`), e não em base64 num JSON: é um arquivo de
@@ -25,9 +28,10 @@
 
 const express = require("express");
 const sharp = require("sharp");
-const crypto = require("crypto");
 const rede = require("./extrator-rede");
 const ampliar = require("./extrator-ampliar");
+const preencher = require("./extrator-preencher");
+const { criarFila, rotasDeAcompanhar } = require("./extrator-fila");
 
 const router = express.Router();
 
@@ -83,7 +87,9 @@ function responder(res, erro) {
   res.status(status).json({ error: erro.message || "O Extrator não conseguiu terminar.", codigo: erro.codigo || null });
 }
 
-router.get("/estado", (req, res) => res.json({ ...rede.estadoDaRede(), ampliar: ampliar.porqueNaoAmplia() }));
+router.get("/estado", (req, res) => res.json({
+  ...rede.estadoDaRede(), ampliar: ampliar.porqueNaoAmplia(), preencher: preencher.porqueNaoPreenche(),
+}));
 
 router.post("/ler", express.raw({ limit: "80mb", type: () => true }), async (req, res) => {
   if (!req.body || !req.body.length) return res.status(400).json({ error: "Não veio foto nenhuma.", codigo: null });
@@ -126,60 +132,76 @@ function lerPedidoDeAmpliar(query, bytes) {
 }
 
 /**
- * As ampliações em andamento: id → { feitos, total, png, erro, cancelado, criado }.
- * Uma de cada vez, na fila: duas ao mesmo tempo dividiriam os mesmos núcleos.
- * A tela pergunta o andamento a cada 400 ms; a que ninguém buscar some em 30 min.
+ * A fila dos trabalhos pesados (a ampliação e o preenchimento), um de cada
+ * vez: ver `extrator-fila.js`. A tela pergunta o andamento a cada 400 ms.
  */
-const ampliacoes = new Map();
-const VALIDADE_DA_AMPLIACAO_MS = 30 * 60 * 1000;
-let fila = Promise.resolve();
+const fila = criarFila();
 
-router.post("/ampliar", express.raw({ limit: "400mb", type: () => true }), (req, res) => {
+/** O maior elemento que sobe para ampliar: a foto inteira no teto de entrada, 40 MP × 4 bytes. */
+const CORPO_DO_RGBA = "160mb";
+
+function responderFila(res, erro) {
+  if (erro.codigo === "fila-cheia") return res.status(429).json({ error: erro.message, codigo: erro.codigo });
+  throw erro;
+}
+
+router.post("/ampliar", express.raw({ limit: CORPO_DO_RGBA, type: () => true }), (req, res) => {
   const pedido = lerPedidoDeAmpliar(req.query, req.body);
   if (pedido.erro) return res.status(400).json({ error: pedido.erro, codigo: null });
   const { largura, altura, saidaLargura, saidaAltura } = pedido;
   const comRede = ampliar.precisaDaRede(largura, altura, saidaLargura, saidaAltura);
   const motivo = comRede ? ampliar.porqueNaoAmplia() : null;
   if (motivo) return res.status(503).json({ error: motivo, codigo: "sem-rede" });
-
-  const agora = Date.now();
-  for (const [id, a] of ampliacoes) if (agora - a.criado > VALIDADE_DA_AMPLIACAO_MS) ampliacoes.delete(id);
-  const id = crypto.randomUUID();
-  const a = { feitos: 0, total: comRede ? ampliar.ladrilhosDe(largura, altura) : 1, png: null, erro: null, cancelado: false, criado: agora };
-  ampliacoes.set(id, a);
   const rgba = req.body;
-  fila = fila
-    .then(() => (a.cancelado ? null : ampliar.ampliar(rgba, largura, altura, saidaLargura, saidaAltura, {
-      aoAndar: (feitos, total) => { a.feitos = feitos; a.total = total; },
-      cancelado: () => a.cancelado,
-    })))
-    .then(async (r) => {
-      if (r && !a.cancelado) a.png = await sharp(r.rgba, { raw: { width: r.largura, height: r.altura, channels: 4 } }).png().toBuffer();
-    })
-    .catch((erro) => { a.erro = erro.message; });
-  res.json({ id, total: a.total });
+  try {
+    res.json(fila.colocar(comRede ? ampliar.ladrilhosDe(largura, altura) : 1, async (w) => {
+      const r = await ampliar.ampliar(rgba, largura, altura, saidaLargura, saidaAltura, {
+        aoAndar: (feitos, total) => { w.feitos = feitos; w.total = total; },
+        cancelado: () => w.cancelado,
+      });
+      return sharp(r.rgba, { raw: { width: r.largura, height: r.altura, channels: 4 } }).png().toBuffer();
+    }));
+  } catch (erro) {
+    responderFila(res, erro);
+  }
 });
 
-router.get("/ampliar/:id", (req, res) => {
-  const a = ampliacoes.get(req.params.id);
-  if (!a) return res.status(404).json({ error: "Essa ampliação não existe mais: venceu ou foi cancelada.", codigo: null });
-  if (a.erro) {
-    ampliacoes.delete(req.params.id);
-    return res.status(500).json({ error: `A ampliação falhou: ${a.erro}`, codigo: null });
-  }
-  if (!a.png) return res.json({ feitos: a.feitos, total: a.total });
-  ampliacoes.delete(req.params.id);
-  res.setHeader("Content-Type", "image/png");
-  res.send(a.png);
+rotasDeAcompanhar(router, "/ampliar", fila, {
+  sumiu: "Essa ampliação não existe mais: venceu ou foi cancelada.", falhou: "A ampliação falhou",
 });
 
-router.delete("/ampliar/:id", (req, res) => {
-  const a = ampliacoes.get(req.params.id);
-  if (a) {
-    a.cancelado = true;
-    ampliacoes.delete(req.params.id);
+/** O pedido de preenchimento: a medida da peça montada, e os bytes batendo com ela. */
+function lerPedidoDePreencher(query, bytes) {
+  const largura = Number(query.largura), altura = Number(query.altura);
+  if (![largura, altura].every((v) => Number.isInteger(v) && v > 0 && v <= 4096)) {
+    return { erro: "Faltou a medida da peça, ou ela passa de 4096 px de lado." };
   }
-  res.json({ ok: true });
+  if (!bytes || bytes.length !== largura * altura * 4) return { erro: "A peça não veio inteira: o tamanho não bate com a medida." };
+  return { largura, altura };
+}
+
+router.post("/preencher", express.raw({ limit: "80mb", type: () => true }), (req, res) => {
+  const pedido = lerPedidoDePreencher(req.query, req.body);
+  if (pedido.erro) return res.status(400).json({ error: pedido.erro, codigo: null });
+  const motivo = preencher.porqueNaoPreenche();
+  if (motivo) return res.status(503).json({ error: motivo, codigo: "sem-rede" });
+  const { largura, altura } = pedido;
+  const rgba = req.body;
+  try {
+    res.json(fila.colocar(preencher.ladrilhosDe(rgba, largura, altura), async (w) => {
+      const r = await preencher.preencher(rgba, largura, altura, {
+        aoAndar: (feitos, total) => { w.feitos = feitos; w.total = total; },
+        cancelado: () => w.cancelado,
+      });
+      return sharp(r.rgb, { raw: { width: r.largura, height: r.altura, channels: 3 } }).png().toBuffer();
+    }));
+  } catch (erro) {
+    responderFila(res, erro);
+  }
+});
+
+rotasDeAcompanhar(router, "/preencher", fila, {
+  sumiu: "Esse preenchimento não existe mais: venceu ou foi cancelado.", falhou: "O preenchimento falhou",
 });
 
 /** O SVG do vetor.js, e só ele: nada de imagem, script ou referência a arquivo de fora — o rsvg do sharp seguiria. */
@@ -213,5 +235,6 @@ module.exports = router;
 module.exports.fotoDoCorpo = fotoDoCorpo;
 module.exports.lerPedidoDeMascara = lerPedidoDeMascara;
 module.exports.lerPedidoDeAmpliar = lerPedidoDeAmpliar;
+module.exports.lerPedidoDePreencher = lerPedidoDePreencher;
 module.exports.svgSeguro = svgSeguro;
 module.exports.svgNoTamanho = svgNoTamanho;

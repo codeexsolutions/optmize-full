@@ -89,4 +89,64 @@ const require = createRequire(import.meta.url);
   // A rede ausente diz o que falta.
   assert.match(pre.porqueNaoPreenche("C:/nao/existe/lama.onnx"), /npm run modelos/);
 }
-console.log("OK — as peças da camisa sem rede: o preenchimento.");
+// ---------- a fila dos trabalhos pesados ----------
+{
+  const { criarFila } = require("../servidor/extrator-fila.js");
+  let relogio = 0;
+  const fila = criarFila({ maximoEsperando: 2, validadeMs: 1000, agora: () => relogio });
+  let soltar;
+  const trava = new Promise((pronto) => { soltar = pronto; });
+  const rodou = [];
+  const a = fila.colocar(3, async (w) => { rodou.push("a"); w.feitos = 1; await trava; return Buffer.from("png-a"); });
+  assert.equal(fila.ver(a.id).estado, "esperando", "começa esperando; roda no tique seguinte");
+  await new Promise((pronto) => setTimeout(pronto, 0));
+  const b = fila.colocar(1, async () => { rodou.push("b"); return Buffer.from("png-b"); });
+  const c = fila.colocar(1, async () => { rodou.push("c"); return Buffer.from("png-c"); });
+  assert.equal(fila.ver(a.id).estado, "rodando", "o primeiro roda");
+  assert.equal(fila.ver(a.id).feitos, 1);
+  // Esperando: b e c. O quarto passa do máximo de 2.
+  assert.throws(() => fila.colocar(1, async () => Buffer.alloc(0)), (e) => e.codigo === "fila-cheia" && e.status === 429
+    && e.message === "Já há trabalhos demais na fila; espere um terminar.");
+  fila.cancelar(b.id);
+  assert.equal(fila.ver(b.id), null, "o cancelado some");
+  soltar();
+  await fila.vazia();
+  assert.deepEqual(rodou, ["a", "c"], "o cancelado não roda");
+  assert.equal(fila.ver(a.id).png.toString(), "png-a");
+  fila.entregue(a.id);
+  assert.equal(fila.ver(a.id), null);
+
+  // A varredura: o que ninguém buscou em 30 min (aqui, 1 s) é cancelado.
+  let soltar2;
+  const trava2 = new Promise((pronto) => { soltar2 = pronto; });
+  const rodou2 = [];
+  const d = fila.colocar(1, async () => { await trava2; return Buffer.from("d"); });
+  const e = fila.colocar(1, async () => { rodou2.push("e"); return Buffer.from("e"); });
+  relogio += 1500;
+  assert.equal(fila.ver(e.id), null, "venceu");
+  assert.equal(fila.ver(d.id), null);
+  soltar2();
+  await fila.vazia();
+  assert.deepEqual(rodou2, [], "o vencido não roda");
+  assert.equal(fila.ver(c.id), null, "o pronto que ninguém buscou também vence");
+  assert.equal(fila.tamanho(), 0);
+
+  // Uma falha vira o erro do trabalho, e a fila segue.
+  const f = fila.colocar(1, async () => { throw new Error("pifou"); });
+  const g = fila.colocar(1, async () => Buffer.from("g"));
+  await fila.vazia();
+  assert.equal(fila.ver(f.id).estado, "falhou");
+  assert.equal(fila.ver(f.id).erro, "pifou");
+  assert.equal(fila.ver(g.id).estado, "pronto");
+}
+
+// ---------- o pedido de preencher ----------
+{
+  const api = require("../servidor/extrator-api.js");
+  assert.deepEqual(api.lerPedidoDePreencher({ largura: "4", altura: "3" }, Buffer.alloc(48)), { largura: 4, altura: 3 });
+  assert.match(api.lerPedidoDePreencher({ largura: "4", altura: "3" }, Buffer.alloc(47)).erro, /não veio inteira/);
+  assert.match(api.lerPedidoDePreencher({ largura: "5000", altura: "3" }, Buffer.alloc(60000)).erro, /4096/);
+  assert.match(api.lerPedidoDePreencher({}, Buffer.alloc(4)).erro, /Faltou a medida/);
+}
+
+console.log("OK — as peças da camisa sem rede: o preenchimento, a fila e o pedido.");
