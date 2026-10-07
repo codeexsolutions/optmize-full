@@ -93,6 +93,7 @@ const require = createRequire(import.meta.url);
 {
   const { criarFila } = require("../servidor/extrator-fila.js");
   let relogio = 0;
+  // O teto conta todo trabalho ainda não entregue: esperando, rodando ou pronto sem ser buscado.
   const fila = criarFila({ maximoEsperando: 2, validadeMs: 1000, agora: () => relogio });
   let soltar;
   const trava = new Promise((pronto) => { soltar = pronto; });
@@ -101,22 +102,34 @@ const require = createRequire(import.meta.url);
   assert.equal(fila.ver(a.id).estado, "esperando", "começa esperando; roda no tique seguinte");
   await new Promise((pronto) => setTimeout(pronto, 0));
   const b = fila.colocar(1, async () => { rodou.push("b"); return Buffer.from("png-b"); });
-  const c = fila.colocar(1, async () => { rodou.push("c"); return Buffer.from("png-c"); });
   assert.equal(fila.ver(a.id).estado, "rodando", "o primeiro roda");
   assert.equal(fila.ver(a.id).feitos, 1);
-  // Esperando: b e c. O quarto passa do máximo de 2.
-  assert.throws(() => fila.colocar(1, async () => Buffer.alloc(0)), (e) => e.codigo === "fila-cheia" && e.status === 429
-    && e.message === "Já há trabalhos demais na fila; espere um terminar.");
+  // Um rodando e um esperando: o terceiro passa do máximo de 2.
+  const cheia = (e) => e.codigo === "fila-cheia" && e.status === 429
+    && e.message === "Já há trabalhos demais na fila; espere um terminar.";
+  assert.throws(() => fila.colocar(1, async () => Buffer.alloc(0)), cheia);
   fila.cancelar(b.id);
   assert.equal(fila.ver(b.id), null, "o cancelado some");
+  const c = fila.colocar(1, async () => { rodou.push("c"); return Buffer.from("png-c"); });
+  assert.throws(() => fila.colocar(1, async () => Buffer.alloc(0)), cheia, "o cancelamento abriu uma vaga, e só uma");
   soltar();
   await fila.vazia();
   assert.deepEqual(rodou, ["a", "c"], "o cancelado não roda");
+  assert.equal(fila.ver(a.id).estado, "pronto");
   assert.equal(fila.ver(a.id).png.toString(), "png-a");
+  assert.equal(fila.ver(c.id).estado, "pronto");
+  // O pronto que ninguém buscou ainda ocupa vaga: o teto vale para a memória, não só para a espera.
+  assert.throws(() => fila.colocar(1, async () => Buffer.alloc(0)), cheia, "o pronto não buscado conta");
   fila.entregue(a.id);
   assert.equal(fila.ver(a.id), null);
+  assert.equal(fila.tamanho(), 1);
+  // A vaga que a entrega abriu serve; a varredura abaixo limpa o resto.
+  fila.colocar(1, async () => Buffer.from("h"));
 
-  // A varredura: o que ninguém buscou em 30 min (aqui, 1 s) é cancelado.
+  // A varredura: o que ninguém buscou em 30 min (aqui, 1 s) é cancelado, até o pronto.
+  relogio += 1500;
+  assert.equal(fila.ver(c.id), null, "o pronto que ninguém buscou também vence");
+  assert.equal(fila.tamanho(), 0);
   let soltar2;
   const trava2 = new Promise((pronto) => { soltar2 = pronto; });
   const rodou2 = [];
@@ -128,7 +141,6 @@ const require = createRequire(import.meta.url);
   soltar2();
   await fila.vazia();
   assert.deepEqual(rodou2, [], "o vencido não roda");
-  assert.equal(fila.ver(c.id), null, "o pronto que ninguém buscou também vence");
   assert.equal(fila.tamanho(), 0);
 
   // Uma falha vira o erro do trabalho, e a fila segue.

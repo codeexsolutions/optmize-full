@@ -10,9 +10,12 @@
  *
  * As travas (da revisão final do Extrator):
  *
- *   - no máximo `MAXIMO_ESPERANDO` (4) trabalhos esperando a vez; o quinto
- *     recebe `fila-cheia` (429): a API escuta a rede da gráfica inteira, e uma
- *     fila sem fim deixaria qualquer um encher a memória do servidor;
+ *   - no máximo `MAXIMO_ESPERANDO` (4) trabalhos na fila, contando todos os
+ *     que ainda não foram entregues: esperando a vez, rodando, ou prontos
+ *     esperando ser buscados (o PNG pronto fica na memória). O quinto recebe
+ *     `fila-cheia` (429): a API escuta a rede da gráfica inteira, e uma fila
+ *     sem fim (ou PNGs que ninguém busca) deixaria qualquer um encher a memória
+ *     do servidor;
  *   - o trabalho que ninguém buscar em 30 minutos é cancelado e some, esteja
  *     ele esperando, rodando ou pronto.
  */
@@ -37,16 +40,15 @@ function criarFila({ maximoEsperando = MAXIMO_ESPERANDO, validadeMs = VALIDADE_M
     }
   }
 
-  const esperando = () => [...trabalhos.values()].filter((w) => w.estado === "esperando").length;
-
   /**
    * Põe um trabalho na fila. `rodar(w)` recebe o registro (para `w.feitos`,
    * `w.total` e `w.cancelado`) e devolve o PNG. Estoura com `codigo:
-   * "fila-cheia"` quando já há trabalhos demais esperando.
+   * "fila-cheia"` quando já há trabalhos demais na fila: todo trabalho ainda
+   * não entregue conta (esperando a vez ou esperando ser buscado).
    */
   function colocar(total, rodar) {
     varrer();
-    if (esperando() >= maximoEsperando) {
+    if (trabalhos.size >= maximoEsperando) {
       throw Object.assign(new Error("Já há trabalhos demais na fila; espere um terminar."), { codigo: "fila-cheia", status: 429 });
     }
     const id = crypto.randomUUID();

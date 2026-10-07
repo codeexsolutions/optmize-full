@@ -142,7 +142,7 @@ const CORPO_DO_RGBA = "160mb";
 
 function responderFila(res, erro) {
   if (erro.codigo === "fila-cheia") return res.status(429).json({ error: erro.message, codigo: erro.codigo });
-  throw erro;
+  responder(res, erro);
 }
 
 router.post("/ampliar", express.raw({ limit: CORPO_DO_RGBA, type: () => true }), (req, res) => {
