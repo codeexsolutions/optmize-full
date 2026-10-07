@@ -191,6 +191,10 @@ segunda continua nossa e local.
   foto, e não a foto) → `{ peca, marcacoes, elementos, ignorados, custo }`.
 - **As travas, porque é a única rota que gasta dinheiro** e o servidor escuta
   a rede inteira da gráfica (apontado pela revisão de segurança):
+  - por padrão, só o próprio computador do servidor analisa (`127.0.0.1`):
+    a sessão do Optmize é da máquina, sem login por pessoa, então de outro
+    computador da rede só com `OPTIMIZE_ANALISE_NA_REDE=1`, de propósito —
+    e o `/estado` já esconde o botão para quem não pode;
   - o pedido precisa do cabeçalho `X-Optimize-Pedido: extrator`, que só a tela
     põe — uma página de outro site aberta no navegador não consegue mandar
     cabeçalho próprio sem o servidor permitir (CSRF);
