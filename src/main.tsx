@@ -9,6 +9,7 @@ import "../estilo/entrada.css";
 import { App } from "./App";
 import { ProvedorDeAlerta } from "./casca/Alerta";
 import { CamadaDeEntrada } from "./telas/Entrada";
+import { aplicarModoLeve } from "./estado/leve";
 
 /*
  * O LINK ANTIGO, COM "#", CONTINUA LEVANDO À TELA CERTA
@@ -26,6 +27,9 @@ const telaNoHash = window.location.hash.replace(/^#\/?/, "");
 if (telaNoHash) {
   window.history.replaceState(null, "", `/${telaNoHash}`);
 }
+
+// Antes de montar: o primeiro quadro já sai sem o que a máquina não aguenta.
+aplicarModoLeve();
 
 const raiz = document.getElementById("raiz");
 if (!raiz) throw new Error("Falta a <div id=\"raiz\"> no index.html.");

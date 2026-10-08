@@ -31,7 +31,8 @@
  *   "sem preferência" de movimento no WebView2 (`src-tauri/src/main.rs`),
  *   esta rede roda até nos PCs que pediram ao Windows para não animar — e,
  *   medida com a CPU 4x mais lenta, ela sozinha segurava ~22% de CPU com o
- *   programa parado, justo nas máquinas mais fracas.
+ *   programa parado, justo nas máquinas mais fracas. Nelas, o modo leve
+ *   (`estado/leve.ts`) a deixa parada de vez.
  * - No máximo `QUADROS_POR_SEGUNDO`. Os pontos andam pelo tempo que passou,
  *   e não por quadro: a velocidade na tela é a mesma de antes, só com menos
  *   desenhos.
@@ -40,6 +41,7 @@
  */
 
 import { useEffect, useRef } from "react";
+import { modoLeve } from "../estado/leve";
 
 type Ponto = { x: number; y: number; vx: number; vy: number };
 type Pulso = { i: number; j: number; t: number; velocidade: number };
@@ -94,7 +96,8 @@ export function RedeAnimada({
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
-    const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // No modo leve, como no pedido de menos movimento: um quadro e para.
+    const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches || modoLeve();
     const temMouse = seguirPonteiro && window.matchMedia("(pointer: fine)").matches;
 
     /*

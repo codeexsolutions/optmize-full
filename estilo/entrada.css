@@ -809,3 +809,20 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
+
+/*
+ * O MODO LEVE: SEM DESFOQUE.
+ *
+ * `backdrop-filter` refaz o desfoque de tudo o que está atrás a cada quadro
+ * que muda — e o cabeçalho fica por cima de toda tela que rola. Sem placa de
+ * vídeo (acesso remoto, driver velho) isso é o processador desfocando a
+ * janela inteira a cada rolagem. Os fundos que levam desfoque já são quase
+ * opacos (o do cabeçalho é 92%), então sem ele a tela fica praticamente
+ * igual. Quem liga a classe é `src/estado/leve.ts`.
+ */
+html.leve *,
+html.leve *::before,
+html.leve *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
