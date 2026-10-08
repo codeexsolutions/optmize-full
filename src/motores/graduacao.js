@@ -12,6 +12,11 @@
  *   "porTamanho", deslocamentos: { P: {dx, dy}, G: … } }` — o ACUMULADO de
  *   cada tamanho em relação ao base. A tela mostra e edita por salto.
  * - Por porcentagem, a peça inteira escala `1 + k × % / 100`.
+ * - Por medida ("medida", a peça inteira em centímetros): a largura do tamanho é a
+ *   do base + k × `medida.largura`, e a altura + k × `medida.altura`, exatas,
+ *   crescendo do centro da caixa. É como a Audaces gradua: centímetros fixos por
+ *   tamanho, diferentes em cada sentido (a gola, 0 e +2). A porcentagem única
+ *   errava mais de 0,5 cm em 39 de 74 peças reais (medido em 2026-10-05).
  *
  * Os dois campos convivem: trocar o jeito não apaga o outro. Coordenadas em
  * cm, as mesmas dos nós: x para a direita, y para baixo. Conta pura: recebe e
@@ -193,8 +198,11 @@ export function graduacaoGirada(graduacao, graus) {
   const c = exato(Math.cos(rad));
   const s = exato(Math.sin(rad));
   const gira = (d) => ({ dx: d.dx * c - d.dy * s + 0, dy: d.dx * s + d.dy * c + 0 });
+  // A peça inteira em cm: deitada (90° ou 270°), a largura vira a altura.
+  const deitada = Math.abs(s) === 1 && graduacao.medida;
   return {
     ...graduacao,
+    ...(deitada ? { medida: { largura: graduacao.medida.altura, altura: graduacao.medida.largura } } : {}),
     regras: (graduacao.regras || []).map((r) => (r.modo === "igual"
       ? { ...r, passo: gira(r.passo) }
       : { ...r, deslocamentos: Object.fromEntries(Object.entries(r.deslocamentos || {}).map(([k, d]) => [k, gira(d)])) })),
@@ -295,6 +303,25 @@ export function deslocamentosDosNos(nos, regras, grade, base, tamanho) {
   });
 }
 
+/**
+ * O jeito "medida": a escala de cada sentido que leva a caixa do risco do base à
+ * do tamanho (k saltos), e o centro de onde cresce. `{ erro }` se a peça some.
+ */
+function escalaDaMedida(base, g, k, tamanho) {
+  const dx = Number(g.medida?.largura) || 0;
+  const dy = Number(g.medida?.altura) || 0;
+  if (dx === 0 && dy === 0) return { erro: "largura e altura 0 não mudam nada" };
+  const pts = achatarCurvas(base.nos);
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const W = x1 - x0, H = y1 - y0;
+  const novaW = W + k * dx, novaH = H + k * dy;
+  if (novaW <= 0.05 || novaH <= 0.05) {
+    return { erro: `com esse salto, o ${tamanho} some (a peça ficaria com ${Math.max(0, Math.min(novaW, novaH)).toFixed(1).replace(".", ",")} cm ou menos)` };
+  }
+  return { c: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 }, sx: W > 0 ? novaW / W : 1, sy: H > 0 ? novaH / H : 1 };
+}
+
 /** Quanto cada nó do base anda no tamanho, pelo jeito da graduação. `null` para tamanho fora da grade. */
 export function deslocamentosDoTamanho(base, grade, tamanho) {
   const g = base.graduacao;
@@ -305,6 +332,11 @@ export function deslocamentosDoTamanho(base, grade, tamanho) {
     const s = 1 + (k * (Number(g.porcentagem) || 0)) / 100;
     const c = centroDoRisco(base.nos);
     return base.nos.map((q) => ({ dx: (q.x - c.x) * (s - 1), dy: (q.y - c.y) * (s - 1) }));
+  }
+  if (g.jeito === "medida") {
+    const e = escalaDaMedida(base, g, k, tamanho);
+    if (e.erro) return base.nos.map(() => ({ ...ZERO }));
+    return base.nos.map((q) => ({ dx: (q.x - e.c.x) * (e.sx - 1), dy: (q.y - e.c.y) * (e.sy - 1) }));
   }
   return deslocamentosDosNos(base.nos, g.regras || [], grade, base.tamanho, tamanho);
 }
@@ -347,6 +379,16 @@ export function gerarTamanho(base, grade, tamanho) {
     nos = base.nos.map((n) => ({ ...n, ...escala(n), entrada: escala(n.entrada), saida: escala(n.saida) }));
     pontos = mc.pontos.map((q) => ({ ...q, ...escala(q) }));
     fio = { ...mc.fio, ...escala(mc.fio), comprimento: mc.fio.comprimento * s };
+  } else if (g.jeito === "medida") {
+    const e = escalaDaMedida(base, g, k, tamanho);
+    if (e.erro) return { erro: e.erro };
+    const escala = (q) => ({ x: e.c.x + (q.x - e.c.x) * e.sx, y: e.c.y + (q.y - e.c.y) * e.sy });
+    nos = base.nos.map((n) => ({ ...n, ...escala(n), entrada: escala(n.entrada), saida: escala(n.saida) }));
+    pontos = mc.pontos.map((q) => ({ ...q, ...escala(q) }));
+    // O fio cresce no sentido dele: ângulo 0 é vertical (ver `marcacoesPadrao`).
+    const rad = ((Number(mc.fio.angulo) || 0) * Math.PI) / 180;
+    const fator = Math.hypot(Math.sin(rad) * e.sx, Math.cos(rad) * e.sy);
+    fio = { ...mc.fio, ...escala(mc.fio), comprimento: mc.fio.comprimento * fator };
   } else {
     const regras = (g.regras || []).filter((r) => r.no >= 0 && r.no < base.nos.length);
     if (regras.length === 0) return { erro: "marque pelo menos um ponto com regra" };
@@ -374,6 +416,10 @@ export function avisosDaGraduacao(base, grade) {
   if (g.perdidos > 0) avisos.push(`A graduação perdeu ${g.perdidos} ponto(s) quando nós foram apagados.`);
   if (g.jeito === "porcentagem") {
     if (!Number(g.porcentagem)) avisos.push("Porcentagem 0 não muda nada.");
+    return avisos;
+  }
+  if (g.jeito === "medida") {
+    if (!Number(g.medida?.largura) && !Number(g.medida?.altura)) avisos.push("Largura e altura 0 não mudam nada: diga quantos cm a peça cresce por tamanho.");
     return avisos;
   }
   const regras = (g.regras || []).filter((r) => r.no >= 0 && r.no < base.nos.length);

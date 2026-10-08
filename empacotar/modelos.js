@@ -18,6 +18,9 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+const rede = require("../servidor/extrator-rede");
+const ampliar = require("../servidor/extrator-ampliar");
+
 const DESTINO = path.join(__dirname, "..", "servidor", "modelos");
 const BASE = "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models";
 
@@ -43,6 +46,28 @@ const MODELOS = [
   },
 ];
 
+/**
+ * A rede de recorte do Extrator: os dois arquivos da escolhida (ver
+ * `REDE_DO_EXTRATOR`, em servidor/extrator-rede.js). A lista de onde baixar
+ * mora lá, num lugar só, junto da medição que escolheu.
+ */
+MODELOS.push(...modelosDoExtrator());
+
+MODELOS.push({
+  nome: path.basename(ampliar.ARQUIVO), ...ampliar.ORIGEM,
+  faz: "amplia o jeito Foto do Extrator (Real-ESRGAN x4v3; BSD-3-Clause)",
+});
+
+function modelosDoExtrator() {
+  const nome = rede.REDE_DO_EXTRATOR;
+  const origens = rede.ORIGENS[nome];
+  const { arquivos, licenca } = rede.ADAPTADORES[nome];
+  return [
+    { nome: arquivos.codificador, ...origens.codificador, faz: `lê a foto do Extrator (${nome}; ${licenca})` },
+    { nome: arquivos.decodificador, ...origens.decodificador, faz: "transforma o clique do Extrator em máscara" },
+  ];
+}
+
 function soma(caminho) {
   return crypto.createHash("sha256").update(fs.readFileSync(caminho)).digest("hex");
 }
@@ -62,7 +87,7 @@ function soma(caminho) {
     const resposta = await fetch(modelo.de);
     if (!resposta.ok) {
       console.log("");
-      throw new Error(`${modelo.nome}: o GitHub respondeu ${resposta.status}`);
+      throw new Error(`${modelo.nome}: ${new URL(modelo.de).host} respondeu ${resposta.status}`);
     }
     const bytes = Buffer.from(await resposta.arrayBuffer());
     fs.writeFileSync(caminho, bytes);

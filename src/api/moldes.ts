@@ -57,10 +57,12 @@ export type RegraDeGraduacao =
 
 /** A graduação de uma peça, guardada na linha do tamanho base. */
 export interface Graduacao {
-  jeito: "pontos" | "porcentagem";
+  jeito: "pontos" | "porcentagem" | "medida";
   regras: RegraDeGraduacao[];
-  /** % por tamanho, no jeito "porcentagem". */
+  /** % por tamanho, no jeito "porcentagem" (o de antes; igual nos dois sentidos). */
   porcentagem: number;
+  /** A peça inteira em cm por tamanho, no jeito "medida": o salto da largura e o da altura. */
+  medida?: { largura: number; altura: number };
   /** Regras perdidas quando nós do base foram apagados (a tela avisa). */
   perdidos?: number;
 }

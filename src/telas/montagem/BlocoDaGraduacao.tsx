@@ -3,7 +3,7 @@
  *
  * Trabalha no base da peça. Por pontos: clicar num nó abre a regra dele —
  * salto igual (um valor por salto) ou por tamanho (um valor para cada salto:
- * P→M, M→G…). Por porcentagem: a peça inteira cresce X% por tamanho. Ver
+ * P→M, M→G…). Peça inteira: cresce X cm na largura e Y na altura por tamanho. Ver
  * `motores/graduacao.js`.
  *
  * Os campos são texto, e não `<input type=number>`: é preciso aceitar vírgula
@@ -103,24 +103,45 @@ export function BlocoDaGraduacao({ base, baseDaGrade, grade, noDaRegra, aoMudarG
         <p className="m-0 text-tinta-fraca">Trabalha no {noBase} (o base); os outros tamanhos aparecem tracejados.</p>
       </div>
 
-      <fieldset className="flex gap-3 border-0 p-0">
+      <fieldset className="flex flex-wrap gap-x-3 gap-y-1 border-0 p-0">
         <label className="flex items-center gap-1.5">
           <input type="radio" name="jeito" checked={g.jeito === "pontos"}
             onChange={() => aoMudarGraduacao((gg) => ({ ...gg, jeito: "pontos" }), true)} />
           Por pontos
         </label>
-        <label className="flex items-center gap-1.5">
-          <input type="radio" name="jeito" checked={g.jeito === "porcentagem"}
-            onChange={() => aoMudarGraduacao((gg) => ({ ...gg, jeito: "porcentagem" }), true)} />
-          Porcentagem
+        <label className="flex items-center gap-1.5" title="A peça inteira cresce centímetros fixos por tamanho, em largura e altura — como a Audaces gradua">
+          <input type="radio" name="jeito" checked={g.jeito === "medida"}
+            onChange={() => aoMudarGraduacao((gg) => ({ ...gg, jeito: "medida", medida: gg.medida ?? { largura: 0, altura: 0 } }), true)} />
+          Peça inteira
         </label>
+        {/* A porcentagem de antes só aparece no molde que já foi graduado com ela. */}
+        {g.jeito === "porcentagem" && (
+          <label className="flex items-center gap-1.5">
+            <input type="radio" name="jeito" checked readOnly />
+            Porcentagem (antiga)
+          </label>
+        )}
       </fieldset>
 
-      {g.jeito === "porcentagem" ? (
+      {g.jeito === "medida" ? (
+        <div className="flex flex-col gap-1.5">
+          <p className="m-0 text-tinta-fraca">Quanto a peça cresce a cada tamanho, do centro (negativo encolhe):</p>
+          <label className="flex items-center gap-2">
+            <CampoDeMedida valor={g.medida?.largura ?? 0} rotulo="Largura por tamanho"
+              aoMudar={(v) => aoMudarGraduacao((gg) => ({ ...gg, medida: { largura: Math.max(-50, Math.min(50, v)), altura: gg.medida?.altura ?? 0 } }), true)} />
+            cm na largura
+          </label>
+          <label className="flex items-center gap-2">
+            <CampoDeMedida valor={g.medida?.altura ?? 0} rotulo="Altura por tamanho"
+              aoMudar={(v) => aoMudarGraduacao((gg) => ({ ...gg, medida: { largura: gg.medida?.largura ?? 0, altura: Math.max(-50, Math.min(50, v)) } }), true)} />
+            cm na altura
+          </label>
+        </div>
+      ) : g.jeito === "porcentagem" ? (
         <label className="flex items-center gap-2">
           <CampoDeMedida valor={g.porcentagem} rotulo="Porcentagem por tamanho"
             aoMudar={(v) => aoMudarGraduacao((gg) => ({ ...gg, porcentagem: Math.max(-50, Math.min(50, v)) }), true)} />
-          % por tamanho (a peça inteira)
+          % por tamanho (a peça inteira, igual nos dois sentidos)
         </label>
       ) : noDaRegra === null ? (
         <p className="m-0 text-tinta-fraca">

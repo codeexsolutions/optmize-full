@@ -129,6 +129,10 @@ app.use("/api/cor", corRouter);
 // rotas acima. Ver o cabeçalho de `arte-entrada.js`.
 app.use("/api/arte", require("./arte-entrada"));
 
+// O Extrator recebe a foto crua (ver o cabeçalho de `extrator-api.js`): vem
+// antes do express.json geral, pelo mesmo motivo do /api/arte.
+app.use("/api/extrator", require("./extrator-api"));
+
 // O PDF do risco que a tela Digitalizar achou. Linha, e só linha — não sobe
 // arte nenhuma —, então o limite dele mora dentro da própria rota, e não aqui.
 app.use("/api/risco", riscoPdfRouter);

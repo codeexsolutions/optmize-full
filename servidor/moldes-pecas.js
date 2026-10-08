@@ -99,7 +99,7 @@ function lerDeslocamento(d) {
  */
 function lerGraduacao(bruta, totalDeNos) {
   if (!bruta || typeof bruta !== "object") return null;
-  const jeito = bruta.jeito === "pontos" || bruta.jeito === "porcentagem" ? bruta.jeito : null;
+  const jeito = ["pontos", "porcentagem", "medida"].includes(bruta.jeito) ? bruta.jeito : null;
   if (!jeito) return null;
   const p = numero(bruta.porcentagem);
   const regras = [];
@@ -124,10 +124,13 @@ function lerGraduacao(bruta, totalDeNos) {
     }
     vistos.add(no);
   }
+  // A peça inteira em cm por tamanho (a largura e a altura do salto), de −50 a 50.
+  const cm = (v) => { const n = numero(v); return n !== null && n >= -50 && n <= 50 ? n : 0; };
   return {
     jeito,
     regras,
     porcentagem: p !== null && p >= -50 && p <= 50 ? p : 0,
+    medida: { largura: cm(bruta.medida && bruta.medida.largura), altura: cm(bruta.medida && bruta.medida.altura) },
     perdidos: Math.max(0, Math.floor(numero(bruta.perdidos) || 0)),
   };
 }

@@ -59,6 +59,10 @@ servidor/motor-encaixe.js
 # binário que se busca com um comando. `npm run modelos` os traz.
 servidor/modelos/*.onnx
 
+# As redes candidatas do Extrator, baixadas pela medição (`npm run medir:recorte`).
+# Ficam na bancada, e não em servidor/, porque o instalador copia servidor/ inteiro.
+bancada/.redes/
+
 # O programa do ESP32 (pasta `esp/`): o que o ESP-IDF gera fica de fora.
 esp/build/
 esp/managed_components/
