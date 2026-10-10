@@ -15,6 +15,14 @@ process.env.OPTIMIZE_DADOS = pasta;
 const tmpdirOriginal = os.tmpdir;
 os.tmpdir = () => pasta;
 const db = require("../servidor/db");
+/*
+  A COTA DE METRAGEM FICA LIBERADA AQUI. Sem conta na máquina a exportação é
+  recusada com 402 (ver `servidor/uso.js`) — no programa a trava do
+  `server.js` nem deixa chegar lá. Esta bancada monta as rotas direto e confere
+  arquivos e sessões, não a cota; tem de ser trocada antes de a rota do PDF
+  carregar, porque ela guarda a função ao ser lida.
+*/
+require("../servidor/uso").permitirExportacao = async () => ({ permitido: true });
 const { limparImagensSoltas } = require("../servidor/uploads-arquivos");
 let servidor;
 let passou = 0;
