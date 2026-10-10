@@ -22,6 +22,7 @@
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -75,6 +76,29 @@ fn esperar_servidor(porta: u16, filho: &Mutex<Option<Child>>) -> bool {
 /// Sobe o `servidor/server.js` com o Node que veio junto.
 fn subir_servidor(pasta: &PathBuf, dados: &PathBuf, porta: u16) -> std::io::Result<Child> {
     let mut comando = Command::new(pasta.join("node.exe"));
+
+    /*
+     * O NODE NÃO HERDA CONFIGURAÇÃO DE FORA.
+     *
+     * `NODE_OPTIONS=--require C:\qualquer.js`, posto nas variáveis do Windows,
+     * faria o Node carregar um script alheio antes do servidor — e esse script
+     * poderia remendar a trava da conta sem tocar em arquivo nenhum da
+     * instalação, passando ao largo da conferência de integridade. O mesmo
+     * vale para `NODE_EXTRA_CA_CERTS` (um certificado falso para fingir ser o
+     * backend) e para as variáveis do próprio Optmize, como `OPTMIZE_BACKEND`.
+     * Nenhuma delas tem uso na máquina do cliente: saem todas, e entram só as
+     * que este programa define logo abaixo.
+     */
+    for (nome, _) in std::env::vars_os() {
+        let maiusculo = nome.to_string_lossy().to_uppercase();
+        if maiusculo.starts_with("NODE_")
+            || maiusculo.starts_with("OPTMIZE_")
+            || maiusculo.starts_with("OPTIMIZE_")
+        {
+            comando.env_remove(&nome);
+        }
+    }
+
     comando
         .arg(pasta.join("servidor").join("server.js"))
         .current_dir(pasta)
@@ -257,30 +281,162 @@ fn icone_da_barra(janela: &tauri::WebviewWindow) {
 /// parado porque o Railway não respondeu.
 const ESPERA_DO_SERVIDOR_DE_VERSOES: Duration = Duration::from_secs(8);
 
-/// Escreve um recado na tela de abertura.
+/// Os argumentos do WebView2, iguais em TODAS as janelas.
 ///
-/// A tela tem uma linha de texto ("Abrindo o sistema…") e uma função para
-/// trocá-la (ver `empacotar/janela/index.html`). É por aqui que a busca de
-/// versão nova conta o que está fazendo, em vez de deixar a pessoa olhando
-/// uma marca parada sem saber por quê.
-fn recado(janela: &tauri::WebviewWindow, texto: &str) {
-    /*
-     * O TEXTO VIRA UM LITERAL JSON, e não um pedaço de JavaScript montado à
-     * mão.
-     *
-     * Parte do que passa por aqui vem DO SERVIDOR — o número da versão sai da
-     * resposta do atualizador —, e isto é um `eval`. Escapar à mão a barra e
-     * a aspa simples parecia bastar e não basta: falta a quebra de linha, que
-     * encerra a instrução, e faltam `U+2028` e `U+2029`, que o JavaScript
-     * trata como quebra de linha dentro de string.
-     *
-     * `serde_json::to_string` cobre os três e todo o resto, porque é a mesma
-     * regra que o JSON usa — e JSON válido é expressão JavaScript válida.
-     */
-    let Ok(seguro) = serde_json::to_string(texto) else { return };
-    let _ = janela.eval(&format!("window.recado && window.recado({seguro})"));
+/// As janelas do programa dividem o mesmo ambiente do WebView2, e o ambiente
+/// nasce com os argumentos da PRIMEIRA janela criada. Uma segunda janela com
+/// argumentos diferentes não abre. O lançador nasce primeiro, então ele leva
+/// a mesma lista que a janela principal precisa (ver o comentário dela).
+const ARGUMENTOS_DO_NAVEGADOR: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+     --force-prefers-no-reduced-motion";
+
+/// O fundo de toda janela, igual ao `--bg` do sistema: sem ele o primeiro
+/// quadro, antes de a página pintar, é branco.
+const FUNDO: tauri::window::Color = tauri::window::Color(0x0b, 0x0b, 0x0c, 0xff);
+
+/// O último estado mandado ao lançador, em JSON.
+///
+/// Guardado porque o Rust costuma falar ANTES de a página terminar de
+/// carregar — e um `eval` numa página que ainda não existe se perde. Quando
+/// ela carrega, recebe este estado e começa já no ponto certo.
+static ESTADO_DO_LANCADOR: Mutex<String> = Mutex::new(String::new());
+
+/// A janela principal já tomou o lugar do lançador?
+///
+/// O `on_page_load` dela roda a cada navegação (o login, um F5). Só a
+/// PRIMEIRA carga fecha o lançador: depois disso, um lançador aberto é o da
+/// instalação, e fechá-lo seria tirar o aviso da frente de quem espera.
+static PRINCIPAL_ASSUMIU: AtomicBool = AtomicBool::new(false);
+
+/// Mostra um estado no lançador (`empacotar/janela/lancador.html`).
+///
+/// O estado vira JSON, e não JavaScript montado à mão: parte dele vem do
+/// servidor (o número da versão) e isto é um `eval`. JSON válido é expressão
+/// JavaScript válida, com quebras de linha e aspas já escapadas.
+fn lancador(app: &tauri::AppHandle, estado: serde_json::Value) {
+    let texto = estado.to_string();
+    *ESTADO_DO_LANCADOR.lock().unwrap() = texto.clone();
+    if let Some(janela) = app.get_webview_window("lancador") {
+        let _ = janela.eval(&format!("window.lancador && window.lancador({texto})"));
+    }
 }
 
+/// Abre o lançador: a janelinha sem borda, no meio da tela, que aparece antes
+/// do programa e na hora de instalar uma versão nova.
+///
+/// Nasce escondido e só aparece com a página pintada — o primeiro quadro que
+/// existe já é a marca, e não um retângulo vazio.
+fn abrir_lancador(app: &tauri::AppHandle) -> tauri::Result<()> {
+    if let Some(janela) = app.get_webview_window("lancador") {
+        let _ = janela.show();
+        let _ = janela.set_focus();
+        return Ok(());
+    }
+    let janela = WebviewWindowBuilder::new(app, "lancador", WebviewUrl::App("lancador.html".into()))
+        .title("Optimize")
+        .inner_size(640.0, 380.0)
+        .resizable(false)
+        .maximizable(false)
+        .decorations(false)
+        .shadow(true)
+        .center()
+        .visible(false)
+        .background_color(FUNDO)
+        .additional_browser_args(ARGUMENTOS_DO_NAVEGADOR)
+        .on_page_load(|janela, carga| {
+            if carga.event() == tauri::webview::PageLoadEvent::Finished {
+                let estado = ESTADO_DO_LANCADOR.lock().unwrap().clone();
+                if !estado.is_empty() {
+                    let _ = janela.eval(&format!("window.lancador && window.lancador({estado})"));
+                }
+                let _ = janela.show();
+            }
+        })
+        .build()?;
+    #[cfg(windows)]
+    icone_da_barra(&janela);
+    #[cfg(not(windows))]
+    let _ = janela;
+    Ok(())
+}
+
+/// Abre a janela principal em `url` e, quando ela tiver pintado, fecha o
+/// lançador.
+///
+/// `cheia` é o sistema, maximizado. As páginas de erro (`erro.html`,
+/// `alterado.html`) abrem no tamanho normal: são um texto para ler, e em tela
+/// cheia ficariam um parágrafo perdido no meio do monitor.
+fn abrir_principal(app: &tauri::AppHandle, url: WebviewUrl, cheia: bool) -> tauri::Result<()> {
+    let janela = WebviewWindowBuilder::new(app, "principal", url)
+        .title("Optimize")
+        .inner_size(1360.0, 900.0)
+        .min_inner_size(1024.0, 640.0)
+        .center()
+        /*
+         * MAXIMIZADA DESDE O PRIMEIRO QUADRO, e escondida até pintar: nascer
+         * num tamanho e pular para a tela inteira depois eram duas mudanças
+         * bruscas no mesmo instante.
+         */
+        .maximized(cheia)
+        .visible(false)
+        .background_color(FUNDO)
+        // Sem isto, arrastar arquivo para dentro da janela não faz nada: o
+        // Tauri intercepta o arrastar-e-soltar do Windows antes da página, e os
+        // eventos `drop` do HTML nunca chegam ao Encaixe nem ao Vetor.
+        .disable_drag_drop_handler()
+        /*
+         * AS ANIMAÇÕES NÃO DEPENDEM DE UMA CAIXA DO WINDOWS.
+         *
+         * O WebView2 responde `prefers-reduced-motion: reduce` sempre que
+         * "Mostrar animações no Windows" está desligado — e no Windows 10 isso
+         * vem desligado em muita máquina que ninguém escolheu. O programa
+         * inteiro ficava parado. `--force-prefers-no-reduced-motion` faz a
+         * página ver "sem preferência"; as outras três são as que o wry já
+         * passa por conta própria — definir a lista substitui a dele.
+         */
+        .additional_browser_args(ARGUMENTOS_DO_NAVEGADOR)
+        .on_page_load(|janela, carga| {
+            if carga.event() != tauri::webview::PageLoadEvent::Finished {
+                return;
+            }
+            let _ = janela.show();
+            if !PRINCIPAL_ASSUMIU.swap(true, Ordering::SeqCst) {
+                let _ = janela.set_focus();
+                if let Some(lancador) = janela.app_handle().get_webview_window("lancador") {
+                    let _ = lancador.close();
+                }
+            }
+        })
+        .build()?;
+
+    // Depois de a janela existir: é ela que carrega o WebView2 a quem as
+    // permissões são respondidas.
+    #[cfg(windows)]
+    {
+        responder_permissoes(&janela);
+        icone_da_barra(&janela);
+    }
+    #[cfg(not(windows))]
+    let _ = janela;
+    Ok(())
+}
+
+/// O que mudou desde a última abertura: `"primeira"`, `"atualizado"` ou nada.
+///
+/// Guarda a versão de cada abertura num arquivo da pasta de dados. É o que
+/// deixa o lançador dizer "Atualizado da 1.2.0 para a 1.2.1" na volta de uma
+/// instalação, em vez de o programa simplesmente reabrir sem explicar.
+fn novidade_da_abertura(dados: &std::path::Path, atual: &str) -> (Option<&'static str>, Option<String>) {
+    let arquivo = dados.join("ultima-versao.txt");
+    let anterior = std::fs::read_to_string(&arquivo).ok().map(|t| t.trim().to_string());
+    let _ = std::fs::write(&arquivo, atual);
+    match anterior {
+        None => (Some("primeira"), None),
+        Some(v) if v != atual && !v.is_empty() => (Some("atualizado"), Some(v)),
+        _ => (None, None),
+    }
+}
 
 type Falha = Box<dyn std::error::Error>;
 
@@ -295,8 +451,79 @@ fn buscar_versao_nova(
     espera: Duration,
 ) -> Result<Option<tauri_plugin_updater::Update>, Falha> {
     use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater_builder().timeout(espera).build()?;
+    let mut construtor = app.updater_builder().timeout(espera);
+    /*
+     * SÓ MÁQUINA VINCULADA A UMA CONTA RECEBE ATUALIZAÇÃO.
+     *
+     * O servidor responde "está atualizado" a quem não manda o token da
+     * máquina (ver `releases.routes.ts`, no backend). O token é o mesmo que o
+     * servidor local guarda ao entrar na conta. Sem ele — primeira abertura,
+     * conta que saiu —, a busca segue sem cabeçalho e não acha nada; quem
+     * entrar na conta recebe a versão nova na busca seguinte.
+     */
+    if let Some(token) = token_da_maquina(app) {
+        construtor = construtor.header("Authorization", format!("Bearer {token}"))?;
+    }
+    let updater = construtor.build()?;
     Ok(tauri::async_runtime::block_on(updater.check())?)
+}
+
+/// O token da máquina, como o servidor local o gravou (`servidor/sessao.js`).
+///
+/// O arquivo e o campo `token` são contrato com aquele arquivo. Qualquer
+/// problema — não existe, não é JSON, não tem token — é o mesmo que não ter
+/// entrado na conta.
+fn token_da_maquina(app: &tauri::AppHandle) -> Option<String> {
+    let dados = dunce::simplified(&app.path().app_data_dir().ok()?).to_path_buf();
+    let texto = std::fs::read_to_string(dados.join("sessao").join("sessao.json")).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&texto).ok()?;
+    let token = json.get("token")?.as_str()?;
+    // Só o que pode ir num cabeçalho: um token de verdade é base64url.
+    let limpo = token
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    (limpo && !token.is_empty()).then(|| token.to_string())
+}
+
+/// A impressão digital dos arquivos do instalador, gerada no build por
+/// `empacotar/integridade.js`. Uma linha por arquivo: `<sha256> <caminho>`.
+#[cfg(not(debug_assertions))]
+const INTEGRIDADE: &str = include_str!("../integridade.txt");
+
+/// Os arquivos de código da instalação são os que saíram no instalador?
+///
+/// É o que impede a trava da conta de ser tirada remendando um arquivo: o
+/// servidor em bytecode, uma dependência, o próprio `node.exe`. Para burlar,
+/// seria preciso remendar ESTE executável, que é código nativo — e não um
+/// arquivo ao lado dele.
+///
+/// `Err` traz o arquivo que não bateu (ou que sumiu), para o log.
+#[cfg(not(debug_assertions))]
+fn conferir_integridade(pasta: &std::path::Path) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut pedaco = vec![0u8; 1 << 20];
+    for linha in INTEGRIDADE.lines() {
+        let Some((esperado, relativo)) = linha.split_once(' ') else {
+            continue;
+        };
+        let mut arquivo =
+            std::fs::File::open(pasta.join(relativo)).map_err(|_| relativo.to_string())?;
+        let mut soma = Sha256::new();
+        loop {
+            let lidos = arquivo.read(&mut pedaco).map_err(|_| relativo.to_string())?;
+            if lidos == 0 {
+                break;
+            }
+            soma.update(&pedaco[..lidos]);
+        }
+        let obtido: String = soma.finalize().iter().map(|b| format!("{b:02x}")).collect();
+        if obtido != esperado {
+            return Err(relativo.to_string());
+        }
+    }
+    Ok(())
 }
 
 /// Baixa o instalador, avisando a porcentagem a cada número novo.
@@ -357,20 +584,23 @@ fn instalar(
 ///
 /// Devolve `Ok(true)` quando instalou — e aí o programa já se encerrou para o
 /// instalador trabalhar, e esta função não chega a devolver nada.
-fn atualizar_na_abertura(
-    app: &tauri::AppHandle,
-    janela: &tauri::WebviewWindow,
-) -> Result<bool, Falha> {
-    recado(janela, "Buscando atualizações…");
+fn atualizar_na_abertura(app: &tauri::AppHandle, base: &serde_json::Value) -> Result<bool, Falha> {
+    let estado = |extra: serde_json::Value| {
+        let mut e = base.clone();
+        if let (Some(e), Some(extra)) = (e.as_object_mut(), extra.as_object()) {
+            for (chave, valor) in extra {
+                e.insert(chave.clone(), valor.clone());
+            }
+        }
+        e
+    };
+
+    lancador(app, estado(serde_json::json!({ "fase": "verificando" })));
 
     let Some(atualizacao) = buscar_versao_nova(app, ESPERA_DO_SERVIDOR_DE_VERSOES)? else {
         return Ok(false);
     };
-
-    recado(
-        janela,
-        &format!("Atualizando para a versão {}…", atualizacao.version),
-    );
+    let nova = atualizacao.version.clone();
 
     /*
      * O PROGRESSO VAI PARA A TELA. São dezenas de MB, e numa internet de
@@ -378,15 +608,17 @@ fn atualizar_na_abertura(
      * marca parada é indistinguível de travado — e é nesse minuto que alguém
      * desliga o computador no botão, no meio de uma instalação.
      */
+    lancador(app, estado(serde_json::json!({ "fase": "baixando", "versaoNova": nova })));
     let pacote = baixar(&atualizacao, |por_cento| {
-        if let Some(por_cento) = por_cento {
-            recado(janela, &format!("Baixando a atualização… {por_cento}%"));
-        }
+        lancador(
+            app,
+            estado(serde_json::json!({ "fase": "baixando", "versaoNova": nova, "porcento": por_cento })),
+        );
     })?;
 
-    recado(janela, "Instalando… o Optmize reabre sozinho em instantes");
-    // Um instante para o recado ser lido: depois do `install` a janela some,
-    // e sem aviso a pessoa clica no ícone de novo no meio da instalação.
+    lancador(app, estado(serde_json::json!({ "fase": "instalando", "versaoNova": nova })));
+    // Um instante para o aviso ser lido: depois do `install` a janela some, e
+    // sem aviso a pessoa clica no ícone de novo no meio da instalação.
     std::thread::sleep(Duration::from_millis(1500));
 
     instalar(app, &atualizacao, pacote)?;
@@ -468,9 +700,22 @@ fn atualizar_com_o_programa_aberto(
         std::thread::sleep(Duration::from_secs(1));
     }
 
-    painel(janela, json!({ "fase": "instalando", "versao": versao }));
+    /*
+     * A INSTALAÇÃO É DO LANÇADOR, como na abertura: a janela do sistema se
+     * esconde e a janelinha conta o que está acontecendo até o programa
+     * reabrir. O mesmo aviso, no mesmo lugar, nos dois caminhos.
+     */
+    lancador(
+        app,
+        json!({ "fase": "instalando", "versao": app.package_info().version.to_string(), "versaoNova": versao }),
+    );
+    if abrir_lancador(app).is_ok() {
+        let _ = janela.hide();
+    } else {
+        painel(janela, json!({ "fase": "instalando", "versao": versao }));
+    }
     // O tempo de a mensagem aparecer antes de a janela ir embora.
-    std::thread::sleep(Duration::from_millis(1200));
+    std::thread::sleep(Duration::from_millis(1500));
 
     instalar(app, &atualizacao, pacote)
 }
@@ -529,194 +774,118 @@ fn main() {
             .to_path_buf();
             std::fs::create_dir_all(&dados)?;
 
+            /*
+             * A CONFERÊNCIA DOS ARQUIVOS corre em paralelo com tudo o mais —
+             * são uns 150 MB para ler, e a busca de atualização e a subida do
+             * Node levam esse tempo de qualquer jeito. O resultado é esperado
+             * logo antes de mostrar o sistema.
+             */
+            #[cfg(not(debug_assertions))]
+            let integridade = {
+                let pasta = pasta.clone();
+                std::thread::spawn(move || conferir_integridade(&pasta))
+            };
+
             let porta = porta_livre()?;
             processo
                 .lock()
                 .unwrap()
                 .replace(subir_servidor(&pasta, &dados, porta)?);
 
-            // A janela abre já, com o aviso de "abrindo", e troca para o
-            // sistema quando o servidor responder. Abrir só no fim deixava
-            // vários segundos de nada na tela — parecia que não tinha aberto.
-            WebviewWindowBuilder::new(app, "principal", WebviewUrl::default())
-                .title("Optimize")
-                .inner_size(1360.0, 900.0)
-                .min_inner_size(1024.0, 640.0)
-                .center()
-                /*
-                 * MAXIMIZADA DESDE O PRIMEIRO QUADRO.
-                 *
-                 * Antes ela nascia com 1360x900 e o `maximize()` vinha lá na
-                 * frente, junto com a navegação: a janela aparecia num tamanho,
-                 * ficava alguns segundos assim e então pulava para a tela
-                 * inteira ao mesmo tempo em que o conteúdo trocava. Eram duas
-                 * mudanças bruscas no mesmo instante. Nascendo já maximizada não
-                 * há pulo nenhum — e o `inner_size` acima continua valendo para
-                 * quando a pessoa restaurar a janela.
-                 */
-                .maximized(true)
-                /*
-                 * NASCE ESCONDIDA, E APARECE QUANDO JÁ TEM O QUE MOSTRAR.
-                 *
-                 * Uma janela criada visível é desenhada pelo Windows antes de o
-                 * WebView ter pintado qualquer coisa — é o lampejo de um
-                 * retângulo vazio que se via no arranque. Escondida, o primeiro
-                 * quadro que existe já é a marca. Quem a mostra é o
-                 * `on_page_load` logo abaixo.
-                 */
-                .visible(false)
-                /*
-                 * O fundo da janela e do WebView, igual ao `--bg` do sistema e
-                 * ao da tela de abertura. Enquanto o HTML não pintou, quem
-                 * responde pelo pixel é esta cor — e sem ela o padrão é branco,
-                 * que num programa escuro é um flash na cara de quem abre.
-                 */
-                .background_color(tauri::window::Color(0x0b, 0x0b, 0x0c, 0xff))
-                // Sem isto, arrastar arquivo para dentro da janela não faz
-                // nada: o Tauri intercepta o arrastar-e-soltar do Windows
-                // antes da página, e os eventos `drop` do HTML nunca chegam
-                // ao Encaixe nem ao Vetor. Desligado, quem recebe o arquivo é
-                // a página — do mesmo jeito que no navegador.
-                .disable_drag_drop_handler()
-                /*
-                 * AS ANIMAÇÕES NÃO DEPENDEM DE UMA CAIXA DO WINDOWS.
-                 *
-                 * O WebView2 responde `prefers-reduced-motion: reduce` sempre
-                 * que "Mostrar animações no Windows" está desligado — e no
-                 * Windows 10 isso vem desligado em muita máquina que ninguém
-                 * escolheu: "Ajustar para obter o melhor desempenho", acesso
-                 * remoto, PC de fábrica configurado pelo técnico. O CSS do
-                 * programa obedece esse pedido, então nessas máquinas o
-                 * programa inteiro ficava parado: sem entrada de lista, sem
-                 * seletor deslizando, sem o poço do encaixe caindo.
-                 *
-                 * `--force-prefers-no-reduced-motion` faz a página ver
-                 * "sem preferência". As três primeiras opções são as que o
-                 * wry já passa por conta própria — definir a lista aqui
-                 * substitui a dele, então elas têm de vir junto.
-                 */
-                .additional_browser_args(
-                    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
-                     --force-prefers-no-reduced-motion",
-                )
-                /*
-                 * Mostrar a janela quando a página termina de carregar, e não
-                 * antes. Vale para a tela de abertura (é a primeira a carregar)
-                 * e é inofensivo nas seguintes: mostrar o que já está visível
-                 * não faz nada. Se por algum motivo este evento não vier, a
-                 * thread de espera mostra a janela assim mesmo — uma janela
-                 * escondida para sempre seria um programa que não abre.
-                 */
-                .on_page_load(|janela, carga| {
-                    if carga.event() == tauri::webview::PageLoadEvent::Finished {
-                        let _ = janela.show();
-                    }
-                })
-                .build()?;
-
-            // Depois de a janela existir: é ela que carrega o WebView2 a quem
-            // as permissões são respondidas.
-            #[cfg(windows)]
-            if let Some(janela) = app.get_webview_window("principal") {
-                responder_permissoes(&janela);
-                icone_da_barra(&janela);
-            }
+            /*
+             * O LANÇADOR ABRE PRIMEIRO, já com a versão e a novidade (primeira
+             * abertura, ou a volta de uma atualização). A janela do sistema só
+             * nasce quando o servidor atende — e é ela que fecha o lançador.
+             */
+            let versao = app.package_info().version.to_string();
+            let (novidade, anterior) = novidade_da_abertura(&dados, &versao);
+            let base = serde_json::json!({
+                "versao": versao,
+                "novidade": novidade,
+                "anterior": anterior,
+            });
+            lancador(app.handle(), {
+                let mut e = base.clone();
+                e["fase"] = "verificando".into();
+                e
+            });
+            abrir_lancador(app.handle())?;
 
             // A espera vai para outra thread de propósito: esperar aqui dentro
             // seguraria o `setup`, e o loop de eventos só começa quando ele
-            // termina — a tela de "abrindo" ficaria branca, sem pintar, que é
-            // exatamente o que ela existe para evitar.
+            // termina — o lançador ficaria branco, sem pintar.
             let app = app.handle().clone();
             let abriu_em = Instant::now();
             std::thread::spawn(move || {
+                let fase = |nome: &str| {
+                    let mut e = base.clone();
+                    e["fase"] = nome.into();
+                    e
+                };
+
                 /*
-                 * A BUSCA DE VERSÃO NOVA VEM ANTES DE TUDO.
-                 *
-                 * Antes de esperar o Node, antes de navegar: é o único momento
-                 * em que não há trabalho na tela para perder. Se houver versão
-                 * nova, o programa instala e reinicia aqui mesmo — e a pessoa
-                 * vê a tela de abertura contando o que está acontecendo, em vez
-                 * de ver o Optmize abrir e fechar sozinho um minuto depois.
+                 * A BUSCA DE VERSÃO NOVA VEM ANTES DE TUDO: é o único momento
+                 * em que não há trabalho na tela para perder.
                  *
                  * Falhou? Segue em frente. Sem internet ou com o servidor fora
                  * do ar, o Optmize abre na versão instalada — parar a produção
                  * por causa de uma atualização seria o erro maior.
                  */
-                if let Some(janela) = app.get_webview_window("principal") {
-                    match atualizar_na_abertura(&app, &janela) {
-                        Ok(true) => return, // reiniciando; nada mais a fazer
-                        Ok(false) => {}
-                        Err(erro) => eprintln!("[atualizacao] {erro}"),
+                match atualizar_na_abertura(&app, &base) {
+                    Ok(true) => return, // reiniciando; nada mais a fazer
+                    Ok(false) => {}
+                    Err(erro) => eprintln!("[atualizacao] {erro}"),
+                }
+                lancador(&app, fase("abrindo"));
+
+                #[cfg(not(debug_assertions))]
+                {
+                    let alterado = match integridade.join() {
+                        Ok(Ok(())) => None,
+                        Ok(Err(arquivo)) => Some(arquivo),
+                        Err(_) => Some(String::from("(a conferência falhou)")),
+                    };
+                    if let Some(arquivo) = alterado {
+                        eprintln!("[integridade] arquivo diferente do instalador: {arquivo}");
+                        // Sem servidor: um arquivo alterado não atende pedido nenhum.
+                        if let Some(filho) = processo.lock().unwrap().as_mut() {
+                            let _ = filho.kill();
+                            let _ = filho.wait();
+                        }
+                        let _ = abrir_principal(&app, WebviewUrl::App("alterado.html".into()), false);
+                        return;
                     }
-                    recado(&janela, "Abrindo o sistema…");
                 }
 
                 let pronto = esperar_servidor(porta, &processo);
-                let Some(janela) = app.get_webview_window("principal") else {
-                    return; // fecharam antes de abrir; não há o que mostrar
-                };
-
-                // A rede de segurança do `.visible(false)`: se o `on_page_load`
-                // não veio, a janela aparece agora de qualquer jeito.
-                let _ = janela.show();
 
                 if !pronto {
-                    /*
-                     * Deu errado. A tela de erro é um texto para ler, não um
-                     * painel de trabalho — em tela cheia ela fica um parágrafo
-                     * perdido no meio do monitor. E não há o que suavizar aqui:
-                     * quem está esperando o programa abrir precisa do recado
-                     * agora, não de mais um terço de segundo de animação.
-                     */
-                    let _ = janela.unmaximize();
-                    // A navegação exige URL absoluta. Resolver a página na
-                    // origem da abertura funciona tanto no app quanto no dev.
-                    if let Ok(abertura) = janela.url() {
-                        if let Ok(url) = abertura.join("erro.html") {
-                            let _ = janela.navigate(url);
-                        }
-                    }
+                    let _ = abrir_principal(&app, WebviewUrl::App("erro.html".into()), false);
                     return;
                 }
 
                 /*
-                 * O PISO DE TEMPO DA ABERTURA.
+                 * O PISO DE TEMPO DO LANÇADOR.
                  *
                  * Numa máquina rápida o servidor atende em menos de meio
-                 * segundo, e a tela de abertura era cortada no meio da própria
-                 * entrada: a marca mal aparecia e já sumia. O efeito é pior do
-                 * que não ter animação nenhuma — lê-se como um piscar, como se
-                 * algo tivesse dado errado e sido refeito.
-                 *
-                 * Então a abertura tem um piso: se o servidor chega antes,
-                 * espera-se o resto. Este número é o custo consciente de ter uma
-                 * abertura bonita numa máquina boa; numa máquina lenta ele não
-                 * cobra nada, porque o servidor demora mais do que ele de todo
-                 * jeito. É aqui que se mexe para encurtar ou alongar.
+                 * segundo, e o lançador piscava: aparecia e sumia antes de a
+                 * marca terminar de entrar. Lê-se como algo que deu errado e
+                 * foi refeito. Numa máquina lenta este piso não cobra nada,
+                 * porque o servidor demora mais do que ele de todo jeito.
                  */
-                const ABERTURA_MINIMA: Duration = Duration::from_millis(1150);
+                const ABERTURA_MINIMA: Duration = Duration::from_millis(1800);
                 if let Some(resto) = ABERTURA_MINIMA.checked_sub(abriu_em.elapsed()) {
                     std::thread::sleep(resto);
                 }
 
-                /*
-                 * A troca em si.
-                 *
-                 * Sem o aviso, `navigate` é um corte seco: a tela de abertura
-                 * some no meio do que estiver fazendo e o sistema aparece de uma
-                 * vez. O `encerrar()` dá a ela o tempo de se apagar, e como o
-                 * fundo das duas é o mesmo `--bg`, o que se vê é o conteúdo
-                 * trocando sobre um fundo parado.
-                 *
-                 * Os 340 ms são os `.34s` das transições do `index.html`, e os
-                 * dois têm que andar juntos: menos aqui corta a saída pela
-                 * metade, mais deixa um vazio no fim dela.
-                 */
-                let _ = janela.eval("window.encerrar && window.encerrar()");
-                std::thread::sleep(Duration::from_millis(340));
+                // A barra enche antes da troca: o fim tem de ser visto.
+                lancador(&app, fase("pronto"));
+                std::thread::sleep(Duration::from_millis(450));
 
                 if let Ok(url) = format!("http://127.0.0.1:{porta}/").parse() {
-                    let _ = janela.navigate(url);
+                    if let Err(erro) = abrir_principal(&app, WebviewUrl::External(url), true) {
+                        eprintln!("[janela] {erro}");
+                    }
                 }
 
                 // Daqui em diante esta thread só cuida das versões novas que

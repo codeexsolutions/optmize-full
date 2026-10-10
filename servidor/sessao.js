@@ -1,50 +1,57 @@
 /**
  * ===========================================================================
- * A SESSÃO — quem está usando o Optmize
+ * A SESSÃO — quem está usando o Optmize, e se esta máquina pode trabalhar
  * ===========================================================================
  *
- * O Optmize abria sozinho desde sempre: um programa por máquina, e quem
- * alcançasse a porta via tudo. Isto é a entrada da conta.
+ * O Optmize só funciona com uma conta. Este arquivo é a única parte do
+ * programa que fala com o backend sobre isso, e é ele que responde à trava de
+ * `server.js`: "esta instalação está liberada?".
  *
  * ---------------------------------------------------------------------------
- * POR QUE O LOGIN PASSA POR AQUI, E NÃO DIRETO DA PÁGINA
+ * O TOKEN É DA MÁQUINA, E NÃO DE UMA SESSÃO
  * ---------------------------------------------------------------------------
  *
- * Por duas razões, e a segunda é a que importa de verdade:
+ * Entrar troca e-mail, senha e documento por um código (`/device/authorize`),
+ * e o código por um token de 48 horas preso a esta máquina (`/device/token`).
+ * Ver `optmize-backend/src/services/device.service.ts`. Duas consequências:
  *
- *   1. CORS. A interface é servida por este Node em `127.0.0.1:8000`, e o
- *      backend mora no Railway. Um `fetch` da página para lá é requisição
- *      entre origens, e passa a depender da lista de origens permitidas do
- *      servidor — que muda de porta conforme a máquina.
- *
- *   2. O TOKEN NÃO PODE MORAR NA PÁGINA. `server.js` escuta em `0.0.0.0`:
- *      qualquer computador da rede da gráfica alcança esta interface. Token em
- *      `localStorage` seria token ao alcance do F12 de qualquer um. Guardado
- *      aqui, ele nunca atravessa para o navegador — o que a tela recebe é um
- *      PERFIL (nome, empresa, papel), que não abre porta nenhuma.
+ *   - entrar aqui NÃO derruba o painel web da mesma conta (o `/auth/login`
+ *     derrubava: uma tela ativa por conta);
+ *   - a conta fica numa máquina só. Entrar em outro computador tira esta da
+ *     conta, e a próxima renovação traz a pessoa de volta para o login.
  *
  * ---------------------------------------------------------------------------
- * O QUE ISTO AINDA NÃO É
+ * AS 48 HORAS
  * ---------------------------------------------------------------------------
  *
- * Isto usa o `POST /auth/login` do backend, que cria uma SESSÃO DE USUÁRIO —
- * e sessão de usuário tem, lá, a regra de uma tela ativa por conta: entrar
- * aqui DERRUBA o painel web que a mesma pessoa tenha aberto, e vice-versa.
+ * Com internet, o token é renovado de hora em hora e nunca chega perto de
+ * vencer. Sem internet, o programa trabalha até a validade que veio do
+ * servidor — no máximo 48 horas depois da última conversa — e então tranca.
+ * Nas últimas 12 horas aparece a tarja avisando, para ninguém ser pego de
+ * surpresa no meio de um pedido.
  *
- * Não é descuido, é uma etapa: o desenho aprovado (ver
- * `docs/superpowers/specs/2026-09-21-identidade-no-full-design.md`) dá ao programa
- * um TOKEN DE DISPOSITIVO, que vive em outra tabela e não derruba sessão
- * nenhuma. Quando `/device/authorize` e `/device/token` existirem no backend,
- * o que muda é só a função `entrar()` abaixo — as rotas, o formato do perfil e
- * a tela seguem iguais.
+ * A validade é a do SERVIDOR, e não uma conta feita com o relógio daqui. E o
+ * relógio do Windows não volta atrás para esticá-la: guarda-se o maior
+ * horário já visto, e vale o maior dos dois.
+ *
+ * ---------------------------------------------------------------------------
+ * O TOKEN NÃO MORA NA PÁGINA
+ * ---------------------------------------------------------------------------
+ *
+ * `server.js` escuta em `0.0.0.0`: qualquer computador da rede da gráfica
+ * alcança a interface. Token em `localStorage` estaria ao alcance do F12 de
+ * qualquer um. Guardado aqui, ele nunca atravessa para o navegador — o que a
+ * tela recebe é um PERFIL (nome, empresa, papel), que não abre porta nenhuma.
  */
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const express = require("express");
 const { spawn } = require("node:child_process");
 
-const { pastaDeDados } = require("./caminhos");
+const { pastaDeDados, PASTA_DO_APP } = require("./caminhos");
 
 /**
  * Onde o backend mora. O mesmo endereço que o atualizador do Tauri já usa
@@ -54,21 +61,90 @@ const { pastaDeDados } = require("./caminhos");
 const BACKEND = process.env.OPTMIZE_BACKEND
   || "https://optmize-backend-production.up.railway.app";
 
+/**
+ * O arquivo do token. O `main.rs` também o lê — é o token que vai no pedido
+ * de atualização —, então o nome e o campo `token` são contrato com ele.
+ */
 const ARQUIVO = path.join(pastaDeDados("sessao"), "sessao.json");
+
+/** De quanto em quanto tempo renovar, com o programa aberto. */
+const RENOVAR_A_CADA_MS = 60 * 60 * 1000;
+
+/** A tarja aparece quando falta menos que isto e a última renovação falhou. */
+const AVISAR_ANTES_MS = 12 * 60 * 60 * 1000;
+
+/** A versão instalada, que vai junto em cada renovação e aparece no painel. */
+const VERSAO = (() => {
+  try {
+    return String(require(path.join(PASTA_DO_APP, "package.json")).version || "");
+  } catch {
+    return "";
+  }
+})();
+
+/*
+ * ---------------------------------------------------------------------------
+ * A IDENTIDADE DA MÁQUINA
+ * ---------------------------------------------------------------------------
+ *
+ * Aleatória, gerada na primeira execução e guardada fora do arquivo da sessão
+ * — sair da conta não a apaga, e entrar de novo reaproveita o mesmo vínculo.
+ * Não é impressão digital de hardware, de propósito: trocar o HD não pode
+ * desvincular a máquina sozinho.
+ */
+const ARQUIVO_DA_MAQUINA = path.join(pastaDeDados("sessao"), "maquina.json");
+
+let maquinaEmMemoria = null;
+
+function idDaMaquina() {
+  if (maquinaEmMemoria) return maquinaEmMemoria;
+  maquinaEmMemoria = lerOuCriarIdDaMaquina();
+  return maquinaEmMemoria;
+}
+
+function lerOuCriarIdDaMaquina() {
+  try {
+    const { deviceId } = JSON.parse(fs.readFileSync(ARQUIVO_DA_MAQUINA, "utf8"));
+    if (typeof deviceId === "string" && deviceId.length >= 16) return deviceId;
+  } catch {
+    // Primeira execução.
+  }
+  const deviceId = crypto.randomBytes(24).toString("hex");
+  fs.writeFileSync(ARQUIVO_DA_MAQUINA, JSON.stringify({ deviceId }), { mode: 0o600 });
+  return deviceId;
+}
+
+function daMaquina() {
+  return {
+    deviceId: idDaMaquina(),
+    deviceName: os.hostname().slice(0, 120),
+    appVersion: VERSAO,
+  };
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * O ARQUIVO
+ * ---------------------------------------------------------------------------
+ */
 
 /**
  * O que está guardado, em memória depois da primeira leitura.
  *
- * `null` = ainda não procuramos; `false` = procuramos e não há nada. A
- * distinção evita reler o disco a cada `GET /eu`, que a tela chama de hora em
- * hora e a cada abertura.
+ * `null` = ainda não procuramos; `false` = procuramos e não há nada.
  */
 let guardado = null;
 
 function ler() {
   if (guardado !== null) return guardado;
   try {
-    guardado = JSON.parse(fs.readFileSync(ARQUIVO, "utf8"));
+    const dados = JSON.parse(fs.readFileSync(ARQUIVO, "utf8"));
+    /*
+      Sessão gravada pela versão de antes do token de máquina (tinha
+      `accessToken`, e não `token`): não vale mais nada. Volta para o login
+      uma vez, e daí em diante é o token novo.
+    */
+    guardado = dados && typeof dados.token === "string" ? dados : false;
   } catch {
     guardado = false;
   }
@@ -78,8 +154,8 @@ function ler() {
 /*
   `mode: 0o600` é o que dá para fazer, e este comentário não finge que é cofre:
   quem tem a senha desta máquina lê o arquivo. O que o protege de verdade é o
-  token ser curto e revogável do lado do servidor — e a senha, essa, nunca é
-  gravada em lugar nenhum.
+  token ser preso a esta máquina, valer 48 horas e ser revogável do lado do
+  servidor — e a senha, essa, nunca é gravada em lugar nenhum.
 */
 function gravar(dados) {
   guardado = dados;
@@ -95,12 +171,169 @@ function apagar() {
   }
 }
 
+/**
+ * Por que a pessoa saiu da conta sem ter clicado em "Sair" — a tela de entrar
+ * mostra. Só em memória: é recado para a próxima tela, não estado.
+ */
+let motivoDaSaida = null;
+
+/*
+ * ---------------------------------------------------------------------------
+ * O RELÓGIO
+ * ---------------------------------------------------------------------------
+ */
+
+/** De quanto em quanto tempo o maior horário visto vai para o disco. */
+const GRAVAR_RELOGIO_A_CADA_MS = 10 * 60 * 1000;
+
+/**
+ * A hora que vale: a do Windows, mas nunca antes da maior que já se viu.
+ *
+ * Atrasar a data do computador para esticar as 48 horas não funciona — o
+ * maior horário fica gravado. Ele só é reposto pela hora do SERVIDOR, a cada
+ * renovação, o que também conserta um relógio que estava adiantado.
+ */
+function agora() {
+  const atual = ler();
+  const local = Date.now();
+  if (!atual) return local;
+  const maior = Number(atual.maiorRelogio) || 0;
+  if (local > maior) {
+    // Grava de tempos em tempos, e não a cada pedido.
+    if (local - maior > GRAVAR_RELOGIO_A_CADA_MS) gravar({ ...atual, maiorRelogio: local });
+    return local;
+  }
+  return maior;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * O ATESTADO
+ * ---------------------------------------------------------------------------
+ *
+ * A trava NÃO confia no que está escrito no arquivo — um JSON no disco da
+ * gráfica se edita no Bloco de Notas. Ela confia no ATESTADO: máquina,
+ * validade e liberação, assinados pelo servidor com uma chave que só existe
+ * lá (ver `optmize-backend/src/infra/crypto/atestado.ts`). Aqui mora a chave
+ * pública, que só confere. Mudar uma vírgula do atestado o invalida; copiá-lo
+ * para outro computador também, porque ele diz de qual máquina é.
+ */
+const CHAVE_DO_ATESTADO = crypto.createPublicKey(
+  "-----BEGIN PUBLIC KEY-----\n"
+  + "MCowBQYDK2VwAyEA9SNy9f3rQv/7bxzki99fqDY83IZ/bG1KQmBIZ4wckkM=\n"
+  + "-----END PUBLIC KEY-----\n",
+);
+
+/** A última conferência, para não refazer a criptografia a cada pedido. */
+let conferido = { texto: null, dados: null };
+
+/** Os dados do atestado, se a assinatura e a máquina baterem; senão `null`. */
+function atestado(atual) {
+  if (!atual || typeof atual.atestado !== "string") return null;
+  if (conferido.texto === atual.atestado) return conferido.dados;
+
+  let dados = null;
+  try {
+    const [prefixo, corpo, assinatura] = atual.atestado.split(".");
+    const valido = prefixo === "OPTMIZE-ATESTADO1"
+      && crypto.verify(
+        null,
+        Buffer.from(corpo, "utf8"),
+        CHAVE_DO_ATESTADO,
+        Buffer.from(assinatura, "base64url"),
+      );
+    if (valido) {
+      const lido = JSON.parse(Buffer.from(corpo, "base64url").toString("utf8"));
+      if (lido && lido.deviceId === idDaMaquina()) dados = lido;
+    }
+  } catch {
+    dados = null;
+  }
+  conferido = { texto: atual.atestado, dados };
+  return dados;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * A TRAVA
+ * ---------------------------------------------------------------------------
+ */
+
+/** A validade que vale: a do atestado. Sem atestado válido, já venceu. */
+function validade(atual) {
+  const dados = atestado(atual);
+  return dados ? Date.parse(dados.expira) : 0;
+}
+
+/** O token venceu sem renovar? */
+function venceu(atual) {
+  return !atual || !(agora() < validade(atual));
+}
+
+/**
+ * Esta instalação pode trabalhar agora?
+ *
+ * É a pergunta da trava de `server.js`, feita a cada pedido — por isso só lê
+ * memória. Tudo sai do atestado: é desta máquina, não venceu, e a conta
+ * estava liberada quando o servidor o assinou.
+ */
+function liberado() {
+  const atual = ler();
+  if (!atual || venceu(atual)) return false;
+  return atestado(atual).liberado === true;
+}
+
+/** O acesso como a tela o vê — com o motivo de quando o token venceu. */
+function acessoDaTela(atual) {
+  if (!venceu(atual)) {
+    // A tela segue o atestado, e não o `liberado` do arquivo: os dois só
+    // discordam se alguém editou o arquivo, e aí quem vale é a assinatura.
+    return atual.acesso ? { ...atual.acesso, liberado: atestado(atual).liberado === true } : null;
+  }
+  return {
+    ...(atual.acesso || {}),
+    liberado: false,
+    pendente: false,
+    podePagar: false,
+    motivo:
+      "O Optmize está sem falar com o servidor há mais de 48 horas. "
+      + "Confira a internet deste computador e clique em conferir de novo.",
+  };
+}
+
+/**
+ * A tarja das últimas 12 horas: sem contato, e o acesso trava em breve.
+ * `null` quando não há o que avisar.
+ */
+function tarja(atual) {
+  if (!atual || !atual.ultimaFalha || venceu(atual)) return null;
+  const falta = validade(atual) - agora();
+  if (falta > AVISAR_ANTES_MS) return null;
+  const horas = Math.max(1, Math.round(falta / 3_600_000));
+  return "O Optmize está sem contato com o servidor. Confira a internet: "
+    + `o acesso trava em ${horas} ${horas === 1 ? "hora" : "horas"}.`;
+}
+
 /** O que a tela pode ver. Nunca inclui token. */
 function perfilDaTela() {
   const atual = ler();
-  if (!atual) return { entrou: false, perfil: null, acesso: null };
-  return { entrou: true, perfil: atual.perfil, acesso: atual.acesso ?? null };
+  if (!atual) {
+    return { entrou: false, perfil: null, acesso: null, aviso: motivoDaSaida, tarja: null };
+  }
+  return {
+    entrou: true,
+    perfil: atual.perfil,
+    acesso: acessoDaTela(atual),
+    aviso: null,
+    tarja: tarja(atual),
+  };
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * A CONVERSA COM O BACKEND
+ * ---------------------------------------------------------------------------
+ */
 
 async function falarComOBackend(rota, corpo) {
   const resposta = await fetch(BACKEND + rota, {
@@ -112,217 +345,144 @@ async function falarComOBackend(rota, corpo) {
   return { ok: resposta.ok, status: resposta.status, dados };
 }
 
-/*
- * ===========================================================================
- * O ACESSO — a conta pode trabalhar hoje?
- * ===========================================================================
+/**
+ * Grava o que o `/device/token` respondeu — no vínculo e em cada renovação.
  *
- * Entrar e PODER TRABALHAR são duas perguntas diferentes, e o programa tratava
- * as duas como uma só: quem passava pelo login via o Optmize inteiro. A conta
- * que escolheu um plano pago e ainda não acertou o pagamento entrava igual —
- * enquanto a própria tela de cadastro prometia que o plano seria liberado
- * quando a CodeEx confirmasse. A promessa existia sem nada atrás dela.
- *
- * Quem decide é o backend, em `GET /billing/subscription`, e a decisão vem
- * pronta: `allowed`, `pendingRelease` e um motivo escrito em português. Nada
- * disso é recalculado aqui — repetir a regra criaria uma segunda verdade, e é
- * sempre a segunda que fica desatualizada.
- *
- * ---------------------------------------------------------------------------
- * SEM INTERNET, O PROGRAMA CONTINUA ABRINDO
- * ---------------------------------------------------------------------------
- *
- * Esta é a decisão que mais importa neste arquivo. O Optmize é instalado na
- * gráfica e fica aberto o dia inteiro; o link da rua cai. Barrar quem já
- * trabalhava porque o Railway não respondeu transformaria queda de internet em
- * expediente parado — e o prejuízo seria de quem PAGA, não de quem deve.
- *
- * Então: a última resposta conhecida fica gravada junto da sessão, e vale
- * enquanto não houver uma nova. Sem resposta nenhuma (primeira vez, sem rede),
- * abre. A trava de verdade não é esta tela, e o comentário de `Casca.tsx` já
- * dizia isso antes de eu chegar aqui: quem barra o trabalho é o servidor, a
- * cada operação que depende dele.
- *
- * ---------------------------------------------------------------------------
- * DE QUANTO EM QUANTO
- * ---------------------------------------------------------------------------
- *
- * Uma vez por hora, e sempre que a tela pedir de propósito (o botão "conferir
- * de novo" de quem está esperando a liberação). Conferir a cada `GET /eu`
- * faria uma ida ao Railway por abertura de menu, para uma resposta que muda
- * uma vez na vida da conta.
+ * O formato do `acesso` é o mesmo que a tela já conhecia (ele vinha do
+ * `/billing/subscription`); só a origem mudou.
  */
-
-const ACESSO_VALE_POR_MS = 60 * 60 * 1000;
-
-/** Foi conferido há pouco? */
-function acessoFresco(atual) {
-  const acesso = atual && atual.acesso;
-  if (!acesso || !acesso.conferidoEm) return false;
-  return Date.now() - Date.parse(acesso.conferidoEm) < ACESSO_VALE_POR_MS;
+function aplicarResposta(dados) {
+  const a = dados.acesso || {};
+  const servidorAgora = Date.parse(dados.agora);
+  gravar({
+    token: dados.token,
+    expira: dados.expira,
+    atestado: dados.atestado,
+    // A hora do servidor repõe o relógio guardado — ver `agora()`.
+    maiorRelogio: Number.isFinite(servidorAgora) ? servidorAgora : Date.now(),
+    ultimoContato: new Date().toISOString(),
+    ultimaFalha: null,
+    perfil: {
+      nome: (dados.usuario && dados.usuario.nome) || "",
+      email: (dados.usuario && dados.usuario.email) || "",
+      empresa: (dados.empresa && dados.empresa.nome) || "",
+      papel: dados.papel === "dono" ? "dono" : "operador",
+    },
+    acesso: {
+      liberado: Boolean(a.allowed),
+      /*
+        O QUE O PLANO LIBERA. A tela usa para trancar o que não foi comprado —
+        hoje, a central das impressoras de quem está no Padrão. Quem decide é o
+        catálogo no servidor; aqui isto só atravessa.
+      */
+      escopos: Array.isArray(a.scopes) ? a.scopes.map(String) : null,
+      /** `true` quando o que falta é a CodeEx liberar, e não a pessoa pagar. */
+      pendente: Boolean(a.pendingRelease),
+      motivo: a.blockedReason || null,
+      plano: a.planName || "",
+      podePagar: Boolean(a.payable),
+      status: a.status || "none",
+      conferidoEm: new Date().toISOString(),
+    },
+  });
+  motivoDaSaida = null;
 }
 
+/** As recusas que tiram a máquina da conta (ver `device.service.ts`). */
+const FORA_DA_CONTA = new Set(["maquina_desvinculada", "token_vencido"]);
+
+let renovando = null;
+
 /**
- * Uma chamada autenticada ao backend, renovando o token uma vez se preciso.
+ * Renova o token e traz o acesso de novo. Nunca lança.
  *
- * O `accessToken` dura meia hora e o programa fica aberto o dia inteiro, então
- * a primeira conferência do dia cai num token vencido — sem o refresh, ela
- * responderia 401 e a tela diria "aguardando liberação" para quem está em dia.
- * Uma tentativa só: se o refresh também falhar, a sessão acabou de verdade.
+ * Um pedido por vez: a trava, o relógio e a tela de espera podem pedir ao
+ * mesmo tempo, e duas renovações simultâneas seriam duas idas ao Railway para
+ * a mesma resposta.
+ */
+function renovar() {
+  if (renovando) return renovando;
+  renovando = (async () => {
+    const atual = ler();
+    if (!atual) return;
+    let resposta;
+    try {
+      resposta = await falarComOBackend("/device/token", { token: atual.token, ...daMaquina() });
+    } catch {
+      resposta = null;
+    }
+
+    if (resposta && resposta.ok && resposta.dados.token) {
+      aplicarResposta(resposta.dados);
+      return;
+    }
+    if (resposta && resposta.status === 401 && FORA_DA_CONTA.has(resposta.dados.code)) {
+      // A conta saiu desta máquina. Volta para o login, dizendo por quê.
+      apagar();
+      motivoDaSaida = resposta.dados.message || "Entre na conta de novo.";
+      return;
+    }
+    // Sem rede, servidor fora, erro do lado de lá: fica o que já se sabia, e a
+    // falha fica anotada para a tarja.
+    const ainda = ler();
+    if (ainda) gravar({ ...ainda, ultimaFalha: new Date().toISOString() });
+  })().finally(() => {
+    renovando = null;
+  });
+  return renovando;
+}
+
+// Renova ao subir — é aqui que a segunda-feira de manhã destrava — e de hora
+// em hora, com o programa aberto. `unref` para o relógio não segurar o Node.
+setTimeout(() => void renovar(), 1500).unref();
+setInterval(() => void renovar(), RENOVAR_A_CADA_MS).unref();
+
+/**
+ * Uma chamada autenticada ao backend, com o token da máquina.
+ *
+ * Um 401 é o token que venceu sem a renovação ter rodado ainda (a máquina
+ * acordou da suspensão, por exemplo): renova uma vez e tenta de novo. Se a
+ * renovação também falhar, a conta acabou nesta máquina de verdade.
  */
 async function pedirComToken(rota, opcoes = {}) {
-  const atual = ler();
-  if (!atual) return null;
+  if (!ler()) return null;
 
-  const tentar = async (token) =>
+  const tentar = async () =>
     fetch(BACKEND + rota, {
       ...opcoes,
-      headers: { ...(opcoes.headers || {}), Authorization: `Bearer ${token}` },
+      headers: { ...(opcoes.headers || {}), Authorization: `Bearer ${ler().token}` },
     });
 
-  let resposta = await tentar(atual.accessToken);
+  const resposta = await tentar();
   if (resposta.status !== 401) return resposta;
 
-  const renovada = await falarComOBackend("/auth/refresh", {
-    refreshToken: atual.refreshToken,
-  });
-  if (!renovada.ok || !renovada.dados.accessToken) return resposta;
-
-  gravar({
-    ...atual,
-    accessToken: renovada.dados.accessToken,
-    refreshToken: renovada.dados.refreshToken || atual.refreshToken,
-  });
-  return tentar(renovada.dados.accessToken);
-}
-
-/**
- * Pergunta ao backend e grava a resposta junto da sessão.
- *
- * Devolve o acesso como a tela o vê. `forcar` pula a validade de uma hora —
- * é o botão de quem está olhando a tela de espera e acabou de falar com a
- * CodeEx pelo WhatsApp.
- */
-async function conferirAcesso(forcar = false) {
-  const atual = ler();
-  if (!atual) return null;
-  if (!forcar && acessoFresco(atual)) return atual.acesso;
-
-  let resposta;
-  try {
-    resposta = await pedirComToken("/billing/subscription");
-  } catch {
-    // Sem rede. Fica valendo o que já se sabia — ver a nota acima.
-    return atual.acesso ?? null;
-  }
-  if (!resposta || !resposta.ok) return atual.acesso ?? null;
-
-  const dados = await resposta.json().catch(() => null);
-  if (!dados) return atual.acesso ?? null;
-
-  const acesso = {
-    liberado: Boolean(dados.allowed),
-    /*
-      O QUE O PLANO LIBERA. A tela usa para trancar o que não foi comprado —
-      hoje, a central das impressoras de quem está no Padrão. Quem decide é o
-      catálogo no servidor; aqui isto só atravessa.
-    */
-    escopos: Array.isArray(dados.scopes) ? dados.scopes.map(String) : null,
-    /** `true` quando o que falta é a CodeEx liberar, e não a pessoa pagar. */
-    pendente: Boolean(dados.pendingRelease),
-    motivo: dados.blockedReason || null,
-    plano: dados.planName || "",
-    /**
-     * Há "Pagar agora"? Quem decide é o backend, pelo plano no banco — a tela
-     * não guarda lista de planos nenhuma.
-     */
-    podePagar: Boolean(dados.payable),
-    status: dados.status || "none",
-    conferidoEm: new Date().toISOString(),
-  };
-
-  gravar({ ...ler(), acesso });
-  await conferirPapel();
-  return acesso;
-}
-
-/*
- * ---------------------------------------------------------------------------
- * QUEM É O DONO
- * ---------------------------------------------------------------------------
- *
- * O `role` do `/auth/me` não responde isto: ele é do USUÁRIO (cliente ou
- * admin da CodeEx), não do lugar dele na empresa. Quem sabe se a conta é a
- * dona é o `GET /team`, no `isOwner` — a mesma regra que o backend usa para
- * deixar criar, desativar e excluir funcionário.
- *
- * O papel vai para o perfil porque é dele que a barra decide mostrar o botão
- * do Painel. Esconder o botão é conforto, não trava: a trava é o backend, que
- * recusa com 403 quem não é dono.
- *
- * Sem rede, fica o papel que já estava.
- */
-async function conferirPapel() {
-  let resposta;
-  try {
-    resposta = await pedirComToken("/team");
-  } catch {
-    return;
-  }
-  if (!resposta || !resposta.ok) return;
-  const dados = await resposta.json().catch(() => null);
-  if (!dados) return;
-
-  const atual = ler();
-  if (!atual) return;
-  gravar({
-    ...atual,
-    perfil: { ...atual.perfil, papel: dados.isOwner ? "dono" : "operador" },
-    papelConferidoEm: new Date().toISOString(),
-  });
+  await renovar();
+  if (!ler()) return resposta;
+  return tentar();
 }
 
 const rotas = express.Router();
 
-let papelTentado = false;
-
 /**
  * Quem está usando agora, e se pode trabalhar. A tela chama isto ao abrir.
  *
- * RESPONDE COM O QUE JÁ SABE e confere depois, sem segurar a resposta: a tela
- * espera este pedido para desenhar qualquer coisa, e uma ida ao Railway no
- * caminho dela seria meio segundo de tela vazia a cada abertura. O que estava
- * gravado é de uma hora atrás, no máximo — e o que muda nele muda uma vez na
- * vida da conta.
+ * Responde com o que já sabe, sem ir ao Railway: a renovação de hora em hora
+ * mantém isto em dia, e uma ida ao servidor aqui seria meio segundo de tela
+ * vazia a cada abertura.
  */
-rotas.get("/eu", async (_req, res) => {
-  /*
-    Sessão gravada antes de o papel existir: descobre agora, UMA vez, e só
-    então responde. Sem isto, o dono que já estava logado abriria o programa
-    sem o botão do Painel até a conferência de uma hora passar.
-  */
-  if (ler() && !ler().papelConferidoEm && !papelTentado) {
-    // Uma tentativa por processo: sem rede, não pode segurar toda abertura.
-    papelTentado = true;
-    await conferirPapel().catch(() => null);
-  }
+rotas.get("/eu", (_req, res) => {
   res.json(perfilDaTela());
-  const atual = ler();
-  if (atual && !acessoFresco(atual)) {
-    conferirAcesso().catch(() => {
-      // Já está tratado lá dentro; aqui é só não derrubar o processo.
-    });
-  }
 });
 
 /**
  * Confere agora, e responde com o resultado.
  *
- * É o botão da tela de espera. Diferente do `/eu`, este ESPERA a resposta:
- * quem apertou está olhando para a tela querendo saber se já liberou.
+ * É o botão da tela de espera — e o da tela de "sem contato há 48 horas".
+ * Diferente do `/eu`, este ESPERA a resposta: quem apertou está olhando para
+ * a tela querendo saber se já liberou.
  */
 rotas.post("/conferir", async (_req, res) => {
-  await conferirAcesso(true).catch(() => null);
+  await renovar();
   res.json(perfilDaTela());
 });
 
@@ -332,10 +492,8 @@ rotas.post("/entrar", async (req, res) => {
   /*
     O DOCUMENTO DA EMPRESA (CNPJ ou CPF) VAI JUNTO, só com os dígitos.
 
-    Quem confere se aquela conta é daquela empresa é o backend, no mesmo
-    `/auth/login` — aqui ele só atravessa. Conferir neste arquivo exigiria uma
-    segunda ida ao servidor para descobrir a empresa da conta, e daria uma
-    segunda regra de acesso para manter em dia.
+    Quem confere se aquela conta é daquela empresa é o backend, no
+    `/device/authorize` — aqui ele só atravessa.
   */
   const documento = String((req.body && req.body.documento) || "").replace(/\D/g, "");
   if (!email || !senha) {
@@ -348,69 +506,48 @@ rotas.post("/entrar", async (req, res) => {
     });
   }
 
-  let entrada;
+  // Sem rede é um caso distinto de senha errada, e a tela precisa poder dizer
+  // isso — "confira a internet" a pessoa resolve sozinha.
+  const semRede = () =>
+    res.status(503).json({
+      code: "sem_rede",
+      message: "O Optmize não conseguiu falar com o servidor. Confira a internet.",
+    });
+
+  let autorizacao;
   try {
-    entrada = await falarComOBackend("/auth/login", {
+    autorizacao = await falarComOBackend("/device/authorize", {
       email,
       password: senha,
       documento,
     });
   } catch {
-    // Sem rede, ou servidor fora do ar. É um caso distinto de senha errada, e
-    // a tela precisa poder dizer isso — "não foi possível validar" manda a
-    // pessoa telefonar; "confira a internet" ela resolve sozinha.
-    return res.status(503).json({
-      code: "sem_rede",
-      message: "O Optmize não conseguiu falar com o servidor. Confira a internet.",
+    return semRede();
+  }
+  if (!autorizacao.ok || !autorizacao.dados.codigo) {
+    return res.status(autorizacao.status || 401).json({
+      code: autorizacao.dados.code || "invalid_credentials",
+      message: autorizacao.dados.message || "E-mail ou senha incorretos.",
     });
   }
 
-  if (!entrada.ok) {
-    return res.status(entrada.status || 401).json({
-      code: entrada.dados.code || "invalid_credentials",
-      message: entrada.dados.message || "E-mail ou senha incorretos.",
-    });
-  }
-
-  /*
-    Quem é a pessoa vem numa segunda pergunta: o `/auth/login` devolve os
-    tokens, e é o `/auth/me` que devolve nome, papel e empresa. Sem este passo
-    a barra do menu mostraria uma conta sem nome.
-  */
-  let perfil = { nome: email, empresa: "", papel: "operador" };
+  let vinculo;
   try {
-    const eu = await fetch(`${BACKEND}/auth/me`, {
-      headers: { Authorization: `Bearer ${entrada.dados.accessToken}` },
+    vinculo = await falarComOBackend("/device/token", {
+      codigo: autorizacao.dados.codigo,
+      ...daMaquina(),
     });
-    if (eu.ok) {
-      const dados = await eu.json();
-      const u = dados.user || dados;
-      perfil = {
-        nome: u.name || email,
-        empresa: u.organizationName || u.organizationId || "",
-        papel: u.role || "operador",
-      };
-    }
   } catch {
-    // O nome é enfeite comparado a estar dentro: entra com o e-mail no lugar.
+    return semRede();
+  }
+  if (!vinculo.ok || !vinculo.dados.token) {
+    return res.status(vinculo.status || 401).json({
+      code: vinculo.dados.code || "nao_vinculou",
+      message: vinculo.dados.message || "Não foi possível vincular esta máquina. Tente de novo.",
+    });
   }
 
-  gravar({
-    accessToken: entrada.dados.accessToken,
-    refreshToken: entrada.dados.refreshToken,
-    perfil,
-    entrouEm: new Date().toISOString(),
-  });
-
-  /*
-    O ACESSO É CONFERIDO AQUI, ANTES DE RESPONDER, e só aqui a espera se
-    justifica: é a única vez em que a tela não tem nada gravado para mostrar.
-    Sem isto, quem entra numa conta pendente veria o programa inteiro por um
-    instante e a tela de espera depois — que é pior do que meio segundo a mais
-    no login.
-  */
-  await conferirAcesso(true).catch(() => null);
-
+  aplicarResposta(vinculo.dados);
   res.json(perfilDaTela());
 });
 
@@ -665,15 +802,17 @@ rotas.post("/pagar", async (_req, res) => {
 
 rotas.post("/sair", (_req, res) => {
   apagar();
+  motivoDaSaida = null;
   res.json(perfilDaTela());
 });
 
 /*
-  `pedirComToken` sai daqui para o `uso.js` usar antes de cada exportação.
+  `pedirComToken` sai daqui para o `uso.js` usar antes de cada exportação, e
+  `liberado` para a trava de `server.js`.
 
   É a única função deste arquivo que outro módulo enxerga, e de propósito: ela
   guarda o token, renova quando vence e devolve a resposta crua. Duplicar esse
   cuidado em outro arquivo daria dois lugares para consertar no dia em que o
   refresh mudar — e o segundo ficaria para trás.
 */
-module.exports = { rotas, perfilDaTela, pedirComToken };
+module.exports = { rotas, perfilDaTela, pedirComToken, liberado };

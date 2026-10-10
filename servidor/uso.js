@@ -24,22 +24,89 @@
  * transformaria queda de internet em pedido parado, e o prejuízo seria de
  * quem PAGA — não de quem deve.
  *
- * Então: erro de rede libera. O que isso permite está dito em voz alta —
- * quem tirar a máquina da internet exporta à vontade. É o mesmo teto da
- * licença offline do programa: quem quer burlar já tinha por onde, e castigar
- * cem gráficas honestas para incomodar uma é troca ruim.
+ * Então: erro de rede libera — MAS FICA ANOTADO. Cada exportação feita sem
+ * internet entra numa fila no disco e é descontada quando a conexão volta
+ * (`enviarPendentes`). Tirar a máquina da internet deixa de ser metragem de
+ * graça: é metragem a prazo, e o prazo é de 48 horas, porque é quanto o
+ * programa trabalha sem falar com o servidor (ver `sessao.js`).
  *
  * ---------------------------------------------------------------------------
- * SEM CONTA, TAMBÉM EXPORTA
+ * SEM CONTA, NÃO CHEGA AQUI
  * ---------------------------------------------------------------------------
  *
- * O programa pede login para abrir (ver `casca/Casca.tsx`), então "sem sessão"
- * aqui significa quase sempre um Optmize aberto antes de a conta existir, ou
- * um teste de bancada. Recusar seria inventar uma trava que a tela de entrada
- * já faz melhor.
+ * A trava de `server.js` não deixa a API responder sem conta liberada nesta
+ * máquina, e a exportação passa por ela.
  */
 
+const fs = require("node:fs");
+const path = require("node:path");
 const { pedirComToken } = require("./sessao");
+const { pastaDeDados } = require("./caminhos");
+
+/** As exportações feitas sem internet, esperando para ser descontadas. */
+const ARQUIVO_PENDENTE = path.join(pastaDeDados("sessao"), "uso-pendente.json");
+
+function lerPendentes() {
+  try {
+    const lista = JSON.parse(fs.readFileSync(ARQUIVO_PENDENTE, "utf8"));
+    return Array.isArray(lista) ? lista : [];
+  } catch {
+    return [];
+  }
+}
+
+function gravarPendentes(lista) {
+  if (lista.length === 0) {
+    fs.rmSync(ARQUIVO_PENDENTE, { force: true });
+    return;
+  }
+  fs.writeFileSync(ARQUIVO_PENDENTE, JSON.stringify(lista), { mode: 0o600 });
+}
+
+function anotarPendente(metros, metrosCaixa) {
+  const lista = lerPendentes();
+  lista.push({ metros, metrosCaixa, quando: new Date().toISOString() });
+  gravarPendentes(lista);
+}
+
+let enviando = null;
+
+/**
+ * Manda ao servidor as exportações feitas sem internet. Nunca lança.
+ *
+ * Para na primeira que falhar por rede — a ordem se mantém, e a próxima
+ * tentativa recomeça dali. Uma que o servidor recusar por dado inválido sai da
+ * fila: ficar reenviando para sempre não desconta nada.
+ */
+function enviarPendentes() {
+  if (enviando) return enviando;
+  enviando = (async () => {
+    let lista = lerPendentes();
+    while (lista.length > 0) {
+      const [item] = lista;
+      let resposta;
+      try {
+        resposta = await pedirComToken("/uso/exportacao", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...item, semRede: true }),
+        });
+      } catch {
+        return; // sem rede de novo
+      }
+      if (!resposta || resposta.status === 401 || resposta.status >= 500) return;
+      lista = lista.slice(1);
+      gravarPendentes(lista);
+    }
+  })().catch(() => {}).finally(() => {
+    enviando = null;
+  });
+  return enviando;
+}
+
+// Na subida e de hora em hora, além de antes de cada exportação.
+setTimeout(() => void enviarPendentes(), 5000).unref();
+setInterval(() => void enviarPendentes(), 60 * 60 * 1000).unref();
 
 /**
  * Pede a metragem desta exportação ao servidor.
@@ -70,21 +137,29 @@ async function permitirExportacao(metrosPedidos, metrosCaixa = null) {
     return { permitido: true, semMetragem: true };
   }
 
+  // As de antes vêm primeiro: o saldo que decide esta tem de contar com elas.
+  await enviarPendentes();
+
+  const caixa = Number.isFinite(metrosCaixa) && metrosCaixa >= metros ? metrosCaixa : null;
+
   let resposta;
   try {
     resposta = await pedirComToken("/uso/exportacao", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        Number.isFinite(metrosCaixa) && metrosCaixa >= metros ? { metros, metrosCaixa } : { metros },
-      ),
+      body: JSON.stringify(caixa !== null ? { metros, metrosCaixa: caixa } : { metros }),
     });
   } catch {
+    // Sem rede: exporta, e fica na fila para ser descontada depois.
+    anotarPendente(metros, caixa);
     return { permitido: true, offline: true };
   }
 
-  // `null` é "não há sessão gravada" — ver a nota no cabeçalho.
-  if (!resposta) return { permitido: true, semConta: true };
+  // `null` é "não há conta nesta máquina"; 401 depois de renovar, a conta
+  // saiu daqui. Nos dois casos não há de quem descontar, e não se exporta.
+  if (!resposta || resposta.status === 401) {
+    return { permitido: false, motivo: "Entre na sua conta do Optmize para exportar." };
+  }
 
   const dados = await resposta.json().catch(() => null);
 
@@ -109,7 +184,11 @@ async function permitirExportacao(metrosPedidos, metrosCaixa = null) {
     };
   }
 
-  if (!resposta.ok) return { permitido: true, falhou: true };
+  if (!resposta.ok) {
+    // Servidor com problema não é cota estourada: exporta, e desconta depois.
+    if (resposta.status >= 500) anotarPendente(metros, caixa);
+    return { permitido: true, falhou: true };
+  }
 
   return {
     permitido: true,

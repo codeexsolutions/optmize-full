@@ -4,6 +4,8 @@ node_modules/
 # Os dois são gerados por `npm run build:app` e pesam ~100 MB cada.
 src-tauri/target/
 src-tauri/servidor/
+# A impressão digital do que vai no instalador: gerada a cada build.
+src-tauri/integridade.txt
 *.log
 dados.db
 dados.db-wal
@@ -16,7 +18,7 @@ uploads/
 # do bot. Nao versione nem compartilhe.
 #
 # `sessao/` E CREDENCIAL PELO MESMO MOTIVO, desde que o login existe: o
-# `sessao.json` guarda o accessToken e o refreshToken de quem entrou. Este
+# `sessao.json` guarda o token da maquina de quem entrou. Este
 # repositorio e PUBLICO — um commit desse arquivo entrega a conta a quem
 # passar por ele. Ver o cabecalho de `servidor/sessao.js`.
 config/

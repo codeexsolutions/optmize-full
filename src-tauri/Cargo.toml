@@ -1,6 +1,6 @@
 [package]
 name = "optimize"
-version = "1.1.0"
+version = "1.2.0"
 description = "Optimize — moldes, encaixe e vetor"
 edition = "2021"
 rust-version = "1.77"
@@ -42,6 +42,11 @@ base64 = "0.22"
 # pasta. `dunce` devolve o mesmo caminho no formato de sempre, sem o prefixo,
 # que é o que o Node espera.
 dunce = "1"
+
+# A impressão digital dos arquivos do instalador, conferida a cada abertura
+# (ver `conferir_integridade`, em src/main.rs). É a mesma versão que o Tauri
+# já traz por dentro: não acrescenta nada ao executável.
+sha2 = "0.10"
 
 # O WebView2 cru, para responder à caixa de permissão que o Chromium levanta
 # quando a pessoa escolhe a pasta de saída do Exportar (ver

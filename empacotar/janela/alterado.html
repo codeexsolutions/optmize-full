@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<title>CodeEx Optmize — instalação alterada</title>
+<!--
+  Quando a conferência de integridade acha um arquivo do programa diferente do
+  que saiu no instalador (ver `conferir_integridade`, em src-tauri/src/main.rs).
+
+  O tom não acusa ninguém: na maioria das vezes quem mexeu foi um antivírus
+  que pôs um arquivo em quarentena, ou uma cópia que corrompeu no meio. O que
+  a pessoa precisa é do caminho de volta, e ele é um só: reinstalar.
+-->
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    background: #0b0b0c;
+    color: #f5f2ee;
+    font-family: "Segoe UI", system-ui, sans-serif;
+  }
+  .bloco { max-width: 520px; display: grid; gap: 16px; }
+  .selo {
+    width: 42px; height: 42px;
+    display: grid; place-items: center;
+    border-radius: 12px;
+    background: #3a1512;
+    color: #ef5f4c;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  h1 { margin: 0; font-size: 21px; font-weight: 600; }
+  p { margin: 0; color: #9d968d; font-size: 14px; line-height: 1.6; }
+  ol { margin: 4px 0 0; padding-left: 20px; color: #9d968d; font-size: 14px; line-height: 1.9; }
+  strong { color: #f5f2ee; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="bloco">
+    <span class="selo">!</span>
+    <h1>Os arquivos do CodeEx Optmize foram alterados</h1>
+    <p>
+      Um arquivo do programa está diferente do que veio no instalador, e por
+      segurança o Optmize não abre assim. Costuma ser um antivírus que mexeu
+      num arquivo, ou uma instalação que não terminou.
+    </p>
+    <ol>
+      <li>Baixe o instalador de novo no site do Optmize, entrando na sua conta.</li>
+      <li>Instale por cima — seus moldes e projetos continuam onde estão.</li>
+      <li>
+        Se repetir, libere a pasta de instalação no seu antivírus e fale com a
+        <strong>CodeEx</strong>.
+      </li>
+    </ol>
+  </div>
+</body>
+</html>

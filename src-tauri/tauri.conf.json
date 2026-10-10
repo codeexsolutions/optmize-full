@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Optimize",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "identifier": "br.com.optimize.desktop",
   "build": {
     "frontendDist": "../empacotar/janela",
-    "beforeBuildCommand": "node empacotar/preparar.js && node empacotar/compilar.js",
+    "beforeBuildCommand": "node empacotar/preparar.js && node empacotar/compilar.js && node empacotar/integridade.js",
     "beforeDevCommand": "node empacotar/preparar.js"
   },
   "plugins": {
@@ -54,7 +54,9 @@
         "languages": [
           "PortugueseBR"
         ],
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "headerImage": "icons/instalador-cabecalho.bmp",
+        "sidebarImage": "icons/instalador-lateral.bmp"
       }
     }
   }

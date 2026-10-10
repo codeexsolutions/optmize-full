@@ -21,8 +21,7 @@
 import { useState, type FormEvent } from "react";
 
 import { alerta } from "../casca/Alerta";
-import { Icone } from "../casca/Icone";
-import { CAMPO, Porta, ROTULO } from "./Porta";
+import { Alternativa, BotaoPrincipal, Cabecalho, Campo, Porta } from "./Porta";
 
 type Passo = "email" | "codigo";
 
@@ -55,7 +54,6 @@ export function RecuperarSenha({
   const [email, setEmail] = useState(emailInicial);
   const [codigo, setCodigo] = useState("");
   const [senha, setSenha] = useState("");
-  const [senhaAberta, setSenhaAberta] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   async function mandarCodigo(evento?: FormEvent) {
@@ -86,126 +84,78 @@ export function RecuperarSenha({
   return (
     <Porta
       rodape={
-        <button
-          type="button"
-          onClick={aoVoltar}
-          className="mt-5 flex w-full items-center justify-center gap-2 border-0 bg-transparent p-0 text-[13px] text-tinta-apagada transition-colors hover:text-ambar"
-        >
-          <Icone referencia="icones.svg#arrow-left" className="size-4" />
+        <Alternativa pergunta="Lembrou a senha?" icone="icones.svg#arrow-left" onClick={aoVoltar}>
           Voltar ao login
-        </button>
+        </Alternativa>
       }
     >
       <div className="flex flex-col gap-5">
-        <header>
-          <h2 className="m-0 font-titulo text-xl font-semibold text-tinta">Redefinir a senha</h2>
-          <p className="mt-1.5 mb-0 text-[13px] leading-relaxed text-tinta-fraca">
-            {passo === "email"
-              ? "Mandamos um código de 6 números para o e-mail da sua conta."
-              : <>Se houver uma conta com <strong className="text-tinta">{email}</strong>, o código
-                  chegou. Ele vale por 15 minutos — confira também a caixa de spam.</>}
-          </p>
-        </header>
+        <Cabecalho
+          titulo="Redefinir senha"
+          subtitulo={
+            passo === "email"
+              ? "Vamos mandar um código de 6 números para o seu e-mail."
+              : <>Se houver uma conta com <span className="text-tinta">{email}</span>, o código
+                  chegou. Vale por 15 minutos — confira também o spam.</>
+          }
+        />
 
         {passo === "email" ? (
           <form onSubmit={mandarCodigo}>
             <fieldset disabled={enviando} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
-              <label className="flex flex-col gap-1.5">
-                <span className={ROTULO}>E-mail</span>
-                <span className="relative flex items-center">
-                  <Icone
-                    referencia="icones.svg#mail"
-                    className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-                  />
-                  <input
-                    type="email"
-                    required
-                    autoFocus
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="E-mail"
-                    className={CAMPO}
-                  />
-                </span>
-              </label>
+              <Campo
+                classe="entrada-degrau"
+                rotulo="E-mail"
+                icone="icones.svg#mail"
+                type="email"
+                required
+                autoFocus
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="voce@suaempresa.com"
+              />
 
-              <button type="submit" className="botao-entrar w-full gap-2 px-4 text-[15px]">
-                <Icone
-                  referencia={enviando ? "icones.svg#loader-circle" : "icones.svg#mail"}
-                  className={`size-4${enviando ? " gira" : ""}`}
-                />
+              <BotaoPrincipal icone="icones.svg#arrow-right" esperando={enviando}>
                 {enviando ? "Mandando…" : "Mandar o código"}
-              </button>
+              </BotaoPrincipal>
             </fieldset>
           </form>
         ) : (
           <form onSubmit={redefinir}>
             <fieldset disabled={enviando} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
-              <label className="flex flex-col gap-1.5">
-                <span className={ROTULO}>Código do e-mail</span>
-                <span className="relative flex items-center">
-                  <Icone
-                    referencia="icones.svg#badge-check"
-                    className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-                  />
-                  <input
-                    required
-                    autoFocus
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    value={codigo}
-                    onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="000000"
-                    className={`${CAMPO} font-mono tracking-[0.4em]`}
-                  />
-                </span>
-              </label>
+              <Campo
+                classe="entrada-degrau"
+                rotulo="Código do e-mail"
+                icone="icones.svg#badge-check"
+                required
+                autoFocus
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="000000"
+                className="font-mono tracking-[0.4em]"
+              />
 
-              <label className="flex flex-col gap-1.5">
-                <span className={ROTULO}>Senha nova</span>
-                <span className="relative flex items-center">
-                  <Icone
-                    referencia="icones.svg#lock"
-                    className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-                  />
-                  <input
-                    type={senhaAberta ? "text" : "password"}
-                    required
-                    minLength={8}
-                    autoComplete="new-password"
-                    value={senha}
-                    onChange={(e) => setSenha(e.target.value)}
-                    placeholder="Senha nova"
-                    className={`${CAMPO} pr-11`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSenhaAberta((v) => !v)}
-                    title={senhaAberta ? "Esconder a senha" : "Mostrar a senha"}
-                    aria-label={senhaAberta ? "Esconder a senha" : "Mostrar a senha"}
-                    className="absolute right-2 grid size-8 place-items-center rounded-lg border-0 bg-transparent p-0 text-tinta-apagada transition-colors hover:text-ambar"
-                  >
-                    <Icone
-                      referencia={senhaAberta ? "icones.svg#eye-off" : "icones.svg#eye"}
-                      className="size-4"
-                    />
-                  </button>
-                </span>
-              </label>
+              <Campo
+                classe="entrada-degrau"
+                rotulo="Senha nova"
+                icone="icones.svg#lock"
+                senha
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                placeholder="Crie uma senha"
+                dica="Ao menos 8 caracteres."
+              />
 
-              <button
-                type="submit"
-                disabled={codigo.length !== 6}
-                className="botao-entrar w-full gap-2 px-4 text-[15px]"
-              >
-                <Icone
-                  referencia={enviando ? "icones.svg#loader-circle" : "icones.svg#check"}
-                  className={`size-4${enviando ? " gira" : ""}`}
-                />
+              <BotaoPrincipal icone="icones.svg#arrow-right" esperando={enviando} disabled={codigo.length !== 6}>
                 {enviando ? "Trocando…" : "Trocar a senha"}
-              </button>
+              </BotaoPrincipal>
 
               <button
                 type="button"
