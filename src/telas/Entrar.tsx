@@ -44,14 +44,23 @@
  * perfil e pronto. Ver o cabeçalho de `servidor/sessao.js`.
  */
 
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import { alerta } from "../casca/Alerta";
 import { encerrarEntrada, tocarEntrada } from "./Entrada";
-import { CriarConta } from "./CriarConta";
-import { RecuperarSenha } from "./RecuperarSenha";
 import { Alternativa, BotaoPrincipal, Cabecalho, Campo, mascararDocumento, Porta } from "./Porta";
 import { usePlanos } from "../estado/planos";
+
+/*
+  O CADASTRO E A SENHA CHEGAM QUANDO SÃO ABERTOS. O cadastro traz o carrossel
+  dos planos (`react-alice-carousel`, ~60 KB), e quem já tem conta — quase
+  todo mundo que vê esta tela — nunca o abre. Os dois são pedidos logo depois
+  de o login desenhar (ver o efeito abaixo), então o clique não espera.
+*/
+const carregarCriarConta = () => import("./CriarConta");
+const carregarRecuperarSenha = () => import("./RecuperarSenha");
+const CriarConta = lazy(() => carregarCriarConta().then((m) => ({ default: m.CriarConta })));
+const RecuperarSenha = lazy(() => carregarRecuperarSenha().then((m) => ({ default: m.RecuperarSenha })));
 
 export function Entrar({
   aoEntrar,
@@ -87,6 +96,15 @@ export function Entrar({
   */
   const carregarPlanos = usePlanos((e) => e.carregar);
   useEffect(() => { carregarPlanos(); }, [carregarPlanos]);
+
+  // O código do cadastro e da senha, com o login já na tela (ver lá em cima).
+  useEffect(() => {
+    const adiantar = window.setTimeout(() => {
+      void carregarCriarConta().catch(() => {});
+      void carregarRecuperarSenha().catch(() => {});
+    }, 1500);
+    return () => window.clearTimeout(adiantar);
+  }, []);
 
   /** `true` enquanto a tela de redefinir a senha está na frente. */
   const [recuperando, setRecuperando] = useState(false);
@@ -184,27 +202,31 @@ export function Entrar({
   */
   if (recuperando) {
     return (
-      <RecuperarSenha
-        emailInicial={email}
-        aoVoltar={() => setRecuperando(false)}
-        aoRedefinir={(emailDaConta) => {
-          setEmail(emailDaConta);
-          setSenha("");
-          setRecuperando(false);
-        }}
-      />
+      <Suspense fallback={null}>
+        <RecuperarSenha
+          emailInicial={email}
+          aoVoltar={() => setRecuperando(false)}
+          aoRedefinir={(emailDaConta) => {
+            setEmail(emailDaConta);
+            setSenha("");
+            setRecuperando(false);
+          }}
+        />
+      </Suspense>
     );
   }
 
   if (cadastrando) {
     return (
-      <CriarConta
-        aoVoltar={() => setCadastrando(false)}
-        aoCadastrar={(emailCriado) => {
-          setEmail(emailCriado);
-          setCadastrando(false);
-        }}
-      />
+      <Suspense fallback={null}>
+        <CriarConta
+          aoVoltar={() => setCadastrando(false)}
+          aoCadastrar={(emailCriado) => {
+            setEmail(emailCriado);
+            setCadastrando(false);
+          }}
+        />
+      </Suspense>
     );
   }
 

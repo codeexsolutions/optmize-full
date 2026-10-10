@@ -1,6 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Estrutura } from "./Estrutura";
-import { montarProducao } from "./controlador";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ProvedorDaLigacao, type Ligacao } from "./ligacao";
 import type { NomeDeTela } from "../rotas";
 import "./producao.css";
@@ -14,6 +12,19 @@ import { useErroEmAlerta } from "../casca/Alerta";
  * Projetos e Moldes já saíram dela, e a Cor saiu do programa (2026-09-21).
  */
 export const ehProducaoIntegrada = (pagina: string) => ["encaixe"].includes(pagina);
+
+type Editor = typeof import("./editor");
+
+/*
+  O EDITOR CHEGA SOB DEMANDA (ver `editor.ts`). A promessa é do módulo, e não
+  do componente: quem desmonta e monta de novo o editor não espera outra vez.
+*/
+let editorCarregado: Editor | null = null;
+let carregandoEditor: Promise<Editor> | null = null;
+function carregarEditor(): Promise<Editor> {
+  carregandoEditor ??= import("./editor").then((modulo) => (editorCarregado = modulo));
+  return carregandoEditor;
+}
 
 /**
  * ===========================================================================
@@ -57,7 +68,7 @@ export function Producao({ pagina, irPara, children }: {
   children?: ReactNode;
 }) {
   const raiz = useRef<HTMLDivElement>(null);
-  const controle = useRef<ReturnType<typeof montarProducao> | null>(null);
+  const controle = useRef<ReturnType<Editor["montarProducao"]> | null>(null);
   const navegar = useRef(irPara);
   navegar.current = irPara;
   const setErro = useErroEmAlerta("Não deu certo na produção");
@@ -76,15 +87,32 @@ export function Producao({ pagina, irPara, children }: {
    */
   const esperando = useRef<(() => void)[]>([]);
 
+  /** O código do editor, quando já chegou. Até lá o `montado` espera por ele. */
+  const [editor, setEditor] = useState<Editor | null>(editorCarregado);
+
+  useEffect(() => {
+    if (!montado || editor) return;
+    let vivo = true;
+    carregarEditor().then(
+      (modulo) => { if (vivo) setEditor(modulo); },
+      (erro) => {
+        // Sem o pedaço (arquivo faltando na instalação): diz, e solta quem esperava.
+        setErro(erro instanceof Error ? erro.message : String(erro));
+        esperando.current.splice(0).forEach((seguir) => seguir());
+      },
+    );
+    return () => { vivo = false; };
+  }, [montado, editor, setErro]);
+
   useLayoutEffect(() => {
-    if (!montado) return;
+    if (!montado || !editor) return;
 
     const elemento = raiz.current!;
     const aoErro = (evento: Event) => setErro((evento as CustomEvent<string>).detail);
     elemento.addEventListener("producao:erro", aoErro);
 
     try {
-      controle.current = montarProducao(elemento, (destino: NomeDeTela) => navegar.current(destino));
+      controle.current = editor.montarProducao(elemento, (destino: NomeDeTela) => navegar.current(destino));
       // Acabou de subir: a tela da vez precisa ser dita, senão o editor abre
       // na página em que estava quando foi desmontado.
       controle.current.navegar(pagina);
@@ -106,7 +134,7 @@ export function Producao({ pagina, irPara, children }: {
     };
     // `pagina` de propósito fora: trocar de tela não remonta o editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [montado]);
+  }, [montado, editor]);
 
   /*
    * A TROCA DE TELA, E A DECISÃO DE FICAR OU SAIR.
@@ -171,9 +199,9 @@ export function Producao({ pagina, irPara, children }: {
    * Encaixe.
    */
   return <ProvedorDaLigacao value={ligacao}>
-    {montado && (
+    {montado && editor && (
       <div ref={raiz} className="producao h-full" hidden={!ehProducaoIntegrada(pagina)}>
-        <Estrutura />
+        <editor.Estrutura />
       </div>
     )}
     {children}
