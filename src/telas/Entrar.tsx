@@ -47,14 +47,23 @@
 import { useEffect, useState } from "react";
 
 import { alerta } from "../casca/Alerta";
-import { Icone } from "../casca/Icone";
 import { encerrarEntrada, tocarEntrada } from "./Entrada";
 import { CriarConta } from "./CriarConta";
 import { RecuperarSenha } from "./RecuperarSenha";
-import { mascararDocumento, Porta } from "./Porta";
+import { Alternativa, BotaoPrincipal, Cabecalho, Campo, mascararDocumento, Porta } from "./Porta";
 import { usePlanos } from "../estado/planos";
 
-export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
+export function Entrar({
+  aoEntrar,
+  aviso = null,
+}: {
+  aoEntrar: () => void;
+  /**
+   * Por que a conta saiu desta máquina sem a pessoa clicar em "Sair" — outra
+   * máquina entrou na conta, ou o acesso foi retirado. Vem do servidor local.
+   */
+  aviso?: string | null;
+}) {
   /*
     O DOCUMENTO DA EMPRESA — CNPJ ou CPF — É O PRIMEIRO CAMPO.
 
@@ -78,8 +87,7 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
   */
   const carregarPlanos = usePlanos((e) => e.carregar);
   useEffect(() => { carregarPlanos(); }, [carregarPlanos]);
-  /** O olho da senha: ver o que se digitou poupa um telefonema. */
-  const [senhaAberta, setSenhaAberta] = useState(false);
+
   /** `true` enquanto a tela de redefinir a senha está na frente. */
   const [recuperando, setRecuperando] = useState(false);
   /** `true` enquanto a tela de cadastro da empresa está na frente. */
@@ -95,6 +103,11 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
     const quadro = requestAnimationFrame(() => encerrarEntrada());
     return () => cancelAnimationFrame(quadro);
   }, []);
+
+  // Quem foi tirado da conta precisa saber por quê, senão parece defeito.
+  useEffect(() => {
+    if (aviso) void alerta.erro("Você saiu da conta nesta máquina", aviso);
+  }, [aviso]);
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
@@ -199,37 +212,21 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
     <Porta
       consumido={consumindo}
       rodape={
-        <>
-          {/*
-            O CONVITE DE QUEM AINDA NÃO TEM CONTA.
+        /*
+          O CONVITE DE QUEM AINDA NÃO TEM CONTA.
 
-            FORA do cartão e separado por um traço: dentro dele, viraria um
-            quinto campo do formulário, e quem entra todo dia leria um botão a
-            mais na altura do "Entrar". Aqui embaixo ele existe para quem
-            procura, sem atrapalhar quem não procura.
-
-            Este botão só passou a fazer sentido quando o programa ganhou plano sem
-            mensalidade: antes, mandar alguém se cadastrar levaria a um
-            pagamento que não destrava o programa instalado. Com o Padrão, o
-            cadastro TERMINA em alguém trabalhando.
-          */}
-          <div className="mt-6 flex items-center gap-3">
-            <span className="h-px flex-1 bg-linha" />
-            <span className="text-[10.5px] tracking-[1.4px] text-tinta-apagada uppercase">
-              Ainda não tem conta?
-            </span>
-            <span className="h-px flex-1 bg-linha" />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setCadastrando(true)}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 py-3 text-[14px] font-medium text-ambar transition-colors hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
-          >
-            <Icone referencia="icones.svg#building-2" className="size-4" />
-            Cadastrar a minha empresa
-          </button>
-        </>
+          Este botão só passou a fazer sentido quando o programa ganhou plano
+          sem mensalidade: antes, mandar alguém se cadastrar levaria a um
+          pagamento que não destrava o programa instalado. Com o Padrão, o
+          cadastro TERMINA em alguém trabalhando.
+        */
+        <Alternativa
+          pergunta="Ainda não tem conta?"
+          icone="icones.svg#building-2"
+          onClick={() => setCadastrando(true)}
+        >
+          Cadastrar a minha empresa
+        </Alternativa>
       }
     >
       <form onSubmit={enviar}>
@@ -239,133 +236,64 @@ export function Entrar({ aoEntrar }: { aoEntrar: () => void }) {
           `fieldset` desliga os campos todos de uma vez, sem um `disabled`
           em cada um.
         */}
-        <fieldset disabled={enviando} className="m-0 flex min-w-0 flex-col gap-5 border-0 p-0">
-        <div className="entrada-degrau">
-          <h2 className="m-0 font-titulo text-xl font-semibold text-tinta">Entrar</h2>
-          <p className="mt-1 mb-0 text-[12px] text-tinta-apagada">
-            Acesse sua conta para continuar
-          </p>
-        </div>
+        <fieldset disabled={enviando} className="m-0 flex min-w-0 flex-col gap-6 border-0 p-0">
+          <Cabecalho titulo="Entrar" />
 
-        {/*
-          O ÍCONE FICA DENTRO DO CAMPO, absoluto, e o campo ganha recuo à
-          esquerda para não escrever por cima dele. É por isso que o
-          `<label>` é `relative` e o ícone `pointer-events-none`: sem
-          isso, clicar no desenho não põe o cursor no campo, e o alvo de
-          clique mais óbvio da linha seria justamente o pedaço morto.
-        */}
-        <label className="entrada-degrau flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-tinta-fraca">CNPJ ou CPF</span>
-          <span className="relative flex items-center">
-            <Icone
-              referencia="icones.svg#file-text"
-              className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-            />
-            <input
-              inputMode="numeric"
-              required
-              autoFocus
-              value={documento}
-              onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
-              placeholder="CNPJ/CPF"
-              className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 font-mono text-[14px] text-tinta outline-none transition-[border-color,box-shadow] placeholder:font-texto focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
-            />
-          </span>
-        </label>
-
-        <label className="entrada-degrau flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-tinta-fraca">E-mail</span>
-          <span className="relative flex items-center">
-            <Icone
-              referencia="icones.svg#mail"
-              className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-            />
-            <input
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="E-mail"
-              className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
-            />
-          </span>
-        </label>
-
-        <label className="entrada-degrau flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium text-tinta-fraca">Senha</span>
-          <span className="relative flex items-center">
-            <Icone
-              referencia="icones.svg#lock"
-              className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-            />
-            <input
-              type={senhaAberta ? "text" : "password"}
-              autoComplete="current-password"
-              required
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              placeholder="Senha"
-              className="w-full rounded-xl border border-linha bg-fundo py-3.5 pr-11 pl-10 text-[14px] text-tinta outline-none transition-[border-color,box-shadow] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
-            />
-            {/*
-              O OLHO. Senha digitada errada às cegas é a causa mais comum
-              de "não consigo entrar" — e no chão de fábrica, com teclado
-              sujo e pressa, ver o que se escreveu poupa um telefonema.
-            */}
-            <button
-              type="button"
-              onClick={() => setSenhaAberta((v) => !v)}
-              title={senhaAberta ? "Esconder a senha" : "Mostrar a senha"}
-              aria-label={senhaAberta ? "Esconder a senha" : "Mostrar a senha"}
-              className="absolute right-2 grid size-7 place-items-center rounded-md text-tinta-apagada transition-colors hover:text-tinta"
-            >
-              <Icone
-                referencia={senhaAberta ? "icones.svg#eye-off" : "icones.svg#eye"}
-                className="size-4"
-              />
-            </button>
-          </span>
-        </label>
-
-        {/*
-          ESQUECI A SENHA — acima do botão e à esquerda.
-
-          Acima porque a ordem de leitura é a ordem em que a dúvida
-          aparece: quem não lembra a senha percebe isso ANTES de tentar
-          entrar, não depois. E à esquerda, alinhado com os rótulos dos
-          campos, porque ele pertence ao campo de senha logo acima — no
-          centro, ele flutuava entre o formulário e o botão sem pertencer
-          a nenhum dos dois.
-
-          ELE MANDA UM CÓDIGO PARA O E-MAIL e abre a tela de redefinir
-          (`RecuperarSenha.tsx`), já com o e-mail digitado aqui.
-        */}
-        <button
-          type="button"
-          onClick={() => setRecuperando(true)}
-          className="entrada-degrau -mt-1 self-start border-0 bg-transparent p-0 text-[12px] text-tinta-apagada transition-colors hover:text-ambar"
-        >
-          Esqueci a senha
-        </button>
-
-        <button
-          type="submit"
-          disabled={enviando}
-          /*
-            `botao-entrar`, e NÃO `btn primary`: aquela classe vive em
-            `:where(.producao)`, e esta tela não está dentro da produção
-            — o botão ficava sem estilo nenhum. Ver `estilo/entrada.css`.
-          */
-          className="entrada-degrau botao-entrar mt-1 w-full gap-2 px-4 text-[15px]"
-        >
-          <Icone
-            referencia={enviando ? "icones.svg#loader-circle" : "icones.svg#log-in"}
-            className={`size-4${enviando ? " gira" : ""}`}
+          <Campo
+            classe="entrada-degrau"
+            rotulo="CNPJ ou CPF"
+            icone="icones.svg#file-text"
+            inputMode="numeric"
+            required
+            autoFocus
+            value={documento}
+            onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
+            placeholder="00.000.000/0000-00"
+            className="font-mono placeholder:font-texto"
           />
-          {enviando ? "Entrando…" : "Entrar"}
-        </button>
 
+          <Campo
+            classe="entrada-degrau"
+            rotulo="E-mail"
+            icone="icones.svg#mail"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="voce@suaempresa.com"
+          />
+
+          {/*
+            A SENHA COM O "ESQUECI" NA MESMA ALTURA DO RÓTULO, à direita: ele
+            pertence a este campo, e quem não lembra a senha percebe isso
+            ANTES de tentar entrar. Manda um código para o e-mail e abre a tela
+            de redefinir (`RecuperarSenha.tsx`), já com o e-mail digitado aqui.
+          */}
+          <Campo
+            classe="entrada-degrau"
+            rotulo="Senha"
+            icone="icones.svg#lock"
+            senha
+            autoComplete="current-password"
+            required
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+            placeholder="Sua senha"
+            acessorio={
+              <button
+                type="button"
+                onClick={() => setRecuperando(true)}
+                className="border-0 bg-transparent p-0 text-[12px] text-tinta-apagada transition-colors hover:text-ambar"
+              >
+                Esqueci a senha
+              </button>
+            }
+          />
+
+          <BotaoPrincipal icone="icones.svg#arrow-right" esperando={enviando} disabled={enviando} className="mt-2">
+            {enviando ? "Entrando…" : "Entrar"}
+          </BotaoPrincipal>
         </fieldset>
       </form>
     </Porta>

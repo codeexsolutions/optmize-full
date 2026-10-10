@@ -95,6 +95,31 @@ instalada aceita atualização nunca mais. O Secret **não serve de cópia de
 segurança** — o GitHub não deixa ler de volta. Guarde o arquivo também fora
 deste computador.
 
+## A conta no programa (desde a 1.2)
+
+O programa só funciona com uma conta, e quem diz se a máquina pode trabalhar é
+um **atestado assinado pelo backend** (ver o cabeçalho de `servidor/sessao.js`).
+Três variáveis no **Railway** sustentam isso:
+
+| Nome | O quê |
+|---|---|
+| `OPTMIZE_CHAVE_DO_DISPOSITIVO` | o **conteúdo** de `optmize-dispositivo.key` (`Get-Content $HOME\.optmize\optmize-dispositivo.key -Raw`). Sem ela, **ninguém consegue entrar** no programa. |
+| `GITHUB_TOKEN` | só com este repositório **privado**: um token de leitura dele, para o backend entregar o instalador da release. |
+| `SITE_URL` | o endereço do site, se não for `https://optmize-desktop.vercel.app`. |
+
+**A ordem importa.** A variável e o backend novo sobem ANTES de a 1.2 ir para
+a `main`: uma 1.2 publicada contra um backend antigo não consegue entrar na
+conta, e todo cliente que atualizar fica na tela de login.
+
+A pública correspondente está escrita em `servidor/sessao.js`. Perder a
+privada é ter de lançar uma versão com par novo; vazar a privada é qualquer um
+poder emitir atestado — guarde-a como a do atualizador, fora do OneDrive e com
+cópia fora deste computador.
+
+As versões anteriores à 1.2 continuam recebendo atualização sem token (é ela
+que traz o login). Quando não houver mais nenhuma lá fora,
+`EXIGIR_TOKEN_NA_ATUALIZACAO=1` no Railway fecha essa porta.
+
 ## Voltar atrás
 
 O atualizador só instala número maior que o instalado. Para desfazer uma versão

@@ -373,10 +373,9 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
         */}
         <div className="-mx-3 -mt-4 mb-4 flex shrink-0 items-center gap-2.5 border-b border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-4 py-3 curta:mb-2 curta:py-2 tela:max-[1100px]:justify-center tela:max-[1100px]:px-0">
           {/*
-            O HALO ATRÁS DA MARCA é o mesmo da porta de entrar (`porta-pulsa`),
-            e aqui ele NÃO pulsa: na porta o movimento diz "o programa está
-            vivo" para quem espera; numa barra que fica aberta oito horas ele
-            seria uma luz piscando no canto do olho o dia inteiro.
+            O HALO ATRÁS DA MARCA, e ele NÃO pulsa: numa barra que fica
+            aberta oito horas, um brilho que pulsa seria uma luz piscando no
+            canto do olho o dia inteiro.
           */}
           <span className="relative grid shrink-0 place-items-center">
             <span

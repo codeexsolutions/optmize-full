@@ -3,32 +3,38 @@
  * A PORTA — a moldura de quem ainda não entrou
  * ===========================================================================
  *
- * Duas colunas no computador: a marca e o que o programa faz à esquerda, um
- * cartão à direita. É o desenho do painel web (`layouts/AuthLayout.tsx`, no
- * outro repositório), e é por isso que ele é um arquivo à parte aqui também:
- * há DUAS telas antes de entrar — o login e o cadastro da empresa —, e elas
- * têm de ser a mesma casa.
+ * Duas colunas no computador: a marca, a impressora e o que o programa faz à
+ * esquerda, o cartão à direita. É o desenho do painel web
+ * (`layouts/AuthLayout.tsx`, no outro repositório), com a rede animada no
+ * fundo da coluna da esquerda.
  *
- * ---------------------------------------------------------------------------
- * POR QUE ISTO SAIU DE DENTRO DO `Entrar.tsx`
- * ---------------------------------------------------------------------------
+ * A IMPRESSORA voltou em 3D (`Impressora3D.tsx`, em Three.js): uma impressora
+ * de grande formato imprimindo a marca num filme que desce pela saída. Fica
+ * por cima da rede, com fundo transparente, entre a marca e as vantagens.
  *
- * Porque a moldura nasceu lá dentro, quando o login era a única porta. Quando
- * o cadastro chegou, ele foi desenhado como uma página de rolagem, sem coluna
- * e sem cartão — e clicar em "Cadastrar a minha empresa" trocava de prédio no
- * meio da frase. Copiar as duas colunas para o outro arquivo resolveria a
- * vista de hoje e criaria duas molduras para manter: no dia de trocar o
- * brilho do fundo, uma das duas ficaria para trás.
- *
- * O que muda entre as duas telas é só o miolo do cartão (`children`) e o que
- * vem debaixo dele (`rodape`) — o convite para cadastrar, num lado; o caminho
- * de volta ao login, no outro.
+ * Há várias telas antes de entrar — login, cadastro, senha, espera — e todas
+ * usam esta moldura. O que muda entre elas é só o miolo do cartão
+ * (`children`) e o pé dele (`rodape`).
  */
 
-import type { ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useId,
+  useState,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from "react";
 
 import { Icone } from "../casca/Icone";
 import { RedeAnimada } from "./RedeAnimada";
+
+/*
+  O THREE.JS SÓ CHEGA COM A PORTA. São centenas de KB que nenhuma outra tela
+  usa; carregado sob demanda, o programa não paga por ele depois de entrar.
+*/
+const Impressora3D = lazy(() => import("./Impressora3D").then((m) => ({ default: m.Impressora3D })));
 
 /** O que o programa faz, para a coluna da esquerda. */
 const VANTAGENS = [
@@ -66,17 +72,17 @@ export function Porta({
   consumido?: boolean;
   /** O miolo do cartão. */
   children: ReactNode;
-  /** O que vem debaixo do cartão, fora dele. */
+  /** O pé do cartão, debaixo de um traço. */
   rodape?: ReactNode;
 }) {
   return (
-    <div className="grid h-screen w-full overflow-hidden bg-fundo font-texto text-tinta antialiased tela:grid-cols-[1.05fr_1fr]">
+    <div className="porta grid h-screen w-full overflow-hidden bg-fundo font-texto text-tinta antialiased tela:grid-cols-[1.05fr_1fr]">
       {/*
-        A COLUNA DA ESQUERDA some abaixo de 801px (`tela:`), como no painel web: numa
-        janela estreita ela empurraria o cartão para fora da vista, e o cartão
-        é a única coisa aqui que alguém precisa alcançar.
+        A COLUNA DA ESQUERDA some abaixo de 801px (`tela:`): numa janela
+        estreita ela empurraria o cartão para fora da vista, e o cartão é a
+        única coisa aqui que alguém precisa alcançar.
       */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden border-r border-linha p-12 tela:flex">
+      <aside className="relative hidden flex-col overflow-hidden border-r border-linha p-12 tela:flex">
         {/*
           O fundo da coluna: o mesmo par de camadas da barra lateral — um
           brilho âmbar no alto à esquerda sobre um degradê vertical. Nenhum hex:
@@ -87,23 +93,14 @@ export function Porta({
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_50%_at_0%_0%,var(--accent-soft)_0%,transparent_60%),linear-gradient(178deg,var(--card-bg)_0%,var(--sidebar-bg)_45%,var(--bg)_100%)]"
         />
         {/*
-          A REDE, POR CIMA DO DEGRADÊ E POR BAIXO DE TUDO O MAIS.
-
-          É o fundo do login do Flow trazido para cá em laranja — os pontos se
-          ligam por raios quando chegam perto, e de vez em quando um pulso de
-          luz corre pelo raio. Só nesta coluna: atrás do cartão ela disputaria
-          a atenção com o campo da senha, que é a única coisa aqui que alguém
-          precisa achar.
+          A REDE, POR CIMA DO DEGRADÊ E POR BAIXO DE TUDO O MAIS — o fundo do
+          login do Flow em laranja. A 60 quadros e com parada longa: é a
+          primeira tela que alguém vê, e a 20 o movimento lia como travado.
         */}
-        <RedeAnimada className="absolute inset-0 z-0" />
+        <RedeAnimada className="absolute inset-0 z-0" quadrosPorSegundo={60} pararAposMs={60000} />
+
         <div className="relative flex items-center gap-3">
-          {/*
-            O HALO QUE RESPIRA atrás da marca — o mesmo do painel web, em
-            laranja. Fica `absolute` e atrás do logotipo: é brilho, não moldura,
-            e nada nele deve empurrar o nome para o lado.
-          */}
-          {/* A MARCA DE VERDADE, e não um ícone genérico: é o mesmo desenho
-              que o instalador, a aba do navegador e o pé da barra usavam. */}
+          {/* O halo que respira atrás da marca, como no painel web. */}
           <span className="relative grid shrink-0 place-items-center">
             <span
               aria-hidden="true"
@@ -115,28 +112,32 @@ export function Porta({
               className="relative size-10 rounded-[10px]"
             />
           </span>
-          {/*
-            O NOME é "CodeEx Optmize", e nada mais.
-
-            Não há edição, versão nem sufixo a distinguir: é um programa só, e o
-            que muda entre os planos é como se paga por ele. Na porta de
-            entrada, o que a pessoa lê é o mesmo nome que está no instalador,
-            na aba do navegador e na tela Sobre.
-          */}
           <span className="font-titulo text-[20px] tracking-tight">
             <span className="text-tinta-fraca">CodeEx </span>
             <span className="font-bold text-ambar">Optmize</span>
           </span>
         </div>
 
-        <div className="relative max-w-md">
-          <h2 className="font-titulo text-[34px] leading-[1.1] tracking-tight text-tinta">
+        {/*
+          A IMPRESSORA OCUPA O QUE SOBRA entre a marca e as vantagens
+          (`flex-1 min-h-0`): numa janela baixa ela encolhe, e o texto não é
+          empurrado para fora.
+        */}
+        <div className="relative my-4 min-h-0 flex-1">
+          <Suspense fallback={null}>
+            <Impressora3D className="absolute inset-0" />
+          </Suspense>
+        </div>
+
+        <div className="relative">
+          <h2 className="m-0 font-titulo text-[30px] leading-[1.1] tracking-tight text-tinta">
             Menos tecido
             <br />
             <span className="text-ambar">no mesmo pedido.</span>
           </h2>
 
-          <ul className="mt-8 flex list-none flex-col gap-4 p-0">
+          {/* Em duas colunas, para a impressora ficar com a altura. */}
+          <ul className="mt-6 mb-0 grid list-none grid-cols-2 gap-x-6 gap-y-4 p-0">
             {VANTAGENS.map((v) => (
               <li key={v.titulo} className="flex items-start gap-3">
                 <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] text-ambar">
@@ -154,11 +155,10 @@ export function Porta({
         </div>
 
         {/*
-          A versão acompanha o rodapé da porta pela mesma razão que aparece na
-          barra: quem liga para o suporte quase nunca está DENTRO do programa —
-          está parado na tela de entrar, que é onde o problema apareceu.
+          A versão fica na porta porque quem liga para o suporte quase nunca
+          está DENTRO do programa: está parado nesta tela.
         */}
-        <p className="relative m-0 text-[11.5px] text-tinta-apagada">
+        <p className="relative mt-8 mb-0 text-[11.5px] text-tinta-apagada">
           © {new Date().getFullYear()} Optmize · CodeEx Solutions
           <span className="font-mono text-tinta-apagada/60"> · v{__VERSAO__}</span>
         </p>
@@ -172,22 +172,10 @@ export function Porta({
         </div>
 
         {/*
-          `my-auto`, E NÃO `items-center` NA COLUNA.
-
-          Os dois centram o cartão enquanto ele cabe. A diferença aparece
-          quando ele não cabe — e o do cadastro não cabe, com os planos e os
-          cinco campos: centrado pelo `items-center`, um cartão mais alto que a
-          janela tem o TOPO CORTADO, e a rolagem não alcança o que ficou acima
-          do zero. A margem automática cede, e a tela rola inteira.
-
-          `max-w-[480px]` é a largura do cartão do login, e o cadastro herda a
-          mesma: é o que faz as duas telas parecerem o mesmo cartão com outro
-          conteúdo dentro, em vez de duas telas parecidas.
-        */}
-        {/*
-          A chegada (`entrada-sobe`) SAI quando o cartão é consumido: uma
-          animação com `both` segura o `transform` e a opacidade do fim dela,
-          e a transição de se desfazer não teria como mexer em nenhum dos dois.
+          `my-auto`, E NÃO `items-center`: centrado pelo `items-center`, um
+          cartão mais alto que a janela (o cadastro) tem o TOPO CORTADO, e a
+          rolagem não alcança o que ficou acima do zero. A margem automática
+          cede, e a tela rola inteira.
         */}
         <div className={`${consumido ? "consumido" : "entrada-sobe"} porta-cartao relative z-10 my-auto w-full max-w-[480px]`}>
           {/* No computador a marca já está na coluna ao lado; aqui repetiria. */}
@@ -209,22 +197,21 @@ export function Porta({
             </h1>
           </div>
 
-          <div className="relative rounded-2xl border border-linha bg-painel/90 p-8 backdrop-blur transition-[border-color,box-shadow] duration-300 shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85)] focus-within:border-[var(--accent-line)] focus-within:shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85),0_0_0_1px_var(--accent-line)]">
+          <div className="relative overflow-hidden rounded-2xl border border-linha bg-painel/90 backdrop-blur transition-[border-color,box-shadow] duration-300 shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85)] focus-within:border-[var(--accent-line)] focus-within:shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85),0_0_0_1px_var(--accent-line)]">
             {/* O fio de luz no topo do cartão — o detalhe que o painel web tem. */}
             <span
               aria-hidden="true"
               className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-60"
             />
-
-            {children}
+            <div className="p-8">{children}</div>
+            {rodape && <div className="border-t border-linha px-8 py-4">{rodape}</div>}
           </div>
-
-          {rodape}
         </div>
       </div>
     </div>
   );
 }
+
 
 /**
  * O CNPJ **ou** o CPF com máscara enquanto se digita.
@@ -260,31 +247,171 @@ export function mascararDocumento(texto: string): string {
 }
 
 /**
- * Um campo com o ícone DENTRO, à esquerda.
+ * O CAMPO DA FICHA — rótulo, ícone, linha e, na senha, o olho.
  *
- * O ícone é absoluto e o campo ganha recuo para não escrever por cima dele; é
- * por isso que o `<span>` de fora é `relative` e o ícone é
- * `pointer-events-none` — sem isso, clicar no desenho não põe o cursor no
- * campo, e o alvo de clique mais óbvio da linha seria justamente o pedaço
- * morto.
+ * NÃO É UMA CAIXA: é a linha de uma ficha de produção, onde se escreve em
+ * cima do traço. No foco, um traço laranja corre da esquerda para a direita
+ * por cima dele (um `scaleX`, que a placa de vídeo faz sozinha) e o ícone
+ * acende — é o que diz, de relance, onde o cursor está.
  *
- * Vive aqui, e não em cada tela, porque o login e o cadastro desenham o mesmo
- * campo: quem digita o e-mail nas duas telas tem de ver a mesma caixa.
+ * `senha` liga o olho e cuida do `type` sozinho. Todo o resto vai direto para o `<input>`.
  */
-export const CAMPO =
-  "w-full rounded-xl border border-linha bg-fundo py-3.5 pr-3 pl-10 text-[14px] text-tinta"
-  + " outline-none transition-[border-color,box-shadow]"
-  + " focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]";
+export function Campo({
+  rotulo,
+  icone,
+  senha = false,
+  dica,
+  acessorio,
+  classe = "",
+  className = "",
+  ...props
+}: {
+  rotulo: string;
+  icone: string;
+  senha?: boolean;
+  /** Uma regra curta debaixo do campo ("Ao menos 8 caracteres"). */
+  dica?: ReactNode;
+  /** Algo à direita do rótulo, na mesma linha ("Esqueci a senha"). */
+  acessorio?: ReactNode;
+  /** Classe do bloco de fora (o `entrada-degrau`, por exemplo). */
+  classe?: string;
+} & InputHTMLAttributes<HTMLInputElement>) {
+  const [aberta, setAberta] = useState(false);
+  const idGerado = useId();
+  const id = props.id ?? idGerado;
 
-/** O rótulo pequeno acima de cada campo. */
-export const ROTULO = "text-[11px] font-medium text-tinta-fraca";
+  return (
+    <div className={`group flex flex-col gap-1 ${classe}`}>
+      <div className="flex items-baseline justify-between gap-3">
+        <label htmlFor={id} className="text-[12.5px] text-tinta-fraca">
+          {rotulo}
+        </label>
+        {acessorio}
+      </div>
+      <span className="relative flex items-center">
+        <Icone
+          referencia={icone}
+          className="pointer-events-none absolute left-0 size-4 text-tinta-apagada transition-colors duration-200 group-focus-within:text-ambar"
+        />
+        <input
+          {...props}
+          id={id}
+          type={senha ? (aberta ? "text" : "password") : props.type}
+          className={`campo-ficha${senha ? " pr-10" : ""} ${className}`}
+        />
+        <span aria-hidden="true" className="campo-ficha-traco" />
+        {/*
+          O OLHO. Senha digitada errada às cegas é a causa mais comum de "não
+          consigo entrar" — e no chão de fábrica, com teclado sujo e pressa,
+          ver o que se escreveu poupa um telefonema.
+        */}
+        {senha && (
+          <button
+            type="button"
+            onClick={() => setAberta((v) => !v)}
+            title={aberta ? "Esconder a senha" : "Mostrar a senha"}
+            aria-label={aberta ? "Esconder a senha" : "Mostrar a senha"}
+            className="absolute right-0 grid size-8 place-items-center rounded-lg text-tinta-apagada transition-colors hover:text-ambar"
+          >
+            <Icone referencia={aberta ? "icones.svg#eye-off" : "icones.svg#eye"} className="size-4" />
+          </button>
+        )}
+      </span>
+      {dica && <span className="mt-1 text-[11.5px] text-tinta-apagada">{dica}</span>}
+    </div>
+  );
+}
 
 /**
- * O rótulo de um GRUPO de campos.
- *
- * Não usa a classe `.eyebrow` do programa, e o motivo é o mesmo do
- * `botao-entrar`: aquela regra vive dentro de `:where(.producao)`, e estas
- * telas estão fora da produção — a classe existiria no HTML sem pintar nada.
+ * O CABEÇALHO DA FOLHA: o título e uma linha dizendo o que se faz ali. `children` é o que
+ * vem embaixo — a trilha dos passos, no cadastro.
  */
-export const GRUPO =
-  "mb-0 p-0 text-[10.5px] font-medium tracking-[1.4px] text-tinta-apagada uppercase";
+export function Cabecalho({
+  titulo,
+  subtitulo,
+  children,
+}: {
+  titulo: ReactNode;
+  subtitulo?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <header className="entrada-degrau flex flex-col gap-5">
+      <div>
+        <h2 className="m-0 font-titulo text-[26px] leading-tight tracking-[-0.015em] text-tinta">
+          {titulo}
+        </h2>
+        {subtitulo && (
+          <p className="mt-1.5 mb-0 text-[13.5px] leading-relaxed text-tinta-fraca">{subtitulo}</p>
+        )}
+      </div>
+      {children}
+    </header>
+  );
+}
+
+/**
+ * O BOTÃO PRINCIPAL da folha, com o canto CORTADO — o do molde — e o giro de
+ * "esperando" embutido. A seta anda para a frente quando o mouse passa.
+ *
+ * `botao-entrar`, e NÃO `btn primary`: aquela classe vive em
+ * `:where(.producao)`, e estas telas não estão dentro da produção — o botão
+ * ficava sem estilo nenhum. Ver `estilo/entrada.css`.
+ */
+export function BotaoPrincipal({
+  icone,
+  esperando = false,
+  children,
+  className = "",
+  ...props
+}: {
+  icone: string;
+  esperando?: boolean;
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="submit"
+      {...props}
+      className={`entrada-degrau botao-entrar w-full justify-between! px-5 text-[15px] ${className}`}
+    >
+      <span>{children}</span>
+      <Icone
+        referencia={esperando ? "icones.svg#loader-circle" : icone}
+        className={`botao-entrar-seta size-[18px]${esperando ? " gira" : ""}`}
+      />
+    </button>
+  );
+}
+
+/**
+ * O CANHOTO: a pergunta à esquerda e o caminho para a outra tela à direita.
+ * É o mesmo desenho no login ("Ainda não tem conta?"), no cadastro e na senha
+ * ("Já tem conta?"), para ir e voltar serem o mesmo gesto dos dois lados.
+ */
+export function Alternativa({
+  pergunta,
+  icone,
+  children,
+  onClick,
+}: {
+  pergunta: string;
+  icone: string;
+  children: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <span className="text-[13px] text-tinta-apagada">{pergunta}</span>
+      <button
+        type="button"
+        onClick={onClick}
+        className="group/alt flex items-center gap-2 border-0 bg-transparent p-0 text-[13.5px] text-ambar transition-colors hover:text-[var(--accent-bright)]"
+      >
+        <Icone referencia={icone} className="size-4" />
+        <span className="bg-[linear-gradient(currentColor,currentColor)] bg-[length:0%_1px] bg-left-bottom bg-no-repeat pb-px transition-[background-size] duration-300 group-hover/alt:bg-[length:100%_1px]">
+          {children}
+        </span>
+      </button>
+    </div>
+  );
+}

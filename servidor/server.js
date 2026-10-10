@@ -97,6 +97,44 @@ app.use((req, res, next) => {
 
 if (TRAVA_DE_LICENCA_LIGADA) licenca.conferirRevogacaoOnline().catch(() => {});
 
+/*
+ * ===========================================================================
+ * A TRAVA DA CONTA
+ * ===========================================================================
+ *
+ * Sem conta liberada nesta máquina, a API não responde. É ESTA a trava — a
+ * tela de entrar só esconde o programa, e `server.js` escuta em `0.0.0.0`:
+ * qualquer computador da rede alcança `/api/*` direto, sem passar por tela
+ * nenhuma.
+ *
+ * Quem decide é `sessao.liberado()`, que só aceita o atestado assinado pelo
+ * servidor (ver o cabeçalho de `sessao.js`). Ficam de fora só as rotas por
+ * onde se entra: as da conta e as da licença antiga.
+ *
+ * Os arquivos da interface continuam sendo servidos — sem eles não haveria
+ * tela de entrar. O que se tranca é o que TRABALHA: a API, as imagens
+ * enviadas e o canal das impressoras.
+ */
+const sessaoDaConta = require("./sessao");
+
+app.use((req, res, next) => {
+  const caminho = req.path;
+  const protegido = caminho.startsWith("/api/") || caminho.startsWith("/uploads/");
+  if (!protegido) return next();
+  if (caminho.startsWith("/api/sessao/") || caminho.startsWith("/api/licenca")) return next();
+  if (sessaoDaConta.liberado()) return next();
+  return res.status(401).json({
+    erro: "conta",
+    code: "conta",
+    message: "Entre na sua conta do Optmize para usar esta função.",
+  });
+});
+
+io.use((_socket, next) => {
+  if (sessaoDaConta.liberado()) return next();
+  return next(new Error("conta"));
+});
+
 // A tela de ativação sai de `estatico/`, que é irmã de `servidor/` — daí o
 // `PASTA_DO_APP` e não o `__dirname`. Ver o cabeçalho de `caminhos.js`.
 app.get("/licenca", (req, res) => {
@@ -174,7 +212,7 @@ app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
  * `sessao.js` para por que o login passa pelo Node em vez de a página falar
  * direto com o backend.
  */
-app.use("/api/sessao", require("./sessao").rotas);
+app.use("/api/sessao", sessaoDaConta.rotas);
 
 // A tela de Macros: entrega o .bas da macro do Corel e ajuda a pô-lo lá.
 app.use("/api/macros", macrosRouter);

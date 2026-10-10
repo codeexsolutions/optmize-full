@@ -140,14 +140,12 @@ export function Casca() {
    * piscar a tela de entrar na cara de quem já entrou é pior do que meio
    * segundo de tela vazia.
    *
-   * ISTO NÃO É SEGURANÇA, e vale dizer aqui para ninguém se enganar: é a TELA
-   * que se esconde. A API local continua respondendo em `/api/*`, e
-   * `server.js` escuta em `0.0.0.0` — qualquer máquina da rede da gráfica a
-   * alcança. A trava de verdade é no servidor, e é o próximo passo (o pedaço
-   * B, em `docs/superpowers/plans/2026-09-21-identidade-no-full.md`).
+   * ISTO, SOZINHO, NÃO SERIA SEGURANÇA: é a TELA que se esconde. A trava de
+   * verdade é a de `servidor/server.js`, que não deixa `/api/*` responder sem
+   * a conta liberada nesta máquina — a tela só acompanha o que ela decide.
    */
   if (sessao.estado === "carregando") return null;
-  if (sessao.estado === "fora") return <Entrar aoEntrar={sessao.recarregar} />;
+  if (sessao.estado === "fora") return <Entrar aoEntrar={sessao.recarregar} aviso={sessao.aviso} />;
 
   /*
     O TERCEIRO ESTADO: entrou, e ainda não pode trabalhar.
@@ -204,6 +202,20 @@ export function Casca() {
         fundo entre ela e a tela, e a bancada do Encaixe — que é colada na
         janela — deixou de ocupar a largura toda.
       */}
+      {/*
+        A TARJA DAS ÚLTIMAS 12 HORAS SEM CONTATO. Sem ela, o programa
+        trancaria de surpresa no meio de um pedido; com ela, há um expediente
+        inteiro para alguém olhar a internet. Ver `tarja()` em sessao.js.
+      */}
+      {sessao.tarja && (
+        <div
+          role="status"
+          className="fixed bottom-4 left-1/2 z-70 max-w-[min(92vw,640px)] -translate-x-1/2 rounded-[9px] border border-atencao/50 bg-painel px-4 py-2.5 text-center text-sm text-tinta shadow-lg shadow-black/40"
+        >
+          {sessao.tarja}
+        </div>
+      )}
+
       <main className="flex h-screen flex-col overflow-hidden tela:ml-[236px] tela:max-[1100px]:ml-[78px]">
         {semTopo ? (
           /*

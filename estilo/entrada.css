@@ -407,6 +407,13 @@
 .entrada-degrau:nth-child(3) { animation-delay: .26s; }
 .entrada-degrau:nth-child(4) { animation-delay: .33s; }
 .entrada-degrau:nth-child(5) { animation-delay: .40s; }
+.entrada-degrau:nth-child(6) { animation-delay: .47s; }
+.entrada-degrau:nth-child(n+7) { animation-delay: .54s; }
+
+/* O caminho para a outra tela entra depois do cartão, sem disputar com ele. */
+.porta-alternativa {
+  animation: entrada-sobe .5s cubic-bezier(.22, 1, .36, 1) .45s both;
+}
 
 /*
  * O TREMOR DO ERRO.
@@ -432,6 +439,7 @@
 @media (prefers-reduced-motion: reduce) {
   .entrada-sobe,
   .entrada-degrau,
+  .porta-alternativa,
   .entrada-treme {
     animation: none;
   }
@@ -645,35 +653,6 @@
 }
 
 /*
- * O BRILHO ATRÁS DA MARCA, na porta.
- *
- * O painel web tem um halo que respira atrás do logotipo, feito com
- * framer-motion (`opacity: [0.35, 0.75, 0.35]`, `scale: [1, 1.15, 1]`). Aqui
- * ele é o mesmo movimento em CSS, e em LARANJA: a cor sai de `--accent`, que
- * é lido do arquivo do logotipo (ver tokens.css), e não do azul-marca de lá.
- *
- * Por que um halo que pulsa e não um brilho parado: a porta é a única tela do
- * programa em que não há nada acontecendo — sem isso ela parece congelada
- * enquanto a pessoa digita a senha, e o movimento diz "está vivo, e é aqui".
- */
-@keyframes porta-pulsa {
-  0%, 100% { opacity: .30; transform: scale(1); }
-  50%      { opacity: .70; transform: scale(1.15); }
-}
-
-.porta-pulsa {
-  animation: porta-pulsa 2.8s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Parado, e não ausente: o brilho também é o que assenta a marca no fundo. */
-  .porta-pulsa {
-    animation: none;
-    opacity: .45;
-  }
-}
-
-/*
  * ===========================================================================
  * OS EFEITOS DA TELA DE ENTRAR
  * ===========================================================================
@@ -724,11 +703,15 @@
   letter-spacing: -.01em;
   /* Uma sombra curta e escura, não um halo colorido: o botão apoia na
      superfície em vez de flutuar acesa sobre ela. */
-  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, .8);
-  transition: background-color .15s ease, transform .1s ease;
+  /* O fio claro no topo é o que dá ao botão a borda de uma peça, e não de
+     um retângulo pintado. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 8px 20px -12px rgba(0, 0, 0, .85);
+  transition: background-color .15s ease, transform .15s ease, box-shadow .2s ease;
 }
 
 .botao-entrar:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .26), 0 12px 24px -14px color-mix(in srgb, var(--accent) 80%, transparent);
   background: var(--accent-bright);
 }
 
@@ -808,4 +791,68 @@
 :where(html) :is(.font-mono, .tabular) {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+}
+
+/*
+ * O BRILHO ATRÁS DA MARCA, na porta: um halo que respira, em LARANJA (sai de
+ * `--accent`). Sem ele a porta parece congelada enquanto a pessoa digita a
+ * senha; o movimento diz "está vivo, e é aqui".
+ */
+@keyframes porta-pulsa {
+  0%, 100% { opacity: .30; transform: scale(1); }
+  50%      { opacity: .70; transform: scale(1.15); }
+}
+.porta-pulsa { animation: porta-pulsa 2.8s ease-in-out infinite; }
+
+/* A impressora 3D (`telas/Impressora3D.tsx`) entra subindo, como o cartão. */
+.impressora-3d { animation: entrada-sobe .8s cubic-bezier(.22, 1, .36, 1) .1s both; }
+
+/* ── O campo da ficha ──────────────────────────────────────────────────── */
+
+.campo-ficha {
+  width: 100%;
+  height: 44px;
+  padding: 0 0 0 28px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  transition: border-color .2s ease;
+}
+.campo-ficha::placeholder { color: color-mix(in srgb, var(--text-faint) 75%, transparent); }
+.campo-ficha:hover { border-bottom-color: color-mix(in srgb, var(--text-faint) 70%, transparent); }
+
+/* O preenchimento automático do Windows pinta o fundo; aqui ele não pinta. */
+.campo-ficha:-webkit-autofill {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  transition: background-color 99999s ease 0s;
+}
+
+/* O traço laranja que corre por cima da linha quando o campo entra em foco. */
+.campo-ficha-traco {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .4s cubic-bezier(.22, 1, .36, 1);
+  pointer-events: none;
+}
+.campo-ficha:focus ~ .campo-ficha-traco { transform: scaleX(1); }
+
+.botao-entrar-seta { transition: transform .25s cubic-bezier(.22, 1, .36, 1); }
+.botao-entrar:hover:not(:disabled) .botao-entrar-seta:not(.gira) { transform: translateX(3px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .impressora-3d { animation: none; }
+  /* Parado, e não ausente: o brilho também assenta a marca no fundo. */
+  .porta-pulsa { animation: none; opacity: .45; }
+  .campo-ficha-traco { transition: none; }
 }

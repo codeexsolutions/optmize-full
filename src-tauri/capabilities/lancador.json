@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "lancador",
+  "description": "O lançador não tem borda: arrastá-lo pelo fundo é a única forma de mudá-lo de lugar.",
+  "windows": ["lancador"],
+  "permissions": ["core:window:allow-start-dragging"]
+}

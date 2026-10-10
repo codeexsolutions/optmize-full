@@ -95,6 +95,10 @@ export interface Sessao {
   recarregar: () => void;
   /** Pergunta de novo ao backend, e espera a resposta. O botão da espera. */
   conferir: () => Promise<void>;
+  /** Por que a conta saiu desta máquina sozinha. Só com o estado "fora". */
+  aviso: string | null;
+  /** O aviso das últimas 12 horas sem contato com o servidor. */
+  tarja: string | null;
 }
 
 /**
@@ -108,16 +112,22 @@ interface RespostaDaSessao {
   entrou: boolean;
   perfil: Usuario | null;
   acesso: Acesso | null;
+  aviso?: string | null;
+  tarja?: string | null;
 }
 
 export function useSessao(): Sessao {
   const [estado, setEstado] = useState<EstadoDaSessao>("carregando");
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [acesso, setAcesso] = useState<Acesso | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [tarja, setTarja] = useState<string | null>(null);
 
   const aplicar = useCallback((s: RespostaDaSessao) => {
     setUsuario(s.entrou ? s.perfil : null);
     setAcesso(s.acesso ?? null);
+    setAviso(s.aviso ?? null);
+    setTarja(s.tarja ?? null);
     if (!s.entrou) return setEstado("fora");
     /*
       SEM RESPOSTA SOBRE O ACESSO, O PROGRAMA ABRE.
@@ -157,7 +167,17 @@ export function useSessao(): Sessao {
 
   useEffect(() => { recarregar(); }, [recarregar]);
 
-  return { estado, usuario, acesso, recarregar, conferir };
+  /*
+    A CONTA PODE SAIR DESTA MÁQUINA COM O PROGRAMA ABERTO — outra máquina
+    entrou nela, o acesso foi retirado, as 48 horas passaram. O servidor local
+    renova de hora em hora; a tela relê a cada cinco minutos para acompanhar.
+  */
+  useEffect(() => {
+    const relogio = setInterval(recarregar, 5 * 60 * 1000);
+    return () => clearInterval(relogio);
+  }, [recarregar]);
+
+  return { estado, usuario, acesso, recarregar, conferir, aviso, tarja };
 }
 
 export function iniciais(nome: string): string {

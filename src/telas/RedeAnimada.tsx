@@ -46,8 +46,19 @@ type Pulso = { i: number; j: number; t: number; velocidade: number };
 
 /** A partir de quantos pixels dois pontos param de se enxergar. */
 const DISTANCIA_LIGACAO = 132;
-/** Teto de desenhos por segundo. Fundo decorativo não precisa de 60. */
+/**
+ * Teto de desenhos por segundo quando quem chama não diz outro. A barra
+ * lateral, aberta o dia inteiro, fica nos 20; a porta pede 60, porque a 20 o
+ * movimento lia como travado — e é a primeira tela que alguém vê.
+ */
 const QUADROS_POR_SEGUNDO = 20;
+/**
+ * Os raios são desenhados em LOTE, um traço por faixa de opacidade, e não um
+ * por raio. Eram ~300 `stroke()` por quadro; agora são oito. É o que deixa a
+ * porta rodar a 60 sem custar mais do que custava a 20.
+ */
+const FAIXAS = 8;
+const OPACIDADE_MAXIMA = 0.8;
 /** Sem mouse nem teclado por este tempo, a rede para até o próximo movimento. */
 const PARADA_APOS_MS = 8000;
 /** A velocidade dos pontos foi escrita para um quadro de 60 por segundo. */
@@ -62,6 +73,8 @@ export function RedeAnimada({
   className = "absolute inset-0",
   densidade = 15000,
   seguirPonteiro = true,
+  quadrosPorSegundo = QUADROS_POR_SEGUNDO,
+  pararAposMs = PARADA_APOS_MS,
 }: {
   className?: string;
   /*
@@ -86,6 +99,14 @@ export function RedeAnimada({
     caminho que o mouse faz todo dia.
   */
   seguirPonteiro?: boolean;
+  /** Teto de desenhos por segundo. */
+  quadrosPorSegundo?: number;
+  /*
+    QUANTO TEMPO PARADO ATÉ A REDE CONGELAR. Na porta é mais longo: quem está
+    lendo a tela antes de digitar via a rede parar do nada em 8s, e isso
+    parecia o programa travando.
+  */
+  pararAposMs?: number;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -138,8 +159,11 @@ export function RedeAnimada({
     };
 
     /** `passo` = quantos quadros de 60/s se passaram desde o último desenho. */
+    const faixas: number[][] = Array.from({ length: FAIXAS }, () => []);
+
     const desenhar = (passo = 1) => {
       ctx.clearRect(0, 0, largura, altura);
+      for (const f of faixas) f.length = 0;
 
       for (const p of pontos) {
         p.x += p.vx * passo;
@@ -166,8 +190,12 @@ export function RedeAnimada({
         for (let j = i + 1; j < pontos.length; j++) {
           const a = pontos[i]!;
           const c = pontos[j]!;
-          const dist = Math.hypot(a.x - c.x, a.y - c.y);
-          if (dist >= DISTANCIA_LIGACAO) continue;
+          const dx = a.x - c.x;
+          const dy = a.y - c.y;
+          // O quadrado primeiro: a raiz só para quem está perto o bastante.
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= DISTANCIA_LIGACAO * DISTANCIA_LIGACAO) continue;
+          const dist = Math.sqrt(d2);
 
           // Quanto mais perto, mais forte o raio — é o que dá profundidade.
           let opacidade = (1 - dist / DISTANCIA_LIGACAO) * 0.34;
@@ -175,15 +203,11 @@ export function RedeAnimada({
           // Perto do cursor os raios acendem: a rede reage a quem está ali.
           if (ponteiro.ativo) {
             const pd = Math.hypot((a.x + c.x) / 2 - ponteiro.x, (a.y + c.y) / 2 - ponteiro.y);
-            if (pd < 170) opacidade = Math.min(0.8, opacidade + (1 - pd / 170) * 0.45);
+            if (pd < 170) opacidade = Math.min(OPACIDADE_MAXIMA, opacidade + (1 - pd / 170) * 0.45);
           }
 
-          ctx.strokeStyle = cor(opacidade);
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(c.x, c.y);
-          ctx.stroke();
+          const faixa = Math.min(FAIXAS - 1, Math.floor((opacidade / OPACIDADE_MAXIMA) * FAIXAS));
+          faixas[faixa]!.push(a.x, a.y, c.x, c.y);
 
           /*
             O PULSO NASCE RARO, e com teto de nove ao mesmo tempo. Frequente,
@@ -196,12 +220,27 @@ export function RedeAnimada({
         }
       }
 
-      ctx.fillStyle = cor(0.75);
-      for (const p of pontos) {
+      ctx.lineWidth = 1;
+      for (let f = 0; f < FAIXAS; f++) {
+        const linhas = faixas[f]!;
+        if (linhas.length === 0) continue;
+        ctx.strokeStyle = cor(((f + 0.5) / FAIXAS) * OPACIDADE_MAXIMA);
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 1.4, 0, Math.PI * 2);
-        ctx.fill();
+        for (let k = 0; k < linhas.length; k += 4) {
+          ctx.moveTo(linhas[k]!, linhas[k + 1]!);
+          ctx.lineTo(linhas[k + 2]!, linhas[k + 3]!);
+        }
+        ctx.stroke();
       }
+
+      // Os pontos também num caminho só.
+      ctx.fillStyle = cor(0.75);
+      ctx.beginPath();
+      for (const p of pontos) {
+        ctx.moveTo(p.x + 1.4, p.y);
+        ctx.arc(p.x, p.y, 1.4, 0, Math.PI * 2);
+      }
+      ctx.fill();
 
       for (let k = pulsos.length - 1; k >= 0; k--) {
         const pulso = pulsos[k]!;
@@ -237,10 +276,12 @@ export function RedeAnimada({
     let rodando = false;
     let ultimoDesenho = 0;
     let ultimaAtividade = performance.now();
-    const intervalo = 1000 / QUADROS_POR_SEGUNDO;
+    // Um pouco de folga no intervalo: o rAF chega a cada ~16,7ms, e um teto de
+    // 60 exato pularia quadros por fração de milissegundo.
+    const intervalo = 1000 / quadrosPorSegundo - 2;
 
     const podeRodar = () => !document.hidden && document.hasFocus()
-      && performance.now() - ultimaAtividade < PARADA_APOS_MS;
+      && performance.now() - ultimaAtividade < pararAposMs;
 
     const laco = (agora: number) => {
       if (!podeRodar()) { rodando = false; return; }
@@ -310,7 +351,7 @@ export function RedeAnimada({
       window.removeEventListener("pointerleave", aoSair);
       document.removeEventListener("visibilitychange", aoEsconder);
     };
-  }, [densidade, seguirPonteiro]);
+  }, [densidade, seguirPonteiro, quadrosPorSegundo, pararAposMs]);
 
   return (
     <canvas

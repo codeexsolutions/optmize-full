@@ -70,7 +70,7 @@ import { Check, Printer, Ruler, Users } from "lucide-react";
 import "react-alice-carousel/lib/alice-carousel.css";
 
 import { Icone } from "../casca/Icone";
-import { CAMPO, mascararDocumento, Porta, ROTULO } from "./Porta";
+import { Alternativa, BotaoPrincipal, Cabecalho, Campo, mascararDocumento, Porta } from "./Porta";
 import { usePlanos, type Plano } from "../estado/planos";
 import { useErroEmAlerta } from "../casca/Alerta";
 
@@ -189,7 +189,7 @@ function Trilha({ passo }: { passo: Passo }) {
   const noPlano = passo === "plano";
   const marca = (ativo: boolean, pronto: boolean) =>
     [
-      "grid size-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold transition-colors",
+      "grid size-6 shrink-0 place-items-center rounded-full border text-[11.5px] transition-colors",
       pronto
         ? "border-[var(--accent)] bg-[var(--accent)] text-fundo"
         : ativo
@@ -202,8 +202,8 @@ function Trilha({ passo }: { passo: Passo }) {
       <span className={marca(noPlano, !noPlano)}>
         {noPlano ? "1" : <Icone referencia="icones.svg#check" className="size-3.5" />}
       </span>
-      <span className={`text-[12px] ${noPlano ? "text-tinta" : "text-tinta-apagada"}`}>
-        O plano
+      <span className={`text-[12.5px] ${noPlano ? "text-tinta" : "text-tinta-apagada"}`}>
+        Plano
       </span>
 
       <span
@@ -212,8 +212,8 @@ function Trilha({ passo }: { passo: Passo }) {
       />
 
       <span className={marca(!noPlano, false)}>2</span>
-      <span className={`text-[12px] ${noPlano ? "text-tinta-apagada" : "text-tinta"}`}>
-        Os seus dados
+      <span className={`text-[12.5px] ${noPlano ? "text-tinta-apagada" : "text-tinta"}`}>
+        Seus dados
       </span>
     </div>
   );
@@ -242,8 +242,6 @@ export function CriarConta({
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [senha, setSenha] = useState("");
-  /** O olho da senha, igual ao do login: ver o que se digitou poupa um erro. */
-  const [senhaAberta, setSenhaAberta] = useState(false);
 
   const setErro = useErroEmAlerta("Não foi possível criar a conta");
   const [enviando, setEnviando] = useState(false);
@@ -355,11 +353,11 @@ export function CriarConta({
   if (pronto) {
     return (
       <Porta>
-        <div className="text-center">
-          <span className="mx-auto grid size-14 place-items-center rounded-2xl border border-[var(--accent-line)] bg-[var(--accent-soft)]">
-            <Icone referencia="icones.svg#badge-check" className="size-7 text-ambar" />
+        <div className="entrada-degrau text-center">
+          <span className="mx-auto grid size-16 place-items-center rounded-[6px] border border-[var(--accent-line)] bg-[var(--accent-soft)] shadow-[0_0_40px_-8px_var(--accent-line)]">
+            <Icone referencia="icones.svg#badge-check" className="size-8 text-ambar" />
           </span>
-          <h2 className="mt-4 mb-0 font-titulo text-xl font-semibold text-tinta">
+          <h2 className="mt-5 mb-0 font-titulo text-[22px] tracking-tight text-tinta">
             Conta criada
           </h2>
           <p className="mt-2 mb-0 text-[13.5px] leading-relaxed text-tinta-fraca">
@@ -383,20 +381,20 @@ export function CriarConta({
                   body: JSON.stringify({ url: pronto.checkoutUrl }),
                 }).catch(() => {});
               }}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 py-3 text-[14px] font-medium text-ambar transition-colors hover:border-[var(--accent)]"
+              className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-[4px] border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 text-[14px] font-medium text-ambar transition-colors hover:border-[var(--accent)]"
             >
               <Icone referencia="icones.svg#external-link" className="size-4" />
               Abrir o pagamento de novo
             </button>
           )}
-          <button
+          <BotaoPrincipal
             type="button"
+            icone="icones.svg#log-in"
             onClick={() => aoCadastrar(email.trim().toLowerCase())}
-            className="botao-entrar mt-6 w-full gap-2 px-4 text-[15px]"
+            className="mt-3"
           >
-            <Icone referencia="icones.svg#log-in" className="size-4" />
             Ir para o login
-          </button>
+          </BotaoPrincipal>
         </div>
       </Porta>
     );
@@ -408,12 +406,12 @@ export function CriarConta({
     return (
       <Porta rodape={<VoltarAoLogin aoVoltar={aoVoltar} />}>
         <div className="flex flex-col gap-5">
-          <header className="entrada-degrau flex flex-col gap-4">
-            <h2 className="m-0 font-titulo text-xl font-semibold text-tinta">
-              Escolha o seu plano
-            </h2>
+          <Cabecalho
+            titulo="Criar conta"
+            subtitulo="Escolha um plano. Dá para trocar depois."
+          >
             <Trilha passo="plano" />
-          </header>
+          </Cabecalho>
 
 
           {planos === null && (
@@ -493,7 +491,7 @@ export function CriarConta({
                     key={plano.id}
                     data-plano={plano.id}
                     className={[
-                      "group relative mr-2.5 flex cursor-pointer flex-col rounded-2xl border p-3.5",
+                      "group relative mr-2.5 flex cursor-pointer flex-col rounded-[6px] border p-3.5",
                       "transition-[border-color,background-color,box-shadow] duration-200",
                       marcado
                         ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_0_0_1px_var(--accent-line),0_18px_40px_-28px_rgba(0,0,0,0.9)]"
@@ -585,15 +583,14 @@ export function CriarConta({
             />
           </fieldset>
 
-          <button
+          <BotaoPrincipal
             type="button"
+            icone="icones.svg#arrow-right"
             disabled={!escolhido}
             onClick={() => setPasso("dados")}
-            className="entrada-degrau botao-entrar w-full gap-2 px-4 text-[15px]"
           >
             Continuar
-            <Icone referencia="icones.svg#arrow-right" className="size-4" />
-          </button>
+          </BotaoPrincipal>
         </div>
       </Porta>
     );
@@ -603,13 +600,13 @@ export function CriarConta({
 
   return (
     <Porta rodape={<VoltarAoLogin aoVoltar={aoVoltar} />}>
-      <form onSubmit={enviar} className="flex flex-col gap-5">
-        <header className="entrada-degrau flex flex-col gap-4">
-          <h2 className="m-0 font-titulo text-xl font-semibold text-tinta">
-            Os seus dados
-          </h2>
+      <form onSubmit={enviar} className="flex flex-col gap-6">
+        <Cabecalho
+          titulo="Seus dados"
+          subtitulo="A conta fica no nome de quem responde pela empresa."
+        >
           <Trilha passo="dados" />
-        </header>
+        </Cabecalho>
 
         {/*
           O QUE FICOU DECIDIDO, numa linha — com o caminho de volta DENTRO
@@ -618,7 +615,7 @@ export function CriarConta({
           mudar de ideia?" no mesmo lugar em que a pergunta aparece.
         */}
         {planoEscolhido && (
-          <div className="entrada-degrau flex items-center gap-3 rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] px-3.5 py-2.5">
+          <div className="entrada-degrau flex items-center gap-3 rounded-md border border-[var(--accent-line)] bg-[var(--accent-soft)] px-3.5 py-2.5">
             <Icone
               referencia="icones.svg#badge-check"
               className="size-4 shrink-0 text-ambar"
@@ -654,137 +651,86 @@ export function CriarConta({
           documento, que é único no banco. O servidor usa o documento como
           nome até alguém acertar isso no painel.
         */}
-        <fieldset className="entrada-degrau m-0 flex flex-col gap-4 border-0 p-0">
+        <fieldset className="entrada-degrau m-0 flex flex-col gap-6 border-0 p-0">
           <legend className="sr-only">Os seus dados</legend>
 
-          <label className="flex flex-col gap-1.5">
-            <span className={ROTULO}>Nome do representante</span>
-            <span className="relative flex items-center">
-              <Icone
-                referencia="icones.svg#users"
-                className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-              />
-              <input
-                required
-                autoFocus
-                maxLength={200}
-                autoComplete="name"
-                value={nomeDono}
-                onChange={(e) => setNomeDono(e.target.value)}
-                placeholder="seu nome completo aqui"
-                className={CAMPO}
-              />
-            </span>
-          </label>
+          <Campo
+            rotulo="Nome do representante"
+            icone="icones.svg#users"
+            required
+            autoFocus
+            maxLength={200}
+            autoComplete="name"
+            value={nomeDono}
+            onChange={(e) => setNomeDono(e.target.value)}
+            placeholder="Nome e sobrenome"
+          />
 
-          <label className="flex flex-col gap-1.5">
-            <span className={ROTULO}>CNPJ ou CPF</span>
-            <span className="relative flex items-center">
-              <Icone
-                referencia="icones.svg#file-text"
-                className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-              />
-              <input
-                required
-                inputMode="numeric"
-                value={documento}
-                onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
-                placeholder="seu CNPJ ou CPF aqui"
-                className={`${CAMPO} font-mono placeholder:font-texto`}
-              />
-            </span>
-          </label>
+          <Campo
+            rotulo="CNPJ ou CPF"
+            icone="icones.svg#file-text"
+            required
+            inputMode="numeric"
+            value={documento}
+            onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
+            placeholder="00.000.000/0000-00"
+            className="font-mono placeholder:font-texto"
+          />
 
-          <label className="flex flex-col gap-1.5">
-            <span className={ROTULO}>E-mail</span>
-            <span className="relative flex items-center">
-              <Icone
-                referencia="icones.svg#mail"
-                className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-              />
-              <input
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu e-mail aqui"
-                className={CAMPO}
-              />
-            </span>
-          </label>
+          {/* E-mail e telefone lado a lado quando cabem: são o par "contato". */}
+          <div className="grid gap-6 min-[440px]:grid-cols-2">
+            <Campo
+              rotulo="E-mail"
+              icone="icones.svg#mail"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="voce@suaempresa.com"
+            />
 
-          <label className="flex flex-col gap-1.5">
-            <span className={ROTULO}>Telefone / WhatsApp</span>
-            <span className="relative flex items-center">
-              <Icone
-                referencia="icones.svg#smartphone"
-                className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-              />
-              <input
-                type="tel"
-                required
-                inputMode="numeric"
-                autoComplete="tel"
-                value={telefone}
-                onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
-                placeholder="seu WhatsApp aqui"
-                className={`${CAMPO} font-mono placeholder:font-texto`}
-              />
-            </span>
-          </label>
+            <Campo
+              rotulo="WhatsApp"
+              icone="icones.svg#smartphone"
+              type="tel"
+              required
+              inputMode="numeric"
+              autoComplete="tel"
+              value={telefone}
+              onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
+              placeholder="(00) 00000-0000"
+              className="font-mono placeholder:font-texto"
+            />
+          </div>
 
-          <label className="flex flex-col gap-1.5">
-            <span className={ROTULO}>Senha</span>
-            <span className="relative flex items-center">
-              <Icone
-                referencia="icones.svg#lock"
-                className="pointer-events-none absolute left-3 size-4 text-tinta-apagada"
-              />
-              <input
-                type={senhaAberta ? "text" : "password"}
-                required
-                minLength={8}
-                autoComplete="new-password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="crie uma senha aqui"
-                className={`${CAMPO} pr-11`}
-              />
-              <button
-                type="button"
-                onClick={() => setSenhaAberta((v) => !v)}
-                title={senhaAberta ? "Esconder a senha" : "Mostrar a senha"}
-                aria-label={senhaAberta ? "Esconder a senha" : "Mostrar a senha"}
-                className="absolute right-2 grid size-7 place-items-center rounded-md text-tinta-apagada transition-colors hover:text-tinta"
-              >
-                <Icone
-                  referencia={senhaAberta ? "icones.svg#eye-off" : "icones.svg#eye"}
-                  className="size-4"
-                />
-              </button>
-            </span>
-            {/*
-              A ÚNICA REGRA QUE SOBREVIVEU DEBAIXO DE UM CAMPO, e porque ela é
-              uma REGRA, não uma explicação: sem este aviso, o tamanho mínimo
-              só apareceria como recusa depois de a pessoa ter escolhido uma
-              senha — e escolher senha duas vezes é o pior lugar para descobrir
-              qualquer coisa.
-            */}
-            <span className="text-[11.5px] text-tinta-apagada">
-              Ao menos 8 caracteres.
-            </span>
-          </label>
+          {/*
+            "Ao menos 8 caracteres" é a única regra que sobreviveu debaixo de
+            um campo, porque é REGRA e não explicação: sem ela o tamanho mínimo
+            só apareceria como recusa depois de a pessoa ter escolhido a senha.
+          */}
+          <Campo
+            rotulo="Senha"
+            icone="icones.svg#lock"
+            senha
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+            placeholder="Crie uma senha"
+            dica="Ao menos 8 caracteres."
+          />
         </fieldset>
 
-        <button
-          type="submit"
+        <BotaoPrincipal
+          icone="icones.svg#building-2"
+          esperando={enviando}
           disabled={enviando || !escolhido}
-          className="entrada-degrau botao-entrar mt-1 w-full gap-2 px-4 text-[15px]"
+          className="mt-1"
         >
-          <Icone referencia="icones.svg#building-2" className="size-4" />
           {enviando ? "Criando…" : "Criar conta da empresa"}
-        </button>
+        </BotaoPrincipal>
       </form>
     </Porta>
   );
@@ -804,23 +750,8 @@ function VoltarAoLogin({ aoVoltar }: { aoVoltar: () => void }) {
     cadastro por engano procurar a saída.
   */
   return (
-    <>
-      <div className="mt-6 flex items-center gap-3">
-        <span className="h-px flex-1 bg-linha" />
-        <span className="text-[10.5px] tracking-[1.4px] text-tinta-apagada uppercase">
-          Já tem conta?
-        </span>
-        <span className="h-px flex-1 bg-linha" />
-      </div>
-
-      <button
-        type="button"
-        onClick={aoVoltar}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 py-3 text-[14px] font-medium text-ambar transition-colors hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
-      >
-        <Icone referencia="icones.svg#arrow-left" className="size-4" />
-        Voltar ao login
-      </button>
-    </>
+    <Alternativa pergunta="Já tem conta?" icone="icones.svg#arrow-left" onClick={aoVoltar}>
+      Voltar ao login
+    </Alternativa>
   );
 }

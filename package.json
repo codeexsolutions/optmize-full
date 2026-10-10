@@ -1,6 +1,6 @@
 {
   "name": "optimize",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Optimize: biblioteca de moldes, encaixe de peças no tecido, vetorização de imagem e a central das impressoras da produção.",
   "main": "servidor/server.js",
   "type": "commonjs",
@@ -79,6 +79,7 @@
     "pdfkit": "^0.15.0",
     "sharp": "^0.35.3",
     "socket.io": "^4.8.1",
+    "three": "^0.180.0",
     "whatsapp-web.js": "^1.34.7",
     "xml2js": "^0.6.2",
     "zustand": "^5.0.15"
@@ -91,6 +92,7 @@
     "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "@types/three": "^0.180.0",
     "@vitejs/plugin-react": "^6.1.1",
     "esbuild": "^0.28.2",
     "jsdom": "^30.0.1",
