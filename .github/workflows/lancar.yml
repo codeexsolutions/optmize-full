@@ -115,9 +115,10 @@ jobs:
       - name: Dependências
         run: npm ci
 
-      - name: Modelos do reconhecimento de rosto
-        # Não moram no git (39 MB, ver empacotar/modelos.js): sem este passo o
-        # instalador sairia sem reconhecimento facial no Ponto.
+      - name: Modelos do Extrator
+        # Não moram no git (ver empacotar/modelos.js): sem este passo o
+        # instalador sairia sem as redes do Extrator. Os de rosto (39 MB)
+        # saíram com o Ponto, em 2026-10-10.
         run: npm run modelos
 
       - name: Número da versão

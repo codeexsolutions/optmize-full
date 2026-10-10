@@ -60,13 +60,14 @@ import { useLocation } from "react-router-dom";
  * A troca de tela passa por um `<Suspense>` (ver `casca/Casca.tsx`), e o
  * pedaço fica no cache do navegador: a espera acontece uma vez por tela.
  *
- * A que ainda é do editor de produção NÃO entra aqui (o Encaixe). Ela não é desenhada pela rota — quem a desenha é o
- * `<Producao/>`, que fica montado o tempo todo (ver `casca/Casca.tsx`), então
- * dividi-la não adiantaria nada: o pacote viria junto de qualquer forma, na
- * primeira tela.
+ * A que ainda é do editor de produção (o Encaixe) não é desenhada pela rota:
+ * quem a desenha é o `<Producao/>`, que carrega o editor sob demanda (ver
+ * `producao/editor.ts`). A rota dela leva `DoEditor`, que não desenha nada.
  */
-import { Encaixe } from "./telas/Encaixe";
 import { TelaTrancada } from "./casca/TelaTrancada";
+
+/** O lugar da tela do Encaixe na rota: quem a desenha é o `<Producao/>`. */
+const DoEditor = () => null;
 
 const Moldes = lazy(() => import("./telas/Moldes").then((m) => ({ default: m.Moldes })));
 const Projetos = lazy(() => import("./telas/Projetos").then((m) => ({ default: m.Projetos })));
@@ -80,8 +81,6 @@ const Whatsapp = lazy(() => import("./telas/Whatsapp").then((m) => ({ default: m
 const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default: m.Historico })));
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
 const Retrabalho = lazy(() => import("./telas/Retrabalho").then((m) => ({ default: m.Retrabalho })));
-const Ponto = lazy(() => import("./telas/Ponto").then((m) => ({ default: m.Ponto })));
-const Funcionarios = lazy(() => import("./telas/Funcionarios").then((m) => ({ default: m.Funcionarios })));
 const Sobre = lazy(() => import("./telas/Sobre").then((m) => ({ default: m.Sobre })));
 const Conta = lazy(() => import("./telas/Conta").then((m) => ({ default: m.Conta })));
 const Painel = lazy(() => import("./telas/Painel").then((m) => ({ default: m.Painel })));
@@ -89,7 +88,7 @@ const Painel = lazy(() => import("./telas/Painel").then((m) => ({ default: m.Pai
 export type NomeDeTela =
   | "moldes" | "projetos" | "encaixe" | "digitalizar" | "montagem" | "extrator" | "macros"
   | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
-  | "reposicao" | "historico" | "retrabalho" | "ponto" | "funcionarios"
+  | "reposicao" | "historico" | "retrabalho"
   // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
   // programa falando de si mesmo e da conta, não trabalho de produção.
   | "sobre" | "conta"
@@ -132,14 +131,15 @@ export interface Tela {
    * mesma palavra, e a dupla obrigava a escolher entre as duas toda vez.
    *
    * Desde 2026-09-21 são sete: saíram também **Macros**, **WhatsApp** e o
-   * grupo **Relatórios** inteiro (Histórico, Ponto, Funcionários, Reposição).
+   * grupo **Relatórios** inteiro (Histórico, Reposição; o Ponto e os
+   * Funcionários saíram do programa em 2026-10-10).
    * Aí a razão é outra, e vale dizê-la em voz alta para ninguém "consertar"
    * isso por engano: foi decisão de desenho, para o menu do dia a dia mostrar
    * só onde se trabalha. O menu caiu de doze linhas para quatro.
    *
-   * ATENÇÃO, e é o preço: diferente de Máquinas, essas seis **não têm outra
+   * ATENÇÃO, e é o preço: diferente de Máquinas, essas **não têm outra
    * porta**. Nada no programa leva a elas depois desta mudança — só o endereço
-   * digitado (`/historico`, `/ponto`, …) ou um link guardado. Se alguma voltar
+   * digitado (`/historico`, `/retrabalho`, …) ou um link guardado. Se alguma voltar
    * a ser usada no dia a dia, o certo não é devolvê-la ao menu por reflexo: é
    * decidir de onde ela passa a ser alcançada.
    *
@@ -275,7 +275,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "Aproveitamento do tecido",
     apoioTopo: "Otimize o uso do tecido e prepare arquivos para impressão.",
     icone: "icones.svg#blocks",
-    Componente: Encaixe,
+    Componente: DoEditor,
   },
   {
     /*
@@ -352,34 +352,6 @@ export const TELAS: readonly Tela[] = [
     icone: "icones.svg#history",
     escopo: "relatorios",
     Componente: Historico,
-  },
-  {
-    /*
-     * O ponto fica em Relatórios, e não em Produção, porque é o mesmo gesto
-     * das outras telas daqui: alguém abre para CONFERIR o que já aconteceu,
-     * não para fazer acontecer. Quem bate ponto é o terminal de chão de
-     * fábrica; esta tela é onde se olha para o que ele registrou.
-     */
-    nome: "ponto",
-    grupo: "relatorios",
-    foraDoMenu: true,
-    rotulo: "Ponto",
-    apoioMenu: "Quem bateu, e quando",
-    apoioTopo: "As batidas que vieram do terminal, em grade — o que está faltando aparece como traço.",
-    icone: "icones.svg#clock",
-    escopo: "relatorios",
-    Componente: Ponto,
-  },
-  {
-    nome: "funcionarios",
-    grupo: "relatorios",
-    foraDoMenu: true,
-    rotulo: "Funcionários",
-    apoioMenu: "Quem é quem, e quais rostos",
-    apoioTopo: "Cadastre as pessoas e os rostos que o terminal precisa reconhecer.",
-    icone: "icones.svg#users",
-    escopo: "relatorios",
-    Componente: Funcionarios,
   },
   {
     // Era "reposicao" até 2026-09-29: o nome foi para a aba nova, que guarda

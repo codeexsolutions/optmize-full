@@ -38,7 +38,6 @@ const riscoPdfRouter = require("./risco-pdf");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
 const galeriaArquivosRouter = require("./galeria-arquivos-api");
-const pontoRouter = require("./ponto-api");
 const vozRouter = require("./voz-api");
 const corRouter = require("./cor-api");
 const licenca = require("./licenca");
@@ -226,7 +225,6 @@ app.use("/api/galeria", galeriaArquivosRouter);
 // A Reposição: cada trabalho exportado, guardado para refazer peças.
 // O JSON leva as miniaturas das peças, por isso o limite maior.
 app.use("/api/reposicao", express.json({ limit: "30mb" }), require("./reposicao-api"));
-app.use("/api/ponto", pontoRouter);
 app.use("/api/voz", vozRouter);
 // As impressoras da produção: varredura da rede, histórico, ordens de
 // serviço, lista da calandra e os avisos no WhatsApp.

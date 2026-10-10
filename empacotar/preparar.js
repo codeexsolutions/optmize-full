@@ -98,8 +98,8 @@ function podarPrebuilds(pasta) {
 /**
  * O mesmo peso morto do `podarPrebuilds`, e numa escala outra.
  *
- * O `onnxruntime-node` — quem roda a rede que acha rosto em foto (ver
- * `servidor/rostos.js`) — traz o runtime compilado para as três plataformas e
+ * O `onnxruntime-node` — quem roda as redes do Extrator (ver
+ * `servidor/extrator-*.js`) — traz o runtime compilado para as três plataformas e
  * as duas arquiteturas de cada uma: 289 MB, em `bin/napi-v6/<sistema>/<arco>/`.
  * Fica o desta máquina. Os outros 244 MB são o runtime do ONNX para macOS e
  * Linux dentro de um instalador que só existe para Windows, e que sozinhos

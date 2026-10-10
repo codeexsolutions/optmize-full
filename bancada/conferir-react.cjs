@@ -304,7 +304,7 @@ async function main() {
   // cada encaixe exportado para refazer peças, e ela ESTÁ no menu. A que saiu,
   // o relatório de quanto foi refeito, é a de antes, que agora se chama
   // `retrabalho` (ver rotas.ts).
-  for (const nome of ['macros','whatsapp','historico','ponto','funcionarios','retrabalho']) {
+  for (const nome of ['macros','whatsapp','historico','retrabalho']) {
     assert.ok(!document.querySelector(`a[href="/${nome}"]`),
       `a ${nome} saiu do menu`);
   }

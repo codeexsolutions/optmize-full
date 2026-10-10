@@ -6,8 +6,6 @@ const os = require("node:os");
 const path = require("node:path");
 const express = require("express");
 const sharp = require("sharp");
-const vm = require("node:vm");
-const { createRequire } = require("node:module");
 
 const pasta = fs.mkdtempSync(path.join(os.tmpdir(), "optimize-revisao-backend-"));
 process.env.OPTIMIZE_DADOS = pasta;
@@ -182,37 +180,6 @@ async function principal() {
     assert.equal(removida.status, 400);
   });
 
-  // A rede é simulada, mas a leitura da foto é a do Sharp de produção. Assim
-  // exercitamos o erro de decodificação sem modelos nem rostos de pessoas.
-  const arquivoRostos = path.join(__dirname, "../servidor/rostos.js");
-  const requireRostos = createRequire(arquivoRostos);
-  const moduloRostos = { exports: {} };
-  const saidasVazias = {};
-  for (const passo of [8, 16, 32]) {
-    const celulas = (640 / passo) ** 2;
-    for (const [nome, canais] of [["cls", 1], ["obj", 1], ["bbox", 4], ["kps", 10]]) {
-      saidasVazias[`${nome}_${passo}`] = { data: new Float32Array(celulas * canais) };
-    }
-  }
-  const carregarRostos = vm.runInThisContext(
-    `(function(require, module, exports, __dirname) {${fs.readFileSync(arquivoRostos, "utf8")}\n})`,
-    { filename: arquivoRostos },
-  );
-  carregarRostos((nome) => {
-    if (nome === "fs") return { ...fs, existsSync: () => true };
-    if (nome === "onnxruntime-node") return {
-      InferenceSession: { create: async () => ({ run: async () => saidasVazias }) },
-      Tensor: class {},
-    };
-    return requireRostos(nome);
-  }, moduloRostos, moduloRostos.exports, path.dirname(arquivoRostos));
-  const rostos = moduloRostos.exports;
-  const quebrada = await rostos.vetorDaFoto(Buffer.from("imagem corrompida"));
-  const semRosto = await rostos.vetorDaFoto(vermelha);
-  conferir("imagem corrompida devolve erro de reconhecimento sem rejeição não tratada", () => {
-    assert.equal(typeof quebrada.erro, "string");
-    assert.equal(semRosto.erro, "Não achei nenhum rosto nesta foto.");
-  });
   const criado = await api("POST", "/api/reposicao/trabalhos", {
     nome: "teste-pedidos", larguraTecido: 178, consumoCm: 100,
     pecas: [

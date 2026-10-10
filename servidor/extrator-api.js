@@ -3,8 +3,7 @@
  * A API DO EXTRATOR — a foto, os cliques e os arquivos do elemento
  * ===========================================================================
  *
- * Tudo o que é pesado no Extrator mora aqui, pelo mesmo motivo do
- * reconhecimento facial: o `onnxruntime-node` usa os seis núcleos em código
+ * Tudo o que é pesado no Extrator mora aqui: o `onnxruntime-node` usa os seis núcleos em código
  * nativo, e a tela não trava esperando.
  *
  *   GET    /estado        a rede está instalada? (e a de ampliar)

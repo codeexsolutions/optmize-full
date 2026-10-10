@@ -5,8 +5,7 @@
  *
  * O operador clica no logo e a tela mostra o contorno dele. Quem acha o
  * contorno é uma rede da família do Segment Anything, rodando aqui no
- * servidor pelo mesmo `onnxruntime-node` do reconhecimento facial (ver
- * `rostos.js`).
+ * servidor pelo `onnxruntime-node`.
  *
  * A rede tem duas metades, e é isso que deixa o clique instantâneo:
  *

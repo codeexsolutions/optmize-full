@@ -1,15 +1,14 @@
 /**
  * ===========================================================================
- * OS MODELOS DE RECONHECIMENTO — buscar, uma vez
+ * OS MODELOS DO EXTRATOR — buscar, uma vez
  * ===========================================================================
  *
- * Dois arquivos ONNX do OpenCV Zoo (Apache 2.0) que o reconhecimento facial
- * precisa. São 39 MB e iguais para todo mundo, então não moram no repositório:
- * ficam ignorados no git e são buscados por este comando.
+ * As redes ONNX do Extrator (o recorte, a ampliação e o preenchimento). São
+ * grandes e iguais para todo mundo, então não moram no repositório: ficam
+ * ignorados no git e são buscadas por este comando.
  *
- * São servidos pelo endpoint de mídia do GitHub, e não pelo `raw`: o repositório
- * usa git-lfs, e o `raw` devolve um ponteiro de texto de 130 bytes que parece um
- * download bem-sucedido até a hora de abrir.
+ * Os dois modelos de rosto do OpenCV Zoo (yunet e sface, 39 MB) saíram junto
+ * com o Ponto, em 2026-10-10.
  *
  *     npm run modelos
  */
@@ -23,29 +22,13 @@ const ampliar = require("../servidor/extrator-ampliar");
 const preencher = require("../servidor/extrator-preencher");
 
 const DESTINO = path.join(__dirname, "..", "servidor", "modelos");
-const BASE = "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models";
 
 /**
  * A soma de verificação não é paranoia: um download que corta no meio dá um
- * arquivo ONNX que abre e dá números errados, e um reconhecimento que erra por
- * arquivo truncado é indistinguível de um que erra por câmera ruim.
+ * arquivo ONNX que abre e dá números errados, e uma rede que erra por arquivo
+ * truncado é indistinguível de uma que erra por foto ruim.
  */
-const MODELOS = [
-  {
-    nome: "yunet.onnx",
-    de: `${BASE}/face_detection_yunet/face_detection_yunet_2023mar.onnx`,
-    tamanho: 232589,
-    sha256: "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
-    faz: "acha o rosto e os cinco pontos (olhos, nariz, cantos da boca)",
-  },
-  {
-    nome: "sface.onnx",
-    de: `${BASE}/face_recognition_sface/face_recognition_sface_2021dec.onnx`,
-    tamanho: 38696353,
-    sha256: "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
-    faz: "transforma o rosto endireitado em 128 números",
-  },
-];
+const MODELOS = [];
 
 /**
  * A rede de recorte do Extrator: os dois arquivos da escolhida (ver

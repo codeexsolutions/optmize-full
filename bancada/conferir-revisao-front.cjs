@@ -10,7 +10,6 @@ const compilado = buildSync({
     contents: `export { useDados } from './src/api/useDados';
       export { ProvedorDeDialogo, useDialogo } from './src/casca/Dialogo';
       export { Projetos } from './src/telas/Projetos';
-      export { Funcionarios } from './src/telas/Funcionarios';
       export { Moldes } from './src/telas/Moldes';
       export { duracao } from './src/utils/formato';
       export { MemoryRouter } from 'react-router-dom';`,
@@ -28,7 +27,7 @@ for (const nome of ['window', 'document', 'HTMLElement', 'Node', 'Event', 'Mouse
 global.IS_REACT_ACT_ENVIRONMENT = true;
 dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 mod._compile(compilado, mod.filename);
-const { useDados, ProvedorDeDialogo, useDialogo, Projetos, Funcionarios, Moldes, duracao, MemoryRouter } = mod.exports;
+const { useDados, ProvedorDeDialogo, useDialogo, Projetos, Moldes, duracao, MemoryRouter } = mod.exports;
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
@@ -164,36 +163,6 @@ async function conferirProjetos() {
   await act(async () => root.unmount());
 }
 
-async function conferirCamera() {
-  global.fetch = async url => {
-    if (url === '/api/ponto/funcionarios?todos=1') return Response.json([{ id: 1, nome: 'Pessoa', ativo: 1 }]);
-    if (url === '/api/ponto/reconhecimento') return Response.json({ modelosNoDisco: false });
-    throw new Error('Requisição inesperada: ' + url);
-  };
-  const originalNavigator = Object.getOwnPropertyDescriptor(global, 'navigator');
-  const permissao = adiada();
-  Object.defineProperty(global, 'navigator', { configurable: true, value: { mediaDevices: { getUserMedia: () => permissao.promise } } });
-  const root = await montar(elemento(Funcionarios));
-  try {
-    await clicar(botao('Tirar foto'));
-    await clicar(botao('Cancelar'));
-    let encerramentos = 0;
-    await act(async () => permissao.resolve({ getTracks: () => [{ stop: () => encerramentos++ }] }));
-    assert.equal(encerramentos, 1, 'câmera autorizada após fechar o modal é desligada imediatamente');
-    assert.equal(document.querySelector('video'), null);
-
-    Object.defineProperty(global, 'navigator', { configurable: true, value: {} });
-    await clicar(botao('Tirar foto'));
-    assert.match(document.body.textContent, /não oferece acesso à câmera/,
-      'navegador sem câmera mostra erro sem desmontar a tela');
-    await clicar(botao('Cancelar'));
-  } finally {
-    await act(async () => root.unmount());
-    if (originalNavigator) Object.defineProperty(global, 'navigator', originalNavigator);
-    else delete global.navigator;
-  }
-}
-
 async function conferirMoldes() {
   const aberturas = [];
   global.fetch = async url => {
@@ -230,7 +199,6 @@ async function main() {
   await conferirConsultas();
   await conferirDialogos();
   await conferirProjetos();
-  await conferirCamera();
   await conferirMoldes();
   assert.equal(duracao(3599), '1 h');
   assert.equal(duracao(7199), '2 h');
@@ -238,6 +206,6 @@ async function main() {
   assert.equal(duracao(30), 'menos de 1 min');
   assert.equal(duracao(0), '—');
   dom.window.close();
-  console.log('Revisão frontend: recargas, eventos, filtros, diálogos, projetos, moldes, câmera e duração passaram.');
+  console.log('Revisão frontend: recargas, eventos, filtros, diálogos, projetos, moldes e duração passaram.');
 }
 main().catch(erro => { console.error(erro); process.exitCode = 1; dom.window.close(); });
