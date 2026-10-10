@@ -220,7 +220,7 @@ function agora() {
  */
 const CHAVE_DO_ATESTADO = crypto.createPublicKey(
   "-----BEGIN PUBLIC KEY-----\n"
-  + "MCowBQYDK2VwAyEA9SNy9f3rQv/7bxzki99fqDY83IZ/bG1KQmBIZ4wckkM=\n"
+  + "MCowBQYDK2VwAyEABZS9PxD/dpd62qyLdQOf1zsaur5DUaY6WoxXRu3v65E=\n"
   + "-----END PUBLIC KEY-----\n",
 );
 
