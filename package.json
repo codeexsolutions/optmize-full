@@ -57,6 +57,8 @@
     "bancada:extrator": "node bancada/conferir-extrator.mjs",
     "bancada:extrator-rede": "node bancada/conferir-extrator-rede.mjs",
     "bancada:extrator-tela": "node bancada/conferir-extrator-tela.cjs",
+    "bancada:pecas": "node bancada/conferir-pecas.mjs",
+    "bancada:pecas-rede": "node bancada/conferir-pecas-rede.mjs",
     "bancada:montagem": "node bancada/conferir-montagem.mjs",
     "bancada:moldes-pecas": "node bancada/conferir-moldes-pecas.cjs",
     "bancada:risco-pdf": "node bancada/conferir-risco-pdf.js",

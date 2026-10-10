@@ -96,7 +96,7 @@ jobs:
         run: npm run bancada:conferencia
 
       - name: Extrator (sem rede)
-        run: npm run bancada:extrator
+        run: npm run bancada:extrator && npm run bancada:pecas
 
       - name: Moldes e tamanhos
         run: npm run bancada:tamanhos && npm run bancada:moldes-pecas && npm run bancada:montagem && npm run bancada:graduacao && npm run bancada:nos && npm run bancada:editor && npm run bancada:envio && npm run bancada:risco-pdf
