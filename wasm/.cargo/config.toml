@@ -3,4 +3,8 @@ rustflags = [
   # O JavaScript precisa saber a partir de que endereço pode escrever sem
   # pisar na pilha nem nos dados do módulo.
   "-C", "link-arg=--export=__heap_base",
+  # Instruções de quatro números por vez (SIMD de 128 bits): é o que deixa o
+  # laço do encaixe medir quatro colunas numa conta só (ver lib.rs). Todo
+  # navegador e Node atual têm — o Chromium do WebView2 desde a versão 91.
+  "-C", "target-feature=+simd128",
 ]

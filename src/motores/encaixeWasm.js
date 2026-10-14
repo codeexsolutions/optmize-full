@@ -60,8 +60,16 @@ export const WASM_CAB = {
   ordem: 10, nOrdem: 11,
   perfil: 12, colsTecido: 13, usaVazio: 14, pulo: 15,
   acumulado: 16, saida: 17, linhasBancada: 18, manterPerfil: 19,
+  formaTopo4: 20, formaMascara4: 21,
 };
-export const WASM_CAB_TAMANHO = 20;
+export const WASM_CAB_TAMANHO = 22;
+
+/**
+ * As colunas de uma forma arredondadas para cima até múltiplo de 4: é de
+ * quatro em quatro que o Rust lê o topo e a máscara (ver "QUATRO COLUNAS POR
+ * VEZ", em wasm/src/lib.rs).
+ */
+const colunas4 = (cols) => Math.ceil(cols / 4) * 4;
 
 export let motorWasm = null;      // { instancia, i32, memoria }
 export let motorWasmFalhou = false;
@@ -204,6 +212,7 @@ export function prepararUnidadesNoWasm(unidades) {
   unidades.forEach((u) => u.formas.forEach((f) => {
     const sondas = f.sondas || (f.sondas = sondasDaForma(f));
     colsDasFormas += f.cols * 2; // topo e base
+    colsDasFormas += colunas4(f.cols) * 2; // o topo e a máscara do SIMD
     sondasDasFormas += sondas.length;
   }));
 
@@ -241,10 +250,14 @@ export function prepararUnidadesNoWasm(unidades) {
   plano.formaTopo = reservar(nFormas);
   plano.formaBase = reservar(nFormas);
   plano.formaSondas = reservar(nFormas);
+  plano.formaTopo4 = reservar(nFormas);
+  plano.formaMascara4 = reservar(nFormas);
   plano.unidInicio = reservar(nUnidades);
   plano.unidQtd = reservar(nUnidades);
   plano.ordem = reservar(nUnidades);
-  plano.perfil = reservar(COLS_TECIDO_MAX);
+  // A folga de 4 no fim: o SIMD lê o relevo de quatro em quatro colunas e pode
+  // passar até três da última (o que ele lê ali, a máscara apaga).
+  plano.perfil = reservar(COLS_TECIDO_MAX + 4);
   i = alinhar(i, 2); // o acumulado é de 64 bits e precisa de endereço par
   plano.acumulado = reservar((COLS_TECIDO_MAX + 1) * 2);
   plano.saida = reservar(nUnidades * 4);
@@ -275,6 +288,19 @@ export function prepararUnidadesNoWasm(unidades) {
       i32.set(forma.base, d); d += forma.cols;
       i32[plano.formaSondas + f] = d;
       i32.set(forma.sondas, d); d += forma.sondas.length;
+
+      // O topo e a máscara do SIMD: coluna vazia vira topo 0 e máscara 0, e a
+      // sobra até o múltiplo de 4 também — assim ela não conta nem no máximo
+      // nem na soma.
+      const largura4 = colunas4(forma.cols);
+      i32[plano.formaTopo4 + f] = d;
+      for (let c = 0; c < largura4; c++) {
+        const t = c < forma.cols ? forma.topo[c] : -1;
+        i32[d + c] = t >= 0 ? t : 0;
+        i32[d + largura4 + c] = t >= 0 ? -1 : 0;
+      }
+      i32[plano.formaMascara4 + f] = d + largura4;
+      d += largura4 * 2;
       f++;
     });
   });
@@ -289,6 +315,8 @@ export function prepararUnidadesNoWasm(unidades) {
   i32[cab + WASM_CAB.formaTopo] = plano.formaTopo;
   i32[cab + WASM_CAB.formaBase] = plano.formaBase;
   i32[cab + WASM_CAB.formaSondas] = plano.formaSondas;
+  i32[cab + WASM_CAB.formaTopo4] = plano.formaTopo4;
+  i32[cab + WASM_CAB.formaMascara4] = plano.formaMascara4;
   i32[cab + WASM_CAB.unidInicio] = plano.unidInicio;
   i32[cab + WASM_CAB.unidQtd] = plano.unidQtd;
   i32[cab + WASM_CAB.ordem] = plano.ordem;

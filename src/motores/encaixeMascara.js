@@ -661,8 +661,10 @@ export function tirarFundoDosPixels(px, largura, altura, forcar) {
  * 4 mm dava 1,87 mm. Com quatro sub-amostras, o que pode escapar é menos de um
  * sexto de um quarto de célula.
  *
- * A área (`cobertura`) continua sendo a MÉDIA do alfa: ela mede quanto de
- * tecido a peça tem, e não por onde a folga passa.
+ * A área (`cobertura`) é a média das sub-amostras de cada célula — o quanto
+ * dela fica dentro do contorno da arte (ver "A ÁREA DA PEÇA É O QUE FICA
+ * DENTRO DO CONTORNO"): ela mede quanto de tecido a peça tem, e não por onde a
+ * folga passa.
  *
  * ---------------------------------------------------------------------------
  * O FUNDO QUE A MÁSCARA IGNORA TEM DE SAIR NO PDF
@@ -731,6 +733,116 @@ export function subamostrasDaArte(larguraImg, largura, cols, rows, passo) {
   return Math.max(1, Math.min(SUBAMOSTRAS_MAX, pelaArte, peloTeto));
 }
 
+/*
+ * ===========================================================================
+ * A ÁREA DA PEÇA É O QUE FICA DENTRO DO CONTORNO
+ * ===========================================================================
+ *
+ * É dela que sai o aproveitamento (área das peças ÷ mídia gasta), e ela já foi
+ * a MÉDIA DO ALFA de cada pixel. Para arte opaca isso é exato: o pixel da borda
+ * meio transparente é meia peça, e a média conta meia. O defeito é que a média
+ * não distingue borda suavizada de TINTA semitransparente — e arte de DTF é
+ * cheia de tinta assim: a sombra, o degradê, o brilho, a textura gasta. Tudo
+ * isso é impresso (é o que diz `ALFA_PECA`) e ocupa o filme inteiro, mas
+ * contava pela opacidade: a sombra de 20% valia 20% da área.
+ *
+ * E havia um segundo buraco: o vão FECHADO dentro da arte (o miolo de uma
+ * letra, o meio de um anel) contava como desperdício. Ele sai junto com a peça
+ * no corte, e nenhum motor deste programa consegue pôr outra peça ali — todos
+ * enxergam a peça como ocupada do topo à base de cada coluna. Não é tecido que
+ * o encaixe deixou de aproveitar; é tecido da peça. (A arte opaca lida pela cor
+ * do fundo — o modo "fundo" — já era medida assim: o branco de dentro do
+ * desenho nunca foi fundo, porque o fundo só se espalha a partir da borda.)
+ *
+ * Medido num trabalho de DTF de verdade (35 artes, mídia de 160 cm, folga de
+ * 0,5 cm), que a tela mostrava com 52,5%:
+ *
+ *   média do alfa (antes)                   52,5%
+ *   todo pixel com tinta, sem os vãos        57,8%
+ *   dentro do contorno (agora)               59,4%
+ *   caixa da arte                            94,1%
+ *
+ * A regra agora: tudo o que está DENTRO do contorno externo da arte conta
+ * inteiro — a tinta semitransparente e os vãos fechados também. Só a faixa da
+ * borda externa (`FAIXA_DA_BORDA` pixels) é medida pelo alfa, e pelo alfa
+ * RELATIVO à opacidade ao redor: na borda suavizada de uma arte opaca isso é a
+ * média de sempre, e na borda de uma tinta de 30% o pixel de 15% vale meio.
+ * Conferido em círculo, estrela e anel com borda suavizada, de 8 a 40 cm: a
+ * área sai a menos de 0,05% da conta exata (o anel, com o miolo dentro).
+ *
+ * A folga entre as peças continua FORA da área, e deve: é mídia gasta, mas
+ * gasta pela distância de corte que foi pedida, não pelo desenho.
+ */
+const FAIXA_DA_BORDA = 2;
+
+/** O maior valor num quadrado de lado `2r + 1` em volta de cada pixel. */
+function maiorEmVolta(valores, largura, altura, r) {
+  const linha = new Uint8Array(largura * altura);
+  const saida = new Uint8Array(largura * altura);
+  for (let y = 0; y < altura; y++) {
+    const base = y * largura;
+    for (let x = 0; x < largura; x++) {
+      const de = x - r < 0 ? 0 : x - r;
+      const ate = x + r >= largura ? largura - 1 : x + r;
+      let maior = 0;
+      for (let k = de; k <= ate; k++) if (valores[base + k] > maior) maior = valores[base + k];
+      linha[base + x] = maior;
+    }
+  }
+  for (let y = 0; y < altura; y++) {
+    const de = y - r < 0 ? 0 : y - r;
+    const ate = y + r >= altura ? altura - 1 : y + r;
+    for (let x = 0; x < largura; x++) {
+      let maior = 0;
+      for (let k = de; k <= ate; k++) if (linha[k * largura + x] > maior) maior = linha[k * largura + x];
+      saida[y * largura + x] = maior;
+    }
+  }
+  return saida;
+}
+
+/**
+ * Quanto de cada pixel é peça, pela regra acima: 1 dentro do contorno, a
+ * fração do alfa na faixa da borda externa, 0 fora.
+ *
+ * "Fora" é o que se alcança a partir da borda da imagem andando só por pixel
+ * sem tinta (alfa abaixo de `ALFA_PECA`); o vão fechado não é alcançado, e por
+ * isso fica dentro.
+ */
+function areaDentroDoContorno(dados, largura, altura) {
+  const total = largura * altura;
+  const alfa = new Uint8Array(total);
+  for (let i = 0, a = 3; i < total; i++, a += 4) alfa[i] = dados[a];
+
+  const fora = new Uint8Array(total);
+  const pilha = new Int32Array(total);
+  let topo = 0;
+  const entrar = (p) => {
+    if (fora[p] || alfa[p] >= ALFA_PECA) return;
+    fora[p] = 1;
+    pilha[topo++] = p;
+  };
+  for (let x = 0; x < largura; x++) { entrar(x); entrar((altura - 1) * largura + x); }
+  for (let y = 0; y < altura; y++) { entrar(y * largura); entrar(y * largura + largura - 1); }
+  while (topo > 0) {
+    const p = pilha[--topo];
+    const x = p % largura;
+    if (x > 0) entrar(p - 1);
+    if (x < largura - 1) entrar(p + 1);
+    if (p >= largura) entrar(p - largura);
+    if (p < total - largura) entrar(p + largura);
+  }
+
+  const naFaixa = maiorEmVolta(fora, largura, altura, FAIXA_DA_BORDA);
+  const opacidadeEmVolta = maiorEmVolta(alfa, largura, altura, FAIXA_DA_BORDA);
+  const cobertura = new Float32Array(total);
+  for (let i = 0; i < total; i++) {
+    if (fora[i]) continue;
+    cobertura[i] = naFaixa[i] ? Math.min(1, alfa[i] / Math.max(1, opacidadeEmVolta[i])) : 1;
+  }
+  return cobertura;
+}
+
 /** A silhueta com uma amostra por célula: o `silhuetaDeDados` de antes. */
 function silhuetaNaGrade(dados, cols, rows) {
   const total = cols * rows;
@@ -746,13 +858,9 @@ function silhuetaNaGrade(dados, cols, rows) {
     // sombra suave também é tinta (ver `ALFA_PECA`).
     for (let i = 0, a = 3; i < total; i++, a += 4) bits[i] = dados[a] >= ALFA_PECA ? 1 : 0;
     const validada = validarSilhueta(bits, total, "alfa");
-    // A área sai do alfa, e não do bit: a célula de borda meio transparente é
-    // meia peça, e contá-la inteira inflava o aproveitamento.
-    if (validada.modo === "alfa") {
-      const cobertura = new Float32Array(total);
-      for (let i = 0, a = 3; i < total; i++, a += 4) cobertura[i] = dados[a] / 255;
-      validada.cobertura = cobertura;
-    }
+    // A área sai de `areaDentroDoContorno`, e não do bit: ver "A ÁREA DA PEÇA
+    // É O QUE FICA DENTRO DO CONTORNO", logo abaixo.
+    if (validada.modo === "alfa") validada.cobertura = areaDentroDoContorno(dados, cols, rows);
     return validada;
   }
 

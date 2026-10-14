@@ -659,24 +659,57 @@ export function pontuar(livre, w, h, heuristica) {
   }
 }
 
+/**
+ * O melhor livre para a peça, nas duas pegadas quando ela pode girar.
+ *
+ * É a conta de `pontuar`, aberta aqui dentro: este laço roda para cada livre
+ * de cada peça de cada tentativa, e a versão anterior criava dois arrays e dois
+ * objetos por livre só para descrever as pegadas e devolver as notas. O perfil
+ * da busca mostrava o motor de caixa com um quinto do tempo total, quase todo
+ * em lixo de memória. A ordem de visita e o desempate (`1e-9`, o primeiro que
+ * aparece fica) são os mesmos — o resultado tem de ser idêntico, e
+ * `bancada/conferir-maxrects.js` confere peça por peça.
+ */
 export function melhorPosicao(packer, w, h, podeGirar, heuristica) {
-  let melhor = null;
+  const livres = packer.livres;
+  const pegadas = podeGirar ? 2 : 1;
+  const codigo = heuristica === "bl" ? 0 : heuristica === "bssf" ? 1 : heuristica === "blsf" ? 2 : 3;
+  let melhorLivre = null;
+  let melhorGirado = false;
+  let m1 = 0;
+  let m2 = 0;
 
-  packer.livres.forEach((livre) => {
-    const tentativas = podeGirar
-      ? [{ w, h, girado: false }, { w: h, h: w, girado: true }]
-      : [{ w, h, girado: false }];
+  for (let i = 0; i < livres.length; i++) {
+    const livre = livres[i];
+    for (let g = 0; g < pegadas; g++) {
+      const tw = g === 0 ? w : h;
+      const th = g === 0 ? h : w;
+      if (tw > livre.w + 1e-9 || th > livre.h + 1e-9) continue;
+      const sobraX = livre.w - tw;
+      const sobraY = livre.h - th;
+      const menorSobra = sobraX < sobraY ? sobraX : sobraY;
+      const maiorSobra = sobraX < sobraY ? sobraY : sobraX;
+      let p1;
+      let p2;
+      if (codigo === 0) { p1 = livre.y + th; p2 = livre.x; }
+      else if (codigo === 1) { p1 = menorSobra; p2 = maiorSobra; }
+      else if (codigo === 2) { p1 = maiorSobra; p2 = menorSobra; }
+      else { p1 = livre.w * livre.h - tw * th; p2 = menorSobra; }
+      if (melhorLivre !== null
+        && !(p1 < m1 - 1e-9 || (Math.abs(p1 - m1) < 1e-9 && p2 < m2 - 1e-9))) continue;
+      melhorLivre = livre;
+      melhorGirado = g === 1;
+      m1 = p1;
+      m2 = p2;
+    }
+  }
 
-    tentativas.forEach((t) => {
-      if (t.w > livre.w + 1e-9 || t.h > livre.h + 1e-9) return;
-      const [p1, p2] = pontuar(livre, t.w, t.h, heuristica);
-      if (melhor && !(p1 < melhor.p1 - 1e-9 || (Math.abs(p1 - melhor.p1) < 1e-9 && p2 < melhor.p2 - 1e-9))) return;
-      melhor = { x: livre.x, y: livre.y, w: t.w, h: t.h, girado: t.girado, p1, p2,
-        bancada: livre.bancada };
-    });
-  });
-
-  return melhor;
+  if (melhorLivre === null) return null;
+  return {
+    x: melhorLivre.x, y: melhorLivre.y,
+    w: melhorGirado ? h : w, h: melhorGirado ? w : h,
+    girado: melhorGirado, p1: m1, p2: m2, bancada: melhorLivre.bancada,
+  };
 }
 
 /** Corta de `livre` a área ocupada por `usado`, devolvendo o que sobrou. */
@@ -707,12 +740,71 @@ export function contido(a, b) {
 }
 
 export function ocupar(packer, usado) {
-  let livres = [];
-  packer.livres.forEach((livre) => { livres = livres.concat(recortar(livre, usado)); });
+  // A lista nova sai na MESMA ordem de antes — cada livre no lugar dele, ou os
+  // pedaços dele no lugar dele —, porque é a ordem que desempata posições
+  // iguais em `melhorPosicao`. Os pedaços novos ficam marcados.
+  const livres = [];
+  const novos = []; // os índices, em `livres`, dos pedaços novos
+  const antigos = packer.livres;
+  for (let i = 0; i < antigos.length; i++) {
+    const livre = antigos[i];
+    const longe = usado.x >= livre.x + livre.w || usado.x + usado.w <= livre.x
+      || usado.y >= livre.y + livre.h || usado.y + usado.h <= livre.y;
+    if (longe) {
+      livres.push(livre);
+      continue;
+    }
+    const pedacos = recortar(livre, usado);
+    for (let k = 0; k < pedacos.length; k++) {
+      novos.push(livres.length);
+      livres.push(pedacos[k]);
+    }
+  }
 
-  // Sem essa limpeza a lista de retângulos livres cresce sem parar, porque o
-  // MaxRects gera muitos pedaços que já estão dentro de outros.
-  packer.livres = livres.filter((r, i) => !livres.some((outro, j) => j !== i && contido(r, outro)));
+  /*
+   * Sem essa limpeza a lista de retângulos livres cresce sem parar, porque o
+   * MaxRects gera muitos pedaços que já estão dentro de outros.
+   *
+   * A regra é a de sempre — sai todo livre contido em OUTRO da lista, e dois
+   * iguais saem os dois —, mas sem comparar todos contra todos. Os livres que
+   * sobraram da limpeza anterior não estão contidos uns nos outros (foi
+   * exatamente isso que ela tirou), então só falta comparar os pares em que
+   * pelo menos um é pedaço novo: o pedaço novo contra a lista inteira, e o
+   * livre antigo só contra os pedaços novos. Era a conta quadrática sobre a
+   * lista inteira, a cada peça, que pesava no perfil da busca.
+   *
+   * O `contido` vai aberto aqui dentro, com as MESMAS expressões dele — trocar
+   * `a >= b - 1e-9` por `b <= a + 1e-9` parece igual e não é: arredonda
+   * diferente, e o desempate da lista muda.
+   */
+  const total = livres.length;
+  const ehNovo = new Uint8Array(total);
+  for (let k = 0; k < novos.length; k++) ehNovo[novos[k]] = 1;
+  const limpos = [];
+  for (let i = 0; i < total; i++) {
+    const r = livres[i];
+    const rx = r.x;
+    const ry = r.y;
+    const rfx = r.x + r.w;
+    const rfy = r.y + r.h;
+    let dentro = false;
+    if (ehNovo[i]) {
+      for (let j = 0; j < total && !dentro; j++) {
+        if (j === i) continue;
+        const o = livres[j];
+        dentro = rx >= o.x - 1e-9 && ry >= o.y - 1e-9
+          && rfx <= o.x + o.w + 1e-9 && rfy <= o.y + o.h + 1e-9;
+      }
+    } else {
+      for (let k = 0; k < novos.length && !dentro; k++) {
+        const o = livres[novos[k]];
+        dentro = rx >= o.x - 1e-9 && ry >= o.y - 1e-9
+          && rfx <= o.x + o.w + 1e-9 && rfy <= o.y + o.h + 1e-9;
+      }
+    }
+    if (!dentro) limpos.push(r);
+  }
+  packer.livres = limpos;
 }
 
 /**
@@ -2006,8 +2098,18 @@ export function ocuparIntervalos(colunas, col, sinal) {
     const coluna = colunas[x + c];
     if (!coluna) continue;
     if (sinal > 0) {
-      coluna.push({ ini: y + forma.topo[c], fim: y + forma.base[c], dono: col });
-      coluna.sort((a, b) => a.ini - b.ini);
+      // Entra no lugar dela, por busca binária — depois de todas as de `ini`
+      // menor ou igual, que é onde a ordenação estável de antes (`push` e
+      // `sort` da coluna inteira, a cada peça) a deixava. Mesma ordem, sem
+      // reordenar a coluna toda: era um décimo do tempo do encaixe por vãos.
+      const iv = { ini: y + forma.topo[c], fim: y + forma.base[c], dono: col };
+      let baixo = 0;
+      let alto = coluna.length;
+      while (baixo < alto) {
+        const meio = (baixo + alto) >> 1;
+        if (coluna[meio].ini <= iv.ini) baixo = meio + 1; else alto = meio;
+      }
+      if (baixo === coluna.length) coluna.push(iv); else coluna.splice(baixo, 0, iv);
     } else {
       const onde = coluna.findIndex((iv) => iv.dono === col);
       if (onde >= 0) coluna.splice(onde, 1);
@@ -2045,67 +2147,100 @@ export function descerNosVaos(colunas, x, forma, tetoFundo, deOnde, quais, quant
   // A bancada entra na descida, e não depois dela: parar dentro de um vão que
   // atravessa a linha não é uma posição válida que precise ser corrigida — é
   // uma posição que não existe, e a descida tem que continuar dali.
-  let y = empurrarParaBancada(deOnde || 0, forma.maxBase + 1, linhasBancada);
+  const alturaDaForma = forma.maxBase + 1;
+  const { topo, base } = forma;
+  let y = empurrarParaBancada(deOnde || 0, alturaDaForma, linhasBancada);
   const olhaTodas = quais === undefined;
   const nColunas = olhaTodas ? forma.cols : quantas;
-  for (let voltas = 0; voltas < 4096; voltas++) {
-    // Uma passada por TODAS as colunas, ficando com o maior empurrão de todos.
-    //
-    // A primeira versão parava na primeira coluna que batia e recomeçava a
-    // volta inteira dali. Correto, e lento: numa peça de trezentas colunas com
-    // meia dúzia de intervalos em cada, eram dezenas de voltas completas. Aqui
-    // cada volta já colhe o pior caso de uma vez, e duas ou três bastam —
-    // é a mesma conta do relevo, só que perguntando à lista de intervalos em
-    // vez de a uma altura só.
-    let proximo = y;
-    for (let i = 0; i < nColunas; i++) {
-      const c = olhaTodas ? i : quais[i];
-      const t = forma.topo[c];
-      if (t < 0) continue;
-      const lista = colunas[x + c];
-      if (lista.length === 0) continue;
-      const base = forma.base[c];
-      // Empurra até ESTA coluna caber. Cada empurrão move a janela, então ela
-      // é recalculada a cada volta — e `proximo` só cresce, o que faz isto
-      // terminar sempre.
-      let mudou = true;
-      while (mudou) {
-        mudou = false;
-        const ini = proximo + t;
-        const fim = proximo + base;
-        /*
-         * O primeiro intervalo que ainda alcança a janela, por busca binária.
-         *
-         * Isto era uma varredura desde o começo da lista. Funciona, e no fundo
-         * do rolo custa caro: a coluna já tem dezenas de intervalos, todos
-         * acima da janela, e cada um era pulado um a um. Medido no trabalho de
-         * produção, eram 34.842 descidas por passada e 84% do tempo do motor
-         * inteiro aqui dentro.
-         *
-         * A lista está ordenada por `ini` e os intervalos não se sobrepõem, o
-         * que também deixa `fim` crescente — então dá para saltar direto.
-         */
-        let baixo = 0;
-        let alto = lista.length;
-        while (baixo < alto) {
-          const meio = (baixo + alto) >> 1;
-          if (lista[meio].fim < ini) baixo = meio + 1; else alto = meio;
-        }
-        if (baixo < lista.length) {
-          const iv = lista[baixo];
-          if (iv.ini <= fim && iv.fim + 1 - t > proximo) {
-            proximo = iv.fim + 1 - t;
-            mudou = true;
-          }
-        }
-      }
+  /*
+   * A RESPOSTA NÃO DEPENDE DA ORDEM DAS COLUNAS — e é isso que deixa andar em
+   * roda.
+   *
+   * O que a descida procura é o MENOR `y`, a partir de onde ela começa, em que
+   * nenhuma coluna bate e a peça não cruza a linha da bancada. Cada empurrão
+   * só pula alturas que de fato batem: a coluna empurra a peça para logo
+   * abaixo do intervalo que ela tocou, e toda altura no meio do caminho ainda
+   * toca nele. Então qualquer sequência de empurrões chega no mesmo `y`.
+   *
+   * Isto já foi em voltas completas: passa por todas as colunas, aplica a
+   * bancada, e só termina quando uma volta inteira não empurra nada — de novo
+   * por todas as colunas, inclusive as que já tinham aceitado o `y` final na
+   * volta anterior. Aqui a roda continua de onde parou, e termina assim que
+   * `nColunas` colunas seguidas aceitam o `y`: é a mesma volta sem empurrão,
+   * só que contada a partir do último empurrão, e não do começo da lista.
+   *
+   * E desiste NA HORA em que o `y` passa do teto — antes terminava a volta
+   * inteira para só então conferir. O `y` só cresce, então uma vez passado ele
+   * não volta: a resposta seria `null` de qualquer jeito.
+   *
+   * `bancada/conferir-contra-o-commit.js` confere que o encaixe sai idêntico.
+   */
+  const inicio = y;
+  let aceitaram = 0; // colunas seguidas que aceitaram o `y` atual
+  let i = 0;
+  // A mesma rede de segurança de antes (4096 voltas), em número de colunas.
+  for (let passos = 0, teto = 4096 * Math.max(1, nColunas); passos < teto; passos++) {
+    if (aceitaram >= nColunas) {
+      const naBancada = empurrarParaBancada(y, alturaDaForma, linhasBancada);
+      if (naBancada === y) return y;
+      y = naBancada;
+      aceitaram = 0;
+      if (y + alturaDaForma >= tetoFundo) return null;
+      continue;
     }
-    proximo = empurrarParaBancada(proximo, forma.maxBase + 1, linhasBancada);
-    if (proximo === y) return y;
-    y = proximo;
-    if (y + forma.maxBase + 1 >= tetoFundo) return null;
+    const c = olhaTodas ? i : quais[i];
+    if (++i === nColunas) i = 0;
+    const t = topo[c];
+    const lista = t < 0 ? null : colunas[x + c];
+    if (!lista || lista.length === 0) { aceitaram++; continue; }
+    const novo = descerNaColuna(lista, t, base[c], y);
+    if (novo === y) { aceitaram++; continue; }
+    y = novo;
+    // Esta coluna já aceita o `y` novo; as outras vão ser conferidas de novo.
+    aceitaram = 1;
+    if (y > inicio && y + alturaDaForma >= tetoFundo) return null;
   }
   return null;
+}
+
+/**
+ * A menor altura, a partir de `y`, em que UMA coluna deixa a peça passar: a
+ * janela `[y + topo, y + base]` dela não toca intervalo nenhum da lista.
+ *
+ * É o passo de dentro de `descerNosVaos`, e mora separado porque o encaixe por
+ * vãos também o usa sozinho, como certificado (ver "A DESCIDA QUE NÃO TEM COMO
+ * GANHAR", em `melhorVagaPorVaos`): a resposta da descida inteira nunca fica
+ * acima do que uma coluna sozinha permite.
+ */
+function descerNaColuna(lista, t, fimDaPeca, y) {
+  for (;;) {
+    const ini = y + t;
+    const fim = y + fimDaPeca;
+    /*
+     * O primeiro intervalo que ainda alcança a janela, por busca binária.
+     *
+     * Isto era uma varredura desde o começo da lista. Funciona, e no fundo do
+     * rolo custa caro: a coluna já tem dezenas de intervalos, todos acima da
+     * janela, e cada um era pulado um a um. Medido no trabalho de produção,
+     * eram 34.842 descidas por passada e 84% do tempo do motor inteiro aqui
+     * dentro.
+     *
+     * A lista está ordenada por `ini` e os intervalos não se sobrepõem, o que
+     * também deixa `fim` crescente — então dá para saltar direto.
+     */
+    let baixo = 0;
+    let alto = lista.length;
+    while (baixo < alto) {
+      const meio = (baixo + alto) >> 1;
+      if (lista[meio].fim < ini) baixo = meio + 1; else alto = meio;
+    }
+    if (baixo === lista.length) return y;
+    const iv = lista[baixo];
+    // Bater quer dizer `iv.fim >= ini`, então o empurrão sempre anda (`iv.fim
+    // + 1 - t > y`): não há o caso de "bate e fica".
+    if (iv.ini > fim) return y;
+    y = iv.fim + 1 - t;
+  }
 }
 
 /** A melhor colocação nova para esta unidade, se houver alguma acima da atual. */
@@ -2593,7 +2728,7 @@ export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBanc
     if (forma.cols > colsTecido) return;
     if (linhasBancada && forma.maxBase + 1 > linhasBancada) return;
     const ultimoX = colsTecido - forma.cols;
-    const { cols, topo, maxBase } = forma;
+    const { cols, topo, base, maxBase } = forma;
     const sondas = forma.sondas || (forma.sondas = sondasDaForma(forma));
     const nSondas = sondas.length;
     // Rascunho reaproveitado entre as posições: alocar um vetor por posição
@@ -2657,6 +2792,7 @@ export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBanc
        */
       let comVao = 0;
       let ySky = 0;
+      let cMax = -1; // a coluna que decide o `ySky`
       let piso = 0;
       let cortada = false;
       for (let c = 0; c < cols; c++) {
@@ -2664,7 +2800,7 @@ export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBanc
         if (t < 0) continue;
         const coluna = x + c;
         const encosta = perfil[coluna] - t;
-        if (encosta > ySky) ySky = encosta;
+        if (encosta > ySky) { ySky = encosta; cMax = c; }
         // A peça cabe no maior buraco desta coluna? Se não, a única posição
         // possível aqui é abaixo do relevo — e essa coluna não precisa ser
         // andada na descida.
@@ -2698,14 +2834,53 @@ export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBanc
        * Era 84% do tempo do motor. A conta que evita isso já estava pronta no
        * mesmo laço; faltava a comparação.
        */
-      if (comVao > 0 && piso < ySky) {
-        // Aqui pode haver buraco fechado por cima: vale a descida de verdade.
-        // Ela nunca devolve `y` maior que o do relevo, então o relevo já serve
-        // de teto e a busca desiste cedo.
-        const tetoDaDescida = Math.min(limite, y + maxBase + 1);
-        const yVao = descerNosVaos(colunas, x, forma, tetoDaDescida + 1, piso, colunasComVao,
-          comVao, linhasBancada);
-        if (yVao !== null && yVao < y) y = yVao;
+      if (comVao > 0 && piso < ySky && cMax >= 0) {
+        /*
+         * A DESCIDA QUE NÃO TEM COMO GANHAR.
+         *
+         * A descida pelos intervalos só serve se achar um `y` ACIMA do relevo
+         * — e medindo, isso acontecia em 2% a 7% das descidas. As outras
+         * varriam as duzentas e tantas colunas da peça, começando lá no alto
+         * do rolo, para devolver o mesmo `y` ou nada. Era a maior parte do
+         * tempo deste motor.
+         *
+         * O certificado: a resposta da descida é a menor altura em que TODAS
+         * as colunas deixam a peça passar, então ela nunca fica acima do que
+         * UMA coluna sozinha permite (`descerNaColuna`). Começando pela coluna
+         * que decide o relevo e passando pelas colunas-sonda, o maior desses
+         * limites já costuma alcançar o `y` do relevo — e aí a descida não
+         * tem o que ganhar e nem roda. Quando não alcança, ela roda partindo
+         * dali, que é um piso tão válido quanto o de antes, só que mais
+         * baixo no rolo.
+         *
+         * O encaixe não muda: só deixa de rodar a descida que não podia
+         * melhorar a posição, e a que roda chega na mesma resposta
+         * (`bancada/conferir-contra-o-commit.js` confere). Medido: pula de
+         * metade a quase todas as descidas, conforme o trabalho, e nenhuma
+         * das puladas teria melhorado. O motor por vãos ficou cerca de 2,5x
+         * mais rápido no lote de produção.
+         */
+        // As voltas continuam enquanto o limite sobe (até oito): cada coluna
+        // que empurra pode fazer outra, já conferida, empurrar de novo. Parar
+        // em duas voltas deixava rodar o dobro de descidas no lote grande.
+        let yMinimo = descerNaColuna(colunas[x + cMax], topo[cMax], base[cMax], piso);
+        for (let volta = 0, antes = -1; volta < 8 && yMinimo < y && yMinimo !== antes; volta++) {
+          antes = yMinimo;
+          for (let i = 0; i < nSondas && yMinimo < y; i++) {
+            const c = sondas[i];
+            yMinimo = descerNaColuna(colunas[x + c], topo[c], base[c], yMinimo);
+          }
+          if (yMinimo < y) yMinimo = descerNaColuna(colunas[x + cMax], topo[cMax], base[cMax], yMinimo);
+        }
+        if (yMinimo < y) {
+          // Aqui pode haver buraco fechado por cima: vale a descida de verdade.
+          // Ela nunca devolve `y` maior que o do relevo, então o relevo já
+          // serve de teto e a busca desiste cedo.
+          const tetoDaDescida = Math.min(limite, y + maxBase + 1);
+          const yVao = descerNosVaos(colunas, x, forma, tetoDaDescida + 1, yMinimo, colunasComVao,
+            comVao, linhasBancada);
+          if (yVao !== null && yVao < y) y = yVao;
+        }
       }
 
       const fundo = y + maxBase + 1;

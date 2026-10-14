@@ -749,6 +749,16 @@ quantos metros vão ser gastos.
    inflaria o número, porque o vazio ao redor do desenho apareceria como
    aproveitado; com a silhueta, o número dos dois modos dá para comparar.
 
+   A área da peça é **tudo o que fica dentro do contorno externo da arte**:
+   a tinta semitransparente (sombra, degradê, textura gasta — a impressora
+   imprime) e o vão fechado dentro do desenho (o miolo de uma letra, que sai
+   junto com a peça no corte) contam inteiros. Só a borda suavizada é medida
+   pelo alfa. Até a versão 1.2 a área era a média do alfa de cada pixel, e a
+   arte de DTF saía bem abaixo do que ela ocupa: um trabalho de 35 artes que
+   mostrava 52,5% passa a mostrar 59,4% (ver "A ÁREA DA PEÇA É O QUE FICA
+   DENTRO DO CONTORNO", em `src/motores/encaixeMascara.js`). A folga entre as
+   peças continua fora da área: é mídia gasta pela distância de corte pedida.
+
    Ao lado dele vem um segundo, **"na faixa usada"**: o mesmo cálculo, só que
    contra a largura que as peças de fato ocuparam, e não contra o rolo inteiro.
    A diferença entre os dois é a tira lateral que ninguém usou.

@@ -67,10 +67,40 @@ const CAB_LINHAS_BANCADA: usize = 18; // comprimento da bancada em células; 0 =
 // dá exatamente o mesmo que encaixar tudo de uma vez, porque a peça só
 // enxerga o relevo que as anteriores deixaram.
 const CAB_MANTER_PERFIL: usize = 19;
+// As duas leituras da forma que o SIMD usa (ver "QUATRO COLUNAS POR VEZ",
+// adiante). Cada uma é um vetor de deslocamentos, um por forma, e cada forma
+// tem `colunas4` números: as colunas arredondadas para cima até múltiplo de 4.
+const CAB_FORMA_TOPO4: usize = 20; // o topo, com 0 nas colunas vazias e na sobra
+const CAB_FORMA_MASCARA4: usize = 21; // -1 nas colunas com peça, 0 no resto
+
+use core::arch::wasm32::*;
+
+/// O endereço do i32 de índice `indice` na memória linear.
+#[inline(always)]
+fn ponteiro(indice: i32) -> *mut i32 {
+    (indice as usize * 4) as *mut i32
+}
 
 #[inline(always)]
 unsafe fn ler(base: *const i32, indice: i32) -> i32 {
     *base.offset(indice as isize)
+}
+
+/// O maior dos quatro números do vetor.
+#[inline(always)]
+fn maior_das_quatro(v: v128) -> i32 {
+    let a = i32x4_max(v, i32x4_shuffle::<2, 3, 0, 1>(v, v));
+    let b = i32x4_max(a, i32x4_shuffle::<1, 0, 3, 2>(a, a));
+    i32x4_extract_lane::<0>(b)
+}
+
+/// A soma dos quatro números do vetor, em 64 bits.
+#[inline(always)]
+fn soma_das_quatro(v: v128) -> i64 {
+    i32x4_extract_lane::<0>(v) as i64
+        + i32x4_extract_lane::<1>(v) as i64
+        + i32x4_extract_lane::<2>(v) as i64
+        + i32x4_extract_lane::<3>(v) as i64
 }
 
 /// Onde a peça pousa de verdade, respeitando a linha da bancada.
@@ -108,29 +138,39 @@ fn empurrar_para_bancada(y: i32, altura: i32, linhas: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C" fn encaixar(cabecalho: *const i32) -> i32 {
     // Os campos do cabeçalho são **índices de i32 contados do endereço zero**
-    // da memória linear, e não deslocamentos a partir do cabeçalho. Por isso o
-    // ponteiro base é o próprio zero: `zero.offset(i)` chega no byte i*4.
-    let zero = 0 as *mut i32;
+    // da memória linear, e não deslocamentos a partir do cabeçalho: o índice i
+    // está no byte i*4.
+    //
+    // O ponteiro sai DIRETO do endereço (`ponteiro`), e não de um ponteiro
+    // nulo somado do deslocamento. Esta função já foi escrita com
+    // `zero.offset(i)`, sendo `zero` o ponteiro nulo — e aritmética a partir
+    // do nulo é comportamento indefinido em Rust: o otimizador pode supor que
+    // ela não acontece. Funcionou por sorte enquanto o laço andava coluna a
+    // coluna; com o laço em SIMD, o otimizador passou a tirar proveito disso e
+    // a heurística "vazio" começou a errar posição. Quem pegou foi a paridade
+    // com o JavaScript (`bancada/conferir.js`).
     let cab = cabecalho;
-    let p_forma_cols = zero.offset(ler(cab, CAB_FORMA_COLS as i32) as isize);
-    let p_forma_ncols = zero.offset(ler(cab, CAB_FORMA_NCOLS as i32) as isize);
-    let p_forma_somatopo = zero.offset(ler(cab, CAB_FORMA_SOMATOPO as i32) as isize);
-    let p_forma_maxbase = zero.offset(ler(cab, CAB_FORMA_MAXBASE as i32) as isize);
-    let p_forma_nsondas = zero.offset(ler(cab, CAB_FORMA_NSONDAS as i32) as isize);
-    let p_forma_topo = zero.offset(ler(cab, CAB_FORMA_TOPO as i32) as isize);
-    let p_forma_base = zero.offset(ler(cab, CAB_FORMA_BASE as i32) as isize);
-    let p_forma_sondas = zero.offset(ler(cab, CAB_FORMA_SONDAS as i32) as isize);
-    let p_unid_inicio = zero.offset(ler(cab, CAB_UNID_INICIO as i32) as isize);
-    let p_unid_qtd = zero.offset(ler(cab, CAB_UNID_QTD as i32) as isize);
-    let p_ordem = zero.offset(ler(cab, CAB_ORDEM as i32) as isize);
+    let p_forma_cols = ponteiro(ler(cab, CAB_FORMA_COLS as i32));
+    let p_forma_ncols = ponteiro(ler(cab, CAB_FORMA_NCOLS as i32));
+    let p_forma_somatopo = ponteiro(ler(cab, CAB_FORMA_SOMATOPO as i32));
+    let p_forma_maxbase = ponteiro(ler(cab, CAB_FORMA_MAXBASE as i32));
+    let p_forma_nsondas = ponteiro(ler(cab, CAB_FORMA_NSONDAS as i32));
+    let p_forma_topo = ponteiro(ler(cab, CAB_FORMA_TOPO as i32));
+    let p_forma_base = ponteiro(ler(cab, CAB_FORMA_BASE as i32));
+    let p_forma_sondas = ponteiro(ler(cab, CAB_FORMA_SONDAS as i32));
+    let p_forma_topo4 = ponteiro(ler(cab, CAB_FORMA_TOPO4 as i32));
+    let p_forma_mascara4 = ponteiro(ler(cab, CAB_FORMA_MASCARA4 as i32));
+    let p_unid_inicio = ponteiro(ler(cab, CAB_UNID_INICIO as i32));
+    let p_unid_qtd = ponteiro(ler(cab, CAB_UNID_QTD as i32));
+    let p_ordem = ponteiro(ler(cab, CAB_ORDEM as i32));
     let n_ordem = ler(cab, CAB_N_ORDEM as i32);
-    let perfil = zero.offset(ler(cab, CAB_PERFIL as i32) as isize);
+    let perfil = ponteiro(ler(cab, CAB_PERFIL as i32));
     let cols_tecido = ler(cab, CAB_COLS_TECIDO as i32);
     let usa_vazio = ler(cab, CAB_USA_VAZIO as i32) != 0;
     let pulo = if ler(cab, CAB_PULO as i32) < 1 { 1 } else { ler(cab, CAB_PULO as i32) };
     let linhas_bancada = ler(cab, CAB_LINHAS_BANCADA as i32);
-    let acumulado = (zero.offset(ler(cab, CAB_ACUMULADO as i32) as isize)) as *mut i64;
-    let saida = zero.offset(ler(cab, CAB_SAIDA as i32) as isize);
+    let acumulado = (ponteiro(ler(cab, CAB_ACUMULADO as i32))) as *mut i64;
+    let saida = ponteiro(ler(cab, CAB_SAIDA as i32));
 
     // O relevo começa zerado: tecido novo. A não ser que o JavaScript já tenha
     // escrito nele o que sobrou de um pedaço anterior — aí esta rodada continua
@@ -179,8 +219,11 @@ pub unsafe extern "C" fn encaixar(cabecalho: *const i32) -> i32 {
                 continue;
             }
             let n_sondas = *p_forma_nsondas.offset(forma as isize);
-            let topo = zero.offset(*p_forma_topo.offset(forma as isize) as isize);
-            let sondas = zero.offset(*p_forma_sondas.offset(forma as isize) as isize);
+            let topo = ponteiro(*p_forma_topo.offset(forma as isize));
+            let sondas = ponteiro(*p_forma_sondas.offset(forma as isize));
+            let topo4 = ponteiro(*p_forma_topo4.offset(forma as isize)) as *const v128;
+            let mascara4 = ponteiro(*p_forma_mascara4.offset(forma as isize)) as *const v128;
+            let blocos = (cols + 3) / 4;
             let ultimo_x = cols_tecido - cols;
             let pode_cortar = !usa_vazio || n_cols == cols as i64;
 
@@ -230,26 +273,58 @@ pub unsafe extern "C" fn encaixar(cabecalho: *const i32) -> i32 {
                     }
 
                     if !pular_esta {
-                        // 2) a medida de verdade, colunas em ordem
-                        let mut y = 0i32;
-                        let mut soma_perfil = 0i64;
+                        // 2) a medida de verdade — QUATRO COLUNAS POR VEZ.
+                        //
+                        // A conta é a de sempre: o y é o maior `perfil − topo`
+                        // das colunas com peça (e nunca menos que zero), e a
+                        // soma do relevo debaixo delas sai junto. Aqui ela anda
+                        // de quatro em quatro colunas numa instrução só (SIMD):
+                        //
+                        //   - coluna vazia e a sobra do fim valem ZERO, pela
+                        //     máscara — e zero é o y de partida, então não
+                        //     mexem no máximo nem na soma;
+                        //   - a leitura do relevo passa até três colunas do fim
+                        //     da forma; o relevo tem folga para isso, e o que se
+                        //     lê ali a máscara apaga.
+                        //
+                        // O corte ("esta posição já não ganha") é conferido a
+                        // cada quatro blocos, e não a cada coluna. Isso não muda
+                        // o resultado: cortar é só deixar de calcular uma
+                        // posição que perde, e a conferência do fim (logo
+                        // abaixo) corta exatamente as mesmas que a coluna a
+                        // coluna cortava — o y só cresce, então "passou da
+                        // melhor em alguma coluna" é o mesmo que "passou no
+                        // fim".
+                        let mut vy = i32x4_splat(0);
+                        let mut vs = i32x4_splat(0);
+                        let base_perfil = perfil.offset(x as isize) as *const i32;
                         let mut cortada = false;
-                        for c in 0..cols {
-                            let t = *topo.offset(c as isize);
-                            if t < 0 {
-                                continue;
+                        let mut b = 0i32;
+                        while b < blocos {
+                            let fim = if b + 4 < blocos { b + 4 } else { blocos };
+                            while b < fim {
+                                // Leitura DESALINHADA, e dita assim de propósito: o
+                                // relevo começa em qualquer coluna `x`, e nada
+                                // aqui cai em múltiplo de 16 bytes. Ler um `v128`
+                                // por ponteiro comum presumiria o alinhamento.
+                                let p = core::ptr::read_unaligned(base_perfil.offset((b * 4) as isize) as *const v128);
+                                let m = core::ptr::read_unaligned(mascara4.offset(b as isize));
+                                let t = core::ptr::read_unaligned(topo4.offset(b as isize));
+                                vy = i32x4_max(vy, v128_and(i32x4_sub(p, t), m));
+                                vs = i32x4_add(vs, v128_and(p, m));
+                                b += 1;
                             }
-                            let altura = *perfil.offset((x + c) as isize);
-                            soma_perfil += altura as i64;
-                            let encosta = altura - t;
-                            if encosta <= y {
-                                continue;
-                            }
-                            y = encosta;
-                            if tem_melhor && pode_cortar && nota_com!(y) > melhor_p1 {
+                            if tem_melhor && pode_cortar && b < blocos
+                                && nota_com!(maior_das_quatro(vy)) > melhor_p1
+                            {
                                 cortada = true;
                                 break;
                             }
+                        }
+                        let y = maior_das_quatro(vy);
+                        let soma_perfil = soma_das_quatro(vs);
+                        if !cortada && tem_melhor && pode_cortar && nota_com!(y) > melhor_p1 {
+                            cortada = true;
                         }
 
                         if !cortada {
@@ -320,8 +395,8 @@ pub unsafe extern "C" fn encaixar(cabecalho: *const i32) -> i32 {
 
         // Assenta: o relevo de cada coluna passa a ser a base da peça ali.
         let cols = *p_forma_cols.offset(melhor_forma as isize);
-        let topo = zero.offset(*p_forma_topo.offset(melhor_forma as isize) as isize);
-        let base_f = zero.offset(*p_forma_base.offset(melhor_forma as isize) as isize);
+        let topo = ponteiro(*p_forma_topo.offset(melhor_forma as isize));
+        let base_f = ponteiro(*p_forma_base.offset(melhor_forma as isize));
         let mut fundo = 0i32;
         for c in 0..cols {
             if *topo.offset(c as isize) < 0 {
