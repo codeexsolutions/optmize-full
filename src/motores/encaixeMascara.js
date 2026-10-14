@@ -775,32 +775,6 @@ export function subamostrasDaArte(larguraImg, largura, cols, rows, passo) {
  */
 const FAIXA_DA_BORDA = 2;
 
-/** O maior valor num quadrado de lado `2r + 1` em volta de cada pixel. */
-function maiorEmVolta(valores, largura, altura, r) {
-  const linha = new Uint8Array(largura * altura);
-  const saida = new Uint8Array(largura * altura);
-  for (let y = 0; y < altura; y++) {
-    const base = y * largura;
-    for (let x = 0; x < largura; x++) {
-      const de = x - r < 0 ? 0 : x - r;
-      const ate = x + r >= largura ? largura - 1 : x + r;
-      let maior = 0;
-      for (let k = de; k <= ate; k++) if (valores[base + k] > maior) maior = valores[base + k];
-      linha[base + x] = maior;
-    }
-  }
-  for (let y = 0; y < altura; y++) {
-    const de = y - r < 0 ? 0 : y - r;
-    const ate = y + r >= altura ? altura - 1 : y + r;
-    for (let x = 0; x < largura; x++) {
-      let maior = 0;
-      for (let k = de; k <= ate; k++) if (linha[k * largura + x] > maior) maior = linha[k * largura + x];
-      saida[y * largura + x] = maior;
-    }
-  }
-  return saida;
-}
-
 /**
  * Quanto de cada pixel é peça, pela regra acima: 1 dentro do contorno, a
  * fração do alfa na faixa da borda externa, 0 fora.
@@ -808,37 +782,117 @@ function maiorEmVolta(valores, largura, altura, r) {
  * "Fora" é o que se alcança a partir da borda da imagem andando só por pixel
  * sem tinta (alfa abaixo de `ALFA_PECA`); o vão fechado não é alcançado, e por
  * isso fica dentro.
+ *
+ * ESTA CONTA RODA NO PREPARO DE TODA PEÇA, e a primeira versão dela custava de
+ * 3,6x a 4,6x o preparo de antes: ela passava uma janela de 5x5 em todo pixel,
+ * duas vezes, e alocava cinco vetores do tamanho da imagem. Esta dá o mesmo
+ * número fazendo só o necessário:
+ *
+ *   - pixel OPACO vale 1 sem olhar em volta (na faixa a conta daria 255/255);
+ *   - a faixa da borda sai por contagem deslizante — duas passadas de poucas
+ *     operações por pixel, em vez de 25 leituras;
+ *   - a opacidade em volta só é medida para o pixel semitransparente da faixa,
+ *     que é uma tira fina em volta da peça;
+ *   - a pilha do preenchimento usa a memória do resultado, que ainda está
+ *     vazio quando ela é usada.
  */
 function areaDentroDoContorno(dados, largura, altura) {
   const total = largura * altura;
-  const alfa = new Uint8Array(total);
-  for (let i = 0, a = 3; i < total; i++, a += 4) alfa[i] = dados[a];
-
+  const r = FAIXA_DA_BORDA;
+  const cobertura = new Float32Array(total);
   const fora = new Uint8Array(total);
-  const pilha = new Int32Array(total);
+
+  // 1) O fora: preenchimento a partir da borda, por pixel sem tinta. Por
+  //    SEGMENTOS de linha: marca o trecho inteiro de uma vez e só empilha o
+  //    começo de cada trecho livre nas linhas de cima e de baixo — pixel a
+  //    pixel, cada um entrava e saía da pilha, e era o grosso desta conta.
+  const pilha = new Int32Array(cobertura.buffer);
   let topo = 0;
-  const entrar = (p) => {
-    if (fora[p] || alfa[p] >= ALFA_PECA) return;
-    fora[p] = 1;
-    pilha[topo++] = p;
+  const livre = (p) => fora[p] === 0 && dados[p * 4 + 3] < ALFA_PECA;
+  const semear = (p) => { if (livre(p)) pilha[topo++] = p; };
+  for (let x = 0; x < largura; x++) { semear(x); semear((altura - 1) * largura + x); }
+  for (let y = 0; y < altura; y++) { semear(y * largura); semear(y * largura + largura - 1); }
+  // Empilha o começo de cada trecho livre de `de` a `ate` na linha `y`.
+  const semearTrechos = (y, de, ate) => {
+    const base = y * largura;
+    let dentro = false;
+    for (let x = de; x <= ate; x++) {
+      if (livre(base + x)) {
+        if (!dentro) { pilha[topo++] = base + x; dentro = true; }
+      } else dentro = false;
+    }
   };
-  for (let x = 0; x < largura; x++) { entrar(x); entrar((altura - 1) * largura + x); }
-  for (let y = 0; y < altura; y++) { entrar(y * largura); entrar(y * largura + largura - 1); }
   while (topo > 0) {
     const p = pilha[--topo];
-    const x = p % largura;
-    if (x > 0) entrar(p - 1);
-    if (x < largura - 1) entrar(p + 1);
-    if (p >= largura) entrar(p - largura);
-    if (p < total - largura) entrar(p + largura);
+    if (!livre(p)) continue;
+    const y = (p / largura) | 0;
+    const base = y * largura;
+    let esq = p - base;
+    let dir = esq;
+    while (esq > 0 && livre(base + esq - 1)) esq--;
+    while (dir < largura - 1 && livre(base + dir + 1)) dir++;
+    fora.fill(1, base + esq, base + dir + 1);
+    if (y > 0) semearTrechos(y - 1, esq, dir);
+    if (y < altura - 1) semearTrechos(y + 1, esq, dir);
   }
 
-  const naFaixa = maiorEmVolta(fora, largura, altura, FAIXA_DA_BORDA);
-  const opacidadeEmVolta = maiorEmVolta(alfa, largura, altura, FAIXA_DA_BORDA);
-  const cobertura = new Float32Array(total);
-  for (let i = 0; i < total; i++) {
-    if (fora[i]) continue;
-    cobertura[i] = naFaixa[i] ? Math.min(1, alfa[i] / Math.max(1, opacidadeEmVolta[i])) : 1;
+  // 2) A faixa: o pixel com algum "fora" a até `r` pixels (num quadrado), por
+  //    contagem deslizante — primeiro na linha, depois na coluna.
+  const naLinha = new Uint8Array(total);
+  for (let y = 0; y < altura; y++) {
+    const base = y * largura;
+    let conta = 0;
+    for (let k = 0; k <= r && k < largura; k++) conta += fora[base + k];
+    for (let x = 0; x < largura; x++) {
+      naLinha[base + x] = conta > 0 ? 1 : 0;
+      const sai = x - r;
+      const entra = x + r + 1;
+      if (sai >= 0) conta -= fora[base + sai];
+      if (entra < largura) conta += fora[base + entra];
+    }
+  }
+  // Na coluna, a mesma contagem — mas andando LINHA a linha, com um contador
+  // por coluna: andar coluna por coluna salta `largura` bytes a cada pixel, e
+  // isso custava mais que a conta.
+  const naFaixa = new Uint8Array(total);
+  const contaDaColuna = new Int32Array(largura);
+  for (let k = 0; k <= r && k < altura; k++) {
+    const base = k * largura;
+    for (let x = 0; x < largura; x++) contaDaColuna[x] += naLinha[base + x];
+  }
+  for (let y = 0; y < altura; y++) {
+    const base = y * largura;
+    for (let x = 0; x < largura; x++) naFaixa[base + x] = contaDaColuna[x] > 0 ? 1 : 0;
+    const sai = y - r;
+    const entra = y + r + 1;
+    if (sai >= 0) {
+      const b = sai * largura;
+      for (let x = 0; x < largura; x++) contaDaColuna[x] -= naLinha[b + x];
+    }
+    if (entra < altura) {
+      const b = entra * largura;
+      for (let x = 0; x < largura; x++) contaDaColuna[x] += naLinha[b + x];
+    }
+  }
+
+  // 3) A cobertura. A pilha usou esta memória; tudo é escrito de novo aqui.
+  for (let p = 0; p < total; p++) {
+    if (fora[p]) { cobertura[p] = 0; continue; }
+    const a = dados[p * 4 + 3];
+    if (a === 255 || !naFaixa[p]) { cobertura[p] = 1; continue; }
+    // Borda suavizada: o alfa contra a opacidade mais alta em volta.
+    const x = p % largura;
+    const y = (p - x) / largura;
+    let maior = 0;
+    for (let yy = (y - r < 0 ? 0 : y - r); yy <= (y + r >= altura ? altura - 1 : y + r); yy++) {
+      const base = yy * largura;
+      for (let xx = (x - r < 0 ? 0 : x - r); xx <= (x + r >= largura ? largura - 1 : x + r); xx++) {
+        const v = dados[(base + xx) * 4 + 3];
+        if (v > maior) maior = v;
+      }
+    }
+    const fracao = a / (maior > 1 ? maior : 1);
+    cobertura[p] = fracao < 1 ? fracao : 1;
   }
   return cobertura;
 }

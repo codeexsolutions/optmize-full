@@ -179,6 +179,41 @@ function desenhar(especie, r, larguraTecido) {
   }, [dados.buffer]);
 }
 
+/*
+ * ===========================================================================
+ * O ANDAMENTO — no máximo dez por segundo
+ * ===========================================================================
+ *
+ * A busca avisa o andamento a CADA rodada, e cada aviso que atravessa vira
+ * trabalho na thread da tela: soma das fatias, painel redesenhado. Medido na
+ * 1.2.406, uma fatia rápida mandava de 400 a 1.000 avisos por segundo; com o
+ * motor 2x a 4x mais rápido da 1.2.408 passou de 1.700, e com quatro fatias
+ * rápidas a tela recebia perto de 7.000 por segundo. Ela não dava conta: a fila
+ * de mensagens crescia na memória até travar o computador, e o resultado só
+ * aparecia segundos depois de a busca acabar — o tempo de esvaziar a fila.
+ *
+ * Ninguém lê um contador que muda mil vezes por segundo. Passa um a cada
+ * `INTERVALO_DO_ANDAMENTO_MS`, e passam SEMPRE os que decidem alguma coisa:
+ *
+ *   - troca de fase (a base terminou, a busca acabou, começou a perseguir);
+ *   - meta alcançada — é ele que manda as outras fatias pararem;
+ *   - consumo novo — o melhor caiu, e a tela mostra o número.
+ */
+const INTERVALO_DO_ANDAMENTO_MS = 100;
+let ultimoAndamentoEm = 0;
+let ultimoAndamento = null;
+
+function relatarAndamento(estado) {
+  const antes = ultimoAndamento;
+  const agora = Date.now();
+  const decide = !antes || estado.fase !== antes.fase || estado.alcancouMeta
+    || estado.consumo !== antes.consumo;
+  if (!decide && agora - ultimoAndamentoEm < INTERVALO_DO_ANDAMENTO_MS) return;
+  ultimoAndamentoEm = agora;
+  ultimoAndamento = estado;
+  self.postMessage({ tipo: "andamento", k: fatia.k, estado });
+}
+
 self.onmessage = async (evento) => {
   const msg = evento.data;
 
@@ -242,6 +277,9 @@ self.onmessage = async (evento) => {
 
   pararAgora = false;
   fatia = msg.fatia;
+  // Busca nova, andamento novo: o primeiro aviso dela sempre passa.
+  ultimoAndamento = null;
+  ultimoAndamentoEm = 0;
 
   try {
     const resultado = await buscarMelhorEncaixe(itens, {
@@ -257,7 +295,7 @@ self.onmessage = async (evento) => {
       semente: msg.config.semente != null ? msg.config.semente : msg.semente,
       motores: msg.motores || msg.config.motores,
       deveParar: () => pararAgora,
-      aoProgredir: (estado) => self.postMessage({ tipo: "andamento", k: fatia.k, estado }),
+      aoProgredir: relatarAndamento,
       aoDesenhar: (especie, r) => desenhar(especie, r, msg.config.larguraTecido),
     });
     self.postMessage({ tipo: "resultado", k: fatia.k, resultado: resultadoParaEnviar(resultado) });
