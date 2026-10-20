@@ -195,12 +195,15 @@ jobs:
           echo "url=https://github.com/$REPO/releases/download/v$VERSAO/$NOME" >> "$GITHUB_OUTPUT"
 
       # As notas vão junto da ficha: são o `notes` que o atualizador recebe e
-      # que o lançador desenha como "Correções" e "Adições" na pergunta.
+      # que o lançador desenha como "Correções" e "Adições" na pergunta. Vão
+      # por ARQUIVO: como argumento, o cmd.exe do `npm run` cortava na primeira
+      # linha e o servidor recebia só "Correções" (ver empacotar/publicar.js).
       - name: Publicar
         env:
           OPTMIZE_ADMIN_KEY: ${{ secrets.OPTMIZE_ADMIN_KEY }}
           OPTMIZE_RELEASE_URL: ${{ steps.hospedar.outputs.url }}
-        run: npm run publicar -- "$(cat "$RUNNER_TEMP/notas.txt")"
+          OPTMIZE_RELEASE_NOTES_FILE: ${{ runner.temp }}/notas.txt
+        run: npm run publicar
 
       # A etiqueta v<versão> agora nasce junto da release do GitHub, no passo
       # de hospedar — `gh release create` cria a tag no commit atual. Este

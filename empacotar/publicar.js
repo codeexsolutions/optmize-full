@@ -152,7 +152,16 @@ async function main() {
     );
   }
 
-  const notas = process.argv.slice(2).join(" ").trim();
+  /*
+    AS NOTAS VÊM POR ARQUIVO no lançamento automático. Pelo argumento, o
+    `npm run` do Windows passa pelo cmd.exe, que corta no primeiro fim de linha:
+    a 1.2.413 chegou ao servidor só com "Correções", e a pergunta de atualizar
+    mostrou o título sem nenhum item. O argumento fica para quem publica à mão.
+  */
+  const arquivoDasNotas = process.env.OPTMIZE_RELEASE_NOTES_FILE?.trim();
+  const notas = arquivoDasNotas
+    ? (await readFile(arquivoDasNotas, "utf8")).trim()
+    : process.argv.slice(2).join(" ").trim();
 
   /*
     ONDE OS BYTES VÃO.
