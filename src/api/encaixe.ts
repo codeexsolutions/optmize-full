@@ -85,10 +85,18 @@ export const encaixeApi = {
    * Mandá-las dentro do JSON em base64 engordava tudo em um terço e derrubava
    * o servidor com arte de verdade.
    */
-  async mandarArte(sessao: string, chave: string, arte: Blob): Promise<void> {
-    const endereco = `/api/encaixe/arte?sessao=${encodeURIComponent(sessao)}&chave=${encodeURIComponent(chave)}`;
+  /**
+   * Manda uma arte, ainda sem giro: `giro` (0, 90, 180, 270) é aplicado pelo
+   * servidor. Devolve `false` quando o servidor não consegue abrir o arquivo
+   * — aí quem chama manda a arte desenhada no lugar.
+   */
+  async mandarArte(sessao: string, chave: string, arte: Blob, giro = 0): Promise<boolean> {
+    const endereco = `/api/encaixe/arte?sessao=${encodeURIComponent(sessao)}`
+      + `&chave=${encodeURIComponent(chave)}&giro=${giro}`;
     const envio = await fetch(endereco, { method: "POST", body: arte });
     if (!envio.ok) throw new Error("o servidor não aceitou uma das artes.");
+    const resposta = await envio.json().catch(() => ({}));
+    return resposta.legivel !== false;
   },
 
   /**

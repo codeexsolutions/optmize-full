@@ -222,7 +222,8 @@ export function grade(larguraTecido, espaco) {
  *
  *   contorno   `comGiroBase` reindexa as quatro máscaras, que já existem
  *   desenho    `desenharArte` soma o giro base (desenhoDoEncaixe.js)
- *   PDF        `prepararArtes` gira a arte original pelo total (exportarEncaixe.js)
+ *   PDF        `prepararArtes` manda o giro total, e o servidor gira a arte
+ *              original (exportarEncaixe.js, servidor/encaixe-pdf.js)
  *
  * A largura e a altura da peça são as do lado certo, já trocadas quando o giro
  * é de 90 ou 270. A silhueta é lida da arte como ela chegou, então é lida com
@@ -639,6 +640,93 @@ export function tirarFundoDosPixels(px, largura, altura, forcar) {
 
   for (let p = 0; p < ehFundo.length; p++) if (ehFundo[p]) px[p * 4 + 3] = 0;
   return { apagados: quantos, cor: fundo.cor };
+}
+
+/*
+ * ===========================================================================
+ * A BORDA DO FUNDO TIRADO NÃO É CORTADA A SECO (só na impressão)
+ * ===========================================================================
+ *
+ * `tirarFundoDosPixels` apaga o fundo inteiro ou deixa o pixel inteiro: é o
+ * certo para a silhueta do encaixe, que só quer saber onde há tinta. Para a
+ * IMPRESSÃO é o que sujava a arte. O pixel da borda suavizada é meio arte,
+ * meio fundo; com o fundo longe demais da cor dele para ser apagado, ele
+ * ficava opaco — e o rolo saía com um contorno da cor do fundo em volta de
+ * cada letra, serrilhado.
+ *
+ * Aqui cada pixel que encosta no fundo apagado é desmisturado: com C a cor
+ * dele, B a do fundo e F a da arte logo ao lado (o vizinho mais longe do
+ * fundo), C ≈ a·F + (1−a)·B. O `a` vira o alfa do pixel, e a cor volta a ser
+ * a da arte, sem o fundo misturado.
+ *
+ * Só mexe quando a conta faz sentido — C está mesmo no caminho entre B e F,
+ * e F é diferente de B. Arte de cor parecida com o fundo, ou textura na
+ * borda, fica como estava: opaca, como sempre foi. E o alfa só desce, nunca
+ * sobe, então a peça impressa nunca passa da silhueta que o encaixe usou.
+ */
+const BORDA_F_MINIMO = 24;    // F tão perto de B não dá para desmisturar
+const BORDA_FORA_DA_RETA = 28; // C longe da reta B–F: é desenho, não mistura
+
+export function suavizarBordaDoFundo(px, largura, altura, cor) {
+  if (!cor) return 0;
+  const [br, bg, bb] = cor;
+  const naBorda = [];
+  for (let y = 0; y < altura; y++) {
+    for (let x = 0; x < largura; x++) {
+      const p = y * largura + x;
+      if (px[p * 4 + 3] === 0) continue;
+      let encosta = false;
+      for (let dy = -1; dy <= 1 && !encosta; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= altura) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= largura) continue;
+          if (px[(yy * largura + xx) * 4 + 3] === 0) { encosta = true; break; }
+        }
+      }
+      if (encosta) naBorda.push(p);
+    }
+  }
+
+  // As contas leem os vizinhos ORIGINAIS: guarda tudo antes de mudar algum.
+  const novos = [];
+  for (const p of naBorda) {
+    const x = p % largura;
+    const y = (p - x) / largura;
+    const cr = px[p * 4] - br, cg = px[p * 4 + 1] - bg, cb = px[p * 4 + 2] - bb;
+    let fr = 0, fg = 0, fb = 0, maior = -1;
+    for (let dy = -2; dy <= 2; dy++) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= altura) continue;
+      for (let dx = -2; dx <= 2; dx++) {
+        const xx = x + dx;
+        if (xx < 0 || xx >= largura) continue;
+        const q = (yy * largura + xx) * 4;
+        if (px[q + 3] === 0) continue;
+        const qr = px[q] - br, qg = px[q + 1] - bg, qb = px[q + 2] - bb;
+        const d = qr * qr + qg * qg + qb * qb;
+        if (d > maior) { maior = d; fr = qr; fg = qg; fb = qb; }
+      }
+    }
+    if (maior < BORDA_F_MINIMO * BORDA_F_MINIMO) continue;
+    const a = Math.min(1, Math.max(0, (cr * fr + cg * fg + cb * fb) / maior));
+    if (a >= 0.98) continue;
+    const rr = cr - a * fr, rg = cg - a * fg, rb = cb - a * fb;
+    if (rr * rr + rg * rg + rb * rb > BORDA_FORA_DA_RETA * BORDA_FORA_DA_RETA) continue;
+    novos.push(p, a);
+  }
+
+  for (let i = 0; i < novos.length; i += 2) {
+    const p = novos[i] * 4;
+    const a = novos[i + 1];
+    if (a < 1 / 255) { px[p + 3] = 0; continue; }
+    px[p] = Math.max(0, Math.min(255, Math.round(br + (px[p] - br) / a)));
+    px[p + 1] = Math.max(0, Math.min(255, Math.round(bg + (px[p + 1] - bg) / a)));
+    px[p + 2] = Math.max(0, Math.min(255, Math.round(bb + (px[p + 2] - bb) / a)));
+    px[p + 3] = Math.round(px[p + 3] * a);
+  }
+  return novos.length / 2;
 }
 
 /**

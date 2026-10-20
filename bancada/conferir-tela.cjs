@@ -274,8 +274,8 @@ async function principal() {
     });
     await esperar(300);
 
-    // Exportar não é para funcionar antes de existir encaixe: o menu dele só
-    // tem saídas para um risco, e não há risco nenhum ainda.
+    // Exportar não é para funcionar antes de existir encaixe: não há risco
+    // nenhum para virar PDF ainda.
     assert.equal(await p.$eval('#btn-exportar', (n) => n.disabled), true,
       'o Exportar tinha que estar apagado antes do encaixe');
 
@@ -303,13 +303,9 @@ async function principal() {
     assert.notEqual(risco, '300x150', 'o risco não foi desenhado');
 
     // ---- 3. o PDF ----
+    // O Exportar é o PDF, direto: o PNG e o Imprimir saíram em 2026-10-19.
+    assert.equal(await p.$('#menu-exportar-painel'), null, 'o menu de formatos não existe mais');
     await p.evaluate(() => document.getElementById('btn-exportar').click());
-    await esperar(600);
-    await p.evaluate(() => {
-      const item = [...document.querySelectorAll('#menu-exportar-painel .menu-item')]
-        .find((b) => /PDF/i.test(b.textContent));
-      item.click();
-    });
     await esperar(20000);
 
     const aviso = await p.$eval('#encaixe-error', (n) => (n.classList.contains('hidden') ? '' : n.textContent));

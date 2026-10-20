@@ -396,99 +396,19 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </div>
 
-<span className="menu-suspenso ml-auto" id="menu-exportar">
-
-<button id="btn-exportar" className="btn primary btn-sm inline-flex items-center gap-1.5" type="button" aria-haspopup="menu" aria-expanded="false" disabled>
+<button id="btn-exportar" className="btn primary btn-sm ml-auto inline-flex items-center gap-1.5" type="button" title="PDF em tamanho real, para imprimir e cortar na medida certa" disabled>
 
 <svg className="size-3.5" viewBox="0 0 24 24" aria-hidden="true">
-<use href="icones.svg#share-2">
-
-</use>
-</svg>
-
-<span id="btn-exportar-rotulo">
-{"Exportar"}
-</span>
-
-<svg className="menu-chevron size-3.5" viewBox="0 0 24 24" aria-hidden="true">
-<use href="icones.svg#chevron-down">
-
-</use>
-</svg>
-
-</button>
-
-<div id="menu-exportar-painel" className="menu-painel direita para-cima hidden" role="menu" aria-label="Exportar">
-
-<button id="btn-encaixe-pdf" className="menu-item" type="button" role="menuitem">
-
-<svg viewBox="0 0 24 24" aria-hidden="true">
 <use href="icones.svg#file-down">
 
 </use>
 </svg>
 
-<span >
-
-<b >
-{"PDF em tamanho real"}
-</b>
-
-<small >
-{"Para imprimir e cortar na medida certa"}
-</small>
-
+<span id="btn-exportar-rotulo">
+{"Exportar PDF"}
 </span>
 
 </button>
-
-<button id="btn-baixar-encaixe" className="menu-item" type="button" role="menuitem">
-
-<svg viewBox="0 0 24 24" aria-hidden="true">
-<use href="icones.svg#download">
-
-</use>
-</svg>
-
-<span >
-
-<b >
-{"PNG"}
-</b>
-
-<small >
-{"O risco como imagem, para conferir ou mandar"}
-</small>
-
-</span>
-
-</button>
-
-<button id="btn-imprimir-encaixe" className="menu-item" type="button" role="menuitem">
-
-<svg viewBox="0 0 24 24" aria-hidden="true">
-<use href="icones.svg#printer">
-
-</use>
-</svg>
-
-<span >
-
-<b >
-{"Imprimir"}
-</b>
-
-<small >
-{"Manda o risco direto para a impressora"}
-</small>
-
-</span>
-
-</button>
-
-</div>
-
-</span>
 
 </div>
 

@@ -28,7 +28,7 @@ import {
   bancadasDoResultado, cortesEntreBancadas, desenharEncaixe, desenharMidiaVazia,
   desenharRascunho, prepararPrevias, previaDaArte,
 } from "../motores/desenhoDoEncaixe";
-import { prepararArtes } from "../motores/exportarEncaixe";
+import { arteDesenhadaDaPeca, prepararArtes } from "../motores/exportarEncaixe";
 import { DPI_PREVIA } from "../motores/resolucaoDaArte";
 import {
   chaveDoTrabalho, encaixeApi, pecasParaGuardar, posicoesParaGuardar, traduzirIndicesDoGuardado,
@@ -326,14 +326,9 @@ const encaixeCanvas = document.getElementById("encaixe-canvas");
 const encaixeCanvasVazio = document.getElementById("encaixe-canvas-vazio");
 const encaixePrevia = document.getElementById("encaixe-previa");
 const encaixePreviaCanvas = document.getElementById("encaixe-previa-canvas");
-const btnBaixarEncaixe = document.getElementById("btn-baixar-encaixe");
-const btnEncaixePdf = document.getElementById("btn-encaixe-pdf");
-const btnImprimirEncaixe = document.getElementById("btn-imprimir-encaixe");
-const menuExportar = document.getElementById("menu-exportar");
 const btnExportar = document.getElementById("btn-exportar");
 const btnExportarRotulo = document.getElementById("btn-exportar-rotulo");
-const menuExportarPainel = document.getElementById("menu-exportar-painel");
-const itensDoExportar = [...menuExportarPainel.querySelectorAll(".menu-item")];
+const ROTULO_EXPORTAR = "Exportar PDF";
 
 // Cada peça: { id, nome, src, img, pxW, pxH, largura, altura, qtd, giro }
 // largura/altura em centímetros; `giro` diz como ela pode virar (ver giroPadrao).
@@ -3684,48 +3679,15 @@ function renderResultado() {
 
 // ==================== DESENHO ====================
 
-escopo.ouvir(btnBaixarEncaixe, "click", async () => {
-  if (!ultimoResultado || recusouPorTrava()) return;
-
-  // Nome de arquivo, e não texto de tela: a vírgula aqui é só para o PNG sair
-  // batendo com o PDF, que já se chamava "encaixe-5,32m.pdf".
-  const nome = `encaixe-${(ultimoResultado.consumo / 100).toFixed(2).replace(".", ",")}m.png`;
-
-  // Onde salvar vem antes de desenhar, como no PDF.
-  const destino = await escolherOndeSalvar(nome, "Imagem do risco", "image/png");
-  if (!destino) return;
-
-  btnExportar.disabled = true;
-  btnExportarRotulo.textContent = "Gravando…";
-  try {
-    // 4 px por cm dá um PNG legível para levar para a mesa de corte.
-    const visao = visaoDosPedidos(ultimoResultado);
-    const temp = document.createElement("canvas");
-    desenharEncaixe(temp, ultimoResultado, { escala: 4, comLegenda: true, pedidos: visao });
-    const final = visao ? comLegendaDosPedidos(temp, visao.legenda) : temp;
-    const imagem = await new Promise((pronto) => final.toBlob(pronto, "image/png"));
-    if (!imagem) throw new Error("o desenho não virou imagem.");
-
-    await destino.gravar(imagem);
-    avisarQueSalvou(destino.nome);
-    void guardarParaReposicao(ultimoResultado, destino.nome);
-  } catch (err) {
-    console.error("[encaixe] falhou ao salvar o PNG:", err);
-    mostrarErroEncaixe(`Não consegui salvar o PNG: ${err.message}`);
-  } finally {
-    btnExportar.disabled = !!producaoTravada();
-    btnExportarRotulo.textContent = "Exportar";
-  }
-});
-
 /**
- * Monta o PDF em tamanho real. O trabalho aqui é preparar as imagens: cada
- * peça é desenhada uma vez por rotação usada, na resolução de impressão, e o
- * servidor só posiciona esses desenhos na página (ver encaixe-pdf.js).
+ * Monta o PDF em tamanho real. Cada peça manda a arte ORIGINAL uma vez por
+ * rotação usada, com o giro ao lado; o servidor gira os pixels (ou o desenho,
+ * quando a arte é PDF) e posiciona na página (ver encaixe-pdf.js).
  *
- * Desenhar a peça já girada evita depender de rotação dentro do PDF, que é
- * onde um sinal trocado passa despercebido até alguém imprimir 12 metros de
- * tecido com as peças de cabeça para baixo.
+ * O giro continua sendo feito na arte, e não com uma rotação dentro do PDF:
+ * é ali que um sinal trocado passa despercebido até alguém imprimir 12 metros
+ * de tecido com as peças de cabeça para baixo. Só mudou de lado — o canvas
+ * da tela mudava a cor e a borda da arte (ver exportarEncaixe.js).
  */
 /*
  * ===========================================================================
@@ -4016,9 +3978,15 @@ async function baixarEncaixeEmPdf() {
     // Sobem UMA vez, mesmo que saiam dez arquivos: são as mesmas peças.
     const sessao = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
     let enviados = 0;
-    for (const [chave, arte] of artes) {
-      if (!arte) continue;
-      await encaixeApi.mandarArte(sessao, chave, arte);
+    for (const [chave, { arte, giro, peca }] of artes) {
+      // O original vai como está; o que o servidor não abre (formato que ele
+      // não conhece, PDF quebrado) vai desenhado, que é o caminho antigo.
+      if (!(await encaixeApi.mandarArte(sessao, chave, arte, giro))) {
+        const desenhada = await arteDesenhadaDaPeca(peca);
+        if (!(await encaixeApi.mandarArte(sessao, chave, desenhada, giro))) {
+          throw new Error(`o servidor não conseguiu abrir a arte "${peca.nome || chave}".`);
+        }
+      }
       enviados++;
       btnExportarRotulo.textContent = `Enviando artes (${enviados}/${artes.size})…`;
     }
@@ -4104,96 +4072,19 @@ async function baixarEncaixeEmPdf() {
     mostrarErroEncaixe(`Não consegui gerar o PDF: ${err.message}`);
   } finally {
     btnExportar.disabled = !!producaoTravada();
-    btnExportarRotulo.textContent = "Exportar";
+    btnExportarRotulo.textContent = ROTULO_EXPORTAR;
   }
 }
 
-escopo.ouvir(btnEncaixePdf, "click", baixarEncaixeEmPdf);
-
-escopo.ouvir(btnImprimirEncaixe, "click", () => {
-  if (!ultimoResultado || recusouPorTrava()) return;
-  window.print();
-});
-
-// ==================== O MENU DE EXPORTAR ====================
-
 /*
- * PDF, PNG e impressora são três jeitos de tirar o MESMO risco daqui, então
- * são um botão só, e as saídas moram dentro dele: a barra para de crescer a
- * cada formato novo, e quem só quer o risco na mão não escolhe o formato
- * antes de decidir exportar.
+ * A ÚNICA SAÍDA É O PDF EM TAMANHO REAL (2026-10-19).
  *
- * Fechar tem animação, e animação precisa que o painel continue na tela
- * enquanto ela roda — daí o `.saindo` antes do `.hidden`, e o relógio que
- * guarda esse intervalo. Clicar de novo no meio da saída cancela o relógio;
- * sem isso o menu reabriria e sumiria logo em seguida.
+ * Havia também o PNG e o "Imprimir" do navegador, num menu. Os dois saíam do
+ * DESENHO DA TELA — prévia reduzida, cor convertida pelo navegador — e não da
+ * arte original, e a produção os usava como se fossem a arte. O PDF é o único
+ * caminho que leva a arte do jeito que ela chegou.
  */
-let saidaDoMenuExportar = null;
-
-function menuExportarAberto() {
-  return btnExportar.getAttribute("aria-expanded") === "true";
-}
-
-function abrirMenuExportar() {
-  clearTimeout(saidaDoMenuExportar);
-  menuExportarPainel.classList.remove("hidden", "saindo");
-  btnExportar.setAttribute("aria-expanded", "true");
-}
-
-function fecharMenuExportar(devolverFoco) {
-  if (!menuExportarAberto()) return;
-  btnExportar.setAttribute("aria-expanded", "false");
-  menuExportarPainel.classList.add("saindo");
-  clearTimeout(saidaDoMenuExportar);
-  saidaDoMenuExportar = setTimeout(() => {
-    menuExportarPainel.classList.add("hidden");
-    menuExportarPainel.classList.remove("saindo");
-  }, 120);
-  // Só devolve o foco quando quem fechou foi o teclado: no clique fora o foco
-  // é de quem clicou, e roubá-lo de volta seria puxar a pessoa para trás.
-  if (devolverFoco) btnExportar.focus();
-}
-
-/* Andar pelos itens com as setas. Dá a volta nas pontas: quem está no último
-   e aperta para baixo quer o primeiro, não o nada. */
-function andarNoMenuExportar(passo) {
-  const agora = itensDoExportar.indexOf(document.activeElement);
-  const total = itensDoExportar.length;
-  const alvo = agora < 0 ? (passo > 0 ? 0 : total - 1) : (agora + passo + total) % total;
-  itensDoExportar[alvo].focus();
-}
-
-escopo.ouvir(btnExportar, "click", () => {
-  if (menuExportarAberto()) fecharMenuExportar();
-  else abrirMenuExportar();
-});
-
-escopo.ouvir(btnExportar, "keydown", (e) => {
-  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-  e.preventDefault();
-  if (!menuExportarAberto()) abrirMenuExportar();
-  andarNoMenuExportar(e.key === "ArrowDown" ? 1 : -1);
-});
-
-escopo.ouvir(menuExportarPainel, "keydown", (e) => {
-  if (e.key === "ArrowDown") { e.preventDefault(); andarNoMenuExportar(1); }
-  else if (e.key === "ArrowUp") { e.preventDefault(); andarNoMenuExportar(-1); }
-  else if (e.key === "Tab") fecharMenuExportar();
-});
-
-// Escolher fecha o menu; o que a escolha FAZ continua sendo do botão de cada
-// item, que é onde o PDF, o PNG e a impressão já moravam.
-escopo.ouvir(menuExportarPainel, "click", () => fecharMenuExportar());
-
-/* `pointerdown` e não `click`: quem clica em outro botão da barra espera que o
-   menu já esteja fora do caminho quando o clique chegar lá. */
-window.addEventListener("pointerdown", (e) => {
-  if (!menuExportar.contains(e.target)) fecharMenuExportar();
-});
-
-window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") fecharMenuExportar(true);
-});
+escopo.ouvir(btnExportar, "click", baixarEncaixeEmPdf);
 
 /*
  * ---------------------------------------------------------------------------
@@ -4350,32 +4241,7 @@ function avisarSemSigla(visao) {
   if (!visao || visao.semSigla.length === 0) return;
   const lista = visao.semSigla.slice(0, 8).join(", ") + (visao.semSigla.length > 8 ? "…" : "");
   mostrarErroEncaixe(`${visao.semSigla.length} peça(s) saíram sem a sigla do pedido — não cabia `
-    + `dentro delas: ${lista}. Separe essas pela tela ou pelo PNG da mesa.`, "aviso");
-}
-
-/** O PNG da mesa de corte com uma faixa no topo: cor, sigla e quantas peças de cada pedido. */
-function comLegendaDosPedidos(desenho, legenda) {
-  const FAIXA = 30;
-  const saida = document.createElement("canvas");
-  saida.width = desenho.width;
-  saida.height = desenho.height + FAIXA;
-  const ctx = saida.getContext("2d");
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, saida.width, FAIXA);
-  ctx.drawImage(desenho, 0, FAIXA);
-  ctx.font = "bold 14px system-ui, sans-serif";
-  ctx.textBaseline = "middle";
-  let x = 10;
-  legenda.forEach(({ pedido, cor, quantas }) => {
-    ctx.fillStyle = cor;
-    ctx.fillRect(x, 8, 14, 14);
-    x += 20;
-    const texto = `${pedido} · ${quantas} peça${quantas === 1 ? "" : "s"}`;
-    ctx.fillStyle = "#111111";
-    ctx.fillText(texto, x, FAIXA / 2);
-    x += ctx.measureText(texto).width + 24;
-  });
-  return saida;
+    + `dentro delas: ${lista}. Separe essas pela tela.`, "aviso");
 }
 
 function redesenharRisco() {

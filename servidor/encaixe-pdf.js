@@ -150,7 +150,7 @@ function limparAntigas() {
 }
 
 /** Recebe uma arte já pronta, em binário, e põe no disco. */
-router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, res) => {
+router.post("/arte", express.raw({ limit: "400mb", type: () => true }), async (req, res) => {
   limparAntigas();
   const sessao = String(req.query.sessao || "");
   const chave = String(req.query.chave || "");
@@ -171,6 +171,11 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, re
         // porque na hora do PDF elas já estão em disco e a pergunta custaria
         // abrir cada arquivo de novo. Ver `pngComAlfa`.
         comAlfa: new Set(),
+        // O giro de cada arte (0, 90, 180, 270), que agora é feito aqui — ver
+        // "A ARTE CHEGA COMO VEIO". E, das que são PDF, a versão: embutir um
+        // desenho vetorial obriga o documento a ser pelo menos dessa versão.
+        giros: new Map(),
+        versoes: new Map(),
       };
     } catch (erro) {
       return res.status(500).json({ error: `Não deu para guardar a arte: ${erro.message}` });
@@ -180,6 +185,9 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, re
 
   // Chaves como "frente.1" e "frente1" são artes distintas. O nome no disco
   // é interno; reenviar a mesma chave substitui apenas aquela arte.
+  // Arte que o servidor não abre não fica: a tela manda a desenhada no lugar.
+  if (!(await arteLegivel(req.body))) return res.json({ ok: true, legivel: false });
+
   const arquivo = guardadas.artes.get(chave)
     || path.join(guardadas.pasta, `${guardadas.artes.size}.arte`);
   try {
@@ -191,7 +199,11 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), (req, re
   // Reenviar a mesma chave substitui a arte: o que valia da anterior não vale.
   if (pngComAlfa(req.body)) guardadas.comAlfa.add(chave);
   else guardadas.comAlfa.delete(chave);
-  res.json({ ok: true, bytes: req.body.length });
+  const giro = Number(req.query.giro) || 0;
+  guardadas.giros.set(chave, [0, 90, 180, 270].includes(giro) ? giro : 0);
+  if (ehPdf(req.body)) guardadas.versoes.set(chave, versaoDoPdf(req.body));
+  else guardadas.versoes.delete(chave);
+  res.json({ ok: true, legivel: true, bytes: req.body.length });
 });
 
 /*
@@ -321,28 +333,91 @@ function canalCru(pixels, largura, altura, cores) {
   };
 }
 
-/**
- * Abre uma arte PNG como imagem do pdfkit: o objeto que `doc.image` aceita no
- * lugar do que `doc.openImage` devolveria (largura, altura, `embed`).
+/*
+ * ===========================================================================
+ * A ARTE CHEGA COMO VEIO, E É AQUI QUE ELA GIRA E VIRA sRGB (2026-10-19)
+ * ===========================================================================
+ *
+ * A tela mandava a arte já girada, desenhada num canvas — e o canvas mudava a
+ * cor (converte ao decodificar, guarda a cor multiplicada pelo alfa) e perdia
+ * o perfil do arquivo. Agora ela manda o arquivo intocado e o giro (`giro`,
+ * no envio), e o giro é feito aqui pelo `sharp`: de 90 em 90 graus, pixel por
+ * pixel, sem reamostrar nada.
+ *
+ * A COR. O PDF declara as imagens como `DeviceRGB`, e o RIP lê `DeviceRGB`
+ * como sRGB. Uma arte salva em Adobe RGB ou Display P3 embutia os números do
+ * arquivo sem o perfil, e o RIP os lia como se fossem sRGB: o roxo vivo saía
+ * apagado (medido: #8a2be2 em P3 chegava como #7f32da). Aqui os pixels são
+ * convertidos para sRGB pelo perfil que o próprio arquivo traz (lcms, dentro
+ * do `sharp`) — e arte sem perfil já é sRGB, então sai com os mesmos números
+ * de sempre. Arte CMYK passa pela mesma conversão, com o perfil dela, em vez
+ * da fórmula ingênua do navegador.
+ *
+ * O JPEG que pode ir direto continua indo direto, sem recompressão: sequencial,
+ * de 8 bits, RGB ou cinza, sem giro de EXIF, e sem perfil que não seja sRGB.
  */
-async function abrirPng(doc, bytes) {
-  // `keepIccProfile` deixa os valores de cor como estão no arquivo, que é o
-  // que o pdfkit punha no PDF; sem ele o sharp converteria para sRGB — e o
-  // `extractChannel` abaixo passaria a pegar o canal errado.
-  const abrir = () => sharp(bytes, { limitInputPixels: false }).keepIccProfile();
-  const { hasAlpha, channels, width, height } = await abrir().metadata();
+function perfilJaESrgb(icc) {
+  if (!icc || icc.length < 132) return true; // sem perfil: o arquivo já fala sRGB
+  if (icc.subarray(16, 20).toString("latin1") !== "RGB ") return false;
+  // A descrição do perfil (tag `desc`) diz quem ele é; os sRGB se chamam assim.
+  return /sRGB/i.test(icc.subarray(0, 4096).toString("latin1"));
+}
 
+/** JPEG sequencial de 8 bits (SOF0/SOF1), o único que o PDF embute sem conversa. */
+function jpegSequencial(bytes) {
+  let i = 2;
+  while (i + 4 <= bytes.length && bytes[i] === 0xff) {
+    const marcador = bytes[i + 1];
+    if (marcador === 0xff) { i++; continue; }
+    if (marcador === 0x01 || (marcador >= 0xd0 && marcador <= 0xd7)) { i += 2; continue; }
+    if (marcador === 0xda || marcador === 0xd9) return false;
+    if (marcador === 0xc0 || marcador === 0xc1) return bytes[i + 4] === 8;
+    if (marcador >= 0xc0 && marcador <= 0xcf && marcador !== 0xc4 && marcador !== 0xc8 && marcador !== 0xcc) {
+      return false;
+    }
+    i += 2 + ((bytes[i + 2] << 8) | bytes[i + 3]);
+  }
+  return false;
+}
+
+/**
+ * Abre uma arte de pixels como imagem do pdfkit: o objeto que `doc.image`
+ * aceita no lugar do que `doc.openImage` devolveria (largura, altura, `embed`).
+ * `giro` é 0, 90, 180 ou 270, no sentido do relógio.
+ */
+async function abrirImagem(doc, bytes, giro = 0) {
+  const meta = await sharp(bytes, { limitInputPixels: false }).metadata();
+
+  if (!giro && meta.format === "jpeg" && !meta.isProgressive
+    && (meta.channels === 3 || meta.channels === 1)
+    && (!meta.orientation || meta.orientation === 1)
+    && perfilJaESrgb(meta.icc) && jpegSequencial(bytes)) {
+    return doc.openImage(bytes);
+  }
+
+  // O EXIF primeiro (é como a tela mostra a arte), depois o giro do encaixe.
+  const abrir = () => {
+    const s = sharp(bytes, { limitInputPixels: false }).autoOrient();
+    return giro ? s.rotate(giro) : s;
+  };
+  const cinza = meta.space === "b-w" || meta.space === "grey16";
   const [corCrua, alfaCru] = await Promise.all([
-    abrir().removeAlpha().raw().toBuffer({ resolveWithObject: true }),
-    // O alfa é o último canal; "alpha" no sharp é sempre o 3, e cinza com
-    // alfa só tem dois. O `b-w` é obrigatório: com o perfil de cor mantido,
-    // o sharp devolveria o canal repetido em três, e a /SMask tem de ser cinza.
-    hasAlpha ? abrir().extractChannel(channels - 1).toColourspace("b-w").raw().toBuffer() : null,
+    abrir().removeAlpha().toColourspace(cinza ? "b-w" : "srgb").raw({ depth: "uchar" })
+      .toBuffer({ resolveWithObject: true }),
+    // O alfa é o último canal da entrada; o `b-w` faz a /SMask sair com um
+    // canal só, como ela tem de ser.
+    meta.hasAlpha
+      ? abrir().extractChannel(meta.channels - 1).toColourspace("b-w").raw({ depth: "uchar" })
+        .toBuffer({ resolveWithObject: true })
+      : null,
   ]);
+  if (corCrua.info.channels !== 1 && corCrua.info.channels !== 3) {
+    throw new Error(`a arte saiu com ${corCrua.info.channels} canais de cor`);
+  }
 
   const cor = canalCru(corCrua.data, corCrua.info.width, corCrua.info.height, corCrua.info.channels);
-  const alfa = alfaCru && mascaraServe(alfaCru)
-    ? canalCru(alfaCru, width, height, 1)
+  const alfa = alfaCru && alfaCru.info.channels === 1 && mascaraServe(alfaCru.data)
+    ? canalCru(alfaCru.data, alfaCru.info.width, alfaCru.info.height, 1)
     : null;
 
   return {
@@ -366,10 +441,184 @@ async function abrirPng(doc, bytes) {
   };
 }
 
-/** Abre a arte do jeito mais rápido que o formato dela permite. */
-async function abrirArte(doc, bytes) {
-  if (bytes.length > 8 && bytes.subarray(0, 8).equals(ASSINATURA_PNG)) return abrirPng(doc, bytes);
-  return doc.openImage(bytes);
+/*
+ * ===========================================================================
+ * O PDF DE ARTE ENTRA COMO VETOR
+ * ===========================================================================
+ *
+ * Arte de Corel e de Illustrator chega em PDF, e o programa a desenhava em
+ * pixels (pdf.js, 300 dpi) antes de pôr no rolo: letra serrilhada no tecido,
+ * e a cor convertida pelo pdf.js, sem perfil. "Sempre fica assim quando a
+ * arte é vetor" — e ficava mesmo.
+ *
+ * Agora a primeira página do PDF entra no rolo como um Form XObject: o mesmo
+ * desenho, os mesmos traços, as mesmas fontes, as mesmas cores (CMYK continua
+ * CMYK, cor especial continua especial), em qualquer tamanho. Quem lê o PDF
+ * de origem e monta o XObject é o `pdf-lib`; aqui ele é só copiado, objeto
+ * por objeto, para dentro do documento do pdfkit.
+ *
+ * A caixa é a CropBox, que é o que o pdf.js mediu quando a peça entrou (a
+ * medida da peça saiu dela), e o /Rotate da página é somado ao giro do
+ * encaixe.
+ */
+const { PDFDocument: LeitorDePdf, PDFDict, PDFArray, PDFRef, PDFStream } = require("pdf-lib");
+
+const ASSINATURA_PDF = Buffer.from("%PDF");
+const ehPdf = (bytes) => !!bytes && bytes.length > 4 && bytes.subarray(0, 4).equals(ASSINATURA_PDF);
+
+/** O "x" do "%PDF-1.x" que o arquivo declara. */
+function versaoDoPdf(bytes) {
+  const m = /^%PDF-1\.(\d)/.exec(bytes.subarray(0, 16).toString("latin1"));
+  return m ? Number(m[1]) : 4;
+}
+
+/** A primeira página como Form XObject, num documento do pdf-lib. */
+async function paginaComoForma(bytes) {
+  const origem = await LeitorDePdf.load(bytes, { updateMetadata: false });
+  if (origem.getPageCount() < 1) throw new Error("o PDF não tem página");
+  const pagina = origem.getPage(0);
+  const caixa = pagina.getCropBox();
+  if (!(caixa.width > 0 && caixa.height > 0)) throw new Error("a página tem tamanho zero");
+  const destino = await LeitorDePdf.create({ updateMetadata: false });
+  const forma = await destino.embedPage(pagina, {
+    left: caixa.x, bottom: caixa.y, right: caixa.x + caixa.width, top: caixa.y + caixa.height,
+  });
+  await forma.embed();
+  const rotacao = ((pagina.getRotation().angle % 360) + 360) % 360;
+  return { contexto: destino.context, ref: forma.ref, largura: caixa.width, altura: caixa.height, rotacao };
+}
+
+/**
+ * Copia um objeto do pdf-lib, e tudo o que ele alcança, para o pdfkit.
+ *
+ * O pdfkit escreve texto JS como nome (`/X`), e por isso o que não é
+ * dicionário, lista nem referência vai como o texto que o pdf-lib já
+ * escreveria — numa subclasse da referência abstrata do próprio pdfkit, que
+ * ele serializa pelo `toString`.
+ */
+function copiarParaOPdfkit(doc, contexto, raizDaOrigem) {
+  const copias = new Map();
+  const pendentes = [];
+  let Literal = null;
+
+  const refDe = (ref) => {
+    const chave = ref.toString();
+    if (copias.has(chave)) return copias.get(chave);
+    const nova = doc.ref({});
+    copias.set(chave, nova);
+    pendentes.push([ref, nova]);
+    return nova;
+  };
+  const converter = (obj) => {
+    if (obj instanceof PDFRef) return refDe(obj);
+    if (obj instanceof PDFDict) {
+      const saida = {};
+      for (const [nome, valor] of obj.entries()) saida[nome.asString().slice(1)] = converter(valor);
+      return saida;
+    }
+    if (obj instanceof PDFArray) return obj.asArray().map(converter);
+    return new Literal(obj.toString());
+  };
+
+  const raiz = refDe(raizDaOrigem);
+  const Abstrata = Object.getPrototypeOf(raiz.constructor);
+  Literal = class extends Abstrata {
+    constructor(texto) { super(); this.texto = texto; }
+    toString() { return this.texto; }
+  };
+
+  while (pendentes.length) {
+    const [ref, nova] = pendentes.pop();
+    const obj = contexto.lookup(ref);
+    if (obj instanceof PDFStream) {
+      const dados = converter(obj.dict);
+      delete dados.Length; // o pdfkit conta de novo
+      nova.data = dados;
+      // Já comprimido na origem: vai como está, sem comprimir outra vez.
+      nova.compress = doc.compress && !dados.Filter;
+      nova.end(Buffer.from(obj.getContents()));
+    } else {
+      nova.data = obj === undefined ? null : converter(obj);
+      nova.end();
+    }
+  }
+  return raiz;
+}
+
+/** Abre a página do PDF como desenho vetorial, pronto para `desenharVetor`. */
+async function abrirVetor(doc, bytes) {
+  const forma = await paginaComoForma(bytes);
+  doc._formasDeArte = (doc._formasDeArte || 0) + 1;
+  return {
+    vetor: true,
+    label: `Fx${doc._formasDeArte}`,
+    obj: null,
+    largura: forma.largura,
+    altura: forma.altura,
+    rotacao: forma.rotacao,
+    forma,
+  };
+}
+
+/**
+ * A matriz que leva a página (0..largura × 0..altura, y para cima) à caixa da
+ * peça no rolo, girada no sentido do relógio. O pdfkit desenha com y para
+ * baixo, a partir do canto de cima.
+ */
+function matrizDoVetor(vetor, giro, x, y, w, h) {
+  const total = (vetor.rotacao + giro) % 360;
+  const L = vetor.largura;
+  const A = vetor.altura;
+  const deitada = total === 90 || total === 270;
+  const RL = deitada ? A : L; // a página já girada, antes de ir à medida da peça
+  const RA = deitada ? L : A;
+  const ponto = (u, v) => {
+    let px = u;
+    let py = A - v; // de y para cima a y para baixo
+    if (total === 90) [px, py] = [RL - py, px];
+    else if (total === 180) [px, py] = [L - px, A - py];
+    else if (total === 270) [px, py] = [py, RA - px];
+    return [x + px * (w / RL), y + py * (h / RA)];
+  };
+  const [e, f] = ponto(0, 0);
+  const [ux, uy] = ponto(1, 0);
+  const [vx, vy] = ponto(0, 1);
+  return [ux - e, uy - f, vx - e, vy - f, e, f];
+}
+
+function desenharVetor(doc, vetor, giro, x, y, w, h) {
+  if (!vetor.obj) {
+    vetor.obj = copiarParaOPdfkit(doc, vetor.forma.contexto, vetor.forma.ref);
+    vetor.forma = null; // copiado: o documento de origem pode ir embora
+  }
+  doc.page.xobjects[vetor.label] = vetor.obj;
+  doc.save();
+  doc.transform(...matrizDoVetor(vetor, giro, x, y, w, h));
+  doc.addContent(`/${vetor.label} Do`);
+  doc.restore();
+}
+
+/** Abre a arte do jeito que o formato dela pede. */
+async function abrirArte(doc, bytes, giro = 0) {
+  if (ehPdf(bytes)) return abrirVetor(doc, bytes);
+  return abrirImagem(doc, bytes, giro);
+}
+
+/**
+ * O servidor consegue abrir esta arte? Perguntado no envio, para a tela ter
+ * tempo de mandar a arte desenhada no lugar (ver `arteDesenhadaDaPeca`).
+ */
+async function arteLegivel(bytes) {
+  try {
+    if (ehPdf(bytes)) {
+      await paginaComoForma(bytes);
+      return true;
+    }
+    const meta = await sharp(bytes, { limitInputPixels: false }).metadata();
+    return meta.width > 0 && meta.height > 0;
+  } catch {
+    return false;
+  }
 }
 
 const PT_POR_CM = 72 / 2.54; // 1 ponto = 1/72 de polegada
@@ -509,6 +758,7 @@ function escreverMarca(doc, marca, topoDaPagina) {
  */
 async function montarPdf({
   larguraTecido, consumo, posicoes, buffers, lerArte, podeTerTransparencia, fonteDaSigla = FONTE_DA_SIGLA,
+  giros, giroDe, versaoMinima,
 }, destino) {
   const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
@@ -533,6 +783,15 @@ async function montarPdf({
   const comAlfa = podeTerTransparencia !== undefined
     ? podeTerTransparencia
     : !!(buffers && [...buffers.values()].some(pngComAlfa));
+  /*
+   * E o PDF de arte embutido como vetor (ver "O PDF DE ARTE ENTRA COMO
+   * VETOR") leva junto o que a página dele usa — transparência, no mínimo —,
+   * então o documento é pelo menos 1.4, ou a versão da origem, até 1.7.
+   */
+  const daOrigem = versaoMinima !== undefined
+    ? versaoMinima
+    : Math.max(0, ...(buffers ? [...buffers.values()].filter(ehPdf).map(versaoDoPdf) : []));
+  const menor = Math.min(7, Math.max(comAlfa ? 4 : 3, daOrigem ? Math.max(4, daOrigem) : 0));
 
   // Antes de abrir o documento: sem a fonte, nenhum byte sai.
   const comMarca = posicoes.some((pos) => pos.marca);
@@ -541,7 +800,7 @@ async function montarPdf({
   const doc = new PDFDocument({
     size: tamanhoDa(paginas[0]),
     margin: 0,
-    pdfVersion: comAlfa ? "1.4" : "1.3",
+    pdfVersion: `1.${menor}`,
   });
   doc.pipe(destino);
 
@@ -599,6 +858,7 @@ async function montarPdf({
    * chamam.
    */
   const buscar = lerArte || ((chave) => (buffers ? buffers.get(chave) : null));
+  const giroDaArte = giroDe || ((chave) => (giros ? giros.get(chave) || 0 : 0));
   const desenhos = new Map();
   const desenhoDe = async (chave) => {
     if (desenhos.has(chave)) return desenhos.get(chave);
@@ -606,7 +866,7 @@ async function montarPdf({
     try {
       const bytes = buscar(chave);
       // Ver "O PNG NÃO PASSA PELO LEITOR DO PDFKIT", lá em cima.
-      if (bytes) desenho = await abrirArte(doc, bytes);
+      if (bytes) desenho = await abrirArte(doc, bytes, giroDaArte(chave));
     } catch (err) {
       // arte ilegível: as outras continuam
       console.warn(`[encaixe-pdf] arte ilegível (${chave}):`, err && err.message);
@@ -626,10 +886,13 @@ async function montarPdf({
       try {
         // O `y` da peça é medido no rolo inteiro; na página ele conta a partir
         // do começo da bancada.
-        doc.image(desenho, pos.x * PT_POR_CM, (pos.y - pagina.topo) * PT_POR_CM, {
-            width: pos.largura * PT_POR_CM,
-            height: pos.altura * PT_POR_CM,
-          });
+        const x = pos.x * PT_POR_CM;
+        const y = (pos.y - pagina.topo) * PT_POR_CM;
+        if (desenho.vetor) {
+          desenharVetor(doc, desenho, giroDaArte(pos.chave), x, y, pos.largura * PT_POR_CM, pos.altura * PT_POR_CM);
+        } else {
+          doc.image(desenho, x, y, { width: pos.largura * PT_POR_CM, height: pos.altura * PT_POR_CM });
+        }
         desenhadas++;
       } catch (err) {
         // uma imagem ruim não pode derrubar o PDF inteiro
@@ -782,7 +1045,13 @@ router.post("/pdf", async (req, res) => {
   const podeTerTransparencia = [...daMemoria.values()].some(pngComAlfa)
     || (guardadas ? [...doDisco.keys()].some((chave) => guardadas.comAlfa.has(chave)) : false);
 
-  montarPdf({ larguraTecido, consumo, posicoes, lerArte, podeTerTransparencia }, res).catch((erro) => {
+  const giroDe = (chave) => (guardadas && guardadas.giros.get(chave)) || 0;
+  const versaoMinima = guardadas
+    ? Math.max(0, ...[...doDisco.keys()].map((chave) => guardadas.versoes.get(chave) || 0))
+    : 0;
+
+  montarPdf({ larguraTecido, consumo, posicoes, lerArte, podeTerTransparencia, giroDe, versaoMinima }, res)
+    .catch((erro) => {
     console.error("[encaixe-pdf] falhou ao montar o PDF:", erro);
     res.destroy(erro);
   });
