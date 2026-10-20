@@ -12,11 +12,13 @@
   `src-tauri/src/main.rs`). Ela aparece em três momentos:
 
     - toda abertura, enquanto o programa procura versão nova e o servidor sobe;
-    - quando há versão nova: conta o download e avisa que vai instalar;
-    - com o programa aberto, na hora de instalar uma versão que baixou sozinha.
+    - quando há versão nova (na abertura ou com o programa aberto): mostra as
+      correções e as adições e PERGUNTA — "Atualizar agora" ou "Depois";
+    - depois do "Atualizar agora": conta o download e avisa que vai instalar.
 
-  Quem manda é o Rust, chamando `window.lancador({ fase, ... })`. A página não
-  pergunta nada a ninguém: ela só desenha o último estado que recebeu.
+  Quem manda é o Rust, chamando `window.lancador({ fase, ... })`. A página só
+  desenha o último estado que recebeu; a única coisa que ela devolve é a
+  resposta da pergunta, pelo comando `responder_atualizacao`.
 
   Arquivo solto, sem servidor: no fim de uma instalação o Node já morreu. Por
   isso as cores estão escritas aqui, as mesmas de `index.html`.
@@ -196,6 +198,75 @@
     animation: vaivem 1.5s cubic-bezier(.65, 0, .35, 1) infinite;
   }
 
+  /* ── A pergunta: versão nova, o que mudou e os dois botões ─────────── */
+
+  .notas {
+    position: absolute;
+    z-index: 2;
+    left: 32px;
+    right: 32px;
+    top: 64px;
+    bottom: 96px;
+    display: none;
+    flex-direction: column;
+    pointer-events: auto;
+  }
+  .notas h2 {
+    margin: 0 0 4px;
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+  }
+  .notas .sub { margin: 0 0 14px; font-size: 13px; color: var(--dim); }
+  .notas .lista {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 16px;
+    border: 1px solid var(--linha);
+    border-radius: 8px;
+    background: rgba(13, 13, 15, .92);
+    user-select: text;
+    cursor: auto;
+  }
+  .notas h3 {
+    margin: 12px 0 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .notas h3:first-child { margin-top: 0; }
+  .notas ul { margin: 0; padding-left: 18px; }
+  .notas li { margin: 0 0 5px; font-size: 13px; line-height: 1.45; }
+  .notas p.vazio { margin: 0; font-size: 13px; color: var(--dim); }
+
+  .botoes { display: none; justify-content: flex-end; gap: 10px; pointer-events: auto; }
+  .botoes button {
+    font: inherit;
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--linha);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .botoes button.agora { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .botoes button:hover { filter: brightness(1.12); }
+  .botoes button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+  body.perguntando .nome,
+  body.perguntando .autor,
+  body.perguntando .novidade { display: none; }
+  body.perguntando .marca { opacity: .18; animation: none; transform: none; }
+  body.perguntando .notas { display: flex; }
+  body.perguntando .pe .linha,
+  body.perguntando .pe .trilho { display: none; }
+  body.perguntando .botoes { display: flex; }
+
   @keyframes vaivem {
     from { transform: translateX(-100%); }
     to   { transform: translateX(360%); }
@@ -221,12 +292,22 @@
   <p class="autor">Moldes, encaixe e impressão</p>
   <p class="novidade" id="novidade" hidden></p>
 
+  <div class="notas" id="notas">
+    <h2 id="notas-titulo"></h2>
+    <p class="sub">O Optmize fecha, instala e reabre sozinho. Nada do que está salvo se perde.</p>
+    <div class="lista" id="notas-lista"></div>
+  </div>
+
   <div class="pe">
     <div class="linha">
       <span><span class="status" id="status">Iniciando</span><span class="detalhe" id="detalhe"></span></span>
       <span class="numero" id="numero"></span>
     </div>
     <div class="trilho sem-numero" id="trilho"><div class="barra" id="barra"></div></div>
+    <div class="botoes">
+      <button type="button" id="depois" onclick="responder(false)">Depois</button>
+      <button type="button" class="agora" id="agora" onclick="responder(true)">Atualizar agora</button>
+    </div>
   </div>
 
 <script>
@@ -236,6 +317,7 @@
    */
   var TEXTOS = {
     verificando: function () { return ["Procurando atualizações", ""]; },
+    pergunta:    function () { return ["", ""]; },
     baixando:    function (e) { return ["Baixando a versão " + e.versaoNova, ""]; },
     instalando:  function (e) { return ["Instalando a versão " + e.versaoNova, "o Optmize reabre sozinho"]; },
     abrindo:     function () { return ["Abrindo", ""]; },
@@ -246,8 +328,65 @@
     document.getElementById(id).textContent = valor || "";
   }
 
+  /*
+   * As notas chegam como texto, do jeito que `empacotar/notas-do-lancamento.js`
+   * as escreve: uma linha de título ("Correções", "Adições") e itens começando
+   * com "- ". Montadas com `textContent`: o texto vem do servidor.
+   */
+  function desenharNotas(texto) {
+    var lista = document.getElementById("notas-lista");
+    lista.textContent = "";
+    var ul = null;
+    (texto || "").split(/\r?\n/).forEach(function (linha) {
+      linha = linha.trim();
+      if (!linha) return;
+      var item = /^[-•*]\s+(.*)$/.exec(linha);
+      if (item) {
+        if (!ul) { ul = document.createElement("ul"); lista.appendChild(ul); }
+        var li = document.createElement("li");
+        li.textContent = item[1];
+        ul.appendChild(li);
+      } else {
+        var h3 = document.createElement("h3");
+        h3.textContent = linha.replace(/^#+\s*/, "").replace(/:$/, "");
+        lista.appendChild(h3);
+        ul = null;
+      }
+    });
+    if (!lista.firstChild) {
+      var p = document.createElement("p");
+      p.className = "vazio";
+      p.textContent = "Melhorias de estabilidade e desempenho.";
+      lista.appendChild(p);
+    }
+  }
+
+  var respondido = false;
+
+  /* A resposta da pergunta volta para o Rust (`responder_atualizacao`). */
+  function responder(agora) {
+    if (respondido) return;
+    respondido = true;
+    var ipc = window.__TAURI_INTERNALS__;
+    if (ipc) ipc.invoke("responder_atualizacao", { agora: agora });
+  }
+
+  document.addEventListener("keydown", function (ev) {
+    if (!document.body.classList.contains("perguntando")) return;
+    if (ev.key === "Escape") responder(false);
+  });
+
   window.lancador = function (e) {
     if (!e || !TEXTOS[e.fase]) return;
+
+    var perguntando = e.fase === "pergunta";
+    if (perguntando && !document.body.classList.contains("perguntando")) {
+      respondido = false;
+      document.getElementById("notas-titulo").textContent = "Versão " + e.versaoNova + " disponível";
+      desenharNotas(e.notas);
+      setTimeout(function () { document.getElementById("agora").focus(); }, 0);
+    }
+    document.body.classList.toggle("perguntando", perguntando);
 
     if (e.versao) texto("versao", "Versão " + e.versao);
 

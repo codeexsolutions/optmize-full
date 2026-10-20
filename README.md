@@ -13,6 +13,37 @@ dependências de conta ou nuvem.
 A interface é âmbar sobre preto, num tema só. Toda cor sai dos tokens de
 `estilo/tokens.css`: nenhum outro arquivo deve escrever um hex direto.
 
+## Lançamento — a regra de sempre
+
+**Toda mudança pronta vai para a `main`, e a `main` vira versão nova sozinha.**
+Siga estes passos a cada lançamento, sem pular nenhum:
+
+1. **Trabalhe na sua branch** (`Pedro`, `Guilherme`...). Rode as conferências
+   que cobrem o que mudou (`npm run tipos`, `npm run bancada:revisao`,
+   `npm run bancada:conferir` e a bancada da tela mexida).
+2. **Escreva o commit para quem usa o programa.** O título vira item das notas.
+   Para dizer com todas as letras em qual lista ele entra, ponha no corpo:
+
+   ```
+   Correção: o PDF do encaixe volta a sair com a cor da arte
+   Adição: a pergunta de atualizar mostra o que mudou
+   ```
+
+   Sem essas linhas, o título é classificado pelas palavras ("corrige",
+   "conserta", "volta a", "erro", "falha"... é Correção; o resto é Adição).
+   Confira antes de subir: `node empacotar/notas-do-lancamento.js`.
+3. **Faça o merge na `main` e o push** (`git checkout main && git merge Pedro
+   && git push origin main Pedro`). O push dispara o
+   `.github/workflows/lancar.yml`: compila, assina, monta as notas, publica no
+   backend e etiqueta `v1.2.<commits>`. Acompanhe na aba **Actions**.
+4. **O lançador sempre pergunta.** Em toda máquina, na abertura (e com o
+   programa aberto, a cada 20 minutos), aparece "Versão X disponível" com as
+   listas **Correções** e **Adições** e os botões **Depois** e **Atualizar
+   agora**. Nada instala sem o clique. Não troque isso por instalação
+   silenciosa.
+
+Detalhes, Secrets e como lançar à mão: [docs/LANCAMENTO.md](docs/LANCAMENTO.md).
+
 ## Importante antes de usar
 
 - **Este sistema roda na sua própria máquina.** Não há servidor externo,

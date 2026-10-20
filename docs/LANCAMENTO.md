@@ -4,12 +4,24 @@ Desde 2026-09-21, **o que entra na `main` vira versão nova sozinho**. Ninguém
 precisa compilar, reinstalar nem deixar máquina ligada.
 
 ```
-push na main  →  GitHub: compila e assina → hospeda no GitHub → publica → etiqueta v1.0.N
+push na main  →  GitHub: compila e assina → notas → hospeda no GitHub → publica → etiqueta v1.2.N
                  GitHub: confere (ao lado, sem atrasar o lançamento)
                                                               ↓
-                     quem REABRE o programa se atualiza sozinho, 15 s depois
-                     quem está com ele aberto continua na versão instalada
+             o LANÇADOR PERGUNTA: "Versão X disponível" + Correções + Adições
+                                  [Depois]   [Atualizar agora]
+             (na abertura, e com o programa aberto a cada 20 min)
 ```
+
+**Desde 2026-10-20 o lançador SEMPRE PERGUNTA.** Nada instala sem a pessoa
+apertar "Atualizar agora". A pergunta mostra o que mudou, em duas listas —
+**Correções** e **Adições** —, montadas pelo `empacotar/notas-do-lancamento.js`
+a partir dos commits desde a etiqueta anterior. "Depois" segue na versão
+instalada; a pergunta volta na próxima abertura (com o programa aberto, a
+mesma versão não é perguntada de novo na mesma sessão). Ver `perguntar`, em
+`src-tauri/src/main.rs`, e `desenharNotas`, em `empacotar/janela/lancador.html`.
+
+**Os parágrafos sobre "instala sozinha" e "não existe mais caixa" mais
+abaixo são história**: valeram até a 1.2.410.
 
 Quem faz isso é `.github/workflows/lancar.yml`, nas máquinas do GitHub
 (repositório público: não custa nada). O lado das lojas já existia: o programa

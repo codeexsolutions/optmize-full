@@ -2,11 +2,12 @@
 # LANÇAR — o que entra na main vira versão nova em todas as lojas, sozinho
 # ===========================================================================
 #
-# O lado das máquinas já existia: o Optimize instalado pergunta ao backend, 90 s
-# depois de abrir e a cada 2 horas, se há versão nova, e oferece "Atualizar
-# agora" (ver `procurar_atualizacao`, em src-tauri/src/main.rs). Faltava o
-# gatilho: alguém tinha de rodar `npm run build:app` e `npm run publicar` na
-# máquina que tem a chave. Isto é esse gatilho, rodando nas máquinas do GitHub.
+# O lado das máquinas já existia: o Optimize instalado pergunta ao backend, ao
+# abrir e a cada 20 minutos, se há versão nova, e o LANÇADOR PERGUNTA
+# "Atualizar agora / Depois" mostrando as correções e as adições (ver
+# `perguntar`, em src-tauri/src/main.rs). Faltava o gatilho: alguém tinha de
+# rodar `npm run build:app` e `npm run publicar` na máquina que tem a chave.
+# Isto é esse gatilho, rodando nas máquinas do GitHub.
 #
 # E sai sempre do que está NA MAIN — nunca da pasta de alguém, com mudança sem
 # commit no meio (ver docs/LANCAMENTO.md).
@@ -151,6 +152,15 @@ jobs:
           printf '%s' "$CONTEUDO_DA_CHAVE" > "$CHAVE"
           TAURI_SIGNING_PRIVATE_KEY="$CHAVE" npm run build:app
 
+      # AS NOTAS: as correções e as adições desde o lançamento anterior. O
+      # lançador as mostra na pergunta de atualizar, e elas vão também na
+      # release do GitHub. Ver empacotar/notas-do-lancamento.js — e o README,
+      # sobre como escrever o commit para a nota sair do jeito certo.
+      - name: Notas da versão
+        run: |
+          node empacotar/notas-do-lancamento.js > "$RUNNER_TEMP/notas.txt"
+          cat "$RUNNER_TEMP/notas.txt"
+
       # ---------------------------------------------------------------------
       # ONDE O INSTALADOR FICA HOSPEDADO
       # ---------------------------------------------------------------------
@@ -178,24 +188,19 @@ jobs:
           else
             gh release create "v$VERSAO" "$EXE" "$EXE.sig" \
               --title "Optmize $VERSAO" \
-              --notes "Instalador do CodeEx Optmize para Windows 64 bits."
+              --notes-file "$RUNNER_TEMP/notas.txt"
           fi
 
           REPO="${{ github.repository }}"
           echo "url=https://github.com/$REPO/releases/download/v$VERSAO/$NOME" >> "$GITHUB_OUTPUT"
 
-      # NADA DE NOTAS.
-      #
-      # Aqui se montava a lista de commits desde o lançamento anterior, e ela
-      # ia parar na caixa de "Atualizar agora" da gráfica — texto escrito por
-      # quem programa, para quem programa. O que muda em cada versão continua
-      # no histórico do repositório e na release do GitHub; a caixa do cliente
-      # diz o que interessa a ele, que é ter versão nova.
+      # As notas vão junto da ficha: são o `notes` que o atualizador recebe e
+      # que o lançador desenha como "Correções" e "Adições" na pergunta.
       - name: Publicar
         env:
           OPTMIZE_ADMIN_KEY: ${{ secrets.OPTMIZE_ADMIN_KEY }}
           OPTMIZE_RELEASE_URL: ${{ steps.hospedar.outputs.url }}
-        run: npm run publicar
+        run: npm run publicar -- "$(cat "$RUNNER_TEMP/notas.txt")"
 
       # A etiqueta v<versão> agora nasce junto da release do GitHub, no passo
       # de hospedar — `gh release create` cria a tag no commit atual. Este

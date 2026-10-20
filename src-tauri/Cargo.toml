@@ -20,12 +20,9 @@ tauri = { version = "2", features = [] }
 # qualquer coisa na máquina de quem usa.
 tauri-plugin-updater = "2"
 
-# A caixa que pergunta se pode atualizar agora.
-#
-# Precisa ser NATIVA, e não um `confirm()` na página: a interface do Optimize é
-# servida pelo Node em `127.0.0.1:<porta>`, uma origem remota aos olhos do
-# Tauri, que não fala com o IPC dele. Perguntar pelo lado do Rust evita ter de
-# abrir a ponte de comandos para uma origem HTTP.
+# O seletor nativo de arquivo e pasta. A pergunta de atualizar NÃO usa este
+# plugin: ela mora no lançador, que é servido pelo próprio Tauri e chama o
+# comando `responder_atualizacao` (ver src/main.rs).
 tauri-plugin-dialog = "2"
 
 # Exigido pelo `generate_context!` desde que o `tauri.conf.json` ganhou o bloco
@@ -33,9 +30,6 @@ tauri-plugin-dialog = "2"
 # `serde_json::Value`, e a macro gera código que nomeia o crate. Sem ele aqui, o
 # erro de compilação fala de `serde_json` numa linha que não o menciona.
 serde_json = "1"
-# A marca da tela de atualização vai embutida em data URI (ver
-# `script_da_atualizacao`, em src/main.rs).
-base64 = "0.22"
 # `resource_dir()`/`app_data_dir()` no Windows vêm no formato de caminho
 # estendido (`\\?\C:\...`), que o Node.js não entende direito — a resolução
 # do módulo principal quebra tentando ler o "C:" sozinho como se fosse uma

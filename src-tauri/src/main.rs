@@ -351,6 +351,9 @@ fn abrir_lancador(app: &tauri::AppHandle) -> tauri::Result<()> {
                     let _ = janela.eval(&format!("window.lancador && window.lancador({estado})"));
                 }
                 let _ = janela.show();
+                // Com o programa aberto ele nasce atrás da janela maximizada;
+                // a pergunta de atualizar tem de vir para a frente.
+                let _ = janela.set_focus();
             }
         })
         .build()?;
@@ -575,31 +578,97 @@ fn instalar(
     Ok(())
 }
 
-/// Procura versão nova e instala, ANTES de o sistema aparecer.
-///
-/// É o momento em que não há trabalho na tela para perder: se há versão nova,
-/// ela entra ali mesmo, com a tela de abertura contando o que está
-/// acontecendo. Quem já está com o programa aberto é atendido pelo
-/// `vigiar_atualizacoes`, mais abaixo.
-///
-/// Devolve `Ok(true)` quando instalou — e aí o programa já se encerrou para o
-/// instalador trabalhar, e esta função não chega a devolver nada.
-fn atualizar_na_abertura(app: &tauri::AppHandle, base: &serde_json::Value) -> Result<bool, Falha> {
-    let estado = |extra: serde_json::Value| {
-        let mut e = base.clone();
-        if let (Some(e), Some(extra)) = (e.as_object_mut(), extra.as_object()) {
-            for (chave, valor) in extra {
-                e.insert(chave.clone(), valor.clone());
-            }
+/// O estado `base` com os campos de `extra` por cima.
+fn com(base: &serde_json::Value, extra: serde_json::Value) -> serde_json::Value {
+    let mut e = base.clone();
+    if let (Some(e), Some(extra)) = (e.as_object_mut(), extra.as_object()) {
+        for (chave, valor) in extra {
+            e.insert(chave.clone(), valor.clone());
         }
-        e
-    };
+    }
+    e
+}
 
-    lancador(app, estado(serde_json::json!({ "fase": "verificando" })));
+/// Onde a resposta do lançador chega: `true` é "Atualizar agora".
+///
+/// Existe só enquanto há uma pergunta na tela. Um clique fora de hora (duplo
+/// clique, a página recarregada) encontra o lugar vazio e não faz nada.
+static RESPOSTA: Mutex<Option<std::sync::mpsc::Sender<bool>>> = Mutex::new(None);
 
-    let Some(atualizacao) = buscar_versao_nova(app, ESPERA_DO_SERVIDOR_DE_VERSOES)? else {
-        return Ok(false);
+/// Os botões do lançador chamam isto (`responder` em `lancador.html`).
+///
+/// Só o lançador alcança este comando: ele é a única janela servida pelo
+/// próprio Tauri. A janela do sistema vem de `http://127.0.0.1`, uma origem
+/// remota, e não fala com o IPC.
+#[tauri::command]
+fn responder_atualizacao(agora: bool) {
+    if let Some(resposta) = RESPOSTA.lock().unwrap().take() {
+        let _ = resposta.send(agora);
+    }
+}
+
+/// O tamanho do lançador: maior enquanto pergunta, para caber a lista do que
+/// mudou; o de sempre nas outras fases.
+fn medir_lancador(app: &tauri::AppHandle, perguntando: bool) {
+    if let Some(janela) = app.get_webview_window("lancador") {
+        let alto = if perguntando { 560.0 } else { 380.0 };
+        let _ = janela.set_size(tauri::LogicalSize::new(640.0, alto));
+        let _ = janela.center();
+    }
+}
+
+/// Mostra no lançador a versão nova, as correções e as adições, e espera a
+/// pessoa escolher entre "Atualizar agora" e "Depois".
+///
+/// SEMPRE PERGUNTA. Atualizar reinicia o programa, e quem decide a hora de
+/// parar é quem está trabalhando — na abertura e com o programa aberto. As
+/// notas vêm do servidor (`notes` da release), escritas pelo lançamento a
+/// partir dos commits (ver `empacotar/notas-do-lancamento.js`).
+///
+/// Lançador fechado sem resposta (Alt+F4) conta como "Depois".
+fn perguntar(
+    app: &tauri::AppHandle,
+    base: &serde_json::Value,
+    atualizacao: &tauri_plugin_updater::Update,
+) -> bool {
+    use std::sync::mpsc::{channel, RecvTimeoutError};
+
+    let (envia, recebe) = channel();
+    *RESPOSTA.lock().unwrap() = Some(envia);
+
+    lancador(
+        app,
+        com(base, serde_json::json!({
+            "fase": "pergunta",
+            "versaoNova": atualizacao.version,
+            "notas": atualizacao.body,
+        })),
+    );
+    if abrir_lancador(app).is_err() {
+        RESPOSTA.lock().unwrap().take();
+        return false;
+    }
+    medir_lancador(app, true);
+
+    let agora = loop {
+        match recebe.recv_timeout(Duration::from_millis(500)) {
+            Ok(agora) => break agora,
+            Err(RecvTimeoutError::Timeout) if app.get_webview_window("lancador").is_some() => {}
+            Err(_) => break false,
+        }
     };
+    RESPOSTA.lock().unwrap().take();
+    medir_lancador(app, false);
+    agora
+}
+
+/// Baixa e instala, contando o progresso no lançador. Não volta quando dá
+/// certo: o programa se encerra para o instalador trabalhar.
+fn baixar_e_instalar(
+    app: &tauri::AppHandle,
+    base: &serde_json::Value,
+    atualizacao: &tauri_plugin_updater::Update,
+) -> Result<(), Falha> {
     let nova = atualizacao.version.clone();
 
     /*
@@ -608,132 +677,102 @@ fn atualizar_na_abertura(app: &tauri::AppHandle, base: &serde_json::Value) -> Re
      * marca parada é indistinguível de travado — e é nesse minuto que alguém
      * desliga o computador no botão, no meio de uma instalação.
      */
-    lancador(app, estado(serde_json::json!({ "fase": "baixando", "versaoNova": nova })));
-    let pacote = baixar(&atualizacao, |por_cento| {
+    lancador(app, com(base, serde_json::json!({ "fase": "baixando", "versaoNova": nova })));
+    let pacote = baixar(atualizacao, |por_cento| {
         lancador(
             app,
-            estado(serde_json::json!({ "fase": "baixando", "versaoNova": nova, "porcento": por_cento })),
+            com(base, serde_json::json!({ "fase": "baixando", "versaoNova": nova, "porcento": por_cento })),
         );
     })?;
 
-    lancador(app, estado(serde_json::json!({ "fase": "instalando", "versaoNova": nova })));
+    lancador(app, com(base, serde_json::json!({ "fase": "instalando", "versaoNova": nova })));
     // Um instante para o aviso ser lido: depois do `install` a janela some, e
     // sem aviso a pessoa clica no ícone de novo no meio da instalação.
     std::thread::sleep(Duration::from_millis(1500));
 
-    instalar(app, &atualizacao, pacote)?;
+    instalar(app, atualizacao, pacote)
+}
+
+/// Procura versão nova ANTES de o sistema aparecer e, havendo, pergunta.
+///
+/// Devolve `Ok(true)` quando instalou — e aí o programa já se encerrou para o
+/// instalador trabalhar, e esta função não chega a devolver nada. "Depois"
+/// devolve `Ok(false)` e o Optmize abre na versão instalada; a pergunta volta
+/// na próxima abertura.
+fn atualizar_na_abertura(app: &tauri::AppHandle, base: &serde_json::Value) -> Result<bool, Falha> {
+    lancador(app, com(base, serde_json::json!({ "fase": "verificando" })));
+
+    let Some(atualizacao) = buscar_versao_nova(app, ESPERA_DO_SERVIDOR_DE_VERSOES)? else {
+        return Ok(false);
+    };
+    if !perguntar(app, base, &atualizacao) {
+        return Ok(false);
+    }
+    baixar_e_instalar(app, base, &atualizacao)?;
     Ok(true)
 }
 
 /// De quanto em quanto tempo o programa aberto pergunta se há versão nova.
 ///
 /// A abertura já perguntou; isto é para quem deixa o Optmize aberto o dia
-/// inteiro. Vinte minutos põem uma versão nova na máquina no mesmo expediente
-/// em que ela foi lançada, sem que o servidor seja consultado a toda hora.
+/// inteiro. Vinte minutos põem a pergunta na tela no mesmo expediente em que
+/// a versão foi lançada, sem que o servidor seja consultado a toda hora.
 const INTERVALO_DA_BUSCA: Duration = Duration::from_secs(20 * 60);
 
 /// Com o programa aberto a busca não segura a abertura de ninguém, então pode
 /// esperar mais pelo servidor do que a busca da tela de abertura.
 const ESPERA_EM_SEGUNDO_PLANO: Duration = Duration::from_secs(30);
 
-/// Os segundos da contagem na tela cheia, entre o fim do download e o reinício.
-const CONTAGEM_PARA_REINICIAR: u64 = 5;
-
-/// A tela de atualização (`atualizacao.js`), com a marca já embutida.
+/// Com o programa aberto, achou versão nova: o lançador aparece por cima,
+/// com o que mudou, e pergunta.
 ///
-/// A marca vai em data URI, e não como endereço do servidor: na hora de
-/// instalar o servidor já foi desligado, e a imagem sumiria da tela justamente
-/// no momento em que a pessoa mais olha para ela.
-fn script_da_atualizacao() -> &'static str {
-    use base64::Engine;
-    static SCRIPT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    SCRIPT.get_or_init(|| {
-        let marca = base64::engine::general_purpose::STANDARD
-            .encode(include_bytes!("../../empacotar/janela/icone.png"));
-        include_str!("atualizacao.js")
-            .replace("__LOGO__", &format!("data:image/png;base64,{marca}"))
-    })
-}
-
-/// Mostra um estado da tela de atualização na página que estiver aberta.
-///
-/// O script vai inteiro em toda chamada: ele só se define se ainda não
-/// existir, e assim uma página que recarregou no meio do download ganha a tela
-/// de volta na chamada seguinte.
-fn painel(janela: &tauri::WebviewWindow, estado: serde_json::Value) {
-    let _ = janela.eval(&format!(
-        "{};window.__optmizeAtualizacao({estado})",
-        script_da_atualizacao()
-    ));
-}
-
-/// Com o programa aberto, baixa a versão nova em segundo plano e reinicia.
-///
-/// Enquanto baixa, um cartão no canto conta o progresso e a pessoa continua
-/// trabalhando, na tela que estiver. Terminado o download, a tela cheia de
-/// atualização cobre o sistema, conta alguns segundos e o programa reinicia
-/// sozinho na versão nova.
+/// "Depois" fecha o lançador e a pessoa segue trabalhando; a mesma versão não
+/// é perguntada de novo nesta sessão (`recusada`) — volta na próxima
+/// abertura, ou antes, se sair uma versão mais nova ainda. "Atualizar agora"
+/// esconde o sistema e o lançador conta o download até o programa reabrir.
 fn atualizar_com_o_programa_aberto(
     app: &tauri::AppHandle,
     janela: &tauri::WebviewWindow,
+    recusada: &mut Option<String>,
 ) -> Result<(), Falha> {
-    use serde_json::json;
-
     let Some(atualizacao) = buscar_versao_nova(app, ESPERA_EM_SEGUNDO_PLANO)? else {
         return Ok(());
     };
-    let versao = atualizacao.version.clone();
-
-    painel(janela, json!({ "fase": "baixando", "versao": versao }));
-    let pacote = baixar(&atualizacao, |por_cento| {
-        painel(
-            janela,
-            json!({ "fase": "baixando", "versao": versao, "porcento": por_cento }),
-        );
-    })?;
-
-    for segundos in (1..=CONTAGEM_PARA_REINICIAR).rev() {
-        painel(
-            janela,
-            json!({ "fase": "reiniciando", "versao": versao, "porcento": 100, "segundos": segundos }),
-        );
-        std::thread::sleep(Duration::from_secs(1));
+    if recusada.as_deref() == Some(atualizacao.version.as_str()) {
+        return Ok(());
     }
 
-    /*
-     * A INSTALAÇÃO É DO LANÇADOR, como na abertura: a janela do sistema se
-     * esconde e a janelinha conta o que está acontecendo até o programa
-     * reabrir. O mesmo aviso, no mesmo lugar, nos dois caminhos.
-     */
-    lancador(
-        app,
-        json!({ "fase": "instalando", "versao": app.package_info().version.to_string(), "versaoNova": versao }),
-    );
-    if abrir_lancador(app).is_ok() {
-        let _ = janela.hide();
-    } else {
-        painel(janela, json!({ "fase": "instalando", "versao": versao }));
+    let base = serde_json::json!({ "versao": app.package_info().version.to_string() });
+    if !perguntar(app, &base, &atualizacao) {
+        *recusada = Some(atualizacao.version.clone());
+        if let Some(lancador) = app.get_webview_window("lancador") {
+            let _ = lancador.close();
+        }
+        return Ok(());
     }
-    // O tempo de a mensagem aparecer antes de a janela ir embora.
-    std::thread::sleep(Duration::from_millis(1500));
 
-    instalar(app, &atualizacao, pacote)
+    let _ = janela.hide();
+    baixar_e_instalar(app, &base, &atualizacao)
 }
 
 /// O laço que atende quem fica com o programa aberto. Não volta.
 ///
-/// Uma falha (sem internet, servidor fora, download cortado) some com o
-/// cartão e espera a próxima rodada: atualização nenhuma pode virar erro na
-/// cara de quem está trabalhando.
+/// Uma falha (sem internet, servidor fora, download cortado) devolve o
+/// sistema à tela e espera a próxima rodada: atualização nenhuma pode virar
+/// erro na cara de quem está trabalhando.
 fn vigiar_atualizacoes(app: tauri::AppHandle) {
+    let mut recusada: Option<String> = None;
     loop {
         std::thread::sleep(INTERVALO_DA_BUSCA);
         let Some(janela) = app.get_webview_window("principal") else {
             return;
         };
-        if let Err(erro) = atualizar_com_o_programa_aberto(&app, &janela) {
+        if let Err(erro) = atualizar_com_o_programa_aberto(&app, &janela, &mut recusada) {
             eprintln!("[atualizacao] {erro}");
-            painel(&janela, serde_json::json!({ "fase": "oculto" }));
+            let _ = janela.show();
+            if let Some(lancador) = app.get_webview_window("lancador") {
+                let _ = lancador.close();
+            }
         }
     }
 }
@@ -746,13 +785,14 @@ fn main() {
         /*
          * O PLUGIN DE DIÁLOGO CONTINUA REGISTRADO, e de propósito.
          *
-         * A única caixa nativa que existia era a de atualizar, e ela saiu. O
+         * A pergunta de atualizar mora no lançador, e não numa caixa nativa. O
          * plugin fica porque é ele que serve `open`/`save` — o seletor de
          * arquivo que uma tela vai pedir no dia em que precisar —, e tirá-lo
          * para economizar alguns KB significaria devolvê-lo (e mexer nas
          * capabilities) na primeira vez que alguém quiser escolher uma pasta.
          */
         .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![responder_atualizacao])
         .manage(Servidor(processo.clone()))
         .setup(move |app| {
             // `resource_dir()`/`app_data_dir()` no Windows vêm no formato de
