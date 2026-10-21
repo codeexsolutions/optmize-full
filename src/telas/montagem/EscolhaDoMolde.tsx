@@ -31,8 +31,8 @@ export function EscolhaDoMolde({ aoEscolher, sumiu }: Props) {
   }, [moldes, busca]);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-[720px] flex-col gap-3 overflow-auto p-6">
-      <h2 className="m-0 text-[1.1rem] font-semibold">Qual molde você vai montar?</h2>
+    <div className="flex h-full w-full flex-col gap-3 overflow-auto px-4 py-3 lg:px-6 lg:py-4">
+      <h2 className="m-0 text-[1.1rem] ">Qual molde você vai montar?</h2>
       {sumiu && (
         <p className="m-0 flex items-center gap-2 text-[0.85rem] text-ambar">
           <Icone referencia="icones.svg#triangle-alert" className="size-4" />

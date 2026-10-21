@@ -110,7 +110,7 @@ export function Retrabalho() {
 
         {dados && dados.totalCount > 0 && (
           <>
-            <p className="m-0 font-mono text-[2.2rem] leading-none font-semibold text-atencao">
+            <p className="m-0 font-mono text-[2.2rem] leading-none  text-atencao">
               {metrosCurtos(dados.totalMeters)}
             </p>
             <p className="mt-1 mb-0 text-[0.8rem] text-tinta-fraca">

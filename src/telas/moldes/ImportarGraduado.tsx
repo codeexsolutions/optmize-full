@@ -157,7 +157,7 @@ export function ImportarGraduado() {
         <div className="fixed inset-0 z-90 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div role="dialog" aria-modal="true" aria-label="Importar o molde graduado"
             className="flex max-h-[90vh] w-full max-w-3xl flex-col gap-3 rounded-2xl border border-linha bg-painel-suave p-5 shadow-2xl shadow-black/60">
-            <h2 className="m-0 font-titulo text-base font-semibold text-tinta">Importar o molde graduado</h2>
+            <h2 className="m-0 font-titulo text-base  text-tinta">Importar o molde graduado</h2>
 
             {erro && <p className="m-0 text-sm text-[#ff4d4d]">{erro}</p>}
 
@@ -198,7 +198,7 @@ export function ImportarGraduado() {
                       <li key={i} className={`flex items-center gap-3 rounded-xl border p-2 ${incompleta ? "border-ambar" : "border-linha"}`}>
                         <Miniatura peca={p} grade={grade} />
                         <span className="min-w-0 text-sm">
-                          <span className="block truncate font-semibold text-tinta">{p.nome}{p.quantidade > 1 ? ` ×${p.quantidade}` : ""}</span>
+                          <span className="block truncate  text-tinta">{p.nome}{p.quantidade > 1 ? ` ×${p.quantidade}` : ""}</span>
                           <span className={`block text-xs ${incompleta ? "text-ambar" : "text-tinta-apagada"}`}>
                             {incompleta ? `achei ${achados} de ${grade.length} tamanhos` : `${grade.length} tamanhos`}
                           </span>

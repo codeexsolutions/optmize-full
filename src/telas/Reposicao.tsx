@@ -220,7 +220,7 @@ export function Reposicao() {
       {/* ------------------------------------------------ a lista, à esquerda */}
       <aside className="galeria-lateral flex w-80 shrink-0 flex-col overflow-hidden border-r border-linha">
         <div className="shrink-0 border-b border-linha p-4">
-          <h1 className="m-0 mb-3 flex items-center gap-2 font-titulo text-lg font-semibold text-tinta">
+          <h1 className="m-0 mb-3 flex items-center gap-2 font-titulo text-lg  text-tinta">
             <Icone referencia="icones.svg#rotate-ccw" className="size-5 text-ambar" />
             Reposição
           </h1>
@@ -245,7 +245,7 @@ export function Reposicao() {
           ) : (
             grupos.map(([dia, lista]) => (
               <div key={dia} className="mb-3">
-                <p className="mt-0 mb-1.5 px-2 text-[10px] font-bold tracking-widest text-tinta-apagada uppercase">{dia}</p>
+                <p className="mt-0 mb-1.5 px-2 text-[10px]   text-tinta-apagada ">{dia}</p>
                 {lista.map((t) => {
                   const ativo = aberto?.id === t.id;
                   return (
@@ -264,7 +264,7 @@ export function Reposicao() {
                           : <Icone referencia="icones.svg#blocks" className="size-5 text-tinta-apagada" />}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className={`block truncate text-[13px] ${ativo ? "font-semibold text-ambar" : "text-tinta"}`}>{t.nome}</span>
+                        <span className={`block truncate text-[13px] ${ativo ? " text-ambar" : "text-tinta"}`}>{t.nome}</span>
                         <span className="block truncate font-mono text-[11px] text-tinta-apagada">
                           {metros(t.consumoCm)} · {t.totalPecas} peça{t.totalPecas === 1 ? "" : "s"} ·{" "}
                           {new Date(t.criadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
@@ -294,7 +294,7 @@ export function Reposicao() {
               <span className="mx-auto grid size-14 place-items-center rounded-2xl border border-linha bg-painel text-tinta-apagada">
                 <Icone referencia="icones.svg#rotate-ccw" className="size-6" />
               </span>
-              <p className="mt-4 mb-0 font-titulo text-base font-semibold text-tinta">Escolha um trabalho</p>
+              <p className="mt-4 mb-0 font-titulo text-base  text-tinta">Escolha um trabalho</p>
               <p className="mt-1 mb-0 text-sm leading-relaxed text-tinta-fraca">
                 Cada encaixe que você exporta entra na lista ao lado, com todas as peças. Quando uma
                 sair errada, abra o trabalho e marque o que precisa refazer.
@@ -310,7 +310,7 @@ export function Reposicao() {
               )}
               <div className="min-w-0 flex-1">
                 <button type="button" onClick={() => void renomear()} title="Clique para renomear" className="group flex max-w-full items-center gap-1.5 text-left">
-                  <h2 className="m-0 truncate font-titulo text-xl font-semibold text-tinta">{aberto.nome}</h2>
+                  <h2 className="m-0 truncate font-titulo text-xl  text-tinta">{aberto.nome}</h2>
                   <Icone referencia="icones.svg#pencil" className="size-3.5 shrink-0 text-tinta-apagada opacity-0 transition-opacity group-hover:opacity-100" />
                 </button>
                 <p className="mt-1 mb-0 font-mono text-[12px] text-tinta-apagada">
@@ -335,13 +335,13 @@ export function Reposicao() {
             </div>
 
             <div className="flex shrink-0 items-center justify-between gap-3 px-6 pb-3">
-              <p className="m-0 text-[10px] font-bold tracking-widest text-tinta-apagada uppercase">
+              <p className="m-0 text-[10px]   text-tinta-apagada ">
                 Peças do trabalho · marque as que vão sair de novo
               </p>
               <button
                 type="button"
                 onClick={() => setEscolhidas(todasMarcadas ? new Map() : new Map(comArte.map((p) => [p.id, escolhidas.get(p.id) ?? 1])))}
-                className="text-[12px] font-semibold text-tinta-fraca hover:text-ambar"
+                className="text-[12px]  text-tinta-fraca hover:text-ambar"
               >
                 {todasMarcadas ? "Desmarcar todas" : "Marcar todas"}
               </button>
@@ -383,7 +383,7 @@ export function Reposicao() {
                         </span>
                       </button>
                       <div className="flex flex-col gap-1.5 p-3">
-                        <p className="m-0 truncate text-[13px] font-medium text-tinta" title={p.nome}>{p.nome}</p>
+                        <p className="m-0 truncate text-[13px]  text-tinta" title={p.nome}>{p.nome}</p>
                         <p className="m-0 font-mono text-[11px] text-tinta-apagada">
                           {cm(p.largura)} × {cm(p.altura)} cm · no trabalho: {p.qtd}
                         </p>

@@ -65,7 +65,7 @@ export function Botao({
       type="button"
       {...resto}
       className={[
-        "inline-flex shrink-0 items-center justify-center rounded-xl font-semibold transition-colors",
+        "inline-flex shrink-0 items-center justify-center rounded-xl  transition-colors",
         JEITOS[jeito],
         TAMANHOS[tamanho],
         larguraCheia ? "w-full" : "",

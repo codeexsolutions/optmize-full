@@ -193,7 +193,7 @@ export function LancarPedido({ itens, aoFechar, aoCriar }: Props) {
             type="button"
             onClick={confirmar}
             disabled={salvando}
-            className="mt-3 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
+            className="mt-3 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem]  text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
           >
             {salvando ? "Criando..." : `Criar pedido com ${itens.length} trabalho(s)`}
           </button>

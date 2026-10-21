@@ -123,7 +123,7 @@ export function Espera({
         </span>
 
         <div>
-          <h2 className="m-0 font-titulo text-xl font-semibold text-tinta">
+          <h2 className="m-0 font-titulo text-xl  text-tinta">
             {naMaoDeles ? "Estamos liberando a sua conta" : "Falta acertar o plano"}
           </h2>
           <p className="mt-2 mb-0 text-[13.5px] leading-relaxed text-tinta-fraca">
@@ -180,7 +180,7 @@ export function Espera({
           onClick={conferir}
           disabled={conferindo}
           className={podePagar
-            ? "flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 py-3 text-[14px] font-medium text-ambar transition-colors hover:border-[var(--accent)]"
+            ? "flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 py-3 text-[14px]  text-ambar transition-colors hover:border-[var(--accent)]"
             : "botao-entrar w-full gap-2 px-4 text-[15px]"}
         >
           <Icone referencia="icones.svg#refresh-cw" className="size-4" />

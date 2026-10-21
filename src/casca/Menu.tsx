@@ -5,95 +5,50 @@
  * até alguém tocar no botão do cabeçalho, e fecha ao escolher uma tela, ao
  * clicar fora ou no Esc.
  *
- * As telas vêm separadas por grupo (Produção, Impressão, Relatórios). Quem
- * decide o grupo de cada uma é `src/rotas.ts`, como sempre foi com o resto:
- * este arquivo continua sem saber o que é molde, encaixe ou impressora — só
- * desenha a tabela que recebe.
+ * As telas vêm separadas por grupo. Quem decide o grupo de cada uma é
+ * `src/rotas.ts`: este arquivo não sabe o que é molde, encaixe ou impressora —
+ * só desenha a tabela que recebe.
  *
- * Cada item é um `<NavLink>`, e não um `<button>` com `onClick`: é um `<a>` de
- * verdade, então abre em outra aba pelo meio do mouse, mostra o endereço ao
- * passar por cima e é anunciado como link por um leitor de tela. Quem marca o
- * item aberto é o próprio router (o `isActive` do `NavLink`), e não uma
- * comparação feita aqui — este arquivo deixou de precisar saber qual tela está
- * na frente.
+ * Cada item é um `<NavLink>`, um `<a>` de verdade: abre em outra aba pelo meio
+ * do mouse, mostra o endereço ao passar por cima e é anunciado como link por
+ * um leitor de tela. Quem marca o item aberto é o próprio router.
  *
  * ---------------------------------------------------------------------------
- * O DESENHO: UMA BARRA DE PROGRAMA, NÃO UMA LISTA DE AJUSTES
+ * O DESENHO, DESDE 2026-10-21: O DO FLOW
  * ---------------------------------------------------------------------------
  *
- * As medidas vieram da casca antiga (`public/style.css`), e por um tempo
- * tinham que vir: enquanto as duas cascas conviveram, um clique que trocava de
- * casca não podia parecer um clique que trocou de programa. O `public/` já foi
- * apagado, e o que sobrou era um menu que parecia a tela de ajustes de um
- * celular — cada tela num cartão de duas linhas, com o ícone dentro de uma
- * caixinha de borda própria, e o item ativo com borda âmbar em volta.
+ * A mesma barra do CodeEx Flow (`shared/ui/Sidebar.tsx`, lá no outro
+ * repositório), nas cores do Optmize, para quem usa os dois reconhecer a casa:
  *
- * Três coisas mudaram, e é disso que vem o ar de programa:
+ *   - a marca numa caixa com anel laranja, o nome grande e a empresa embaixo;
+ *   - o item aberto é uma PÍLULA cheia na cor da marca, com o texto claro;
+ *   - o título do grupo em laranja suave, com um traço que apaga;
+ *   - o Sobre fica embaixo, fora da navegação, onde o Flow põe "Ajuda";
+ *   - no pé, o cartão de quem está usando, com Configurações e Sair. O Painel
+ *     dos acessos foi para dentro de Configurações (ver `telas/Conta.tsx`).
  *
- *   1. **Uma linha por tela.** A linha de apoio ("Aproveitamento do tecido")
- *      virou o `title` do link — continua a um segundo de distância, no
- *      balãozinho, mas sai da vista de quem já sabe onde clica. Treze cartões
- *      de duas linhas pedem leitura; treze linhas se varrem de olho.
- *
- *   2. **O ícone é um ícone.** Sem moldura, sem fundo. A moldura fazia cada
- *      item parecer um botão dentro do menu, e o menu inteiro, uma barra de
- *      ferramentas empilhada.
- *
- *   3. **O ativo é uma barrinha, não uma caixa.** Um traço âmbar de 3px
- *      encostado na esquerda, o texto e o ícone em âmbar, e um fundo de brilho
- *      baixo. É o que o olho já procura numa barra lateral (é o que fazem o
- *      VS Code, o Figma e a casca antiga) — e sem a borda em volta, a lista
- *      volta a parecer uma lista.
- *
- * Com o item numa linha só, a barra inteira media ~520px: as treze telas
- * cabiam sem rolagem até num monitor de 1366x768, que era o problema que as
- * variantes de altura resolviam à força. Restou o ajuste fino do `curta:`,
- * para a janela bem baixa.
- *
- * DESDE 2026-09-21 SÃO SEIS TELAS no menu — Macros, WhatsApp e o grupo
- * Relatórios saíram (ver `foraDoMenu`, em rotas.ts) —, e isso desfez a conta
- * acima. O aperto das três mudanças continua certo como LINGUAGEM (uma linha
- * por tela, ícone sem moldura, ativo em barrinha), mas as MEDIDAS que o
- * serviam não: elas existiam para ganhar pixels que já não faltam. Por isso a
- * segunda passagem, logo abaixo nas constantes — item de 44px, escala de 4px,
- * respiro real entre os grupos. Seis itens de 44px ocupam menos altura que
- * treze de 36px, então nada disso volta a cobrar rolagem.
+ * O fundo leva a malha de pontos e o brilho no alto do Flow (`.menu-fundo`,
+ * em `estilo/entrada.css`).
  *
  * ---------------------------------------------------------------------------
- * O ACABAMENTO: DE BARRA CORRETA A PAINEL DE MÁQUINA
+ * ELA RECOLHE SOZINHA (desde 2026-10-21)
  * ---------------------------------------------------------------------------
  *
- * A estrutura acima resolveu a LEITURA. O que veio depois é o acabamento, e
- * são quatro coisas, cada uma comentada no lugar onde é escrita:
+ * No computador a barra fica RECOLHIDA, com 72px — só os ícones. Quando o
+ * mouse entra (ou o foco, pelo teclado) ela abre para 272px POR CIMA da tela,
+ * sem empurrar nada; quando o mouse sai e o foco sai, ela recolhe. Quem abre
+ * espaço para ela é o `ml-[72px]` do <main>, em `Casca.tsx` — por isso a
+ * tela não pula quando ela abre.
  *
- *   - **A barra tem luz.** O fundo deixou de ser uma cor chapada e virou um
- *     degradê vertical com um brilho laranja no alto, à esquerda. Uma coluna
- *     iluminada de cima lê como superfície; um retângulo de cor única lê como
- *     um bloco colado na tela.
- *
- *   - **O título do grupo é rótulo de painel**: monoespaçada, versalete
- *     apertado, e um traço que corre até a borda direita.
- *
- *   - **O ativo ACENDE.** A barrinha e o ícone ganharam halo, e o fundo do
- *     item virou um degradê que morre antes da borda direita, em vez de um
- *     retângulo de cor uniforme.
- *
- *   - **O pé perdeu o relógio** e ficou só com a marca.
- *
- * Nenhuma dessas mudanças escreve um hex: todas as cores saem dos tokens de
- * `estilo/tokens.css`, como manda o resto do projeto. Trocar o laranja da
- * marca continua sendo mudar uma linha lá, e a barra acompanha.
- *
- * A FAIXA ESTREITA continua: entre 801 e 1100px a barra encolhe para 78px e
- * deixa só os ícones, como a casca antiga fazia. Sem isso, na mesma janela de
- * 1080px a largura do menu mudava conforme a tela aberta.
+ * O texto não some de uma vez: os rótulos ficam no lugar e a barra os corta
+ * enquanto encolhe, apagando junto (`.menu-some`). Os ícones não se mexem,
+ * porque estão sempre na mesma coluna à esquerda. No celular continua sendo
+ * a gaveta inteira.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { RedeAnimada } from "../telas/RedeAnimada";
 import { Icone } from "./Icone";
-import { useDialogo } from "./Dialogo";
 import { iniciais, type Usuario } from "./usuario";
 import { GRUPOS, telasDoGrupo, type Tela } from "../rotas";
 import { useEscopos, useForaDoPlano } from "./Escopos";
@@ -102,188 +57,94 @@ interface Props {
   aberto: boolean;
   aoFechar: () => void;
   /**
-   * Quem está usando, vindo de cima.
-   *
-   * A barra NÃO lê a sessão sozinha, de propósito: a casca já a lê para
-   * decidir entre a tela de entrar e o programa, e um segundo hook aqui faria
-   * um segundo pedido a `/api/sessao/eu` para saber a mesma coisa. `null` é
-   * ninguém logado, e aí o bloco da conta simplesmente não nasce.
+   * Quem está usando, vindo de cima. A barra não lê a sessão sozinha: a casca
+   * já a lê, e um segundo hook faria um segundo pedido para saber a mesma
+   * coisa. `null` é ninguém logado, e aí o cartão da conta não nasce.
    */
   usuario: Usuario | null;
-  /**
-   * Sai da conta, JÁ CONFIRMADO.
-   *
-   * Quem pergunta é a barra, logo abaixo, porque o diálogo da casca só existe
-   * dentro do provedor e a casca é quem o renderiza. Quem apaga a sessão no
-   * servidor é a casca. A divisão segue a regra de sempre: a barra cuida da
-   * conversa com a pessoa, a casca cuida do efeito.
-   */
+  /** Sai da conta, JÁ CONFIRMADO — quem pergunta é a barra, logo abaixo. */
   aoSair: () => void;
 }
 
-/*
- * ---------------------------------------------------------------------------
- * AS VARIANTES DE ALTURA
- * ---------------------------------------------------------------------------
- *
- * `curta:` é variante de ALTURA de janela, declarada em `estilo/entrada.css`
- * — o Tailwind só traz as de largura. Ela aperta o item nos poucos pixels que
- * faltam numa janela baixa.
- *
- * E vai ESCRITA POR INTEIRO nas classes, nunca montada em pedaços: o Tailwind
- * gera CSS a partir do que ENCONTRA no código-fonte, e um
- * `${PREFIXO}min-h-[34px]` não existe como texto em lugar nenhum — a regra não
- * nasceria, a tela ficaria igual e nada acusaria. Foi o que aconteceu na
- * primeira versão disto.
- */
+/** O que cada papel lê no cartão do pé. */
+const PAPEL: Record<string, string> = {
+  dono: "Dono da empresa",
+  admin: "Administrador",
+  operador: "Funcionário",
+  leitor: "Consulta",
+};
 
 /*
- * O ITEM: uma linha, ícone e rótulo.
- *
- * TODAS AS MEDIDAS DAQUI PARA BAIXO ESTÃO NA ESCALA DE 4px, e isso é uma
- * mudança de 2026-09-21. Antes eram 6, 7, 9, 10, 11, 13, 14 e 21 — números
- * herdados da casca antiga, cada um resolvendo o seu caso sozinho. Nenhum
- * estava errado, e é justamente por isso que o conjunto parecia improvisado:
- * sem uma escala comum, o olho não encontra o ritmo e lê a barra como coisas
- * empilhadas em vez de um painel.
- *
- * A ALTURA SUBIU DE 36px PARA 44px porque a pressão que a segurava acabou. O
- * aperto foi calculado para TREZE telas caberem sem rolagem num monitor de
- * 1366x768. Desde que Macros, WhatsApp e o grupo Relatórios saíram do menu
- * (ver `foraDoMenu`, em rotas.ts), são SEIS — e seis itens de 44px ocupam
- * menos que treze de 36px. O espaço que sobrou não é para encher: é para
- * distribuir, e é por isso que o alvo de clique cresceu junto do respiro.
+ * O ITEM, como no Flow: pílula de canto redondo, 15px, ícone numa coluna de
+ * 24px. `curta:` é variante de ALTURA de janela (ver `estilo/entrada.css`) e
+ * vai escrita por inteiro: o Tailwind só gera a regra que encontra como texto.
  */
 const ITEM =
-  "relative grid min-h-[44px] grid-cols-[20px_minmax(0,1fr)] items-center gap-3 rounded-[10px]" +
-  // `no-underline`: o item virou <a>, e link sublinhado num menu lateral não é
-  // o desenho desta casca — era <button> antes e assim continua parecendo.
-  " px-3 py-2 text-left no-underline transition-colors duration-100" +
-  // Janela baixa: volta ao aperto de antes, que é onde ele ainda se justifica.
-  " curta:min-h-[36px] curta:py-1" +
-  // Barra estreita: o ícone sozinho, centrado.
-  " tela:max-[1100px]:grid-cols-[1fr] tela:max-[1100px]:justify-items-center tela:max-[1100px]:px-0";
+  "menu-item group relative flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px]" +
+  " no-underline transition-colors duration-200 curta:min-h-[38px] curta:py-1.5";
 
-/**
- * O rótulo some quando a barra encolhe — sobra o ícone.
- *
- * 14px, e não os 13px de antes: numa linha de 44px, 13px flutuava pequeno
- * demais no meio do espaço. Cabe com folga — "Digitalizar", o mais longo,
- * ocupa pouco mais da metade dos 180px úteis.
- */
-const TEXTO_DO_ITEM = "truncate text-[14px] font-medium tracking-[-0.005em] tela:max-[1100px]:hidden";
+/** O rótulo some quando a barra encolhe — sobra o ícone. */
+const TEXTO_DO_ITEM = "menu-some relative min-w-0 flex-1 truncate";
 
 const ITEM_PARADO = "text-tinta-fraca hover:bg-[var(--surface-hover)] hover:text-tinta";
 
-/*
- * O ATIVO É UM DEGRADÊ QUE MORRE, NÃO UMA FAIXA CHAPADA.
- *
- * Era `bg-[var(--accent-soft)]`: um retângulo de cor uniforme da esquerda à
- * direita, que reaparecia inteiro no canto direito do item e desenhava uma
- * segunda borda vertical ali — três itens ativos ao longo do dia e o olho já
- * espera o bloco. O degradê sai forte na barrinha e chega transparente antes
- * do fim do item: o realce nasce do indicador e se apaga, em vez de emoldurar
- * o texto. É o mesmo gesto da barra lateral do VS Code e do Linear.
- */
-const ITEM_ATIVO =
-  "bg-[linear-gradient(90deg,var(--accent-soft)_0%,transparent_82%)] text-ambar-claro";
+/** O aberto: a pílula cheia (`.menu-item-aberto`), com o texto na tinta do laranja. */
+const ITEM_ATIVO = "menu-item-aberto text-ambar-tinta";
 
-/**
- * A BARRINHA DO ATIVO.
- *
- * Fica fora do fluxo, colada na borda esquerda do item, com as pontas
- * arredondadas. Era um `shadow-[inset_3px_0]` — que funciona, mas desenha o
- * traço de canto vivo, encostado no topo e no pé do item, e some junto com o
- * fundo se alguém mexer no arredondamento depois.
- *
- * Na barra estreita ela vai para a esquerda da própria barra (não do item),
- * porque de lado, com 78px, encostaria no ícone.
- *
- * O `shadow` é o brilho do traço: laranja espalhado num raio curto, na mesma
- * transparência da linha de acento. Num painel escuro é o que faz o indicador
- * parecer ACESO em vez de pintado — e num raio de 9px ele não vaza para o item
- * de cima nem para o de baixo.
- */
-const TRILHO =
-  // 8px de recuo em cima e embaixo, e não 6: a barrinha acompanha a altura do
-  // item. Mantida a proporção de antes, ela cresceria junto e viraria um traço
-  // comprido demais — o indicador deve marcar o item, não desenhá-lo.
-  "absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-ambar" +
-  " shadow-[0_0_9px_var(--accent-line)]";
+const ICONE_CAIXA = "relative flex w-6 shrink-0 justify-center transition-colors duration-200";
+const ICONE_PARADO = "text-tinta-apagada group-hover:text-ambar";
+const ICONE_ATIVO = "text-ambar-tinta";
 
-/**
- * O ícone, sem moldura: é um desenho, não um botão dentro do botão.
- *
- * 20px preenche a coluna de 20px do grid. Em 18px ele ficava com um pixel de
- * folga de cada lado, e o desalinhamento aparecia justamente na barra estreita,
- * onde o ícone é a única coisa que sobra.
- */
-const ICONE = "size-5 shrink-0 transition-colors duration-100";
-
-/** Aceso, o ícone ganha o mesmo halo do trilho — os dois acendem juntos. */
-const ICONE_ATIVO = "text-ambar drop-shadow-[0_0_5px_var(--accent-line)]";
-
-/*
- * ---------------------------------------------------------------------------
- * OS ÍCONES DO PÉ — Sobre, Conta e Sair
- * ---------------------------------------------------------------------------
- *
- * SÓ O ÍCONE, num alvo quadrado de 28px. Eles já foram três linhas com rótulo
- * escrito, empilhadas: ocupavam ~100px do pé para dizer três palavras que
- * ninguém lê duas vezes. Ao lado do nome de quem está logado — que é onde eles
- * passaram a viver —, o rótulo por extenso empurraria o nome para as
- * reticências, e "Configurações da conta" é a mais comprida das três.
- *
- * O `title` e o `aria-label` de cada um continuam dizendo o nome inteiro: o
- * desenho perde a palavra, não a informação.
- *
- * E SEM A BARRINHA ÂMBAR do ativo: o indicador da lista existe para dizer "a
- * tela aberta é esta". Repeti-lo aqui criaria dois lugares acesos ao mesmo
- * tempo quando alguém abre o Sobre — a lista apagada e o pé aceso —, e o olho
- * perderia a referência de onde está. No pé, o aberto é só o ícone em âmbar.
- */
-const PE_ITEM =
-  "grid size-7 shrink-0 place-items-center rounded-lg border-0 bg-transparent p-0" +
-  " no-underline transition-colors duration-100";
-
-const PE_PARADO = "text-tinta-apagada hover:bg-[var(--surface-hover)] hover:text-tinta";
-
-const PE_ATIVO = "text-ambar-claro";
-
-const PE_ICONE = "size-4 shrink-0";
+/** Os botões do cartão do pé: Configurações e Sair. */
+const PE_BOTAO =
+  "grid size-9 shrink-0 place-items-center rounded-lg border-0 bg-transparent p-0 no-underline transition-all duration-200";
 
 export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
-  const dialogo = useDialogo();
   /*
-    O QUE NÃO ESTÁ NO PLANO NEM APARECE. Antes a tela ficava na barra com
-    cadeado; agora some, e o grupo que ficar vazio some junto. Sem resposta
-    sobre o plano (`null`, primeira abertura sem internet), tudo aparece — a
-    mesma escolha de `casca/Escopos.tsx`: não esconder o programa de quem
-    pagou. A rota continua existindo, e quem chegar nela por endereço vê o
-    aviso de fora do plano.
+    O QUE NÃO ESTÁ NO PLANO NEM APARECE, e o grupo que ficar vazio some junto.
+    Sem resposta sobre o plano (`null`), tudo aparece — a mesma escolha de
+    `casca/Escopos.tsx`: não esconder o programa de quem pagou.
   */
   const escopos = useEscopos();
   const noPlano = (tela: Tela) => !tela.escopo || escopos === null || escopos.includes(tela.escopo);
 
   /*
-    A PERGUNTA MORA AQUI, e não na casca, por uma razão mecânica: `useDialogo`
-    só vale dentro do `<ProvedorDeDialogo>`, e quem o renderiza é a casca — de
-    lá o contexto ainda não existe. A barra está dentro dele.
-
-    `perigoso: false` é a escolha que importa no texto desta caixa. O
-    `confirmar` do diálogo pinta o botão de vermelho por padrão, supondo que
-    quem confirma está prestes a apagar alguma coisa. Sair não apaga nada: o
-    trabalho continua guardado, a conta continua existindo, e a pessoa volta
-    com a senha. Um botão vermelho aqui trataria o fim do expediente como
-    acidente prestes a acontecer.
+    SAIR VAI DIRETO para a tela de saída, sem perguntar (pedido do dono em
+    2026-10-21): quem aperta o botão de sair quer sair.
   */
-  async function pedirParaSair() {
-    const ok = await dialogo.confirmar(
-      "Na próxima vez o Optmize vai pedir o seu e-mail e a sua senha de novo.",
-      { titulo: "Sair da conta", kicker: "CONTA", confirmar: "Sair", perigoso: false },
-    );
-    if (ok) aoSair();
+  function pedirParaSair() {
+    aoSair();
   }
+
+  /*
+    RECOLHIDA sempre que o mouse sai. O foco só a segura aberta quando veio do
+    TECLADO (`:focus-visible`): o clique num item também deixa o foco nele, e
+    aí a barra ficava aberta depois de o mouse sair. A saída espera um
+    instante, para passar rente à borda não fazer a barra piscar.
+    Só no computador (`tela:`, 801px ou mais): no celular ela é a gaveta.
+  */
+  const [ehComputador, setEhComputador] = useState(() => window.matchMedia("(min-width: 801px)").matches);
+  const [expandida, setExpandida] = useState(false);
+  const saida = useRef<number | undefined>(undefined);
+  const barra = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const consulta = window.matchMedia("(min-width: 801px)");
+    const mudou = () => setEhComputador(consulta.matches);
+    consulta.addEventListener("change", mudou);
+    return () => consulta.removeEventListener("change", mudou);
+  }, []);
+  const abrir = () => { window.clearTimeout(saida.current); setExpandida(true); };
+  const recolher = () => {
+    window.clearTimeout(saida.current);
+    saida.current = window.setTimeout(() => {
+      const foco = document.activeElement;
+      const comMouse = barra.current?.matches(":hover");
+      const focoDoTeclado = !!foco && !!barra.current?.contains(foco) && foco.matches(":focus-visible");
+      if (!comMouse && !focoDoTeclado) setExpandida(false);
+    }, 180);
+  };
+  useEffect(() => () => window.clearTimeout(saida.current), []);
+  const recolhida = ehComputador && !expandida;
 
   useEffect(() => {
     if (!aberto) return;
@@ -304,349 +165,157 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
       )}
 
       <aside
+        ref={barra}
+        onMouseEnter={abrir}
+        onMouseLeave={recolher}
+        onFocus={(e) => { if (e.target.matches(":focus-visible")) abrir(); }}
+        onBlur={recolher}
         className={[
-          // A barra NÃO rola: quem rola é a lista de telas, no meio dela. O pé
-          // fica preso embaixo — antes ia embora junto com a rolagem, e o
-          // relógio chegava a cair fora da janela numa tela de 768px.
-          // 236px e 78px: quem repete estas duas medidas é o `ml` do <main>,
-          // em `Casca.tsx` — a barra é `fixed` e não empurra o miolo sozinha.
-          "fixed inset-y-0 left-0 z-80 flex w-[236px] flex-col overflow-x-hidden",
-          "border-r border-[var(--border-hairline)] px-3 pt-4 pb-4",
-          /*
-            O FUNDO É DUAS CAMADAS, E NENHUMA DELAS TEM HEX.
-            Toda cor sai de `estilo/tokens.css`, como no resto do projeto.
-
-            Embaixo, um degradê vertical que vai do painel (mais claro que a
-            barra) ao fundo do programa: a barra passa a ter uma FONTE DE LUZ
-            em cima, então o pé escurece sozinho e o olho entende a coluna como
-            uma superfície, não como um retângulo de cor única.
-
-            Em cima, um brilho laranja no canto superior esquerdo, na mesma
-            transparência do item aceso (`--accent-soft`, 12%). É de onde vem
-            o ar de painel de máquina: a cor da marca lavando o alto da barra,
-            fraca o bastante para não competir com o item ativo — que é a única
-            coisa ali que pode ser laranja de verdade.
-          */
-          "bg-[radial-gradient(130%_46%_at_0%_0%,var(--accent-soft)_0%,transparent_62%),linear-gradient(178deg,var(--card-bg)_0%,var(--sidebar-bg)_40%,var(--bg)_100%)]",
-          // A barra estreita, entre 801 e 1100px. Ver o cabeçalho.
-          "tela:max-[1100px]:w-[78px] tela:max-[1100px]:px-3",
-          "shadow-[6px_0_18px_-8px_rgba(0,0,0,0.55)] transition-transform duration-200",
+          // A barra não rola: quem rola é a lista de telas. O pé fica preso embaixo.
+          "menu-fundo fixed inset-y-0 left-0 z-80 flex w-[272px] flex-col overflow-x-hidden",
+          "border-r border-[var(--border-hairline)]",
+          // Recolhida: 72px, só os ícones. Aberta, a sombra diz que está por cima.
+          recolhida ? "menu-recolhida tela:w-[72px]" : "menu-expandida",
+          "transition-[transform,width,box-shadow] duration-200",
           aberto ? "translate-x-0" : "-translate-x-[105%]",
           "tela:translate-x-0",
         ].join(" ")}
       >
-        {/*
-          A REDE, ATRÁS DE TUDO — a mesma da porta de entrar.
-
-          `-z-10` a põe ACIMA do degradê da barra e ABAIXO do conteúdo: com
-          `z-0` ela venceria o texto, porque elemento posicionado pinta por
-          cima de texto de elemento estático, e a lista de telas sumiria atrás
-          dos pontinhos. O `-z-10` fica preso aqui dentro porque a barra tem
-          `transform` (o `translate-x` que a esconde no celular), e transform
-          abre contexto de empilhamento.
-
-          `opacity-70` porque esta barra fica aberta o dia inteiro, e o que na
-          porta é recepção aqui seria distração: a rede tem de ser textura de
-          fundo, não coisa para olhar.
-        */}
-        <RedeAnimada
-          className="absolute inset-0 -z-10 opacity-70"
-          densidade={6000}
-          seguirPonteiro={false}
-        />
+        {/* O fio de luz na borda direita, na cor da marca, apagando para baixo. */}
+        <span aria-hidden="true" className="menu-fio pointer-events-none absolute inset-y-0 right-0 w-px" />
 
         {/*
-          A CABEÇA DA BARRA: DE QUEM É ESTE PROGRAMA.
-
-          Aqui morava o cartão de quem está USANDO — avatar, nome, empresa e um
-          ícone de sair —, e ele desceu para o pé. No lugar dele voltou a
-          marca, com a empresa embaixo.
-
-          A divisão é a do Flow, e ela responde duas perguntas diferentes em
-          dois lugares: em cima, de quem é a casa (o programa e a gráfica que
-          assina a licença); embaixo, quem está sentado nesta máquina agora.
-          Juntas num bloco só, as duas se misturavam — o nome da pessoa colado
-          no nome da empresa parecia um endereço.
-
-          A EMPRESA SAIU DO PÉ por isto: ela é da instalação, não da sessão.
-          Repeti-la nos dois cantos gastaria duas linhas para dizer o mesmo.
+          A CABEÇA: a marca numa caixa com anel laranja, o nome grande e a
+          empresa que assina a licença embaixo.
         */}
-        <div className="-mx-3 -mt-4 mb-4 flex shrink-0 items-center gap-2.5 border-b border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-4 py-3 curta:mb-2 curta:py-2 tela:max-[1100px]:justify-center tela:max-[1100px]:px-0">
-          {/*
-            O HALO ATRÁS DA MARCA, e ele NÃO pulsa: numa barra que fica
-            aberta oito horas, um brilho que pulsa seria uma luz piscando no
-            canto do olho o dia inteiro.
-          */}
-          <span className="relative grid shrink-0 place-items-center">
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute -inset-1.5 rounded-full bg-ambar opacity-25 blur-md"
-            />
-            <img
-              src={`${import.meta.env.BASE_URL}icone.png`}
-              alt=""
-              className="relative size-[30px] rounded-[9px]"
-            />
-          </span>
-
-          {/*
-            Na barra estreita o texto vira `sr-only`, como no pé: some da vista
-            e continua sendo lido. A marca sozinha basta para o olho, não para
-            quem ouve a tela.
-          */}
-          <span className="min-w-0 flex-1 tela:max-[1100px]:sr-only">
-            <span className="block truncate font-titulo text-[13px] leading-[1.25] tracking-[-0.01em]">
-              <span className="text-tinta-fraca">CodeEx </span>
-              <span className="text-ambar">Optmize</span>
+        <div className="relative flex shrink-0 items-center gap-3.5 px-3 pt-5 pb-3 curta:pt-3">
+          <span className="relative size-12 shrink-0 curta:size-10">
+            <span aria-hidden="true" className="menu-logo-brilho absolute -inset-1 rounded-xl bg-[var(--accent-line)] blur-md" />
+            <span className="menu-logo relative grid size-full place-items-center overflow-hidden rounded-2xl bg-painel ring-1 ring-[var(--accent-line)]">
+              <img src={`${import.meta.env.BASE_URL}icone.png`} alt="" className="size-[70%] rounded-[6px]" />
             </span>
-            {/*
-              A EMPRESA, ou o que o programa faz enquanto não há conta.
-
-              O segundo caso é a bancada e o primeiro minuto antes do login —
-              deixar a linha vazia ali faria a marca dançar para cima quando a
-              conta chegasse.
-            */}
-            <span className="block truncate font-mono text-[9px] leading-[1.35] tracking-[0.06em] text-tinta-apagada uppercase">
-              {usuario?.empresa || "Moldes & encaixe"}
+          </span>
+          {/* Na barra estreita o texto vira `sr-only`: some da vista e continua sendo lido. */}
+          <span className="menu-some min-w-0 flex-1">
+            <span className="block truncate font-titulo text-[17px] leading-tight text-tinta">
+              CodeEx <span className="text-ambar">Optmize</span>
+            </span>
+            <span className="mt-1 block truncate text-[12px] leading-tight text-ambar/80">
+              {usuario?.empresa || "Moldes e encaixe"}
             </span>
           </span>
         </div>
+        {/* A tira de conferência de cor: só no tema Impressão (ver `.menu-tira`). */}
+        <span aria-hidden="true" className="menu-tira mx-3 mb-1">
+          <i /><i /><i /><i /><i /><i /><i />
+        </span>
 
         {/*
-          Um <nav> por grupo, cada um rotulado pelo próprio título. É o que faz
-          um leitor de tela anunciar "navegação Produção" em vez de despejar dez
-          itens seguidos sem dizer onde um assunto acaba e o outro começa.
+          Um <nav> por grupo, rotulado pelo próprio título: o leitor de tela
+          anuncia "navegação Produção" em vez de despejar os itens seguidos.
         */}
-        {/*
-          32px entre os grupos, contra 20px de antes. É o respiro que carrega a
-          leitura agora que não há rótulo de sobra para separar assunto: com
-          quatro itens e dois, o branco entre os blocos faz mais divisão do que
-          qualquer linha a mais faria.
-        */}
-        <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto overscroll-contain px-1 curta:gap-4">
+        <div className="relative flex min-h-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4">
           {GRUPOS.map((grupo) => {
             const telas = telasDoGrupo(grupo.nome).filter(noPlano);
             if (!telas.length) return null;
 
             return (
-              <nav key={grupo.nome} aria-labelledby={`grupo-${grupo.nome}`} className="flex flex-col gap-1">
-                {/*
-                  O TÍTULO DO GRUPO: rótulo em monoespaçada e um traço que
-                  corre até a borda.
-
-                  A monoespaçada (a mesma `--font-mono` do resto do sistema) é
-                  o que separa um RÓTULO DE MÁQUINA de um subtítulo de texto:
-                  largura fixa por letra, versalete apertado, tamanho pequeno.
-                  É como um esquema elétrico nomeia uma seção, e é o motivo de
-                  a barra ler como instrumento e não como menu de site.
-
-                  O traço à direita fecha a linha e faz a separação existir sem
-                  cobrar altura: antes, o que dizia "acabou um assunto" era só
-                  o espaço em branco entre os grupos.
-
-                  Na barra estreita o rótulo vira `sr-only` — sai da vista mas
-                  CONTINUA sendo lido, que é o que dá nome ao <nav> pelo
-                  `aria-labelledby`. Some o texto, sobra o traço, e a divisão
-                  entre os grupos continua visível justo onde há menos espaço
-                  para procurar.
-                */}
+              <nav key={grupo.nome} aria-labelledby={`grupo-${grupo.nome}`}>
                 <h2
                   id={`grupo-${grupo.nome}`}
-                  className="mt-0 mb-3 flex items-center gap-3 px-3 curta:mb-2 tela:max-[1100px]:mb-2 tela:max-[1100px]:px-0"
+                  className="menu-some m-0 flex items-center gap-2 px-3 pt-2 pb-2 text-[12px] whitespace-nowrap text-ambar"
                 >
-                  {/*
-                    10px, e não 9: em 9px a versalete com 0.2em de entreletra
-                    virava textura antes de virar palavra — legível de perto,
-                    ilegível de relance, que é como se lê um rótulo de seção.
-                  */}
-                  <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-tinta-apagada uppercase tela:max-[1100px]:sr-only">
-                    {grupo.rotulo}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="h-px flex-1 bg-[var(--border-hairline)] tela:max-[1100px]:mx-auto tela:max-[1100px]:max-w-6 tela:max-[1100px]:bg-linha"
-                  />
+                  {grupo.rotulo}
+                  <span aria-hidden="true" className="menu-traco h-px flex-1" />
                 </h2>
-
-                {telas.map((tela) => (
-                  <ItemDoMenu key={tela.nome} tela={tela} aoFechar={aoFechar} />
-                ))}
-
+                <div className="flex flex-col gap-0.5">
+                  {telas.map((tela) => (
+                    <ItemDoMenu key={tela.nome} tela={tela} aoFechar={aoFechar} />
+                  ))}
+                </div>
               </nav>
             );
           })}
         </div>
 
         {/*
-          O PAINEL, logo acima do pé: é onde o dono cria, desliga e exclui os
-          acessos dos funcionários. Só a conta dona da empresa o vê — o papel
-          vem do servidor local, que pergunta ao `/team` do backend (ver
-          `servidor/sessao.js`). Esconder aqui é conforto; a trava é o backend.
+          O SOBRE fica fora da navegação, como o "Ajuda e suporte" do Flow: não
+          é lugar que se visita no trabalho, é a saída para quando algo trava.
         */}
-        {usuario?.papel === "dono" && (
-          <nav aria-label="Administração" className="mt-3 shrink-0 px-1">
-            <NavLink
-              to="/painel"
-              onClick={aoFechar}
-              title="Painel — acessos dos funcionários"
-              className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO].join(" ")}
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <span aria-hidden="true" className={TRILHO} />}
-                  <Icone
-                    referencia="icones.svg#shield-user"
-                    className={`${ICONE} ${isActive ? ICONE_ATIVO : ""}`}
-                  />
-                  <span className={TEXTO_DO_ITEM}>Painel</span>
-                </>
-              )}
-            </NavLink>
-          </nav>
-        )}
+        <div className="relative mx-3 mb-3 shrink-0">
+          <NavLink
+            to="/sobre"
+            onClick={aoFechar}
+            title="Sobre o Optmize e suporte"
+            className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO].join(" ")}
+          >
+            {({ isActive }) => (
+              <>
+                <span className={`${ICONE_CAIXA} ${isActive ? ICONE_ATIVO : ICONE_PARADO}`}>
+                  <Icone referencia="icones.svg#life-buoy" className="size-[21px]" />
+                </span>
+                <span className={TEXTO_DO_ITEM}>Sobre e suporte</span>
+              </>
+            )}
+          </NavLink>
+        </div>
 
         {/*
-          ===========================================================================
-          O PÉ DA BARRA — o que não é trabalho
-          ===========================================================================
+          O PÉ: o cartão de quem está sentado nesta máquina, com Configurações
+          (onde moram a conta, a aparência e o painel dos acessos) e Sair.
 
-          Três ações: Sobre, Configurações da conta e Sair. É o canto do
-          programa que fala do PROGRAMA e da CONTA, e não da produção.
-
-          AQUI MORAVA A MARCA — o desenho, "CodeEx Optmize", o botão do
-          Instagram e a linha de direitos reservados. Tudo isso mudou-se para a
-          tela Sobre (`telas/Sobre.tsx`), e a troca tem duas razões. A de
-          espaço: ação precisa de alvo de clique, e os créditos empurravam as
-          três para fora da vista numa janela de 768px. A de propósito: crédito
-          de quem fez se procura uma vez, não se olha oito horas por dia — o pé
-          de um programa aberto o expediente inteiro deve guardar o que se
-          CLICA, não o que se lê.
-
-          A faixa de borda a borda continua (`-mx-3`, o `px` da barra
-          devolvido) pelo mesmo motivo de antes: com seis telas na lista sobra
-          muito vazio entre o último item e o pé, e só uma mudança de
-          superfície segura o olho ali embaixo. É o que o Discord faz com o
-          painel de quem está logado.
-
-          Na barra estreita (78px) sobram os três ícones, centrados: o rótulo
-          não cabe em 58px úteis, e o `title` de cada um diz o nome.
+          Na barra estreita o cartão vira coluna: o avatar em cima, os dois
+          botões embaixo.
         */}
-        <div className="-mx-3 -mb-4 mt-4 flex shrink-0 flex-col gap-2 border-t border-[var(--border-hairline)] bg-[var(--sidebar-bg)] px-3 py-3">
-          {/*
-            UMA LINHA SÓ: quem está usando, e as três coisas que se faz com
-            isso.
-
-            Eram dois blocos — o cartão da conta no alto da barra e uma pilha
-            de três linhas aqui embaixo —, e o "Sair" ficava a uma barra
-            inteira de distância do nome de quem sai. Numa linha só, com os
-            três como ícones ao lado do nome, o pé custa ~50px em vez de ~130,
-            e a lista de telas fica com o que sobrou.
-
-            NA BARRA ESTREITA (78px) a linha vira coluna: o avatar em cima, os
-            três ícones embaixo. Lado a lado seriam quatro alvos em 58px úteis,
-            e nenhum deles acertável.
-          */}
-          <div className="flex items-center gap-2.5 tela:max-[1100px]:flex-col tela:max-[1100px]:gap-2">
+        <div className="relative shrink-0 border-t border-[var(--border-hairline)] p-2.5">
+          <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--surface-hover)]/40 p-2">
             {usuario && (
               <>
-                {/*
-                  O AVATAR: as iniciais num quadrado de canto arredondado.
-
-                  Quadrado, e não círculo: o arredondamento de 9px é o mesmo
-                  dos itens do menu, e um círculo seria a única forma redonda
-                  da barra inteira. As cores são as do item ativo em brilho
-                  baixo — sem foto, é o que dá ao bloco a marca da casa em vez
-                  de um quadrado cinza.
-                */}
                 <span
                   aria-hidden="true"
-                  className="grid size-[30px] shrink-0 place-items-center rounded-[9px] border border-[var(--accent-line)] bg-[var(--accent-soft)] font-mono text-[11px] font-semibold text-ambar"
+                  className="menu-avatar grid size-10 shrink-0 place-items-center rounded-full text-[13px] text-ambar-tinta"
                 >
                   {iniciais(usuario.nome)}
                 </span>
-
-                {/*
-                  Na barra estreita o texto vira `sr-only` em vez de `hidden`:
-                  some da vista mas continua sendo lido, senão o avatar ficaria
-                  sozinho e mudo — um quadrado com duas letras não diz a
-                  ninguém de quem é a conta.
-                */}
-                {/*
-                  UMA LINHA SÓ: o nome de quem está logado.
-
-                  A empresa subiu para a cabeça da barra — ela é da
-                  instalação, não de quem sentou na máquina. E o papel (dono,
-                  operador) continua fora: quem usa o programa já sabe o
-                  próprio cargo, e o lugar do papel é onde ele TEM efeito — na
-                  tela dos membros, e no botão que a pessoa não pode apertar.
-                */}
-                <span
-                  title={`${usuario.nome} — ${usuario.empresa}`}
-                  className="min-w-0 flex-1 truncate font-titulo text-[12.5px] leading-[1.3] tracking-[-0.01em] text-tinta tela:max-[1100px]:sr-only"
-                >
-                  {usuario.nome}
+                <span className="menu-some min-w-0 flex-1">
+                  <span title={usuario.nome} className="block truncate text-[14px] leading-tight text-tinta">
+                    {usuario.nome}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[12px] leading-tight text-tinta-apagada">
+                    {PAPEL[usuario.papel] || "Conectado"}
+                  </span>
                 </span>
               </>
             )}
 
+            <NavLink
+              to="/conta"
+              onClick={aoFechar}
+              title="Configurações"
+              aria-label="Configurações"
+              className={({ isActive }) =>
+                `${PE_BOTAO} hover:rotate-45 hover:bg-[var(--surface-hover)] ${isActive ? "text-ambar" : "text-tinta-apagada hover:text-ambar"}`}
+            >
+              <Icone referencia="icones.svg#settings" className="size-[20px]" />
+            </NavLink>
+
             {/*
-              OS TRÊS ÍCONES, sem rótulo escrito: o nome da pessoa já disputa a
-              largura, e "Configurações da conta" por extenso empurraria o nome
-              para as reticências. O `title` de cada um diz o que é.
-
-              Sem usuário, os ícones ficam sozinhos e centrados — é o que
-              acontece na bancada, antes de haver conta.
+              SAIR só existe quando há de quem sair. O aviso antes não é
+              cerimônia: num computador compartilhado, um clique acidental no
+              fim do expediente deixa o turno seguinte parado na porta.
             */}
-            <span className={`flex shrink-0 items-center gap-0.5 ${usuario ? "" : "flex-1 justify-center"}`}>
-              <NavLink
-                to="/sobre"
-                onClick={aoFechar}
-                title="Sobre o Optmize"
-                aria-label="Sobre o Optmize"
-                className={({ isActive }) => [PE_ITEM, isActive ? PE_ATIVO : PE_PARADO].join(" ")}
+            {usuario && (
+              <button
+                type="button"
+                onClick={pedirParaSair}
+                title="Sair da conta"
+                aria-label="Sair da conta"
+                className={`${PE_BOTAO} text-tinta-apagada hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] hover:text-alerta`}
               >
-                <Icone referencia="icones.svg#info" className={PE_ICONE} />
-              </NavLink>
-
-              <NavLink
-                to="/conta"
-                onClick={aoFechar}
-                title="Configurações da conta"
-                aria-label="Configurações da conta"
-                className={({ isActive }) => [PE_ITEM, isActive ? PE_ATIVO : PE_PARADO].join(" ")}
-              >
-                <Icone referencia="icones.svg#settings" className={PE_ICONE} />
-              </NavLink>
-
-              {/*
-                SAIR só existe quando há de quem sair. Sem conta, o ícone some
-                em vez de aparecer desabilitado: um botão apagado convida a
-                descobrir por que não funciona.
-
-                O aviso antes de sair NÃO é cerimônia: sair apaga a sessão
-                guardada, e num computador compartilhado da produção um clique
-                acidental no fim do expediente deixa o turno seguinte parado na
-                porta sem saber a senha de ninguém.
-              */}
-              {usuario && (
-                <button
-                  type="button"
-                  onClick={pedirParaSair}
-                  title="Sair da conta"
-                  aria-label="Sair da conta"
-                  className={`${PE_ITEM} ${PE_PARADO}`}
-                >
-                  <Icone referencia="icones.svg#log-out" className={PE_ICONE} />
-                </button>
-              )}
-            </span>
+                <Icone referencia="icones.svg#log-out" className="size-[20px]" />
+              </button>
+            )}
           </div>
-
-          {/*
-            A VERSÃO NÃO MORA MAIS AQUI: fica na tela Sobre (o ícone de
-            informação, logo acima), que é onde o suporte manda procurar. No
-            pé da barra ela era um número a mais competindo com o que se clica.
-          */}
         </div>
       </aside>
     </>
@@ -657,13 +326,8 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
 /**
  * Uma linha do menu.
  *
- * Virou componente por causa do cadeado: saber se a tela está no plano é uma
- * pergunta de hook (`useForaDoPlano`), e hook não se chama dentro de um
- * `map`. O desenho é o mesmo de antes.
- *
- * O CADEADO: `trancada` é decisão nossa e vale para todo mundo. A tela fora
- * do plano da conta nem chega aqui — o `Menu` a tira da lista —, mas a
- * checagem fica para o intervalo em que os escopos mudam com o menu aberto.
+ * Componente por causa do cadeado: saber se a tela está no plano é pergunta
+ * de hook (`useForaDoPlano`), e hook não se chama dentro de um `map`.
  */
 function ItemDoMenu({ tela, aoFechar }: { tela: Tela; aoFechar: () => void }) {
   const foraDoPlano = useForaDoPlano(tela);
@@ -679,23 +343,17 @@ function ItemDoMenu({ tela, aoFechar }: { tela: Tela; aoFechar: () => void }) {
     <NavLink
       to={`/${tela.nome}`}
       onClick={aoFechar}
-      /* A linha de apoio não é mais desenhada: vive aqui, no balão. */
+      /* A linha de apoio não é desenhada: vive aqui, no balão. */
       title={balao}
       className={({ isActive }) => [ITEM, isActive ? ITEM_ATIVO : ITEM_PARADO,
-        comCadeado && !isActive ? "opacity-60" : ""].join(" ")}
+        comCadeado && !isActive ? "opacity-55" : ""].join(" ")}
     >
       {({ isActive }) => (
         <>
-          {isActive && <span aria-hidden="true" className={TRILHO} />}
-          {/*
-            Tela com cadeado troca o ícone pelo cadeado (ver `trancada` e
-            `escopo`, em rotas.ts). No lugar do ícone, e não ao lado do nome,
-            porque na barra estreita o nome some e o ícone fica.
-          */}
-          <Icone
-            referencia={comCadeado ? "icones.svg#lock" : tela.icone}
-            className={`${ICONE} ${isActive ? ICONE_ATIVO : ""}`}
-          />
+          {/* Tela com cadeado troca o ícone pelo cadeado: na barra estreita o nome some e o ícone fica. */}
+          <span className={`${ICONE_CAIXA} ${isActive ? ICONE_ATIVO : ICONE_PARADO}`}>
+            <Icone referencia={comCadeado ? "icones.svg#lock" : tela.icone} className="size-[21px]" />
+          </span>
           <span className={TEXTO_DO_ITEM}>{tela.rotulo}</span>
         </>
       )}

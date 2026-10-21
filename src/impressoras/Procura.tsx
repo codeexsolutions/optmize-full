@@ -162,7 +162,7 @@ export function PainelDaVarredura({ estado, aoProcurar }: {
       <ImpressoraProcurando ativo={rodando} className="size-[136px] shrink-0 max-[520px]:mx-auto" />
 
       <div className="min-w-[220px] flex-1">
-        <p className="m-0 font-titulo text-[1.05rem] font-semibold tracking-[-0.02em] text-tinta">
+        <p className="m-0 font-titulo text-[1.05rem]   text-tinta">
           {tituloDaVarredura(estado)}
         </p>
         <p className="mt-1 mb-0 min-h-[1.2em] text-[0.83rem] text-tinta-fraca">
@@ -190,7 +190,7 @@ export function PainelDaVarredura({ estado, aoProcurar }: {
               <button
                 type="button"
                 onClick={aoProcurar}
-                className="mt-2.5 flex items-center gap-2 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro"
+                className="mt-2.5 flex items-center gap-2 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem]  text-ambar-tinta transition-colors hover:bg-ambar-claro"
               >
                 <Icone referencia="icones.svg#radar" className="size-4" />
                 Procurar de novo
@@ -236,7 +236,7 @@ export function FitaDePassos({ fase, className = "" }: { fase: EstadoDaVarredura
           <li key={passo.fase} className="flex items-center gap-2">
             <span
               className={[
-                "flex items-center gap-1.5 rounded-full border px-2.5 py-[3px] text-[0.72rem] font-semibold transition-colors",
+                "flex items-center gap-1.5 rounded-full border px-2.5 py-[3px] text-[0.72rem]  transition-colors",
                 agora ? "border-[var(--accent-line)] bg-[var(--accent-soft)] text-ambar-claro"
                   : feito ? "border-linha text-tinta-fraca"
                     : "border-linha-suave text-tinta-apagada",
@@ -294,8 +294,8 @@ export function Placar({ estado, className = "" }: { estado: EstadoDaVarredura; 
 function Numero({ rotulo, valor, destaque }: { rotulo: string; valor: string; destaque?: boolean }) {
   return (
     <div>
-      <dt className="text-[0.68rem] tracking-[0.08em] text-tinta-apagada uppercase">{rotulo}</dt>
-      <dd className={`m-0 font-mono text-[1.1rem] font-semibold tabular-nums ${destaque ? "text-ambar" : "text-tinta"}`}>
+      <dt className="text-[0.68rem]  text-tinta-apagada ">{rotulo}</dt>
+      <dd className={`m-0 font-mono text-[1.1rem]  tabular-nums ${destaque ? "text-ambar" : "text-tinta"}`}>
         {valor}
       </dd>
     </div>

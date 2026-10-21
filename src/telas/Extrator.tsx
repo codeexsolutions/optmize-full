@@ -133,7 +133,7 @@ export function Extrator() {
               }`}
             >
               <Icone referencia="icones.svg#wand-sparkles" className="mx-auto size-8 text-tinta-apagada" />
-              <p className="mt-2 mb-1 text-[0.9rem] font-semibold">
+              <p className="mt-2 mb-1 text-[0.9rem] ">
                 {arquivoEmCima ? "Solte a foto aqui" : "Arraste a foto para cá, ou clique para escolher"}
               </p>
               <p className="m-0 text-[0.82rem] text-tinta-fraca">

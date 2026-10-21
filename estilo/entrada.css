@@ -545,7 +545,7 @@
   margin: 0;
   font-size: 11px;
   letter-spacing: 3px;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--text-faint);
   animation: entrada-sobe-leve .4s ease .35s both;
 }
@@ -696,7 +696,8 @@
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 12px;
+  /* O mesmo canto dos campos da folha (`.porta-campo`). */
+  border-radius: 6px;
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
@@ -757,27 +758,25 @@
  * Aqui o peso é achatado no fim da folha, e vale para o que já existe e para
  * o que for escrito amanhã.
  *
- * O TETO É 500. Não é birra com negrito: é que hierarquia em tela escura se
- * faz melhor com COR e ESPAÇO do que com gordura — o texto claro sobre fundo
- * escuro já parece mais pesado do que é (o brilho "vaza" para os lados), e um
- * 700 em cima disso vira borrão. O que separa título de texto passa a ser o
- * tamanho e o tom, que é como o Flow faz.
+ * DESDE 2026-10-21 É UM PESO SÓ: 400, a letra limpa, em TODO o programa.
+ * Sem negrito, seminegrito, leve ou itálico, sem letra espaçada e sem
+ * maiúscula forçada pelo CSS. Hierarquia se faz com TAMANHO e COR — o
+ * título é maior, o texto de apoio é mais apagado.
  *
- * FORA DE CAMADA, de propósito: as classes do Tailwind moram em
- * `@layer utilities`, e CSS sem camada ganha de CSS em camada por mais
- * específica que a outra seja. É o que faz um `font-bold` escrito no JSX
- * obedecer sem precisar de `!important` nenhum.
+ * `!important`, e de propósito: vale contra classe do Tailwind, contra regra
+ * de qualquer folha e contra `style` escrito na linha. Quem achar que um
+ * texto precisa de destaque muda o tamanho ou o tom, não o peso.
  *
- * QUEM QUISER MAIS PESO usa `style={{ fontWeight: 600 }}` — inline ganha
- * disto aqui. Ficou difícil de propósito: é para ser exceção pensada, não o
- * reflexo de quem quer destacar alguma coisa.
+ * O `capitalize` fica de fora: ele não é estilo, é o nome da peça começando
+ * com maiúscula ("Frente", e não "frente").
  */
-:where(html) :is(.font-bold, .font-semibold, b, strong, h1, h2, h3, h4, h5, h6) {
-  font-weight: 500;
-}
-
-:where(html) .font-medium {
-  font-weight: 400;
+:where(html) *,
+:where(html) *::before,
+:where(html) *::after {
+  font-weight: 400 !important;
+  font-style: normal !important;
+  letter-spacing: normal !important;
+  font-synthesis: none;
 }
 
 /*
@@ -824,52 +823,423 @@ html.leve *::after {
 /* A impressora 3D (`telas/Impressora3D.tsx`) entra subindo, como o cartão. */
 .impressora-3d { animation: entrada-sobe .8s cubic-bezier(.22, 1, .36, 1) .1s both; }
 
-/* ── O campo da ficha ──────────────────────────────────────────────────── */
+/*
+ * ===========================================================================
+ * A FOLHA — o cartão da porta como a folha que acabou de sair da impressora
+ * ===========================================================================
+ *
+ * Três coisas fazem a folha, e nenhuma é enfeite genérico de cartão:
+ *
+ *   as MARCAS DE CORTE, por fora dos quatro cantos, que dizem onde a folha
+ *   será refilada;
+ *
+ *   a TIRA DE CONFERÊNCIA descendo pela margem esquerda — ciano, magenta,
+ *   amarelo, preto e três cinzas —, a mesma que a gráfica imprime na beira do
+ *   papel para conferir a cor. São as ÚNICAS cores escritas à mão nesta
+ *   folha, e de propósito: tinta de processo não muda com a marca;
+ *
+ *   a SUPERFÍCIE CHAPADA, sem vidro nem desfoque, com um canto vivo.
+ *
+ * Por baixo, a mesa: a grade de centímetros de uma base de corte, quase
+ * apagada.
+ */
+.porta-mesa {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px);
+  background-size: 38px 38px;
+  background-position: center;
+}
 
-.campo-ficha {
+.porta-folha {
+  position: relative;
+  background: var(--card-bg);
+  border-radius: 3px 3px 3px 3px;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--text) 7%, transparent) inset,
+    0 40px 60px -30px rgba(0, 0, 0, .9),
+    0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.porta-folha-pe {
+  border-top: 1px dashed color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+/* As marcas de corte: dois traços em L, 14px FORA de cada canto. */
+.porta-corte {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  border-color: color-mix(in srgb, var(--text) 32%, transparent);
+  border-style: solid;
+  border-width: 0;
+}
+.porta-corte-1 { top: -20px; left: -20px; border-right-width: 1px; border-bottom-width: 1px; }
+.porta-corte-2 { top: -20px; right: -20px; border-left-width: 1px; border-bottom-width: 1px; }
+.porta-corte-3 { bottom: -20px; left: -20px; border-right-width: 1px; border-top-width: 1px; }
+.porta-corte-4 { bottom: -20px; right: -20px; border-left-width: 1px; border-top-width: 1px; }
+
+/* A tira de conferência de cor, na margem esquerda. */
+.porta-tira {
+  position: absolute;
+  top: 36px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.porta-tira i {
+  display: block;
+  width: 10px;
+  height: 18px;
+  border-radius: 1px;
+}
+.porta-tira i:nth-child(1) { background: #00a0e3; }
+.porta-tira i:nth-child(2) { background: #e6007e; }
+.porta-tira i:nth-child(3) { background: #ffed00; }
+.porta-tira i:nth-child(4) { background: #1d1d1b; box-shadow: 0 0 0 1px rgba(255, 255, 255, .14); }
+.porta-tira i:nth-child(5) { background: #8a8a8a; height: 10px; }
+.porta-tira i:nth-child(6) { background: #5a5a5a; height: 10px; }
+.porta-tira i:nth-child(7) { background: #333; height: 10px; }
+
+/*
+ * A ÚNICA ANIMAÇÃO DA FOLHA: ao abrir a porta, a tira é "impressa" de cima
+ * para baixo, uma cor de cada vez — o gesto da cabeça de impressão passando.
+ */
+@keyframes porta-tira-imprime {
+  from { opacity: 0; transform: scaleY(0); }
+  to   { opacity: 1; transform: none; }
+}
+.porta-tira i {
+  transform-origin: top;
+  animation: porta-tira-imprime .28s cubic-bezier(.22, 1, .36, 1) both;
+}
+.porta-tira i:nth-child(1) { animation-delay: .35s; }
+.porta-tira i:nth-child(2) { animation-delay: .42s; }
+.porta-tira i:nth-child(3) { animation-delay: .49s; }
+.porta-tira i:nth-child(4) { animation-delay: .56s; }
+.porta-tira i:nth-child(5) { animation-delay: .63s; }
+.porta-tira i:nth-child(6) { animation-delay: .68s; }
+.porta-tira i:nth-child(7) { animation-delay: .73s; }
+
+/* Numa janela estreita a folha encosta na beira e as marcas sairiam dela. */
+@media (max-width: 560px) {
+  .porta-corte { display: none; }
+}
+
+/* ── O campo da folha ──────────────────────────────────────────────────── */
+
+.porta-campo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 70%, var(--card-bg));
+  cursor: text;
+  transition: border-color .15s ease, box-shadow .2s ease, background-color .15s ease;
+}
+.porta-campo:hover { border-color: color-mix(in srgb, var(--text-faint) 60%, transparent); }
+.porta-campo:focus-within {
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.porta-campo-rotulo {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  cursor: text;
+  transition: color .15s ease;
+}
+.porta-campo:focus-within .porta-campo-rotulo { color: var(--accent-bright); }
+
+.porta-campo-entrada {
   width: 100%;
-  height: 44px;
-  padding: 0 0 0 28px;
+  height: 26px;
+  padding: 0;
   border: 0;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
   background: transparent;
   color: var(--text);
-  font-size: 15px;
+  font-size: 15.5px;
   outline: none;
-  transition: border-color .2s ease;
 }
-.campo-ficha::placeholder { color: color-mix(in srgb, var(--text-faint) 75%, transparent); }
-.campo-ficha:hover { border-bottom-color: color-mix(in srgb, var(--text-faint) 70%, transparent); }
+.porta-campo-entrada::placeholder { color: color-mix(in srgb, var(--text-faint) 55%, transparent); }
 
 /* O preenchimento automático do Windows pinta o fundo; aqui ele não pinta. */
-.campo-ficha:-webkit-autofill {
+.porta-campo-entrada:-webkit-autofill {
   -webkit-text-fill-color: var(--text);
   caret-color: var(--text);
   transition: background-color 99999s ease 0s;
 }
 
-/* O traço laranja que corre por cima da linha quando o campo entra em foco. */
-.campo-ficha-traco {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: var(--accent);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform .4s cubic-bezier(.22, 1, .36, 1);
-  pointer-events: none;
-}
-.campo-ficha:focus ~ .campo-ficha-traco { transform: scaleX(1); }
-
 .botao-entrar-seta { transition: transform .25s cubic-bezier(.22, 1, .36, 1); }
-.botao-entrar:hover:not(:disabled) .botao-entrar-seta:not(.gira) { transform: translateX(3px); }
+.botao-entrar:hover:not(:disabled) .botao-entrar-seta:not(.gira) { transform: translateX(2px); }
+
+/*
+ * O ACABAMENTO DO BOTÃO: um brilho que cai de cima (o papel sob a luz da
+ * mesa) e a seta numa pastilha escura à direita, que é o que o olho procura.
+ */
+.botao-entrar {
+  position: relative;
+  min-height: 52px;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 55%);
+  font-weight: 500;
+}
+/* O `background:` dos estados lá em cima apagaria o brilho; aqui ele volta. */
+.botao-entrar:hover:not(:disabled),
+.botao-entrar:active:not(:disabled),
+.botao-entrar:disabled {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 55%);
+}
+.botao-entrar-pastilha {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent-ink) 88%, transparent);
+  color: var(--accent-bright);
+  transition: background-color .2s ease, transform .25s cubic-bezier(.22, 1, .36, 1);
+}
+.botao-entrar:hover:not(:disabled) .botao-entrar-pastilha {
+  background: var(--accent-ink);
+  transform: translateX(-2px);
+}
+
+/* O botão de cadastrar, embaixo: o mesmo tamanho, sem disputar com o Entrar. */
+.botao-cadastrar {
+  display: flex;
+  min-height: 46px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--accent-line);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  font-size: 14px;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.botao-cadastrar:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.botao-cadastrar:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .impressora-3d { animation: none; }
   /* Parado, e não ausente: o brilho também assenta a marca no fundo. */
   .porta-pulsa { animation: none; opacity: .45; }
-  .campo-ficha-traco { transition: none; }
+  .porta-tira i { animation: none; }
 }
+
+/*
+ * ===========================================================================
+ * O MENU LATERAL — o desenho do Flow (ver `src/casca/Menu.tsx`)
+ * ===========================================================================
+ */
+
+/* O fundo: a cor da barra, um brilho da marca no alto e a malha de pontos,
+   apagando para baixo para não pesar atrás da lista. */
+.menu-fundo {
+  background-color: var(--sidebar-bg);
+  background-image:
+    radial-gradient(ellipse 70% 180px at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+}
+.menu-fundo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(color-mix(in srgb, var(--text) 9%, transparent) 1px, transparent 1.2px);
+  background-size: 18px 18px;
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 70%);
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+
+/* O fio de luz na borda direita: separa o menu do conteúdo com a cor da marca. */
+.menu-fio {
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--accent) 55%, transparent),
+    color-mix(in srgb, var(--accent) 12%, transparent) 45%,
+    transparent);
+}
+
+/* O traço do título do grupo, que apaga para a direita. */
+.menu-traco {
+  background: linear-gradient(to right, color-mix(in srgb, var(--text) 12%, transparent), transparent);
+}
+
+/* O item aberto: a pílula cheia na cor da marca, com um brilho que cai da
+   esquerda e a sombra colorida embaixo. */
+.menu-item-aberto {
+  background-color: var(--accent);
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, .14), transparent 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    0 8px 24px -10px color-mix(in srgb, var(--accent) 75%, transparent);
+}
+
+.menu-item:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+/* O avatar redondo, num degradê da marca. */
+.menu-avatar {
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* O brilho da marca no alto de toda página, como o `aurora` das páginas do Flow. */
+.pagina-aurora {
+  background-image: radial-gradient(60% 288px at 50% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+/* A troca de tema em círculo (ver `src/estado/tema.ts`): o tema novo cobre o
+   antigo sem o esmaecer que o navegador faria por padrão. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) { z-index: 1; }
+::view-transition-new(root) { z-index: 2; }
+
+/* A tira de conferência de cor na barra lateral, sempre: o Optmize é da
+   gráfica. As cores são as de processo, como na `.porta-tira`: não mudam
+   com o tema. */
+.menu-tira {
+  position: relative;
+  display: flex;
+  gap: 3px;
+  height: 4px;
+}
+.menu-tira i { display: block; flex: 3; border-radius: 1px; }
+.menu-tira i:nth-child(1) { background: #00a0e3; }
+.menu-tira i:nth-child(2) { background: #e6007e; }
+.menu-tira i:nth-child(3) { background: #ffed00; }
+.menu-tira i:nth-child(4) { background: #1d1d1b; }
+.menu-tira i:nth-child(5) { background: #8a8a8a; flex: 1; }
+.menu-tira i:nth-child(6) { background: #5a5a5a; flex: 1; }
+.menu-tira i:nth-child(7) { background: #333; flex: 1; }
+
+/*
+ * A BARRA QUE RECOLHE (ver `src/casca/Menu.tsx`). Recolhida, os rótulos
+ * apagam enquanto a barra os corta; aberta, eles voltam e a barra ganha a
+ * sombra de quem está por cima da tela.
+ */
+.menu-some { transition: opacity 0.18s ease; white-space: nowrap; }
+.menu-recolhida .menu-some { opacity: 0; pointer-events: none; }
+.menu-expandida { box-shadow: 18px 0 40px -18px rgba(0, 0, 0, 0.45); }
+@media (max-width: 800px) {
+  .menu-expandida { box-shadow: none; }
+}
+
+/*
+ * O COMPONENTE MODAL (`src/casca/Modal.tsx`): o mesmo desenho dos modais da
+ * produção — brilho do destaque no alto, selo com anel, rodapé numa faixa
+ * própria com os botões em toda a largura.
+ */
+.modal-caixa {
+  background:
+    radial-gradient(120% 140px at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 75%),
+    var(--card-bg);
+  box-shadow: var(--shadow-lift), 0 0 0 1px color-mix(in srgb, var(--text) 4%, transparent);
+}
+.modal-caixa-selo {
+  box-shadow: inset 0 0 0 1px var(--accent-line), 0 10px 24px -14px var(--accent);
+}
+.modal-caixa-rodape {
+  border-top: 1px solid var(--border-hairline);
+  background: color-mix(in srgb, var(--card-bg-soft) 70%, transparent);
+}
+.modal-caixa-rodape > * {
+  flex: 1;
+  justify-content: center;
+  min-height: 46px;
+}
+
+/* A logo da barra no tema claro: numa caixa escura, para o laranja da marca
+   destacar como no escuro (numa caixa branca com anel azul ela sumia). */
+:root[data-tema="claro"] .menu-logo {
+  background: #1b1916;
+  --tw-ring-color: transparent;
+  box-shadow: 0 8px 20px -10px rgba(27, 25, 22, 0.55);
+}
+:root[data-tema="claro"] .menu-logo-brilho { opacity: 0; }
+
+/*
+ * ===========================================================================
+ * A BARRA DA JANELA (só no programa instalado — ver `src/casca/BarraDaJanela.tsx`)
+ * ===========================================================================
+ *
+ * A janela nasce sem a barra do Windows. Esta faixa fina no topo arrasta,
+ * maximiza com dois cliques e tem os três botões. O programa inteiro desce
+ * para baixo dela: a raiz vira um quadro fixo abaixo da faixa, e o
+ * `transform` faz os elementos `fixed` de dentro (a barra lateral, os
+ * modais) se medirem por esse quadro, e não pela janela inteira.
+ */
+:root { --barra-da-janela: 34px; }
+
+#barra-da-janela {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 200;
+  height: var(--barra-da-janela);
+}
+.barra-da-janela {
+  display: flex;
+  justify-content: flex-end;
+  height: 100%;
+  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--border-hairline);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.barra-da-janela-botoes { display: flex; height: 100%; }
+.barra-da-janela-botao {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: default;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.barra-da-janela-botao svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.barra-da-janela-botao:hover { background: var(--surface-hover); color: var(--text); }
+.barra-da-janela-botao:active { background: color-mix(in srgb, var(--text) 14%, transparent); }
+.barra-da-janela-botao.fechar:hover { background: #e81123; color: #fff; }
+.barra-da-janela-botao.fechar:active { background: #b80f1d; color: #fff; }
+.barra-da-janela-botao:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: -2px; }
+
+html.na-janela #raiz {
+  position: fixed;
+  inset: var(--barra-da-janela) 0 0 0;
+  transform: translateZ(0);
+  overflow: hidden;
+}
+/* O que media a janela inteira (100vh) passa a medir o quadro abaixo da faixa. */
+html.na-janela #raiz .h-screen { height: 100%; }

@@ -159,7 +159,7 @@ export function SemImpressoras() {
           <ImpressoraProcurando ativo={rodando} className="w-full" />
         </button>
 
-        <h1 className="mt-8 mb-0 font-titulo text-[1.35rem] leading-tight font-semibold tracking-[-0.03em] text-tinta">
+        <h1 className="mt-8 mb-0 font-titulo text-[1.35rem] leading-tight   text-tinta">
           {achou
             ? `${achadas} impressora${achadas > 1 ? "s" : ""} encontrada${achadas > 1 ? "s" : ""}`
             : rodando

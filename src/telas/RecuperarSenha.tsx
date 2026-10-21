@@ -136,7 +136,7 @@ export function RecuperarSenha({
                 value={codigo}
                 onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="000000"
-                className="font-mono tracking-[0.4em]"
+                className="font-mono "
               />
 
               <Campo

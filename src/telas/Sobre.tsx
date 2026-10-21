@@ -1,99 +1,168 @@
 /**
  * ===========================================================================
- * SOBRE — que programa é este, e de quem
+ * SOBRE E SUPORTE — que programa é este, e como falar com a gente
  * ===========================================================================
  *
- * TUDO QUE ESTÁ AQUI MORAVA NO PÉ DA BARRA LATERAL: o desenho da marca, o
- * nome por extenso, o botão do Instagram e a linha de direitos reservados.
+ * O desenho é o da Ajuda do CodeEx Flow (`features/ajuda/pages/AjudaPage.tsx`,
+ * no outro repositório): a marca grande num cartão, os canais de contato ao
+ * lado, a instalação logo abaixo e as perguntas de sempre, que abrem uma por
+ * vez. É aberto pelo item "Sobre e suporte", embaixo na barra lateral.
  *
- * Saiu de lá por uma razão de espaço e uma de propósito. A de espaço: o pé
- * virou um menu de três ações (Sobre, Conta, Sair), e ação precisa de alvo de
- * clique — a marca e os créditos empurravam as três para baixo da dobra numa
- * janela de 768px. A de propósito: crédito de quem fez é coisa que se procura
- * uma vez, não coisa que se olha o dia inteiro. Um programa aberto oito horas
- * por dia não deve gastar 90px permanentes dizendo o próprio nome para quem já
- * o abriu.
- *
- * O que sobrou no pé é o que se CLICA. O que veio para cá é o que se LÊ.
+ * A versão sai do `package.json` na compilação (ver `vite.config.mts`): é a
+ * primeira coisa que o suporte pergunta.
  */
+
+import { useState } from "react";
 
 import { Icone } from "../casca/Icone";
 
+/** O WhatsApp comercial, o mesmo do site. */
+const WHATSAPP = "(85) 99298-9066";
+const LINK_DO_WHATSAPP = `https://wa.me/5585992989066?text=${encodeURIComponent("Olá! Preciso de ajuda com o CodeEx Optmize.")}`;
+
+const PERGUNTAS: { titulo: string; resumo: string; resposta: string }[] = [
+  {
+    titulo: "Como a quantidade de cada arte entra no encaixe?",
+    resumo: "Pelo nome do arquivo",
+    resposta:
+      "Escreva a quantidade no nome do arquivo, como frente 5x.png. O Encaixe lê o número e coloca as cinco cópias sozinho. A medida vem do próprio arquivo.",
+  },
+  {
+    titulo: "Quais arquivos o Optmize abre?",
+    resumo: "DXF, PLT, SVG, PDF, PNG e JPG",
+    resposta:
+      "Moldes em DXF, PLT, SVG ou PDF vetorial, e artes em PNG ou JPG. O encaixe sai em PDF, com a arte intocada: vetor continua vetor e a cor não muda.",
+  },
+  {
+    titulo: "Como crio o acesso de um funcionário?",
+    resumo: "Em Configurações, na aba Equipe",
+    resposta:
+      "Só o dono da empresa vê a aba Equipe, em Configurações (a engrenagem no pé da barra). Lá se cria, desativa e exclui cada acesso.",
+  },
+  {
+    titulo: "Como deixo o programa claro?",
+    resumo: "Em Configurações, na aba Aparência",
+    resposta:
+      "Em Configurações › Aparência você escolhe entre escuro, claro ou o tema do Windows. A escolha vale só para este computador.",
+  },
+];
+
 export function Sobre() {
+  const [aberta, setAberta] = useState<number | null>(null);
+
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8 py-2">
-      {/*
-        A MARCA, agora com o espaço que ela não tinha no pé: o desenho grande,
-        o nome por extenso e a versão logo abaixo.
-      */}
-      <div className="flex items-center gap-4">
-        <img
-          src={`${import.meta.env.BASE_URL}icone.png`}
-          alt="CodeEx Optmize"
-          className="size-14 shrink-0 rounded-xl"
-        />
-        <div className="min-w-0">
-          {/*
-            O NOME É "CodeEx Optmize", por extenso. A barra lateral abrevia
-            para caber em 180px; aqui não há aperto nenhum, e o nome inteiro é
-            o que vale num chamado de suporte ou numa foto de tela.
-          */}
-          <h2 className="m-0 font-titulo text-xl font-semibold tracking-tight text-tinta">
-            CodeEx Optmize
-          </h2>
-          <p className="mt-0.5 mb-0 text-[13px] text-tinta-fraca">
-            Moldes, encaixe das peças no tecido e a central das impressoras.
-          </p>
+    <div className="flex w-full flex-col gap-3">
+      <div className="grid items-stretch gap-3 lg:grid-cols-[auto_1fr]">
+        {/* A MARCA, grande, com o que o programa faz e o horário do suporte. */}
+        <div className="flex items-center gap-5 rounded-2xl border border-linha bg-painel px-7 py-7">
+          <img
+            src={`${import.meta.env.BASE_URL}icone.png`}
+            alt="CodeEx Optmize"
+            className="size-[68px] shrink-0 rounded-2xl shadow-[0_10px_30px_-12px_var(--accent)]"
+          />
+          <div className="min-w-0">
+            <p className="m-0 font-titulo text-[30px] leading-none text-tinta">
+              CodeEx <span className="text-ambar">Optmize</span>
+            </p>
+            <p className="mt-2 mb-0 text-[12.5px] leading-relaxed text-tinta-fraca">
+              Moldes e encaixe para confecção e gráfica
+            </p>
+            <p className="mt-0.5 mb-0 text-[11.5px] text-tinta-apagada">Segunda a sexta, 8h às 18h</p>
+          </div>
+        </div>
+
+        {/* OS CANAIS: WhatsApp e Instagram. */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Canal
+            href={LINK_DO_WHATSAPP}
+            icone="icones.svg#message-circle"
+            cor="sucesso"
+            titulo="WhatsApp"
+            texto={WHATSAPP}
+          />
+          <Canal
+            href="https://instagram.com/codeexsolutions"
+            icone="icones.svg#at-sign"
+            cor="marca"
+            titulo="Instagram"
+            texto="@codeexsolutions"
+          />
         </div>
       </div>
 
-      {/*
-        O QUE O SUPORTE PERGUNTA.
-
-        Estes três dados são exatamente o que alguém do outro lado da linha
-        pede antes de qualquer outra coisa — e, sem uma tela assim, a resposta
-        era "não sei" ou um print do instalador. A versão sai do `package.json`
-        na compilação (ver `empacotar/versao-do-lancamento.js`).
-      */}
-      <div className="rounded-xl border border-linha bg-painel-suave p-4">
-        <span className="eyebrow">ESTA INSTALAÇÃO</span>
-        <dl className="m-0 mt-3 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[13px]">
-          <dt className="text-tinta-apagada">Versão</dt>
-          <dd className="m-0 font-mono text-tinta">{__VERSAO__}</dd>
-          <dt className="text-tinta-apagada">Atualização</dt>
-          <dd className="m-0 text-tinta-fraca">
-            Automática — o programa avisa quando há versão nova.
-          </dd>
-        </dl>
+      {/* ESTA INSTALAÇÃO: o que o suporte pergunta antes de tudo. */}
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-2 rounded-2xl border border-linha bg-painel px-5 py-4 text-[13px]">
+        <span className="flex items-center gap-2.5 text-tinta">
+          <span className="grid size-9 place-items-center rounded-xl bg-[var(--accent-soft)] text-ambar">
+            <Icone referencia="icones.svg#info" className="size-4" />
+          </span>
+          Esta instalação
+        </span>
+        <span className="text-tinta-apagada">
+          Versão <span className="font-mono text-tinta">{__VERSAO__}</span>
+        </span>
+        <span className="text-tinta-apagada">O programa avisa quando há versão nova e pergunta antes de atualizar.</span>
       </div>
 
-      {/* QUEM FEZ. */}
-      <div className="flex flex-col gap-3">
-        <span className="eyebrow">QUEM FAZ O OPTMIZE</span>
-        <a
-          href="https://instagram.com/codeexsolutions"
-          target="_blank"
-          rel="noreferrer noopener"
-          title="CodeEx Solutions no Instagram"
-          className="flex w-fit items-center gap-2 rounded-[9px] border border-linha bg-painel px-3 py-2 text-[13px] text-tinta-fraca no-underline transition-colors hover:border-[var(--accent-line)] hover:text-tinta"
-        >
-          {/*
-            `at-sign`, e não um ícone do Instagram: a lucide não desenha marcas
-            de terceiros, e o gerador do sprite recusa nome que ela não tem
-            (ver `empacotar/icones.js`). O arroba diz a mesma coisa aqui, ao
-            lado do próprio @ escrito.
-          */}
-          <Icone referencia="icones.svg#at-sign" className="size-4 shrink-0" />
-          @codeexsolutions
-          <Icone
-            referencia="icones.svg#external-link"
-            className="size-3 shrink-0 opacity-60"
-          />
-        </a>
-        <p className="m-0 text-[11px] leading-relaxed tracking-[0.06em] text-tinta-apagada uppercase opacity-70">
-          © CodeEx Solutions · Todos os direitos reservados
-        </p>
+      {/* AS PERGUNTAS DE SEMPRE, uma aberta por vez. */}
+      <div className="flex flex-col gap-2">
+        {PERGUNTAS.map((p, i) => {
+          const on = aberta === i;
+          return (
+            <div key={p.titulo} className="overflow-hidden rounded-2xl border border-linha bg-painel">
+              <button
+                type="button"
+                aria-expanded={on}
+                onClick={() => setAberta(on ? null : i)}
+                className="flex w-full items-center gap-3 border-0 bg-transparent px-4 py-3.5 text-left transition-colors hover:bg-[var(--surface-hover)]"
+              >
+                <span className={`grid size-9 shrink-0 place-items-center rounded-xl transition-colors ${on ? "bg-[var(--accent-soft)] text-ambar" : "bg-[var(--surface-hover)] text-tinta-fraca"}`}>
+                  <Icone referencia="icones.svg#circle-help" className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] text-tinta">{p.titulo}</span>
+                  <span className="block truncate text-[11.5px] text-tinta-apagada">{p.resumo}</span>
+                </span>
+                <Icone
+                  referencia="icones.svg#chevron-down"
+                  className={`size-4 shrink-0 text-tinta-apagada transition-transform duration-200 ${on ? "rotate-180" : ""}`}
+                />
+              </button>
+              {on && (
+                <p className="m-0 border-t border-linha px-4 py-4 text-[12.5px] leading-relaxed text-tinta-fraca">
+                  {p.resposta}
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      <p className="m-0 text-[11px] text-tinta-apagada">© CodeEx Solutions. Todos os direitos reservados.</p>
     </div>
+  );
+}
+
+function Canal({ href, icone, cor, titulo, texto }: { href: string; icone: string; cor: "sucesso" | "marca"; titulo: string; texto: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="flex items-center gap-3 rounded-2xl border border-linha bg-painel p-4 no-underline transition-transform hover:-translate-y-0.5 hover:border-[var(--accent-line)]"
+    >
+      <span
+        className={`grid size-10 shrink-0 place-items-center rounded-xl ${
+          cor === "sucesso" ? "bg-[color-mix(in_srgb,var(--success)_15%,transparent)] text-certo" : "bg-[var(--accent-soft)] text-ambar"
+        }`}
+      >
+        <Icone referencia={icone} className="size-[18px]" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13.5px] text-tinta">{titulo}</span>
+        <span className="block truncate text-[12.5px] text-ambar">{texto}</span>
+      </span>
+      <Icone referencia="icones.svg#external-link" className="ml-auto size-3.5 shrink-0 text-tinta-apagada" />
+    </a>
   );
 }

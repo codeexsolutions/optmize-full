@@ -103,7 +103,7 @@ export function LateralDaGaleria({ nav, children }: {
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-3">
-        <p className="mt-0 mb-1.5 px-2 text-[10px] font-bold tracking-widest text-tinta-apagada uppercase">
+        <p className="mt-0 mb-1.5 px-2 text-[10px]   text-tinta-apagada ">
           {aba === "arquivos" ? "Pastas" : "Clientes"}
         </p>
         {children}
@@ -152,7 +152,7 @@ function AbaDaLateral({ ativo, icone, rotulo, dica, contagem, aoClicar }: {
       className={[
         // O fundo da aba ativa é o seletor que desliza (acima); aqui só a cor
         // do texto muda, e acompanha o tempo dele.
-        "relative flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-semibold transition-colors duration-300",
+        "relative flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px]  transition-colors duration-300",
         ativo
           ? "text-ambar"
           : "text-tinta-fraca hover:text-tinta",
@@ -179,9 +179,9 @@ function Armazenamento({ resumo }: { resumo: ResumoDaGaleria | null }) {
           <Icone referencia="icones.svg#cloud-upload" className="size-4 text-ambar" />
           Armazenamento
         </div>
-        <p className="mt-1.5 mb-0 font-titulo text-lg font-semibold text-tinta">
+        <p className="mt-1.5 mb-0 font-titulo text-lg  text-tinta">
           {resumo ? tamanhoLegivel(resumo.bytes) : "—"}
-          <span className="ml-1 text-xs font-normal text-tinta-apagada">na Galeria</span>
+          <span className="ml-1 text-xs  text-tinta-apagada">na Galeria</span>
         </p>
         {ocupado !== null && disco && (
           <>

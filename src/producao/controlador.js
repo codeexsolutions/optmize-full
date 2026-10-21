@@ -10,7 +10,7 @@ import { prepararArteParaONavegador } from "../api/arte";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
 import { assinaturaDoTrabalho,
   midiaConsumida, aproveitamentoDaMidia, metragemPelaCaixa,
-  prepararComplemento, analisarComplemento } from "../motores/encaixeMotor";
+  prepararComplemento, analisarComplemento, complementarNosVaos } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
 import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
 import {
@@ -328,7 +328,7 @@ const encaixePrevia = document.getElementById("encaixe-previa");
 const encaixePreviaCanvas = document.getElementById("encaixe-previa-canvas");
 const btnExportar = document.getElementById("btn-exportar");
 const btnExportarRotulo = document.getElementById("btn-exportar-rotulo");
-const ROTULO_EXPORTAR = "Exportar PDF";
+const ROTULO_EXPORTAR = "Exportar";
 
 // Cada peça: { id, nome, src, img, pxW, pxH, largura, altura, qtd, giro }
 // largura/altura em centímetros; `giro` diz como ela pode virar (ver giroPadrao).
@@ -444,8 +444,6 @@ function guardarResultado(valor, { semJanela = false } = {}) {
   if (!btnEncaixar.disabled) atualizarBotaoPrincipal();
   if (!btnExportar) return valor;
   btnExportar.disabled = !valor || !!producaoTravada();
-  // Perder o risco com o menu aberto deixaria três itens mortos à vista.
-  if (!valor || recusa) fecharMenuExportar();
   return valor;
 }
 
@@ -471,7 +469,13 @@ function conferirPelaArte(valor, semJanela = false) {
   const travar = (motivo) => {
     valor.sobreposto = motivo;
     if (!semJanela) mostrarErroEncaixe(motivo, "aviso");
-    fecharMenuExportar();
+    /*
+     * Aqui chamava `fecharMenuExportar()`, do menu de exportar que saiu quando
+     * o Encaixe passou a exportar só em PDF. A função não existia mais: a trava
+     * quebrava, a busca caía no `catch` do `optmizar` e o encaixe era refeito
+     * pela caixa (as peças em quadrados) sempre que a conferência pela arte
+     * achava peça encostando em peça. Corrigido em 2026-10-21.
+     */
     if (btnExportar) btnExportar.disabled = true;
     redesenharRisco();
   };
@@ -521,7 +525,6 @@ function recusouPorTrava() {
   const motivo = producaoTravada();
   if (!motivo) return false;
   mostrarErroEncaixe(motivo, "aviso");
-  fecharMenuExportar();
   if (btnExportar) btnExportar.disabled = true;
   return true;
 }
@@ -3102,7 +3105,11 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     // `listaDaReceita`) — uma ordem boa que ele descobre é reaproveitada pelo
     // contorno. Por isso ele entra junto com os outros, e não isolado numa
     // fatia: isolado, ele não teria com quem dividir o que descobre.
+    // "vaos" é o do Completar: só os que encaixam pela silhueta. Sem o de
+    // retângulo, que empatava na metragem e devolvia as peças em quadrados
+    // empilhados em vez de nos vãos umas das outras.
     const motores = modoDeEncaixe === "auto" ? ["contorno", "retangulo", "vaos", "faixas"]
+      : modoDeEncaixe === "vaos" ? ["contorno", "vaos", "faixas"]
       : modoDeEncaixe === "contorno" ? ["contorno"] : ["retangulo"];
 
     /*
@@ -3303,7 +3310,8 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     });
 
     mostrarResumoDaBusca(ultimoResultado, aprendido, anotado, guardadoAntes);
-    if (avisoDoRefeito) encaixeAndamento.textContent = `${avisoDoRefeito} · ${encaixeAndamento.textContent}`;
+    // O aviso do refeito também é do motor: vai para o console, com o resumo.
+    if (avisoDoRefeito) console.info("[encaixe]", avisoDoRefeito);
 
     /*
      * A TELA FICA COM O MELHOR.
@@ -3335,14 +3343,12 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
         limparErroEncaixe();
         guardarResultado(daBusca);
         renderResultado();
-        encaixeAndamento.textContent = resumoDaBusca;
-        encaixeAndamento.classList.remove("hidden");
       } else if (voltou) {
+        // Sem o resumo técnico: só o que importa para quem vai imprimir.
         encaixeAndamento.textContent =
-          `Esta procura deu ${metrosNaTela(consumoDaBusca)}, e o melhor já conseguido com `
-          + `estas peças é ${metrosNaTela(guardadoAntes.consumo)} — a tela ficou com o melhor. · `
-          + resumoDaBusca;
+          `A tela ficou com o melhor encaixe já conseguido com estas peças: ${metrosNaTela(guardadoAntes.consumo)}.`;
         encaixeAndamento.classList.remove("hidden");
+        console.info("[encaixe]", `esta procura deu ${metrosNaTela(consumoDaBusca)} ·`, resumoDaBusca);
       } else if (traduzirIndicesDoGuardado(guardadoAntes.pecas, pecasEncaixe)) {
         // A tabela de peças mudou desde aquele encaixe: não dá para trazê-lo de
         // volta sozinho. Aí a oferta manual continua valendo.
@@ -3429,8 +3435,13 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado, guardadoAntes) {
         ? `, menor folga ${(conferencia.menorFolga * 10).toFixed(1).replace(".", ",")} mm` : ""));
   }
 
-  encaixeAndamento.textContent = partes.join(" · ");
-  encaixeAndamento.classList.remove("hidden");
+  /*
+    FICA NO CONSOLE, NÃO NA TELA (desde 2026-10-21). Tentativas, receita,
+    memória e conferência são números de quem cuida do motor — para o cliente
+    eram ruído no topo da mesa. O resumo continua aqui para o diagnóstico.
+  */
+  console.info("[encaixe]", partes.join(" · "));
+  encaixeAndamento.classList.add("hidden");
 }
 
 /**
@@ -4146,6 +4157,8 @@ window.addEventListener("resize", () => {
   // A espera é a mesma para os dois: é o mesmo gesto de arrastar a janela.
   redimensionarTimer = setTimeout(redesenharEncaixe, 150);
 });
+// E ao trocar de tema: o canvas não acompanha o CSS sozinho (ver `coresDaTela`).
+escopo.ouvir(window, "optmize:tema", () => redesenharEncaixe());
 
 renderPecasEncaixe();
 
@@ -4440,7 +4453,6 @@ document.addEventListener("optimize:trocou-de-tela", () => limparSelecaoDoRisco(
 
 const modalAjustes = document.getElementById("modal-ajustes");
 const btnFecharAjustes = document.getElementById("btn-fechar-ajustes");
-const btnAjustesCancelar = document.getElementById("btn-ajustes-cancelar");
 const btnAjustesOptmizar = document.getElementById("btn-ajustes-optmizar");
 const ajustesContagem = document.getElementById("ajustes-contagem");
 const giroOpcoes = [...document.querySelectorAll(".giro-op")];
@@ -4499,17 +4511,19 @@ function atualizarContagemDosAjustes() {
  * elas sem caminho novo nenhum.
  */
 const modalComplemento = document.getElementById("modal-complemento");
-const complementoResumo = document.getElementById("complemento-resumo");
-const complementoDaGaleria = document.getElementById("complemento-da-galeria");
-const complementoDoEncaixe = document.getElementById("complemento-do-encaixe");
-const complementoMeta = document.getElementById("complemento-meta");
+const complementoJeito = document.getElementById("complemento-jeito");
+const complementoFonte = document.getElementById("complemento-fonte");
+const btnComplementoAplicarRotulo = document.getElementById("btn-complemento-aplicar-rotulo");
 const complementoEstado = document.getElementById("complemento-estado");
 const complementoLista = document.getElementById("complemento-lista");
 const btnFecharComplemento = document.getElementById("btn-fechar-complemento");
-const btnComplementoProcurar = document.getElementById("btn-complemento-procurar");
+const complementoJeitoCaixa = document.getElementById("complemento-jeito-caixa");
+const complementoJeitoBotao = document.getElementById("complemento-jeito-botao");
+const complementoJeitoLista = document.getElementById("complemento-jeito-lista");
+const complementoAte = document.getElementById("complemento-ate");
+const complementoMeta = document.getElementById("complemento-meta");
 const btnComplementoAplicar = document.getElementById("btn-complemento-aplicar");
 const btnComplementoDesfazer = document.getElementById("btn-complemento-desfazer");
-const btnComplementoRefazer = document.getElementById("btn-complemento-refazer");
 
 let saidaDoModalComplemento = null;
 /* Até quantas cópias de cada arte a procura conta. */
@@ -4520,10 +4534,6 @@ let analiseDoComplemento = null;
    arte de 30 megapixels custa segundos: a segunda procura não paga de novo. */
 const galeriaPreparada = new Map();
 
-const modoDoComplemento = () => {
-  const marcado = modalComplemento.querySelector('input[name="complemento-modo"]:checked');
-  return marcado ? marcado.value : "vaos";
-};
 
 function avisarNoComplemento(texto, erro = false) {
   complementoEstado.textContent = texto;
@@ -4531,15 +4541,75 @@ function avisarNoComplemento(texto, erro = false) {
   complementoEstado.classList.toggle("hidden", !texto);
 }
 
-/** O que o risco de agora gasta e quanto dele é tecido sem peça. */
-function resumirComplemento() {
-  const r = ultimoResultado;
-  if (!r) { complementoResumo.textContent = "—"; return; }
-  const midia = midiaConsumida(r.consumo, r.comprimentoBancada, r.posicoes);
-  const areaMidia = r.larguraTecido * midia;
-  const vazio = Math.max(0, areaMidia - r.areaReal);
-  complementoResumo.textContent = `Metragem ${formatarMetros(midia)} · `
-    + `${formatarM2(vazio / 10000)} sem peça (${formatarPorcento(areaMidia > 0 ? (vazio / areaMidia) * 100 : 0)})`;
+/** O botão diz o que vai acontecer: Completar refaz o encaixe, Preencher só os vãos. */
+const jeitoDoComplemento = () => (complementoJeito.value === "preencher" ? "preencher" : "completar");
+function rotularComplemento() {
+  const preencher = jeitoDoComplemento() === "preencher";
+  btnComplementoAplicarRotulo.textContent = preencher ? "Preencher" : "Completar";
+  // O campo da metragem fica à vista nos dois, mas só vale no Completar.
+  complementoMeta.disabled = preencher;
+  complementoAte.classList.toggle("desativado", preencher);
+}
+
+/** A metragem de agora do risco, em cm. */
+const metragemDoRisco = (r) => midiaConsumida(r.consumo, r.comprimentoBancada, r.posicoes);
+
+/*
+ * A META DO COMPLETAR, em cm: a que a pessoa escreveu, nunca menos que a de
+ * agora (otimizar de novo não tira peça do pedido). No Preencher é zero: só
+ * os vãos, sem esticar o rolo.
+ */
+function metaDoComplemento(r) {
+  if (jeitoDoComplemento() === "preencher") return 0;
+  const escrita = Math.round((Number(String(complementoMeta.value).replace(",", ".")) || 0) * 100);
+  const agora = metragemDoRisco(r);
+  return escrita > agora ? escrita : 0;
+}
+
+/*
+ * O SELETOR DO JEITO: um botão que abre a lista das duas opções, com a
+ * animação no CSS (`.jeito.aberto`). Fecha ao escolher, no Esc ou ao
+ * clicar fora; as setas andam entre as opções.
+ */
+function abrirJeito(abrir) {
+  complementoJeitoCaixa.classList.toggle("aberto", abrir);
+  complementoJeitoBotao.setAttribute("aria-expanded", String(abrir));
+  if (abrir) {
+    const atual = complementoJeitoLista.querySelector('[aria-selected="true"]');
+    (atual || complementoJeitoLista.firstElementChild).focus();
+  }
+}
+function escolherJeito(opcao) {
+  complementoJeito.value = opcao.dataset.jeito;
+  complementoJeitoLista.querySelectorAll(".jeito-opcao").forEach((o) => o.setAttribute("aria-selected", String(o === opcao)));
+  document.getElementById("complemento-jeito-nome").textContent = opcao.querySelector("b").textContent;
+  document.getElementById("complemento-jeito-desc").textContent = opcao.querySelector("small").textContent;
+  document.getElementById("complemento-jeito-icone").setAttribute("href", `icones.svg#${opcao.dataset.icone}`);
+  rotularComplemento();
+  abrirJeito(false);
+  complementoJeitoBotao.focus();
+  // O que cabe muda com o jeito (o Completar pode ir até a meta): procura de novo.
+  void procurarComplemento();
+}
+
+/** Zera as contagens das abas: valem só para a procura que as fez. */
+function esconderSugestao() {
+  document.getElementById("complemento-conta-galeria").textContent = "0";
+  document.getElementById("complemento-conta-encaixe").textContent = "0";
+}
+
+/*
+ * AS ABAS GALERIA | ENCAIXE: filtram a lista pelo atributo `data-fonte` do
+ * `<ul>` (o CSS esconde as linhas da outra fonte). Os campos escondidos
+ * continuam valendo no Completar/Preencher — a aba é só o que se vê.
+ */
+function escolherFonte(fonte) {
+  complementoFonte.dataset.fonte = fonte;
+  complementoLista.dataset.fonte = fonte;
+  escopo.ouvir(document.getElementById("btn-complemento-atualizar"), "click", () => { void procurarComplemento(); });
+complementoFonte.querySelectorAll(".fonte-aba").forEach((aba) => {
+    aba.setAttribute("aria-selected", String(aba.dataset.fonte === fonte));
+  });
 }
 
 function abrirComplemento() {
@@ -4550,15 +4620,18 @@ function abrirComplemento() {
   btnComplementoAplicar.disabled = true;
   btnComplementoDesfazer.classList.toggle("hidden", !antesDoComplemento);
   avisarNoComplemento("");
-  resumirComplemento();
-  // A meta nasce um metro depois do que o risco já gasta: é o "fechar a
-  // metragem" mais comum, e a pessoa corrige o número em vez de digitá-lo.
-  const r = ultimoResultado;
-  const midia = midiaConsumida(r.consumo, r.comprimentoBancada, r.posicoes);
-  complementoMeta.value = String(Math.ceil(midia / 100) + 1);
+  esconderSugestao();
+  rotularComplemento();
+  abrirJeito(false);
+  rotularComplemento();
+  // A meta nasce com a metragem de agora; quem quer ir além escreve outra.
+  complementoMeta.value = (metragemDoRisco(ultimoResultado) / 100).toFixed(2);
   modalComplemento.classList.remove("hidden", "saindo");
   document.body.classList.add("modal-aberto");
-  btnComplementoProcurar.focus();
+  complementoJeitoBotao.focus();
+  // A LISTA APARECE SOZINHA: a Galeria e as peças deste encaixe, sempre as
+  // duas, já com a sugestão do que usar.
+  void procurarComplemento();
 }
 
 function fecharComplemento(devolverFoco) {
@@ -4642,26 +4715,18 @@ function configDoRisco(r) {
   };
 }
 
+/* A procura mais nova: uma procura antiga que termina depois não vale mais. */
+let procuraDoComplemento = 0;
+
 async function procurarComplemento() {
   const r = ultimoResultado;
   if (!podeComplementar()) return;
-  const usarGaleria = complementoDaGaleria.checked;
-  const usarEncaixe = complementoDoEncaixe.checked;
-  if (!usarGaleria && !usarEncaixe) {
-    avisarNoComplemento("Marque de onde tirar as peças: a Galeria, as peças deste encaixe ou as duas.", true);
-    return;
-  }
-
-  const midia = midiaConsumida(r.consumo, r.comprimentoBancada, r.posicoes);
-  let metaCm = 0;
-  if (modoDoComplemento() === "ate") {
-    metaCm = Math.round((Number(String(complementoMeta.value).replace(",", ".")) || 0) * 100);
-    if (!(metaCm > midia)) {
-      avisarNoComplemento(`Para completar até uma metragem, ela tem que passar dos ${formatarMetros(midia)} de agora.`, true);
-      complementoMeta.focus();
-      return;
-    }
-  }
+  const estaProcura = ++procuraDoComplemento;
+  // Sempre as duas fontes. A meta é a do campo no Completar (nunca menos
+  // que a de agora) e zero no Preencher — ver `metaDoComplemento`.
+  const usarGaleria = true;
+  const usarEncaixe = true;
+  const metaCm = metaDoComplemento(r);
 
   const config = configDoRisco(r);
   // A grade é a do risco: as máscaras dos candidatos têm que falar com as
@@ -4672,9 +4737,9 @@ async function procurarComplemento() {
     return;
   }
 
-  btnComplementoProcurar.disabled = true;
   btnComplementoAplicar.disabled = true;
   complementoLista.classList.add("hidden");
+  esconderSugestao();
   try {
     const candidatos = [];
     if (usarEncaixe) {
@@ -4689,10 +4754,6 @@ async function procurarComplemento() {
       if (!resposta.ok) throw new Error("a Galeria não respondeu");
       const { artes } = await resposta.json();
       const validas = (artes || []).filter((a) => a.largura > 0 && a.altura > 0);
-      if (validas.length === 0 && !usarEncaixe) {
-        avisarNoComplemento("A Galeria está vazia. Guarde artes num projeto da Galeria para usá-las aqui.", true);
-        return;
-      }
       (await pecasDaGaleria(validas)).forEach(({ arte, peca }) => {
         candidatos.push({ peca, indice: null, daGaleria: true, origem: `Galeria · ${arte.cliente} / ${arte.projeto}` });
       });
@@ -4723,29 +4784,65 @@ async function procurarComplemento() {
     for (let i = 0; i < candidatos.length; i++) {
       avisarNoComplemento(`Medindo os espaços · ${i + 1} de ${candidatos.length}`);
       await respirarNaTela();
-      if (ultimoResultado !== r) return; // o risco mudou no meio da procura
+      // O risco mudou, ou outra procura começou: esta para aqui.
+      if (ultimoResultado !== r || estaProcura !== procuraDoComplemento) return;
       [candidatos[i].cabem] = analisarComplemento(mapa, [candidatos[i].item],
         { metaCm, limite: LIMITE_DA_ANALISE });
     }
 
     candidatos.sort((a, b) => b.cabem - a.cabem);
+    sugerirComplemento(mapa, candidatos, metaCm);
     analiseDoComplemento = { resultado: r, config, metaCm, candidatos };
     mostrarCandidatos(candidatos);
+    mostrarSugestao(candidatos);
 
     const cabem = candidatos.filter((c) => c.cabem > 0).length;
     avisarNoComplemento(cabem === 0
       ? (metaCm > 0
-        ? "Nenhuma peça cabe até essa metragem. Tente uma metragem maior."
-        : "Nenhuma peça cabe nos espaços vazios deste encaixe. Tente “Completar até” uma metragem.")
-      : "Escolha as quantidades e aperte Complementar: o encaixe é refeito do zero com tudo junto, "
-        + "para aproveitar o tecido ao máximo.");
+        ? "Nenhuma peça da Galeria nem deste encaixe cabe até essa metragem."
+        : "Nenhuma peça da Galeria nem deste encaixe cabe nos espaços vazios sem aumentar a metragem.")
+      : "");
     btnComplementoAplicar.disabled = cabem === 0;
   } catch (erro) {
     console.error("[complemento] falhou ao procurar:", erro);
     avisarNoComplemento(`Não deu para procurar: ${erro && erro.message ? erro.message : erro}`, true);
   } finally {
-    btnComplementoProcurar.disabled = false;
+    // nada a soltar: a procura não trava botão nenhum além do Aplicar
   }
+}
+
+/*
+ * A SUGESTÃO DO OPTMIZE: quais artes e quantas de cada.
+ *
+ * O "cabem" de cada candidato é dele SOZINHO — dois candidatos disputam os
+ * mesmos vãos, e somar os números prometia mais do que cabe. A sugestão
+ * assenta todos JUNTOS num mapa de rascunho, os maiores primeiro (só eles
+ * entram nos vãos grandes; os miúdos fecham o que sobra), e o que entrou de
+ * cada um é a quantidade sugerida — as artes da Galeria antes das peças do
+ * próprio encaixe. É a mesma conta do Preencher, então a sugestão é o que de
+ * fato cabe sem mexer no encaixe.
+ */
+function sugerirComplemento(mapa, candidatos, metaCm) {
+  const rascunho = { ...mapa, colunas: mapa.colunas.map((lista) => lista.slice()) };
+  candidatos.forEach((c) => { c.sugerido = 0; });
+  // A GALERIA PRIMEIRO: repetir peça do próprio pedido é decisão de quem
+  // vende, então elas só fecham o que as artes da Galeria deixaram.
+  for (const daGaleria of [true, false]) {
+    const vez = candidatos.filter((c) => c.cabem > 0 && c.daGaleria === daGaleria);
+    if (vez.length === 0) continue;
+    const { colocadas } = complementarNosVaos(rascunho,
+      vez.map((c) => ({ item: c.item, quantidade: c.cabem })), { metaCm });
+    vez.forEach((c, i) => { c.sugerido = colocadas[i] || 0; });
+  }
+}
+
+/** Quantas artes cabem de cada fonte, nas abas; abre na que tem o que oferecer. */
+function mostrarSugestao(candidatos) {
+  const daGaleria = candidatos.filter((c) => c.cabem > 0 && c.daGaleria).length;
+  const doEncaixe = candidatos.filter((c) => c.cabem > 0 && !c.daGaleria).length;
+  document.getElementById("complemento-conta-galeria").textContent = String(daGaleria);
+  document.getElementById("complemento-conta-encaixe").textContent = String(doEncaixe);
+  escolherFonte(daGaleria > 0 || doEncaixe === 0 ? "galeria" : "encaixe");
 }
 
 /** A lista do que cabe: uma linha por arte, com a quantidade editável. */
@@ -4753,6 +4850,7 @@ function mostrarCandidatos(candidatos) {
   const linhas = candidatos.map((c, i) => {
     const li = document.createElement("li");
     li.className = `complemento-item${c.cabem > 0 ? "" : " nao-cabe"}`;
+    li.dataset.fonte = c.daGaleria ? "galeria" : "encaixe";
 
     const img = document.createElement("img");
     img.alt = "";
@@ -4784,10 +4882,10 @@ function mostrarCandidatos(candidatos) {
       campo.type = "number";
       campo.min = "0";
       campo.step = "1";
-      // As da Galeria nascem com a quantidade toda; as do próprio encaixe
-      // nascem zeradas — repetir peça do pedido é decisão de quem vende, não
-      // do vão.
-      campo.value = String(c.daGaleria ? c.cabem : 0);
+      // O campo já nasce com a SUGESTÃO do Optmize (ver `sugerirComplemento`):
+      // a quantidade que, junto com as outras, cabe de verdade.
+      campo.value = String(c.sugerido || 0);
+      if (c.sugerido > 0) li.classList.add("sugerido");
       campo.dataset.candidato = String(i);
       campo.setAttribute("aria-label", `Quantas de ${c.peca.nome || "arte"}`);
       qtd.append(campo);
@@ -4805,7 +4903,10 @@ function mostrarCandidatos(candidatos) {
 function complementar() {
   const analise = analiseDoComplemento;
   if (!analise || analise.resultado !== ultimoResultado) {
-    avisarNoComplemento("O encaixe mudou desde a procura. Procure de novo.", true);
+    // O encaixe mudou por baixo (a conferência pela arte refaz o risco, por
+    // exemplo): a lista é refeita sozinha, e a pessoa só confere de novo.
+    avisarNoComplemento("O encaixe mudou desde a lista. Ela foi refeita: confira as quantidades e aperte de novo.", true);
+    void procurarComplemento();
     return;
   }
 
@@ -4820,7 +4921,80 @@ function complementar() {
     return;
   }
 
-  void complementarOtimizando(analise, pedidos);
+  if (jeitoDoComplemento() === "preencher") preencherNosVaos(analise, pedidos);
+  else void complementarOtimizando(analise, pedidos);
+}
+
+/*
+ * PREENCHER: SÓ OS VÃOS, SEM OTIMIZAR DE NOVO.
+ *
+ * O risco de antes fica intocado e as peças escolhidas se ajeitam onde sobra,
+ * as maiores primeiro (`complementarNosVaos`). É o jeito de antes do
+ * Completar refazer o encaixe, e voltou como escolha: rápido, e o que já
+ * estava posto não sai do lugar.
+ */
+function preencherNosVaos(analise, pedidos) {
+  const r = analise.resultado;
+  const mapa = prepararComplemento(r.posicoes, analise.config);
+  const { novas, colocadas } = complementarNosVaos(mapa,
+    pedidos.map((p) => ({ item: p.item, quantidade: p.quantidade })), { metaCm: analise.metaCm });
+  const total = colocadas.reduce((soma, quantas) => soma + quantas, 0);
+  if (total === 0) {
+    avisarNoComplemento("Juntas, as peças escolhidas não couberam nos vãos. Escolha menos ou outras.", true);
+    return;
+  }
+
+  const antes = { resultado: r, pecas: pecasEncaixe.map((p) => ({ ...p })) };
+
+  // As peças entram na lista: as da Galeria como peças novas, as do encaixe
+  // somando na quantidade. O índice definitivo vai para as posições novas.
+  const indiceFinal = new Map();
+  const copias = new Map();
+  pedidos.forEach((p, i) => {
+    if (!colocadas[i]) return;
+    if (p.c.daGaleria) {
+      const indice = pecasEncaixe.length;
+      pecasEncaixe.push({
+        ...p.c.peca, id: proximoIdPeca++, qtd: colocadas[i],
+        pedido: p.c.peca.pedido || ultimoPedido(pecasEncaixe),
+      });
+      indiceFinal.set(p.item, indice);
+      copias.set(indice, 0);
+    } else {
+      const peca = pecasEncaixe[p.c.indice];
+      copias.set(p.c.indice, Number(peca.qtd) || 0);
+      peca.qtd = (Number(peca.qtd) || 0) + colocadas[i];
+      indiceFinal.set(p.item, p.c.indice);
+    }
+  });
+  novas.forEach((pos) => {
+    const indice = indiceFinal.get(pos.item);
+    const copia = copias.get(indice) + 1;
+    copias.set(indice, copia);
+    pos.item = { ...pos.item, indice, copia };
+  });
+
+  const posicoes = [...r.posicoes, ...novas];
+  const peDaArte = posicoes.reduce((m, p) => Math.max(m, p.y + p.altura), 0);
+  guardarResultado({
+    ...r,
+    posicoes,
+    consumo: Math.max(r.consumo, peDaArte),
+    areaReal: r.areaReal + novas.reduce((soma, p) => soma + p.item.mascaras.areaReal, 0),
+    areaCaixas: (r.areaCaixas || 0) + novas.reduce((soma, p) => soma + p.largura * p.altura, 0),
+    totalItens: (r.totalItens || r.posicoes.length) + total,
+    complementado: (r.complementado || 0) + total,
+  });
+  antesDoComplemento = antes;
+
+  analiseDoComplemento = null;
+  complementoLista.replaceChildren();
+  complementoLista.classList.add("hidden");
+  esconderSugestao();
+  btnComplementoAplicar.disabled = true;
+  fecharComplemento(false);
+  renderPecasEncaixe();
+  renderResultado();
 }
 
 /*
@@ -4837,6 +5011,8 @@ function complementar() {
 async function complementarOtimizando(analise, pedidos) {
   const r = analise.resultado;
   const antes = { resultado: r, pecas: pecasEncaixe.map((p) => ({ ...p })) };
+  // O teto: a meta que a pessoa definiu, ou a metragem de agora se não houver.
+  const metragemDeAntes = Math.max(metragemDoRisco(r), analise.metaCm || 0);
 
   for (const p of pedidos) {
     if (p.c.daGaleria) {
@@ -4856,11 +5032,14 @@ async function complementarOtimizando(analise, pedidos) {
   analiseDoComplemento = null;
   complementoLista.replaceChildren();
   complementoLista.classList.add("hidden");
+  esconderSugestao();
   btnComplementoAplicar.disabled = true;
   fecharComplemento(false);
   renderPecasEncaixe();
 
-  await optmizar();
+  // Só os motores que encaixam pela silhueta: as peças vão para os vãos
+  // umas das outras, e não para quadrados empilhados (ver `motores`).
+  await optmizar({ modo: "vaos" });
 
   if (ultimoResultado === r || !ultimoResultado) {
     // A otimização não trouxe risco novo (cancelada, ou falhou): a lista volta
@@ -4871,6 +5050,24 @@ async function complementarOtimizando(analise, pedidos) {
     renderResultado();
     return;
   }
+  /*
+   * O COMPLETAR NUNCA ESTICA O ROLO. Se a otimização de novo saiu mais
+   * comprida que o encaixe de antes, ela é desfeita e as mesmas peças vão só
+   * para os vãos (o Preencher), que por construção não passa da metragem.
+   */
+  const novo = ultimoResultado;
+  const metragemNova = midiaConsumida(novo.consumo, novo.comprimentoBancada, novo.posicoes);
+  if (metragemNova > metragemDeAntes + 0.5) {
+    pecasEncaixe = antes.pecas;
+    guardarResultado(antes.resultado);
+    renderPecasEncaixe();
+    renderResultado();
+    preencherNosVaos(analise, pedidos);
+    void uiAlert(`Otimizar de novo passava dos ${formatarMetros(metragemDeAntes)} definidos, então as peças `
+      + "foram encaixadas sem refazer o que já estava posto, dentro dessa metragem.", { title: "Completado sem passar da metragem" });
+    return;
+  }
+
   // `guardarResultado` zera o "o que desfazer"; o do complemento vem depois.
   antesDoComplemento = antes;
   ultimoResultado.complementado = (r.complementado || 0) + total;
@@ -4884,24 +5081,35 @@ function desfazerComplemento() {
   renderPecasEncaixe();
   renderResultado();
   btnComplementoDesfazer.classList.add("hidden");
-  resumirComplemento();
   avisarNoComplemento("O último complemento foi desfeito.");
 }
 
 escopo.ouvir(btnFecharComplemento, "click", () => fecharComplemento(true));
-escopo.ouvir(btnComplementoProcurar, "click", () => { void procurarComplemento(); });
 escopo.ouvir(btnComplementoAplicar, "click", complementar);
-escopo.ouvir(btnComplementoDesfazer, "click", desfazerComplemento);
-escopo.ouvir(btnComplementoRefazer, "click", () => {
-  fecharComplemento(false);
-  abrirAjustes();
+complementoFonte.querySelectorAll(".fonte-aba").forEach((aba) => {
+  escopo.ouvir(aba, "click", () => escolherFonte(aba.dataset.fonte));
 });
-fecharNoVeu(modalComplemento, () => fecharComplemento(true));
-// Escrever na meta já escolhe "Completar até": quem digita um número quer usá-lo.
+// Mudar a meta refaz a lista do que cabe, meio segundo depois de parar de digitar.
+let procuraDaMeta = null;
 escopo.ouvir(complementoMeta, "input", () => {
-  const ate = modalComplemento.querySelector('input[name="complemento-modo"][value="ate"]');
-  if (ate) ate.checked = true;
+  clearTimeout(procuraDaMeta);
+  procuraDaMeta = setTimeout(() => { if (complementoAberto()) void procurarComplemento(); }, 500);
 });
+escopo.ouvir(complementoJeitoBotao, "click", () => abrirJeito(!complementoJeitoCaixa.classList.contains("aberto")));
+complementoJeitoLista.querySelectorAll(".jeito-opcao").forEach((opcao) => {
+  escopo.ouvir(opcao, "click", () => escolherJeito(opcao));
+  escopo.ouvir(opcao, "keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); escolherJeito(opcao); }
+    if (e.key === "ArrowDown") { e.preventDefault(); (opcao.nextElementSibling || opcao).focus(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); (opcao.previousElementSibling || opcao).focus(); }
+    if (e.key === "Escape") { e.stopPropagation(); abrirJeito(false); complementoJeitoBotao.focus(); }
+  });
+});
+escopo.ouvir(document, "mousedown", (e) => {
+  if (complementoJeitoCaixa.classList.contains("aberto") && !complementoJeitoCaixa.contains(e.target)) abrirJeito(false);
+});
+escopo.ouvir(btnComplementoDesfazer, "click", desfazerComplemento);
+fecharNoVeu(modalComplemento, () => fecharComplemento(true));
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && complementoAberto()) fecharComplemento(true);
 });
@@ -4938,7 +5146,6 @@ escopo.ouvir(btnAjustesOptmizar, "click", () => {
 });
 
 escopo.ouvir(btnFecharAjustes, "click", () => fecharAjustes(true));
-escopo.ouvir(btnAjustesCancelar, "click", () => fecharAjustes(true));
 
 // Clique no véu fecha; clique DENTRO da caixa — ou que começou dentro dela —
 // não. Ver `fecharNoVeu`, no começo do arquivo.

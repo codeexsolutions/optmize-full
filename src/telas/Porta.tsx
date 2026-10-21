@@ -49,9 +49,9 @@ const VANTAGENS = [
     texto: "O número que vira orçamento, antes de cortar.",
   },
   {
-    icone: "icones.svg#printer",
-    titulo: "Central das impressoras",
-    texto: "A produção inteira num painel só.",
+    icone: "icones.svg#scan-line",
+    titulo: "Moldes por foto",
+    texto: "A foto da peça vira molde na medida certa.",
   },
   {
     icone: "icones.svg#badge-check",
@@ -112,9 +112,9 @@ export function Porta({
               className="relative size-10 rounded-[10px]"
             />
           </span>
-          <span className="font-titulo text-[20px] tracking-tight">
+          <span className="font-titulo text-[20px] ">
             <span className="text-tinta-fraca">CodeEx </span>
-            <span className="font-bold text-ambar">Optmize</span>
+            <span className=" text-ambar">Optmize</span>
           </span>
         </div>
 
@@ -130,7 +130,7 @@ export function Porta({
         </div>
 
         <div className="relative">
-          <h2 className="m-0 font-titulo text-[30px] leading-[1.1] tracking-tight text-tinta">
+          <h2 className="m-0 font-titulo text-[30px] leading-[1.1]  text-tinta">
             Menos tecido
             <br />
             <span className="text-ambar">no mesmo pedido.</span>
@@ -164,12 +164,12 @@ export function Porta({
         </p>
       </aside>
 
-      <div className="relative flex h-full w-full justify-center overflow-y-auto px-4 py-6">
-        {/* Os brilhos presos à coluna do cartão, como no painel web. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-24 -left-24 size-[420px] rounded-full bg-ambar opacity-[0.10] blur-[130px]" />
-          <div className="absolute -right-24 -bottom-24 size-[420px] rounded-full bg-ambar opacity-[0.07] blur-[130px]" />
-        </div>
+      {/*
+        A MESA: a coluna do cartão é a bancada onde a folha cai, com a grade
+        de centímetros de uma base de corte bem apagada por baixo. Saíram os
+        brilhos desfocados — eram o que dava à porta cara de modelo pronto.
+      */}
+      <div className="porta-mesa relative flex h-full w-full justify-center overflow-y-auto px-6 py-8">
 
         {/*
           `my-auto`, E NÃO `items-center`: centrado pelo `items-center`, um
@@ -191,20 +191,28 @@ export function Porta({
                 className="relative size-14 rounded-xl"
               />
             </span>
-            <h1 className="m-0 font-titulo text-2xl tracking-tight">
-              <span className="font-medium text-tinta-fraca">CodeEx </span>
-              <span className="font-bold text-ambar">Optmize</span>
+            <h1 className="m-0 font-titulo text-2xl ">
+              <span className=" text-tinta-fraca">CodeEx </span>
+              <span className=" text-ambar">Optmize</span>
             </h1>
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl border border-linha bg-painel/90 backdrop-blur transition-[border-color,box-shadow] duration-300 shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85)] focus-within:border-[var(--accent-line)] focus-within:shadow-[0_30px_70px_-24px_rgba(0,0,0,0.85),0_0_0_1px_var(--accent-line)]">
-            {/* O fio de luz no topo do cartão — o detalhe que o painel web tem. */}
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-60"
-            />
-            <div className="p-8">{children}</div>
-            {rodape && <div className="border-t border-linha px-8 py-4">{rodape}</div>}
+          {/*
+            A FOLHA QUE SAIU DA IMPRESSORA. Superfície chapada, sem vidro;
+            as marcas de corte nos quatro cantos, por fora, e a tira de
+            conferência de cor descendo pela margem esquerda — a mesma que
+            sai na beira do papel de sublimação. Ver `estilo/entrada.css`.
+          */}
+          <div className="porta-folha">
+            <span aria-hidden="true" className="porta-corte porta-corte-1" />
+            <span aria-hidden="true" className="porta-corte porta-corte-2" />
+            <span aria-hidden="true" className="porta-corte porta-corte-3" />
+            <span aria-hidden="true" className="porta-corte porta-corte-4" />
+            <span aria-hidden="true" className="porta-tira">
+              <i /><i /><i /><i /><i /><i /><i />
+            </span>
+            <div className="py-9 pr-9 pl-16">{children}</div>
+            {rodape && <div className="porta-folha-pe py-4 pr-9 pl-16">{rodape}</div>}
           </div>
         </div>
       </div>
@@ -247,18 +255,19 @@ export function mascararDocumento(texto: string): string {
 }
 
 /**
- * O CAMPO DA FICHA — rótulo, ícone, linha e, na senha, o olho.
+ * O CAMPO DA FOLHA — uma caixa com o rótulo DENTRO, em cima do que se digita,
+ * e, na senha, o olho.
  *
- * NÃO É UMA CAIXA: é a linha de uma ficha de produção, onde se escreve em
- * cima do traço. No foco, um traço laranja corre da esquerda para a direita
- * por cima dele (um `scaleX`, que a placa de vídeo faz sozinha) e o ícone
- * acende — é o que diz, de relance, onde o cursor está.
+ * Era a linha de uma ficha, com um ícone à esquerda de cada campo. O ícone
+ * saiu (`icone` fica no tipo para quem ainda o passa, e não desenha nada): três
+ * desenhos dizendo "documento, envelope, cadeado" ao lado de rótulos que já
+ * dizem isso é enfeite. A caixa inteira é clicável e acende em laranja no foco.
  *
  * `senha` liga o olho e cuida do `type` sozinho. Todo o resto vai direto para o `<input>`.
  */
 export function Campo({
   rotulo,
-  icone,
+  icone: _icone,
   senha = false,
   dica,
   acessorio,
@@ -267,7 +276,8 @@ export function Campo({
   ...props
 }: {
   rotulo: string;
-  icone: string;
+  /** Não desenha mais nada — ver acima. */
+  icone?: string;
   senha?: boolean;
   /** Uma regra curta debaixo do campo ("Ao menos 8 caracteres"). */
   dica?: ReactNode;
@@ -281,25 +291,26 @@ export function Campo({
   const id = props.id ?? idGerado;
 
   return (
-    <div className={`group flex flex-col gap-1 ${classe}`}>
-      <div className="flex items-baseline justify-between gap-3">
-        <label htmlFor={id} className="text-[12.5px] text-tinta-fraca">
+    <div className={`flex flex-col gap-2 ${classe}`}>
+      {/*
+        A caixa toda leva ao campo: o clique no rótulo ou na borda cai no
+        `<input>`, que é onde a pessoa queria escrever.
+      */}
+      <div className="porta-campo" onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          e.preventDefault();
+          document.getElementById(id)?.focus();
+        }
+      }}>
+        <label htmlFor={id} className="porta-campo-rotulo">
           {rotulo}
         </label>
-        {acessorio}
-      </div>
-      <span className="relative flex items-center">
-        <Icone
-          referencia={icone}
-          className="pointer-events-none absolute left-0 size-4 text-tinta-apagada transition-colors duration-200 group-focus-within:text-ambar"
-        />
         <input
           {...props}
           id={id}
           type={senha ? (aberta ? "text" : "password") : props.type}
-          className={`campo-ficha${senha ? " pr-10" : ""} ${className}`}
+          className={`porta-campo-entrada${senha ? " pr-10" : ""} ${className}`}
         />
-        <span aria-hidden="true" className="campo-ficha-traco" />
         {/*
           O OLHO. Senha digitada errada às cegas é a causa mais comum de "não
           consigo entrar" — e no chão de fábrica, com teclado sujo e pressa,
@@ -311,13 +322,18 @@ export function Campo({
             onClick={() => setAberta((v) => !v)}
             title={aberta ? "Esconder a senha" : "Mostrar a senha"}
             aria-label={aberta ? "Esconder a senha" : "Mostrar a senha"}
-            className="absolute right-0 grid size-8 place-items-center rounded-lg text-tinta-apagada transition-colors hover:text-ambar"
+            className="absolute right-2.5 bottom-2 grid size-8 place-items-center rounded-md text-tinta-apagada transition-colors hover:text-ambar"
           >
             <Icone referencia={aberta ? "icones.svg#eye-off" : "icones.svg#eye"} className="size-4" />
           </button>
         )}
-      </span>
-      {dica && <span className="mt-1 text-[11.5px] text-tinta-apagada">{dica}</span>}
+      </div>
+      {(dica || acessorio) && (
+        <div className="flex items-baseline justify-between gap-3">
+          {dica ? <span className="text-[11.5px] text-tinta-apagada">{dica}</span> : <span />}
+          {acessorio}
+        </div>
+      )}
     </div>
   );
 }
@@ -338,7 +354,7 @@ export function Cabecalho({
   return (
     <header className="entrada-degrau flex flex-col gap-5">
       <div>
-        <h2 className="m-0 font-titulo text-[26px] leading-tight tracking-[-0.015em] text-tinta">
+        <h2 className="m-0 font-titulo text-[32px] leading-[1.05]  text-tinta">
           {titulo}
         </h2>
         {subtitulo && (
@@ -372,13 +388,16 @@ export function BotaoPrincipal({
     <button
       type="submit"
       {...props}
-      className={`entrada-degrau botao-entrar w-full justify-between! px-5 text-[15px] ${className}`}
+      className={`entrada-degrau botao-entrar w-full justify-between! pr-2 pl-5 text-[15px] ${className}`}
     >
       <span>{children}</span>
-      <Icone
-        referencia={esperando ? "icones.svg#loader-circle" : icone}
-        className={`botao-entrar-seta size-[18px]${esperando ? " gira" : ""}`}
-      />
+      {/* A seta mora numa pastilha escura, que anda quando o mouse passa. */}
+      <span className="botao-entrar-pastilha">
+        <Icone
+          referencia={esperando ? "icones.svg#loader-circle" : icone}
+          className={`botao-entrar-seta size-[17px]${esperando ? " gira" : ""}`}
+        />
+      </span>
     </button>
   );
 }

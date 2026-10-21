@@ -162,7 +162,7 @@ export function ListaDePecas({ molde, moldeId, grupo, aoEscolherGrupo }: Props) 
           aoCancelar={() => setCasamento(null)}
         />
       )}
-      <p className="m-0 text-[0.8rem] font-semibold text-tinta-fraca">Peças</p>
+      <p className="m-0 text-[0.8rem]  text-tinta-fraca">Peças</p>
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
         {grupos.map((g, i) => {
           // A peça que representa o grupo na lista: a do tamanho base, ou a primeira.

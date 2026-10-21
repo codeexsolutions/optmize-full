@@ -153,7 +153,7 @@ export function Impressoras() {
               O número que a fábrica pergunta primeiro é "quantos metros hoje".
               Ele vem como figura grande; o resto acompanha em ladrilhos.
             */}
-            <p className="m-0 font-mono text-[2.6rem] leading-none font-semibold text-ambar">
+            <p className="m-0 font-mono text-[2.6rem] leading-none  text-ambar">
               {metrosCurtos(dados.today.printLength)}
             </p>
             <p className="mt-1 mb-4 text-[0.8rem] text-tinta-fraca">
@@ -185,7 +185,7 @@ export function Impressoras() {
                   type="button"
                   onClick={() => setDias(janela.dias)}
                   aria-pressed={dias === janela.dias}
-                  className={`rounded-[7px] px-2.5 py-1 text-[0.78rem] font-semibold transition-colors ${
+                  className={`rounded-[7px] px-2.5 py-1 text-[0.78rem]  transition-colors ${
                     dias === janela.dias ? "bg-ambar text-ambar-tinta" : "text-tinta-fraca hover:text-tinta"
                   }`}
                 >
@@ -324,7 +324,7 @@ function BotaoDeAviso({ ligado, aoClicar, icone, rotulo }: {
       type="button"
       onClick={aoClicar}
       aria-pressed={ligado}
-      className={`flex items-center gap-2 rounded-[9px] border px-3.5 py-2 text-[0.82rem] font-semibold transition-colors ${
+      className={`flex items-center gap-2 rounded-[9px] border px-3.5 py-2 text-[0.82rem]  transition-colors ${
         ligado ? "border-ambar bg-ambar text-ambar-tinta" : "border-linha text-tinta-fraca hover:text-tinta"
       }`}
     >
@@ -356,7 +356,7 @@ function ComparacaoComAnterior({ atual, anterior, dias }: { atual: number; anter
   const subiu = delta >= 0;
   return (
     <p className="mt-0 mb-3 flex items-center gap-2 text-[0.8rem] text-tinta-fraca">
-      <span className={`font-mono font-semibold ${subiu ? "text-certo" : "text-atencao"}`}>
+      <span className={`font-mono  ${subiu ? "text-certo" : "text-atencao"}`}>
         {subiu ? "+" : ""}{delta.toFixed(1)}%
       </span>
       contra os {dias} dias anteriores ({metrosCurtos(anterior)}).
@@ -553,10 +553,10 @@ function TabelaDaSerie({ serie }: { serie: DiaDaSerie[] }) {
         <table className="w-full border-collapse text-[0.8rem]">
           <thead>
             <tr className="text-left text-tinta-apagada">
-              <th className="px-2 py-1.5 font-medium">Dia</th>
-              <th className="px-2 py-1.5 text-right font-medium">Metros</th>
-              <th className="px-2 py-1.5 text-right font-medium">Trabalhos</th>
-              <th className="px-2 py-1.5 text-right font-medium">Tinta</th>
+              <th className="px-2 py-1.5 ">Dia</th>
+              <th className="px-2 py-1.5 text-right ">Metros</th>
+              <th className="px-2 py-1.5 text-right ">Trabalhos</th>
+              <th className="px-2 py-1.5 text-right ">Tinta</th>
             </tr>
           </thead>
           <tbody>
@@ -667,7 +667,7 @@ function BotaoDeProcurar({ aoTerminar }: { aoTerminar: () => void }) {
         <button
           type="button"
           onClick={parar}
-          className="rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta"
+          className="rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem]  text-tinta-fraca transition-colors hover:text-tinta"
         >
           Parar
         </button>
@@ -675,7 +675,7 @@ function BotaoDeProcurar({ aoTerminar }: { aoTerminar: () => void }) {
         <button
           type="button"
           onClick={() => procurar()}
-          className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta"
+          className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem]  text-tinta-fraca transition-colors hover:text-tinta"
         >
           <Icone referencia="icones.svg#radar" className="size-4" />
           Procurar na rede

@@ -17,7 +17,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 <span className="flex min-w-0 items-baseline gap-2">
 
 <span className="eyebrow shrink-0">
-{"ARQUIVOS"}
+{"Arquivos"}
 </span>
 
 <span id="encaixe-contagem" className="truncate font-mono text-[10px] text-tinta-apagada">
@@ -135,7 +135,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 <div className="barra-bancada flex shrink-0 items-center gap-3 border-b border-linha bg-painel-suave">
 
 <span className="eyebrow shrink-0">
-{"ÁREA DE TRABALHO"}
+{"Área de trabalho"}
 </span>
 
 <p id="encaixe-andamento" className="hint hidden m-0! min-w-0 truncate">
@@ -146,7 +146,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <span id="encaixe-selecao" className="hidden flex shrink-0 items-center gap-2 rounded-[9px] border border-[var(--accent-line)] bg-[var(--accent-soft)] px-2.5 py-1">
 
-<span id="encaixe-selecao-contagem" className="text-[0.76rem] font-semibold text-ambar">
+<span id="encaixe-selecao-contagem" className="text-[0.76rem]  text-ambar">
 {"0 peças"}
 </span>
 
@@ -245,7 +245,15 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <div id="encaixe-mesa-dica" role="button" tabIndex={0} aria-label="Escolher os arquivos do encaixe" title="Clique para escolher os arquivos" className="mesa-dica absolute inset-0 hidden cursor-pointer place-items-center p-6 outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--accent-line)]">
 
-<div className="max-w-sm rounded-2xl border border-linha bg-painel-suave/90 p-6 text-center backdrop-blur-sm transition-colors hover:border-[var(--accent-line)]">
+{/* O CONVITE É UMA ÁREA MARCADA NA PRÓPRIA MESA, e não um cartão por cima
+    dela: fundo transparente (a grade aparece), contorno tracejado e as marcas
+    de corte nos cantos, como a região de corte riscada no tecido. Ver
+    `.mesa-convite` em producao.css. */}
+<div className="mesa-convite max-w-sm p-6 text-center">
+<span aria-hidden="true" className="mesa-convite-corte mesa-convite-corte-1" />
+<span aria-hidden="true" className="mesa-convite-corte mesa-convite-corte-2" />
+<span aria-hidden="true" className="mesa-convite-corte mesa-convite-corte-3" />
+<span aria-hidden="true" className="mesa-convite-corte mesa-convite-corte-4" />
 
 <span className="mesa-vazia-selo mx-auto grid size-12 place-items-center rounded-xl border border-linha text-tinta-apagada">
 
@@ -257,20 +265,19 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </span>
 
-<p className="mt-3 mb-0 font-titulo text-base font-semibold text-tinta">
+<p className="mt-3 mb-0 font-titulo text-base  text-tinta">
 {"Arraste seus arquivos aqui"}
 </p>
 
-<p className="mt-1 mb-0 text-[0.8rem] font-semibold text-ambar">
+<p className="mt-1 mb-0 text-[0.8rem]  text-ambar">
 {"ou clique para escolher"}
 </p>
 
-<p className="mt-1 mb-0 text-[0.8rem] leading-relaxed text-tinta-fraca">
-{"\n                      Moldes em DXF, PLT, SVG ou PDF, ou artes em PNG e JPG. A medida vem do próprio\n                      arquivo e a quantidade sai do nome — "}
+<p className="mt-2 mb-0 text-[0.72rem] leading-relaxed text-tinta-apagada">
+{"DXF, PLT, SVG, PDF, PNG ou JPG. Quantidade no nome: "}
 <span className="font-mono">
 {"frente 5x.png"}
 </span>
-{".\n                    "}
 </p>
 
 </div>
@@ -327,7 +334,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 <div className="encaixe-loading-copy">
 
 <span className="eyebrow" id="encaixe-loading-etapa">
-{"CALCULANDO ENCAIXE"}
+{"Calculando o encaixe"}
 </span>
 
 <strong id="encaixe-loading-titulo">
@@ -396,16 +403,16 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </div>
 
-<button id="btn-exportar" className="btn primary btn-sm ml-auto inline-flex items-center gap-1.5" type="button" title="PDF em tamanho real, para imprimir e cortar na medida certa" disabled>
+<button id="btn-exportar" className="btn primary ml-auto inline-flex h-11 items-center gap-2 px-6! text-[15px]!" type="button" title="PDF em tamanho real, para imprimir e cortar na medida certa" disabled>
 
-<svg className="size-3.5" viewBox="0 0 24 24" aria-hidden="true">
+<svg className="size-[18px]" viewBox="0 0 24 24" aria-hidden="true">
 <use href="icones.svg#file-down">
 
 </use>
 </svg>
 
 <span id="btn-exportar-rotulo">
-{"Exportar PDF"}
+{"Exportar"}
 </span>
 
 </button>
@@ -667,10 +674,6 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <div className="ajustes-rodape">
 
-<button type="button" id="btn-ajustes-cancelar" className="btn secondary">
-{"Cancelar"}
-</button>
-
 <button type="button" id="btn-ajustes-optmizar" className="btn primary">
 
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -700,48 +703,82 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 </span>
 <span className="ajustes-topo-texto">
 <h3 id="modal-complemento-titulo">{"Complementar"}</h3>
-<p id="complemento-resumo">{"—"}</p>
 </span>
 <button type="button" id="btn-fechar-complemento" className="ajustes-x" title="Fechar" aria-label="Fechar">
 <svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#x"></use></svg>
 </button>
 </div>
 <div className="ajustes-corpo">
-<div className="complemento-grupo">
-<span className="campo-rotulo">{"Procurar em"}</span>
-<div className="complemento-opcoes">
-<label className="complemento-opcao"><input type="checkbox" id="complemento-da-galeria" defaultChecked={true} /><span>{"Galeria"}</span></label>
-<label className="complemento-opcao"><input type="checkbox" id="complemento-do-encaixe" defaultChecked={true} /><span>{"Peças deste encaixe"}</span></label>
+{/* O JEITO, num seletor próprio (o <select> do sistema não anima):
+    COMPLETAR ATÉ otimiza de novo com as peças novas, sem nunca passar da
+    metragem de agora; PREENCHER só encaixa nos vãos, sem otimizar de novo.
+    Quem abre, fecha e escolhe é producao/controlador.js. */}
+{/* O seletor e o "Até … m" na MESMA linha: o campo só aparece no Completar. */}
+<div className="complemento-linha">
+<div className="jeito" id="complemento-jeito-caixa">
+<span className="campo-rotulo">{"Como"}</span>
+<button type="button" id="complemento-jeito-botao" className="jeito-botao" aria-haspopup="listbox" aria-expanded="false">
+<span className="jeito-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><use id="complemento-jeito-icone" href="icones.svg#zap"></use></svg></span>
+<span className="jeito-texto">
+<b id="complemento-jeito-nome">{"Completar até"}</b>
+<small id="complemento-jeito-desc">{"Otimiza de novo, sem passar da metragem que você definir"}</small>
+</span>
+<svg className="jeito-seta" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#chevron-down"></use></svg>
+</button>
+<ul className="jeito-lista" id="complemento-jeito-lista" role="listbox" aria-label="Como complementar">
+<li role="option" className="jeito-opcao" data-jeito="completar" data-icone="zap" aria-selected="true" tabIndex={-1}>
+<span className="jeito-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#zap"></use></svg></span>
+<span className="jeito-texto"><b>{"Completar até"}</b><small>{"Otimiza de novo, sem passar da metragem que você definir"}</small></span>
+<svg className="jeito-marca" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#check"></use></svg>
+</li>
+<li role="option" className="jeito-opcao" data-jeito="preencher" data-icone="puzzle" aria-selected="false" tabIndex={-1}>
+<span className="jeito-icone"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#puzzle"></use></svg></span>
+<span className="jeito-texto"><b>{"Preencher"}</b><small>{"Só os vãos, sem mexer no que já está posto"}</small></span>
+<svg className="jeito-marca" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#check"></use></svg>
+</li>
+</ul>
+<input type="hidden" id="complemento-jeito" defaultValue="completar" />
 </div>
-</div>
-<div className="complemento-grupo">
-<span className="campo-rotulo">{"Até onde"}</span>
-<div className="complemento-opcoes complemento-opcoes-coluna">
-<label className="complemento-opcao"><input type="radio" name="complemento-modo" value="vaos" defaultChecked={true} /><span>{"Pelos espaços vazios — sugere o que cabe sem aumentar a metragem"}</span></label>
-<label className="complemento-opcao"><input type="radio" name="complemento-modo" value="ate" /><span>{"Completar até"}</span>
-<span className="campo-caixa complemento-meta"><input type="number" id="complemento-meta" min="0.1" step="0.1" /><span className="campo-unidade">{"m"}</span></span>
+{/* ATÉ QUANTO: a metragem do Completar, definida por quem usa. Nasce com a
+    de agora; o resultado nunca passa dela. No Preencher fica desativado. */}
+<label className="campo-medida complemento-ate" id="complemento-ate">
+<span className="campo-rotulo">{"Até"}</span>
+<span className="campo-caixa">
+<input type="number" id="complemento-meta" min="0.01" step="0.01" />
+<span className="campo-unidade">{"m"}</span>
+</span>
 </label>
 </div>
-</div>
-<button type="button" id="btn-complemento-procurar" className="btn secondary justify-center">
-<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#search"></use></svg>
-{"Procurar o que cabe"}
-</button>
 <p id="complemento-estado" className="complemento-estado hidden"></p>
+{/* DE ONDE VÊM AS PEÇAS, em abas: a Galeria ou as do próprio Encaixe. As
+    quantidades sugeridas já vêm nos campos das duas; a aba só filtra a lista. */}
+<div className="fonte-linha">
+<div id="complemento-fonte" className="fonte" role="tablist" aria-label="De onde vêm as peças">
+<span className="fonte-pilula" aria-hidden="true"></span>
+<button type="button" role="tab" className="fonte-aba" data-fonte="galeria" aria-selected="true">
+<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#image"></use></svg>
+{"Galeria"}<i id="complemento-conta-galeria">{"0"}</i>
+</button>
+<button type="button" role="tab" className="fonte-aba" data-fonte="encaixe" aria-selected="false">
+<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#blocks"></use></svg>
+{"Encaixe"}<i id="complemento-conta-encaixe">{"0"}</i>
+</button>
+</div>
+{/* Refaz a lista do que cabe — a mesma procura de quando o modal abre. */}
+<button type="button" id="btn-complemento-atualizar" className="fonte-atualizar" title="Procurar de novo o que cabe" aria-label="Procurar de novo o que cabe">
+<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#refresh-cw"></use></svg>
+</button>
+</div>
 <ul id="complemento-lista" className="complemento-lista hidden"></ul>
 </div>
 <div className="ajustes-rodape complemento-rodape">
-<button type="button" id="btn-complemento-refazer" className="btn secondary complemento-refazer" title="Abre os ajustes e refaz o encaixe do zero">
-<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#zap"></use></svg>
-{"Optmizar de novo"}
-</button>
 <button type="button" id="btn-complemento-desfazer" className="btn secondary hidden">
 <svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#rotate-ccw"></use></svg>
 {"Desfazer"}
 </button>
 <button type="button" id="btn-complemento-aplicar" className="btn primary" disabled={true}>
 <svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#puzzle"></use></svg>
-{"Complementar"}
+<span id="btn-complemento-aplicar-rotulo">{"Completar"}</span>
 </button>
 </div>
 </div>

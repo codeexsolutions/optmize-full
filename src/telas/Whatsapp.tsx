@@ -119,7 +119,7 @@ export function Whatsapp() {
             <button
               type="button"
               onClick={conectar}
-              className="rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro"
+              className="rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem]  text-ambar-tinta transition-colors hover:bg-ambar-claro"
             >
               Conectar WhatsApp
             </button>

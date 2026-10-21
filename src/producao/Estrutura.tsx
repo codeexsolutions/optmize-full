@@ -28,7 +28,7 @@ export const Estrutura = memo(function Estrutura() { return <><Encaixe /><div cl
 <div className="ui-dialog-content">
 
 <span className="eyebrow" id="ui-dialog-kicker">
-{"CONFIRMAÇÃO"}
+{"Confirmação"}
 </span>
 
 <h2 id="ui-dialog-title">

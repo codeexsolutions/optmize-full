@@ -68,7 +68,7 @@ export function JanelaDeAtalhos({ aberto, aoFechar, comMontagem }: Props) {
           if (linhas.length === 0) return null;
           return (
             <section key={g.titulo}>
-              <h3 className="m-0 mb-1 text-[10px] font-semibold tracking-wide text-tinta-apagada uppercase">{g.titulo}</h3>
+              <h3 className="m-0 mb-1 text-[10px]   text-tinta-apagada ">{g.titulo}</h3>
               <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                 {linhas.map(([tecla, faz]) => (
                   <div key={tecla} className="contents">

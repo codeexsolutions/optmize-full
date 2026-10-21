@@ -183,7 +183,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
   const novaPasta = async (paiId: number | null = aberta) => {
     const nome = await dialogo.perguntar({
       titulo: "Nova pasta",
-      kicker: "MEUS ARQUIVOS",
+      kicker: "Meus arquivos",
       texto: "O nome da pasta, do jeito que você procuraria por ela.",
       exemplo: "Fardamento Padaria Sol",
       confirmar: "Criar",
@@ -200,7 +200,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
 
   const renomearPasta = async (pasta: { id: number; nome: string }) => {
     const nome = await dialogo.perguntar({
-      titulo: "Renomear pasta", kicker: "MEUS ARQUIVOS", valor: pasta.nome, confirmar: "Salvar",
+      titulo: "Renomear pasta", kicker: "Meus arquivos", valor: pasta.nome, confirmar: "Salvar",
     });
     if (!nome || nome === pasta.nome) return;
     try {
@@ -233,7 +233,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
 
   const renomearArquivo = async (arquivo: ArquivoDaGaleria) => {
     const nome = await dialogo.perguntar({
-      titulo: "Renomear arquivo", kicker: "MEUS ARQUIVOS", valor: arquivo.nome, confirmar: "Salvar",
+      titulo: "Renomear arquivo", kicker: "Meus arquivos", valor: arquivo.nome, confirmar: "Salvar",
     });
     if (!nome || nome === arquivo.nome) return;
     try {
@@ -447,7 +447,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
               referencia={ativa ? "icones.svg#folder-open" : "icones.svg#folder"}
               className={`size-4 shrink-0 ${ativa ? "text-ambar" : "text-tinta-apagada"}`}
             />
-            <span className={`truncate text-[13px] ${ativa ? "font-medium text-ambar" : "text-tinta-fraca group-hover:text-tinta"}`}>{pasta.nome}</span>
+            <span className={`truncate text-[13px] ${ativa ? " text-ambar" : "text-tinta-fraca group-hover:text-tinta"}`}>{pasta.nome}</span>
           </button>
           <span className="hidden shrink-0 group-hover:block">
             <AcaoMiuda titulo="Nova pasta dentro" onClick={() => void novaPasta(pasta.id)}>
@@ -534,7 +534,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
                 </>
               )}
             </nav>
-            <h1 className="m-0 truncate font-titulo text-3xl font-semibold tracking-tight text-tinta">
+            <h1 className="m-0 truncate font-titulo text-3xl   text-tinta">
               {buscando ? `“${termo}”` : nomeDaAberta}
             </h1>
             <p className="mt-1 mb-0 text-xs text-tinta-apagada">
@@ -554,7 +554,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
                 type="button"
                 disabled={envio !== null}
                 onClick={() => entradaDeArquivos.current?.click()}
-                className="galeria-novo flex h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold disabled:opacity-60"
+                className="galeria-novo flex h-10 items-center gap-2 rounded-full px-5 text-sm  disabled:opacity-60"
               >
                 <Icone referencia="icones.svg#upload" className="size-4" />
                 Enviar
@@ -567,7 +567,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
           <div className="mx-6 mb-3 flex items-start gap-2.5 rounded-2xl border border-[color-mix(in_srgb,var(--danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-4 py-3">
             <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-4 shrink-0 text-[var(--danger)]" />
             <p className="m-0 min-w-0 flex-1 text-xs leading-relaxed text-[var(--danger)]">{erro}</p>
-            <button type="button" onClick={() => void recarregar()} className="shrink-0 text-xs font-semibold text-ambar hover:underline">
+            <button type="button" onClick={() => void recarregar()} className="shrink-0 text-xs  text-ambar hover:underline">
               Tentar de novo
             </button>
             <button type="button" onClick={() => setErro("")} aria-label="Fechar o aviso" className="shrink-0 text-tinta-apagada hover:text-tinta">
@@ -629,7 +629,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
                       >
                         <span className="galeria-pasta" aria-hidden="true" />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-tinta">{pasta.nome}</span>
+                          <span className="block truncate text-sm  text-tinta">{pasta.nome}</span>
                           <span className="block truncate text-[11px] text-tinta-apagada">
                             {pasta.onde ? `em ${pasta.onde}` : `${pasta.pastas ? `${pasta.pastas} pasta(s) · ` : ""}${pasta.arquivos} arquivo(s)`}
                           </span>
@@ -661,7 +661,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
                     </div>
                   ) : (
                     <div className="galeria-vidro overflow-hidden rounded-2xl">
-                      <div className="grid grid-cols-[minmax(0,1fr)_110px_120px_104px] items-center gap-3 border-b border-linha px-4 py-2.5 text-[10px] font-bold tracking-widest text-tinta-apagada uppercase">
+                      <div className="grid grid-cols-[minmax(0,1fr)_110px_120px_104px] items-center gap-3 border-b border-linha px-4 py-2.5 text-[10px]   text-tinta-apagada ">
                         <span>Nome</span>
                         <span>Tamanho</span>
                         <span>Guardado em</span>
@@ -721,7 +721,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
                 <Icone referencia="icones.svg#cloud-upload" className="size-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-tinta">
+                <span className="block text-sm  text-tinta">
                   Enviando {envio.feitos + 1} de {envio.total}
                 </span>
                 <span className="block truncate text-[11px] text-tinta-apagada">{envio.nome}</span>
@@ -745,7 +745,7 @@ export function ArquivosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
               <span className="galeria-novo grid size-20 place-items-center rounded-3xl">
                 <Icone referencia="icones.svg#cloud-upload" className="size-9" />
               </span>
-              <p className="m-0 font-titulo text-xl font-semibold text-tinta">Solte para guardar</p>
+              <p className="m-0 font-titulo text-xl  text-tinta">Solte para guardar</p>
               <p className="m-0 text-sm text-tinta-fraca">em <span className="text-ambar">{nomeDaAberta}</span></p>
             </div>
           </div>
@@ -816,7 +816,7 @@ function CartaoDeArquivo({ arquivo, ordem, largo, onde, aoAbrir, acoes, arraste 
             <Icone referencia={tipo.icone} className="size-11 drop-shadow-[0_6px_16px_currentColor]" />
           </span>
         )}
-        <span className="galeria-selo absolute bottom-2 left-2 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider uppercase backdrop-blur">
+        <span className="galeria-selo absolute bottom-2 left-2 rounded-md px-1.5 py-0.5 font-mono text-[10px]    backdrop-blur">
           {extensao(arquivo.nome) || tipo.rotulo}
         </span>
         <span className="galeria-vidro absolute top-2 right-2 flex items-center rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -828,7 +828,7 @@ function CartaoDeArquivo({ arquivo, ordem, largo, onde, aoAbrir, acoes, arraste 
           <Icone referencia={tipo.icone} className="size-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium text-tinta" title={arquivo.nome}>{arquivo.nome}</span>
+          <span className="block truncate text-[13px]  text-tinta" title={arquivo.nome}>{arquivo.nome}</span>
           <span className="block truncate text-[11px] text-tinta-apagada">
             {onde ? `em ${onde}` : `${tamanhoLegivel(arquivo.bytes)} · ${dataCurta(arquivo.criadoEm)}`}
           </span>
@@ -843,11 +843,11 @@ function Secao({ rotulo, icone, contagem, children }: {
 }) {
   return (
     <section className="mb-8">
-      <h2 className="mt-0 mb-3 flex items-center gap-2 text-xs font-semibold tracking-wide text-tinta-fraca">
+      <h2 className="mt-0 mb-3 flex items-center gap-2 text-xs   text-tinta-fraca">
         <Icone referencia={icone} className="size-3.5 text-tinta-apagada" />
         {rotulo}
         {contagem !== undefined && (
-          <span className="rounded-full bg-[var(--surface-hover)] px-2 py-0.5 font-mono text-[10px] font-normal text-tinta-apagada">
+          <span className="rounded-full bg-[var(--surface-hover)] px-2 py-0.5 font-mono text-[10px]  text-tinta-apagada">
             {contagem}
           </span>
         )}
@@ -868,7 +868,7 @@ function PastaVazia({ raiz, aoEnviar, aoCriar }: { raiz: boolean; aoEnviar: () =
           <span className="galeria-pasta absolute top-10 left-1/2 -ml-[23px] scale-[2] drop-shadow-[0_20px_40px_rgba(255,83,31,0.45)]" />
         </div>
         <div>
-          <p className="m-0 font-titulo text-2xl font-semibold text-tinta">
+          <p className="m-0 font-titulo text-2xl  text-tinta">
             {raiz ? "Seu drive está pronto" : "Esta pasta está vazia"}
           </p>
           <p className="mt-2 mb-0 text-sm leading-relaxed text-tinta-fraca">
@@ -878,7 +878,7 @@ function PastaVazia({ raiz, aoEnviar, aoCriar }: { raiz: boolean; aoEnviar: () =
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <button type="button" onClick={aoEnviar} className="galeria-novo flex h-11 items-center gap-2 rounded-full px-6 text-sm font-semibold">
+          <button type="button" onClick={aoEnviar} className="galeria-novo flex h-11 items-center gap-2 rounded-full px-6 text-sm ">
             <Icone referencia="icones.svg#upload" className="size-4" />
             Enviar arquivos
           </button>
@@ -954,12 +954,12 @@ function Visualizador({ arquivo, aoFechar }: { arquivo: ArquivoDaGaleria; aoFech
             <Icone referencia={tipo.icone} className="size-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-tinta">{arquivo.nome}</span>
+            <span className="block truncate text-sm  text-tinta">{arquivo.nome}</span>
             <span className="block text-[11px] text-tinta-apagada">
               {tamanhoLegivel(arquivo.bytes)} · guardado em {dataCurta(arquivo.criadoEm)}
             </span>
           </span>
-          <button type="button" onClick={() => baixar(arquivo)} className="galeria-novo flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold">
+          <button type="button" onClick={() => baixar(arquivo)} className="galeria-novo flex h-9 items-center gap-2 rounded-full px-4 text-sm ">
             <Icone referencia="icones.svg#download" className="size-4" />
             Baixar
           </button>

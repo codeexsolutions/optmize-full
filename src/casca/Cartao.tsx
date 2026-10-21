@@ -70,7 +70,7 @@ export function Cartao({ titulo, apoio, icone, acao, preencher, children }: Prop
               </span>
             )}
             <div className="min-w-0">
-              {titulo && <h2 className="m-0 font-titulo text-[1.05rem] font-semibold tracking-[-0.02em] text-tinta">{titulo}</h2>}
+              {titulo && <h2 className="m-0 font-titulo text-[1.05rem]   text-tinta">{titulo}</h2>}
               {apoio && <p className="mt-1 mb-0 text-[0.83rem] text-tinta-fraca">{apoio}</p>}
             </div>
           </div>

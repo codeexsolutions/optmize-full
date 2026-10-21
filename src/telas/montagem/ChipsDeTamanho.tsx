@@ -33,7 +33,7 @@ export function ChipsDeTamanho({ tamanhos, ativo, comDesenho, aoEscolher, verTam
             aria-pressed={t.nome === ativo}
             title={`${t.nome}${t.base ? " (base)" : ""}${tem ? "" : " — sem desenho nesta peça"}`}
             className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 ${
-              t.nome === ativo ? "border-ambar bg-[var(--accent-soft)] font-semibold" : "border-linha"
+              t.nome === ativo ? "border-ambar bg-[var(--accent-soft)] " : "border-linha"
             } ${tem ? "" : "border-dashed text-tinta-fraca"}`}
           >
             <span className="size-2.5 rounded-full" style={{ background: t.cor }} />

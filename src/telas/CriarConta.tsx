@@ -357,7 +357,7 @@ export function CriarConta({
           <span className="mx-auto grid size-16 place-items-center rounded-[6px] border border-[var(--accent-line)] bg-[var(--accent-soft)] shadow-[0_0_40px_-8px_var(--accent-line)]">
             <Icone referencia="icones.svg#badge-check" className="size-8 text-ambar" />
           </span>
-          <h2 className="mt-5 mb-0 font-titulo text-[22px] tracking-tight text-tinta">
+          <h2 className="mt-5 mb-0 font-titulo text-[22px]  text-tinta">
             Conta criada
           </h2>
           <p className="mt-2 mb-0 text-[13.5px] leading-relaxed text-tinta-fraca">
@@ -381,7 +381,7 @@ export function CriarConta({
                   body: JSON.stringify({ url: pronto.checkoutUrl }),
                 }).catch(() => {});
               }}
-              className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-[4px] border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 text-[14px] font-medium text-ambar transition-colors hover:border-[var(--accent)]"
+              className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-[4px] border border-[var(--accent-line)] bg-[var(--accent-soft)] px-4 text-[14px]  text-ambar transition-colors hover:border-[var(--accent)]"
             >
               <Icone referencia="icones.svg#external-link" className="size-4" />
               Abrir o pagamento de novo
@@ -509,7 +509,7 @@ export function CriarConta({
 
                     <span className="flex h-5 items-start">
                       {selo && (
-                        <span className="rounded-full border border-[var(--accent-line)] bg-[var(--accent-soft)] px-1.5 py-px text-[9.5px] font-medium text-ambar">
+                        <span className="rounded-full border border-[var(--accent-line)] bg-[var(--accent-soft)] px-1.5 py-px text-[9.5px]  text-ambar">
                           {selo}
                         </span>
                       )}
@@ -531,14 +531,14 @@ export function CriarConta({
                           className={`text-fundo transition-opacity ${marcado ? "opacity-100" : "opacity-0"}`}
                         />
                       </span>
-                      <span className="font-titulo text-[13.5px] leading-tight font-semibold text-tinta">
+                      <span className="font-titulo text-[13.5px] leading-tight  text-tinta">
                         {nomeCurto(plano)}
                       </span>
                     </span>
 
                     <span className="mt-2.5 block">
                       <span
-                        className={`block font-titulo text-[17px] leading-none font-semibold tracking-tight ${marcado ? "text-ambar" : "text-tinta"}`}
+                        className={`block font-titulo text-[17px] leading-none   ${marcado ? "text-ambar" : "text-tinta"}`}
                       >
                         {preco.valor}
                       </span>

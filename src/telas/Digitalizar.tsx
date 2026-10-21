@@ -500,7 +500,7 @@ export function Digitalizar() {
       const rotulo = String(i + 1);
       const x = caixa.minX * px + 6;
       const y = caixa.minY * py + 20;
-      ctx.font = "bold 16px ui-sans-serif, system-ui, sans-serif";
+      ctx.font = '16px "Inter Variable", "Inter", "Segoe UI", sans-serif';
       ctx.lineWidth = 3.5;
       ctx.strokeStyle = "rgba(10, 14, 16, 0.9)";
       ctx.strokeText(rotulo, x, y);
@@ -598,7 +598,7 @@ export function Digitalizar() {
             }`}
           >
             <Icone referencia="icones.svg#scan-line" className="mx-auto size-8 text-tinta-apagada" />
-            <p className="mt-2 mb-1 text-[0.9rem] font-semibold">
+            <p className="mt-2 mb-1 text-[0.9rem] ">
               {arquivoEmCima ? "Solte a foto aqui" : "Arraste a foto para cá, ou clique para escolher"}
             </p>
             <p className="m-0 text-[0.82rem] text-tinta-fraca">
@@ -648,7 +648,7 @@ export function Digitalizar() {
 
                 {/* ------------------------------------------------ a edição */}
                 <div className="rounded-[10px] border border-linha bg-painel-suave p-3">
-                  <p className="mt-0 mb-1 text-[0.85rem] font-semibold">Ajustar o traço à mão</p>
+                  <p className="mt-0 mb-1 text-[0.85rem] ">Ajustar o traço à mão</p>
                   <p className="mt-0 mb-2 text-[0.8rem] text-tinta-fraca">
                     A <strong>peça {qual + 1}</strong> tem {nosDaEscolhida} nós. É o editor do Corel:{" "}
                     <strong>clique</strong> num nó para selecionar, <strong>Shift</strong> para somar,{" "}
@@ -700,7 +700,7 @@ export function Digitalizar() {
 
                 {/* ------------------------------------------------ as medidas */}
                 <div className="rounded-[10px] border border-linha bg-painel-suave p-3">
-                  <p className="mt-0 mb-1 text-[0.85rem] font-semibold">
+                  <p className="mt-0 mb-1 text-[0.85rem] ">
                     Meça as peças com a fita e diga quanto deu cada uma
                   </p>
                   <p className="mt-0 mb-2 text-[0.8rem] text-tinta-fraca">
@@ -719,7 +719,7 @@ export function Digitalizar() {
                         >
                           <button type="button" className="flex items-center gap-2" onClick={escolher} title="Ver esta peça na foto">
                             <span className="size-2.5 shrink-0 rounded-full" style={{ background: corDa(i) }} />
-                            <span className={i === qual ? "font-semibold text-ambar" : ""}>Peça {i + 1}</span>
+                            <span className={i === qual ? " text-ambar" : ""}>Peça {i + 1}</span>
                           </button>
                           <select
                             value={m.lado}

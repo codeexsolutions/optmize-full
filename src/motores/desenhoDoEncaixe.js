@@ -325,6 +325,38 @@ export function resolucaoQueCabe(largura, altura, dpr) {
  * O que SAI do programa — PNG e PDF — continua em pé: lá o rolo é físico, e
  * quem imprime espera a largura na largura.
  */
+/*
+ * AS CORES DO TEMA, para o desenho da TELA.
+ *
+ * O canvas não lê `var(--bg)`: a cor tem de chegar pronta. A sonda é um
+ * <span> que recebe o token e devolve a cor calculada — assim o escuro, o
+ * claro e o de impressão desenham a mesa com as próprias cores. O PNG e o
+ * PDF (`escala` fixa) não passam por aqui: o arquivo sai igual em qualquer
+ * tema.
+ */
+function coresDaTela() {
+  const sonda = document.createElement("span");
+  sonda.style.display = "none";
+  document.body.append(sonda);
+  const ler = (token) => { sonda.style.color = `var(${token})`; return getComputedStyle(sonda).color; };
+  const cores = {
+    fundo: ler("--bg"),
+    tecido: ler("--card-bg"),
+    linha: ler("--border"),
+    texto: ler("--text-faint"),
+    tinta: ler("--text"),
+    acento: ler("--accent"),
+  };
+  sonda.remove();
+  return cores;
+}
+
+/** A mesma cor com outra opacidade: `rgb(1, 2, 3)` vira `rgba(1, 2, 3, a)`. */
+function comAlfa(cor, alfa) {
+  const m = cor.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+  return m ? `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alfa})` : cor;
+}
+
 export function desenharEncaixe(canvas, r, {
   escala, comLegenda, deitado,
   /** O quanto o risco está ampliado na tela. 1 = o que cabe na caixa. */
@@ -373,7 +405,17 @@ export function desenharEncaixe(canvas, r, {
   ctx.scale(dpr, dpr);
   ctx.textBaseline = "middle";
 
-  ctx.fillStyle = "#0d1113";
+  // Na tela, as cores do tema; no arquivo (`escala`), as de sempre.
+  const tema = escala ? null : coresDaTela();
+  const cor = {
+    fundo: tema ? tema.fundo : "#0d1113",
+    tecido: tema ? tema.tecido : "#171d21",
+    risco: tema ? tema.linha : "#2b3438",
+    numero: tema ? tema.texto : "#5e696d",
+    borda: tema ? tema.linha : "#3a4448",
+  };
+
+  ctx.fillStyle = cor.fundo;
   ctx.fillRect(0, 0, larguraCanvas, alturaCanvas);
 
   /*
@@ -392,14 +434,14 @@ export function desenharEncaixe(canvas, r, {
   }
 
   // Fundo do tecido
-  ctx.fillStyle = "#171d21";
+  ctx.fillStyle = cor.tecido;
   ctx.fillRect(REGUA, 0, r.larguraTecido * px, r.consumo * px);
 
   // Régua do rolo em pé. Deitado, ela é desenhada depois, fora do giro, para o
   // número não sair de lado.
   if (!deitar) {
-    ctx.strokeStyle = "#2b3438";
-    ctx.fillStyle = "#5e696d";
+    ctx.strokeStyle = cor.risco;
+    ctx.fillStyle = cor.numero;
     ctx.font = "10px system-ui, sans-serif";
     ctx.lineWidth = 1;
     for (let cm = 0; cm <= r.consumo; cm += 10) {
@@ -450,9 +492,9 @@ export function desenharEncaixe(canvas, r, {
     // escrito porque canvas não lê variável de CSS; o valor é o do
     // `--accent` (ver `estilo/tokens.css`) e precisa acompanhá-lo.
     if (!escala && selecao.has(p.item.indice)) {
-      ctx.fillStyle = "rgba(255, 83, 31, 0.22)";
+      ctx.fillStyle = comAlfa(tema.acento, 0.22);
       ctx.fillRect(x, y, w, h);
-      ctx.strokeStyle = "#ff8556";
+      ctx.strokeStyle = tema.acento;
       ctx.lineWidth = 2;
       ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
     }
@@ -503,7 +545,7 @@ export function desenharEncaixe(canvas, r, {
   }
 
   // Contorno do tecido
-  ctx.strokeStyle = "#3a4448";
+  ctx.strokeStyle = cor.borda;
   ctx.lineWidth = 1;
   ctx.strokeRect(REGUA + 0.5, 0.5, r.larguraTecido * px - 1, r.consumo * px - 1);
 
@@ -515,8 +557,8 @@ export function desenharEncaixe(canvas, r, {
      * direita, então a marca de metro é vertical e o número fica embaixo dela.
      */
     const baseDaRegua = alturaCanvas - REGUA;
-    ctx.strokeStyle = "#2b3438";
-    ctx.fillStyle = "#5e696d";
+    ctx.strokeStyle = cor.risco;
+    ctx.fillStyle = cor.numero;
     ctx.font = "10px system-ui, sans-serif";
     ctx.lineWidth = 1;
     for (let cm = 0; cm <= r.consumo; cm += 10) {
@@ -714,7 +756,9 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
    * azulada era a única coisa fria da tela — lia como um retângulo colado de
    * outro programa.
    */
-  ctx.fillStyle = sumindo("#16120f", "rgba(22, 18, 15, 0)");
+  // A superfície é a cor dos cartões do tema, sumindo até o fundo.
+  const tema = coresDaTela();
+  ctx.fillStyle = sumindo(tema.tecido, comAlfa(tema.tecido, 0));
   ctx.fillRect(0, 0, largura, alturaDoTecido);
 
   /*
@@ -768,8 +812,9 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
    * olha para a peça. Acima de uns 15% o laranja começa a disputar com as
    * peças encaixadas, que são o que interessa ali.
    */
-  if (passo5 > 3) malha(passo10, passo5, "rgba(255, 83, 31, 0.06)", "rgba(255, 83, 31, 0)");
-  malha(passo10, 0, "rgba(255, 83, 31, 0.13)", "rgba(255, 83, 31, 0)");
+  // No acento do tema: laranja no escuro e no claro, magenta no de impressão.
+  if (passo5 > 3) malha(passo10, passo5, comAlfa(tema.acento, 0.06), comAlfa(tema.acento, 0));
+  malha(passo10, 0, comAlfa(tema.acento, 0.13), comAlfa(tema.acento, 0));
 
   /*
    * ── A BORDA DA MÍDIA, em três lados ──────────────────────────────────────
@@ -778,7 +823,7 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
    * cabeçalho. É o traço mais forte do desenho de propósito: é ele que diz
    * onde o tecido COMEÇA, e é contra ele que a primeira peça vai encostar.
    */
-  ctx.strokeStyle = sumindo("#ff531f", "rgba(255, 83, 31, 0)");
+  ctx.strokeStyle = sumindo(tema.acento, comAlfa(tema.acento, 0));
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(largura, 0.75);
@@ -801,7 +846,7 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
   const opacidadeEm = (x) =>
     x <= xDoSumico ? 1 : Math.max(0, 1 - (x - xDoSumico) / (largura - xDoSumico));
 
-  ctx.font = "bold 9px ui-monospace, monospace";
+  ctx.font = '9px "Inter Variable", "Inter", "Segoe UI", sans-serif';
   ctx.lineWidth = 1;
 
   for (let cm = 0; cm * px < largura; cm += 10) {
@@ -811,7 +856,7 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
 
     const metro = cm % 100 === 0;
     ctx.globalAlpha = opacidade * (metro ? 1 : 0.55);
-    ctx.strokeStyle = "#ff8556";
+    ctx.strokeStyle = tema.acento;
     ctx.beginPath();
     ctx.moveTo(x, baseDaRegua);
     ctx.lineTo(x, baseDaRegua + (metro ? 9 : 4));
@@ -819,7 +864,7 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
 
     if (metro && cm > 0) {
       ctx.globalAlpha = opacidade;
-      ctx.fillStyle = "#ff8556";
+      ctx.fillStyle = tema.acento;
       ctx.fillText(`${cm / 100}m`, x + 4, baseDaRegua + 18);
     }
   }
@@ -833,8 +878,8 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
    * número, a faixa poderia ser 160 cm ou 320 — e é o número que a pessoa
    * precisa conferir ANTES de soltar arquivo, não depois de encaixar.
    */
-  ctx.font = "bold 10px ui-monospace, monospace";
-  ctx.fillStyle = "#ff8556";
+  ctx.font = '10px "Inter Variable", "Inter", "Segoe UI", sans-serif';
+  ctx.fillStyle = tema.acento;
   ctx.fillText(`${larguraTecido} cm`, 10, 14);
 }
 
@@ -931,9 +976,10 @@ export function desenharRascunho(canvas, {
   ctx.clearRect(0, 0, largura, altura);
 
   // O rolo: o retângulo do tecido, abaixo da régua.
-  ctx.fillStyle = "rgba(255,255,255,0.03)";
+  const temaDoRascunho = coresDaTela();
+  ctx.fillStyle = comAlfa(temaDoRascunho.tinta, 0.03);
   ctx.fillRect(0, REGUA, largura, altura - REGUA);
-  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.strokeStyle = comAlfa(temaDoRascunho.tinta, 0.10);
   ctx.lineWidth = 1;
   ctx.strokeRect(0.5, REGUA + 0.5, largura - 1, altura - REGUA - 1);
 
@@ -947,13 +993,13 @@ export function desenharRascunho(canvas, {
   */
   const n = pecas ? Math.floor(pecas.length / POR_PECA) : 0;
   if (fantasma) {
-    ctx.strokeStyle = "rgba(255,133,86,0.28)";
+    ctx.strokeStyle = comAlfa(temaDoRascunho.acento, 0.28);
     ctx.lineWidth = 1;
   } else {
     // O pulso é o clarão curto de quando um recorde acaba de cair: some em
     // poucos quadros e é o que faz a melhora ser PERCEBIDA, não só mostrada.
-    ctx.fillStyle = `rgba(255,133,86,${0.22 + pulso * 0.45})`;
-    ctx.strokeStyle = `rgba(255,133,86,${0.45 + pulso * 0.4})`;
+    ctx.fillStyle = comAlfa(temaDoRascunho.acento, 0.22 + pulso * 0.45);
+    ctx.strokeStyle = comAlfa(temaDoRascunho.acento, 0.45 + pulso * 0.4);
     ctx.lineWidth = 1;
   }
 
@@ -974,8 +1020,8 @@ export function desenharRascunho(canvas, {
 
   // Os metros, no alto: é o número que a pessoa está esperando ver cair.
   if (!caixa) {
-    ctx.font = "bold 11px ui-monospace, monospace";
-    ctx.fillStyle = fantasma ? "rgba(255,133,86,0.45)" : "#ff8556";
+    ctx.font = '11px "Inter Variable", "Inter", "Segoe UI", sans-serif';
+    ctx.fillStyle = fantasma ? comAlfa(temaDoRascunho.acento, 0.45) : temaDoRascunho.acento;
     ctx.textBaseline = "middle";
     if (!fantasma) ctx.fillText(`${(consumo / 100).toFixed(2).replace(".", ",")} m`, 10, 15);
   }

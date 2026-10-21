@@ -133,7 +133,7 @@ export function LojaDeAcessos({ aoLiberar }: { aoLiberar: () => void }) {
     <div className="mt-4 rounded-2xl border border-[var(--accent-line)] bg-[var(--accent-soft)] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="m-0 flex items-center gap-2 text-sm font-semibold text-tinta">
+          <p className="m-0 flex items-center gap-2 text-sm  text-tinta">
             <Icone referencia="icones.svg#user-plus" className="size-4 text-ambar" />
             Mais um acesso
           </p>
@@ -143,7 +143,7 @@ export function LojaDeAcessos({ aoLiberar }: { aoLiberar: () => void }) {
             mais um e ele entra na hora para a sua equipe.
           </p>
         </div>
-        <p className="m-0 shrink-0 font-titulo text-2xl font-semibold text-ambar">{reais(loja.precoCheioCents)}</p>
+        <p className="m-0 shrink-0 font-titulo text-2xl  text-ambar">{reais(loja.precoCheioCents)}</p>
       </div>
 
       {cobranca ? (

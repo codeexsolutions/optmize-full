@@ -120,7 +120,7 @@ export function BarraDaMontagem({ molde, moldeId, aoTrocar, aoIrParaPeca, tamanh
         </button>
         <input
           type="text" value={molde.nome} onChange={(e) => molde.renomear(e.target.value)}
-          className="w-[260px]! font-semibold" aria-label="Nome do molde"
+          className="w-[260px]! " aria-label="Nome do molde"
         />
         {molde.situacao === "rascunho" && <span className="etiqueta-tamanho">rascunho</span>}
         <label

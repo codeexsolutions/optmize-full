@@ -28,7 +28,7 @@
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   /* O brilho do canto: o mesmo laranja da marca, bem apagado. Escrito em
      rgba porque precisa de alfa; o valor acompanha o `--accent`. */
@@ -69,7 +69,7 @@
   margin: 0 0 8px;
   color: var(--text-dim);
   font-weight: 500;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.03em;
 }
 
@@ -257,7 +257,7 @@
   color: var(--text-dim);
   font-weight: 500;
   font-size: 0.74rem;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.03em;
 }
 
@@ -335,7 +335,7 @@
 :where(.producao) .encaixe-stats .stat-label {
   font-size: 0.66rem;
   color: var(--text-faint);
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.05em;
   white-space: nowrap;
 }
@@ -754,7 +754,7 @@
   transition: border-color .12s, background .12s, color .12s;
 }
 :where(.producao) .aba:hover { border-color: var(--text-faint); color: var(--text); }
-:where(.producao) .aba-nome { font-weight: 500; text-transform: uppercase; font-size: 0.8rem; letter-spacing: .02em; }
+:where(.producao) .aba-nome { font-weight: 500; text-transform: none; font-size: 0.8rem; letter-spacing: .02em; }
 :where(.producao) .aba-conta { font-size: 0.72rem; opacity: 0.75; }
 :where(.producao) .aba.completa .aba-conta { color: var(--accent); opacity: 1; }
 :where(.producao) .aba-x {
@@ -925,7 +925,7 @@
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .04em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 :where(.producao) .hint {
@@ -1329,7 +1329,7 @@
   font-size: 8px;
   font-weight: 500;
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 :where(.producao) .encaixe-loading-tempo strong {
@@ -1684,7 +1684,7 @@
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: .07em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 :where(.producao) .molde-numeros dd {
@@ -1868,7 +1868,7 @@
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 :where(.producao) .projeto-pecas {
@@ -2147,7 +2147,7 @@
   font-weight: 500;
   letter-spacing: 0.04em;
   line-height: 1.5;
-  text-transform: uppercase;
+  text-transform: none;
   white-space: nowrap;
   cursor: help;
 }
@@ -2590,7 +2590,8 @@
   :where(.producao) .bancada-coluna {
     position: relative;
     z-index: 2;
-    box-shadow: 5px 0 16px -8px rgba(0, 0, 0, 0.6);
+    /* Sem sombra desde 2026-10-21: a costura é só a borda, e a mesa parece
+       a mesma superfície da coluna, não um poço por baixo dela. */
   }
 }
 
@@ -2598,7 +2599,7 @@
   :where(.producao) .bancada-coluna {
     position: relative;
     z-index: 2;
-    box-shadow: 0 5px 16px -8px rgba(0, 0, 0, 0.6);
+
   }
 }
 
@@ -2606,7 +2607,7 @@
    esquerda, por baixo da coluna. Sombra para fora aqui competiria com a da
    coluna e as duas se anulariam num borrão. */
 :where(.producao) .bancada-mesa {
-  box-shadow: inset 8px 0 20px -14px rgba(0, 0, 0, 0.85);
+  box-shadow: none;
 }
 
 /* ==================== O MODAL, COM ANIMAÇÃO ====================
@@ -2791,7 +2792,7 @@
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 /* A caixa da medida. A unidade fica DENTRO dela, à direita: "160" e "cm"
@@ -3220,8 +3221,8 @@
    400 px ela viraria um corredor de nomes cortados.
    =========================================================================== */
 :where(.producao) .modal-complemento {
-  width: min(600px, 100%);
-  max-height: min(88vh, 760px);
+  width: min(720px, 100%);
+  max-height: min(92vh, 880px);
 }
 
 :where(.producao) .complemento-grupo {
@@ -3270,6 +3271,28 @@
   width: 15px;
   height: 15px;
   flex-shrink: 0;
+}
+
+/* O seletor e o campo "Até" lado a lado; o campo some no Preencher e o
+   seletor ocupa a linha toda. */
+:where(.producao) .complemento-linha {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+:where(.producao) .complemento-linha .jeito { flex: 1; min-width: 0; }
+:where(.producao) .complemento-ate {
+  flex: 0 0 150px;
+  margin: 0;
+  transition: opacity 0.2s ease;
+}
+:where(.producao) .complemento-ate .campo-caixa input { height: 58px; font-size: 1rem; }
+:where(.producao) .complemento-ate.desativado { opacity: 0.45; }
+:where(.producao) .complemento-ate.desativado .campo-caixa { background: transparent; }
+:where(.producao) .complemento-ate input:disabled { cursor: not-allowed; }
+@media (max-width: 520px) {
+  :where(.producao) .complemento-linha { flex-direction: column; align-items: stretch; }
+  :where(.producao) .complemento-ate { flex-basis: auto; }
 }
 
 :where(.producao) .complemento-meta {
@@ -3349,17 +3372,92 @@
   white-space: nowrap;
 }
 
+/* A quantidade de cada arte: a mesma pele das caixas de medida (borda,
+   anel laranja no foco, número em laranja), só que compacta. */
 :where(.producao) .complemento-qtd input {
-  width: 64px;
-  padding: 4px 6px;
+  width: 72px;
+  height: 36px;
+  padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--card-bg-soft);
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 14px;
   text-align: right;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
+:where(.producao) .complemento-qtd input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+:where(.producao) .complemento-qtd input::-webkit-outer-spin-button,
+:where(.producao) .complemento-qtd input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+/* A linha que a sugestão do Optmize escolheu: um fio laranja à esquerda. */
+:where(.producao) .complemento-item.sugerido {
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+/* O seletor Completar / Preencher, dentro da mesma caixa das medidas. */
+:where(.producao) .campo-caixa select {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+  cursor: pointer;
+}
+:where(.producao) .campo-caixa select option {
+  background: var(--card-bg);
+  color: var(--text);
+}
+
+/* A SUGESTÃO DO OPTMIZE, em cima da lista: quais artes e quantas. */
+:where(.producao) .complemento-sugestao {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+:where(.producao) .complemento-sugestao.hidden { display: none; }
+:where(.producao) .complemento-sugestao svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+:where(.producao) .complemento-sugestao span { flex: 1; min-width: 0; }
+:where(.producao) .complemento-sugestao-usar {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+:where(.producao) .complemento-sugestao-usar:hover { background: var(--accent-soft); }
 
 /* "Optmizar de novo" vai para a esquerda, longe do Complementar: um refaz o
    encaixe inteiro, o outro só acrescenta — não podem ser vizinhos de clique. */
@@ -3372,3 +3470,388 @@
     flex-wrap: wrap;
   }
 }
+
+/*
+ * O SELETOR DO JEITO, no Complementar (ver o `.jeito` em Encaixe.tsx).
+ *
+ * O <select> do sistema não anima e não aceita uma linha de explicação por
+ * opção. Este abre uma lista que desce com um leve desfoque, a seta gira, e
+ * as duas opções entram uma depois da outra. A escolhida leva a marca e o
+ * fundo laranja suave.
+ */
+:where(.producao) .jeito {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+:where(.producao) .jeito-botao {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-bg-soft);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.2s ease, background-color 0.15s ease;
+}
+:where(.producao) .jeito-botao:hover { border-color: var(--accent-line); }
+:where(.producao) .jeito.aberto .jeito-botao,
+:where(.producao) .jeito-botao:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: none;
+}
+
+:where(.producao) .jeito-icone {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  transition: transform 0.25s cubic-bezier(.22, 1, .36, 1);
+}
+:where(.producao) .jeito-icone svg { width: 18px; height: 18px; }
+:where(.producao) .jeito.aberto .jeito-botao .jeito-icone { transform: rotate(-8deg) scale(1.06); }
+
+:where(.producao) .jeito-texto {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+:where(.producao) .jeito-texto b { font-size: 14px; color: var(--text); }
+:where(.producao) .jeito-texto small {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(.producao) .jeito-seta {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--text-faint);
+  transition: transform 0.25s cubic-bezier(.22, 1, .36, 1), color 0.15s ease;
+}
+:where(.producao) .jeito.aberto .jeito-seta { transform: rotate(180deg); color: var(--accent); }
+
+:where(.producao) .jeito-lista {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow-lift);
+  list-style: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px) scale(0.98);
+  transform-origin: top center;
+  filter: blur(4px);
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(.22, 1, .36, 1), filter 0.2s ease, visibility 0s linear 0.22s;
+}
+:where(.producao) .jeito.aberto .jeito-lista {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  filter: none;
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(.22, 1, .36, 1), filter 0.2s ease, visibility 0s;
+}
+
+:where(.producao) .jeito-opcao {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  outline: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: background-color 0.12s ease, opacity 0.2s ease, transform 0.25s cubic-bezier(.22, 1, .36, 1);
+}
+:where(.producao) .jeito.aberto .jeito-opcao { opacity: 1; transform: none; }
+:where(.producao) .jeito.aberto .jeito-opcao:nth-child(2) { transition-delay: 0.05s; }
+:where(.producao) .jeito-opcao:hover,
+:where(.producao) .jeito-opcao:focus-visible { background: var(--surface-hover); }
+:where(.producao) .jeito-opcao[aria-selected="true"] { background: var(--accent-soft); }
+:where(.producao) .jeito-opcao .jeito-icone { background: var(--surface-hover); color: var(--text-dim); }
+:where(.producao) .jeito-opcao[aria-selected="true"] .jeito-icone { background: var(--accent); color: var(--accent-ink); }
+
+:where(.producao) .jeito-marca {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--accent);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.15s ease, transform 0.2s cubic-bezier(.22, 1, .36, 1);
+}
+:where(.producao) .jeito-opcao[aria-selected="true"] .jeito-marca { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.producao) .jeito-lista,
+  :where(.producao) .jeito-opcao,
+  :where(.producao) .jeito-seta,
+  :where(.producao) .jeito-icone { transition-duration: 0.01s; transition-delay: 0s; filter: none; }
+}
+
+/*
+ * AS ABAS GALERIA | ENCAIXE do Complementar: um seletor horizontal com a
+ * pílula laranja deslizando por baixo da aba escolhida. A lista embaixo
+ * mostra só as linhas da fonte escolhida (`data-fonte` no <ul>).
+ */
+:where(.producao) .fonte {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-bg-soft);
+}
+:where(.producao) .fonte-pilula {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 10px;
+  background: var(--accent);
+  box-shadow: 0 8px 20px -10px var(--accent);
+  transition: transform 0.32s cubic-bezier(.22, 1, .36, 1);
+}
+:where(.producao) .fonte[data-fonte="encaixe"] .fonte-pilula { transform: translateX(100%); }
+:where(.producao) .fonte-aba {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+:where(.producao) .fonte-aba:hover { color: var(--text); }
+:where(.producao) .fonte-aba[aria-selected="true"] { color: var(--accent-ink); }
+:where(.producao) .fonte-aba svg { width: 16px; height: 16px; }
+:where(.producao) .fonte-aba i {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  font-size: 11px;
+  font-style: normal;
+  text-align: center;
+}
+:where(.producao) .fonte-aba[aria-selected="true"] i { background: color-mix(in srgb, var(--accent-ink) 18%, transparent); }
+:where(.producao) .fonte-aba:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+
+:where(.producao) .complemento-lista[data-fonte="galeria"] .complemento-item[data-fonte="encaixe"],
+:where(.producao) .complemento-lista[data-fonte="encaixe"] .complemento-item[data-fonte="galeria"] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.producao) .fonte-pilula { transition: none; }
+}
+
+/* As abas e o botão de procurar de novo, na mesma linha. */
+:where(.producao) .fonte-linha { display: flex; align-items: stretch; gap: 8px; }
+:where(.producao) .fonte-linha .fonte { flex: 1; }
+:where(.producao) .fonte-atualizar {
+  display: grid;
+  flex: 0 0 50px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-bg-soft);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+:where(.producao) .fonte-atualizar:hover { color: var(--accent); border-color: var(--accent-line); }
+:where(.producao) .fonte-atualizar svg { width: 18px; height: 18px; transition: transform 0.5s cubic-bezier(.22, 1, .36, 1); }
+:where(.producao) .fonte-atualizar:active svg { transform: rotate(180deg); }
+:where(.producao) .fonte-atualizar:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+
+/*
+ * O CONVITE DA MESA VAZIA: uma área marcada no tecido, e não um cartão por
+ * cima dele. Sem sombra e sem desfoque — a grade da mesa aparece por baixo —,
+ * o contorno tracejado na cor do destaque e as quatro marcas de corte nos
+ * cantos, por fora, como a região de corte riscada antes de imprimir.
+ */
+:where(.producao) .mesa-convite {
+  position: relative;
+  border: 1.5px dashed var(--accent-line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+:where(.producao) .mesa-dica:hover .mesa-convite,
+:where(.producao) .mesa-dica:focus-visible .mesa-convite {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+:where(.producao) .mesa-convite-corte {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: var(--accent);
+  border-style: solid;
+  border-width: 0;
+  pointer-events: none;
+}
+:where(.producao) .mesa-convite-corte-1 { top: -9px; left: -9px; border-right-width: 1.5px; border-bottom-width: 1.5px; }
+:where(.producao) .mesa-convite-corte-2 { top: -9px; right: -9px; border-left-width: 1.5px; border-bottom-width: 1.5px; }
+:where(.producao) .mesa-convite-corte-3 { bottom: -9px; left: -9px; border-right-width: 1.5px; border-top-width: 1.5px; }
+:where(.producao) .mesa-convite-corte-4 { bottom: -9px; right: -9px; border-left-width: 1.5px; border-top-width: 1.5px; }
+
+/*
+ * ===========================================================================
+ * O MODAL, REDESENHADO (2026-10-21)
+ * ===========================================================================
+ *
+ * A mesma casca para o Optmizar, o Complementar e os outros modais da
+ * produção — e o mesmo desenho do componente React (`casca/Modal.tsx`):
+ *
+ *   o TOPO com o selo do ícone (um anel e um brilho na cor do destaque), o
+ *   título e a linha de apoio, sobre um brilho suave que desce do alto;
+ *
+ *   o CORPO com o respiro do topo;
+ *
+ *   o RODAPÉ numa faixa própria, separado por um traço, com os botões
+ *   ocupando a largura toda — a ação fica embaixo, onde a leitura termina.
+ *
+ * Vem por último na folha para valer por cima das regras antigas de mesma
+ * especificidade.
+ */
+:where(.producao) .modal-fundo {
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(6px);
+}
+
+:where(.producao) .modal-ajustes {
+  position: relative;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-hairline);
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 140px at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 75%),
+    var(--card-bg);
+  box-shadow: var(--shadow-lift), 0 0 0 1px color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+:where(.producao) .modal-ajustes .ajustes-topo {
+  align-items: center;
+  gap: 14px;
+  padding: 22px 22px 18px;
+}
+
+:where(.producao) .modal-ajustes .ajustes-selo {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 0 1px var(--accent-line),
+    0 10px 24px -14px var(--accent);
+}
+
+:where(.producao) .modal-ajustes .ajustes-topo-texto h3 {
+  font-size: 1.12rem;
+  line-height: 1.25;
+}
+
+:where(.producao) .modal-ajustes .ajustes-topo-texto p {
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+:where(.producao) .modal-ajustes .ajustes-x {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  align-self: flex-start;
+}
+
+:where(.producao) .modal-ajustes .ajustes-corpo {
+  gap: 18px;
+  padding: 2px 22px 22px;
+}
+
+/* O rodapé: uma faixa própria, com os botões em toda a largura. */
+:where(.producao) .modal-ajustes .ajustes-rodape {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 16px 22px 18px;
+  border-top: 1px solid var(--border-hairline);
+  background: color-mix(in srgb, var(--card-bg-soft) 70%, transparent);
+}
+
+:where(.producao) .modal-ajustes .ajustes-rodape .btn:not(.hidden) {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+:where(.producao) .modal-ajustes .ajustes-rodape .btn.primary {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 24px -12px var(--accent);
+}
+
+:where(.producao) .modal-ajustes .ajustes-rodape .btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+/*
+ * OS NÚMEROS DO RODAPÉ DO ENCAIXE (2026-10-21): o nome e o número na MESMA
+ * letra e no mesmo tamanho, maiores; o que muda é só o tom — o número no
+ * texto forte, o nome apagado. O laranja dos dois primeiros saiu: cor de
+ * destaque num rodapé de leitura disputava com o botão Exportar.
+ */
+:where(.producao) .encaixe-stats { gap: 22px; }
+:where(.producao) .encaixe-stats .stat { gap: 7px; }
+:where(.producao) .encaixe-stats .stat-valor,
+:where(.producao) .encaixe-stats .stat-label {
+  font-size: 15px;
+  letter-spacing: normal;
+}
+:where(.producao) .encaixe-stats .stat-valor,
+:where(.producao) .encaixe-stats .stat:first-child .stat-valor,
+:where(.producao) .encaixe-stats .stat:nth-child(2) .stat-valor {
+  color: var(--text);
+}
+:where(.producao) .encaixe-stats .stat-label { color: var(--text-faint); }

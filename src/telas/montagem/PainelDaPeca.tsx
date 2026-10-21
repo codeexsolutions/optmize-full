@@ -37,19 +37,19 @@ export function PainelDaPeca({ peca, aoMudar, aoMudarGrupo }: Props) {
   return (
     <aside className="flex h-full w-[260px] shrink-0 flex-col gap-3 overflow-auto border-l border-linha p-3 text-[0.85rem]">
       <label className="flex flex-col gap-1">
-        <span className="font-semibold">O que é</span>
+        <span className="">O que é</span>
         <select value={peca.papel} onChange={(e) => aoMudarGrupo((p) => ({ ...p, papel: e.target.value }), true)}>
           {PAPEIS_DE_PECA.map((papel) => <option key={papel} value={papel}>{papel}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-1">
-        <span className="font-semibold">Nome {peca.papel === "outro" ? "(é por ele que a peça é chamada)" : "(opcional)"}</span>
+        <span className="">Nome {peca.papel === "outro" ? "(é por ele que a peça é chamada)" : "(opcional)"}</span>
         {/* Sem lembrar a cada tecla: um nome de doze letras encheria doze passos do desfazer. */}
         {/* `nome` é `string` em `PecaDoMolde` (não aceita `null`); vazio já vale como "sem nome" em `nomeDaPeca`. */}
         <input type="text" value={peca.nome ?? ""} onChange={(e) => aoMudarGrupo((p) => ({ ...p, nome: e.target.value }), false)} />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="font-semibold">Quantas cortam por peça pronta</span>
+        <span className="">Quantas cortam por peça pronta</span>
         <input
           type="number" min={1} step={1} value={peca.quantidade}
           onChange={(e) => aoMudarGrupo((p) => ({ ...p, quantidade: Math.max(1, Math.floor(Number(e.target.value) || 1)) }), true)}
@@ -60,7 +60,7 @@ export function PainelDaPeca({ peca, aoMudar, aoMudarGrupo }: Props) {
         <span>Cortar em par espelhado <span className="text-tinta-fraca">(metade vira do avesso)</span></span>
       </label>
       <label className="flex flex-col gap-1">
-        <span className="font-semibold">Margem de costura (cm)</span>
+        <span className="">Margem de costura (cm)</span>
         <input
           type="text" inputMode="decimal" value={margemEscrita}
           onChange={(e) => setMargemEscrita(e.target.value)}
@@ -76,7 +76,7 @@ export function PainelDaPeca({ peca, aoMudar, aoMudarGrupo }: Props) {
         </span>
       </label>
       <div className="rounded-[8px] border border-linha p-2">
-        <p className="m-0 font-semibold">Corte</p>
+        <p className="m-0 ">Corte</p>
         <p className="m-0 text-tinta-fraca">
           {medida.peca ? `${formatarCm(medida.peca.largura)} × ${formatarCm(medida.peca.altura)}` : medida.erro}
         </p>

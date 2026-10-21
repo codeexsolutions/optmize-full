@@ -43,7 +43,7 @@ function Marca({ estado }: { estado: NoDaVarredura["estado"] }) {
   if (estado === "andando") return <Icone referencia="icones.svg#loader-circle" className="size-3.5 shrink-0 animate-spin text-ambar" />;
   if (estado === "pasta") return <Icone referencia="icones.svg#folder" className="size-3.5 shrink-0 text-tinta-apagada" />;
   const simbolo = { ok: "✓", nada: "·", erro: "✕", info: "i" }[estado];
-  return <span className={`inline-block w-3.5 shrink-0 text-center font-bold ${COR[estado]}`}>{simbolo}</span>;
+  return <span className={`inline-block w-3.5 shrink-0 text-center  ${COR[estado]}`}>{simbolo}</span>;
 }
 
 /** A árvore inteira se revela em pelo menos 4 s e no máximo 12 s. */
@@ -172,7 +172,7 @@ export function ArvoreDaVarredura({ estado, className = "", revelar = false, aoT
             <span className="inline-block size-4 shrink-0" />
           )}
           <Marca estado={no.estado} />
-          <span className={`min-w-0 truncate ${no.pai === null ? "font-semibold text-tinta" : no.estado === "nada" ? "text-tinta-apagada" : "text-tinta-fraca"}`} title={no.rotulo}>
+          <span className={`min-w-0 truncate ${no.pai === null ? " text-tinta" : no.estado === "nada" ? "text-tinta-apagada" : "text-tinta-fraca"}`} title={no.rotulo}>
             {no.rotulo}
           </span>
           {no.detalhe && <span className={`shrink-0 ${COR[no.estado]} opacity-90`}>— {no.detalhe}</span>}
@@ -256,13 +256,13 @@ export function JanelaDaVarredura({ estado, aoFechar, aoParar }: {
             <Icone referencia="icones.svg#radar" className={`size-5 ${rodando ? "animate-pulse" : ""}`} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="m-0 font-titulo text-base font-semibold text-tinta">
+            <h2 className="m-0 font-titulo text-base  text-tinta">
               {rodando ? "Varrendo a rede" : "A última varredura"}
             </h2>
             <p className="m-0 mt-0.5 truncate text-[12px] text-tinta-fraca">{estado?.error || estado?.message}</p>
           </div>
           {rodando && aoParar && (
-            <button type="button" onClick={aoParar} className="rounded-[9px] border border-linha px-3 py-1.5 text-[12px] font-semibold text-tinta-fraca hover:text-tinta">
+            <button type="button" onClick={aoParar} className="rounded-[9px] border border-linha px-3 py-1.5 text-[12px]  text-tinta-fraca hover:text-tinta">
               Parar
             </button>
           )}

@@ -1,30 +1,33 @@
 /**
  * ===========================================================================
- * CONTA — quem está usando, e de que empresa
+ * CONFIGURAÇÕES — a conta, a aparência e a equipe, em abas, como no Flow
  * ===========================================================================
  *
- * A tela que o pé da barra abre em "Configurações da conta".
+ * A tela que a engrenagem do pé da barra abre. A rota continua `/conta` (é a
+ * que está guardada em atalho e link), e a aba aberta vai no endereço
+ * (`/conta?aba=aparencia`), para o link levar direto a ela.
  *
- * O QUE ELA MOSTRA HOJE é o que o programa realmente sabe: o nome de quem
- * entrou, a empresa a que a conta pertence e o papel dela. Nada disso se
- * edita aqui, e a tela diz isso em voz alta em vez de oferecer campos que não
- * salvam — um formulário que parece editável e não é custa mais confiança do
- * que a ausência dele.
+ *   CONTA      quem está usando, de que empresa, e o Sair. Nada disso se edita
+ *              aqui — trocar senha é no painel web da empresa —, e a tela diz
+ *              isso em vez de oferecer campos que não salvam.
  *
- * QUEM EDITA É O PAINEL WEB, e não por preguiça: trocar senha, criar
- * funcionário e escolher as telas de cada um são coisas da EMPRESA, não da
- * instalação. Fazê-las aqui significaria que a gráfica só consegue gerir a
- * própria equipe sentada na máquina em que o Optmize está instalado — e o dono
- * costuma estar em outra sala, ou em casa.
+ *   APARÊNCIA  escuro, claro ou o do sistema (ver `estado/tema.ts`), com a
+ *              prévia de cada um, como a Aparência do Flow.
  *
- * O que falta para esta tela crescer está escrito no plano da identidade
- * (`docs/superpowers/plans/2026-09-21-identidade-no-full.md`): é o pedaço C,
- * o painel do dono.
+ *   EQUIPE     o antigo PAINEL (`telas/Painel.tsx`): criar, desativar e
+ *              excluir os acessos dos funcionários. Saiu da barra lateral em
+ *              2026-10-21 e só aparece para a conta dona da empresa; a trava
+ *              de verdade continua no backend.
  */
 
+import type { ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
+
 import { Icone } from "../casca/Icone";
-import { useDialogo } from "../casca/Dialogo";
+import { NoCabecalho } from "../casca/Cabecalho";
 import { iniciais, useSessao } from "../casca/usuario";
+import { useTema, type ModoDoTema } from "../estado/tema";
+import { Painel } from "./Painel";
 
 /** Como o papel se chama em português, para quem não fala `owner`. */
 const PAPEL: Record<string, string> = {
@@ -36,32 +39,74 @@ const PAPEL: Record<string, string> = {
   leitor: "Somente leitura",
 };
 
+type Aba = "conta" | "aparencia" | "equipe";
+
+const ABAS: { id: Aba; rotulo: string; icone: string; soDono?: boolean }[] = [
+  { id: "conta", rotulo: "Conta", icone: "icones.svg#user" },
+  { id: "aparencia", rotulo: "Aparência", icone: "icones.svg#palette" },
+  { id: "equipe", rotulo: "Equipe", icone: "icones.svg#users", soDono: true },
+];
+
 export function Conta() {
   /*
-    A TELA LÊ A SESSÃO SOZINHA, e não a recebe de cima: as rotas montam o
-    componente sem props (ver `Componente`, em rotas.ts), e inventar um caminho
-    para passar o usuário até aqui custaria mais do que o pedido a mais. É uma
-    tela que se abre raramente; um `GET /api/sessao/eu` nela não pesa.
+    A tela lê a sessão sozinha: as rotas montam o componente sem props (ver
+    `Componente`, em rotas.ts). Abre raramente; o pedido a mais não pesa.
   */
   const { usuario } = useSessao();
-  const dialogo = useDialogo();
+  const [parametros, setParametros] = useSearchParams();
+
+  if (!usuario) return null;
+
+  const dono = usuario.papel === "dono";
+  const abas = ABAS.filter((a) => !a.soDono || dono);
+  const pedida = parametros.get("aba") as Aba | null;
+  const aberta: Aba = abas.some((a) => a.id === pedida) ? (pedida as Aba) : "conta";
+
+  return (
+    <div className="flex w-full flex-col gap-3">
+      {/* AS ABAS vão no cabeçalho, à direita, como no Flow. */}
+      <NoCabecalho>
+      <div role="tablist" aria-label="Configurações" className="flex gap-1 rounded-xl border border-[var(--border-hairline)] bg-painel/70 p-1">
+        {abas.map((aba) => {
+          const ativa = aba.id === aberta;
+          return (
+            <button
+              key={aba.id}
+              type="button"
+              role="tab"
+              aria-selected={ativa}
+              onClick={() => setParametros(aba.id === "conta" ? {} : { aba: aba.id }, { replace: true })}
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border-0 px-3 py-1.5 text-[12.5px] transition-all duration-200 ${
+                ativa ? "menu-item-aberto text-ambar-tinta" : "bg-transparent text-tinta-fraca hover:bg-[var(--surface-hover)] hover:text-tinta"
+              }`}
+            >
+              <Icone referencia={aba.icone} className="size-[15px]" />
+              {aba.rotulo}
+            </button>
+          );
+        })}
+      </div>
+      </NoCabecalho>
+
+      {aberta === "conta" && <AbaConta />}
+      {aberta === "aparencia" && <AbaAparencia />}
+      {aberta === "equipe" && <Painel />}
+    </div>
+  );
+}
+
+/* ── Conta ───────────────────────────────────────────────────────────── */
+
+function AbaConta() {
+  const { usuario } = useSessao();
 
   /*
-    SAIR daqui RECARREGA a página, e isso é de propósito.
-
-    Esta tela tem a própria leitura da sessão, separada da que a casca usa para
-    decidir entre o programa e o login. Avisar a casca exigiria um contexto
-    compartilhado só para este botão. Recarregar resolve melhor: além de a
-    casca reler a sessão do zero, TODO o trabalho em memória vai junto — as
-    artes carregadas, o último encaixe, a lista de peças. Sair e deixar o
-    trabalho da pessoa anterior na memória seria o erro pior.
+    SAIR daqui RECARREGA a página, de propósito: a casca relê a sessão do zero
+    e TODO o trabalho em memória vai junto — deixar as artes da pessoa
+    anterior na memória seria o erro pior.
   */
+  // Sem perguntar, como o botão de sair da barra: quem aperta quer sair.
   async function sair() {
-    const ok = await dialogo.confirmar(
-      "Na próxima vez o Optmize vai pedir o seu e-mail e a sua senha de novo.",
-      { titulo: "Sair da conta", kicker: "CONTA", confirmar: "Sair", perigoso: false },
-    );
-    if (!ok) return;
     try {
       await fetch("/api/sessao/sair", { method: "POST" });
     } finally {
@@ -72,59 +117,27 @@ export function Conta() {
   if (!usuario) return null;
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 py-2">
-      {/* QUEM ESTÁ USANDO. */}
-      <div className="flex items-center gap-4 rounded-xl border border-linha bg-painel-suave p-4">
-        <span className="grid size-14 shrink-0 place-items-center rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] font-titulo text-lg font-semibold text-ambar">
+    <>
+      <div className="flex items-center gap-4 rounded-2xl border border-linha bg-painel p-5">
+        <span className="menu-avatar grid size-14 shrink-0 place-items-center rounded-full font-titulo text-lg text-ambar-tinta">
           {iniciais(usuario.nome)}
         </span>
         <div className="min-w-0">
-          <h2 className="m-0 truncate font-titulo text-lg font-semibold text-tinta">
-            {usuario.nome}
-          </h2>
+          <h2 className="m-0 truncate font-titulo text-lg text-tinta">{usuario.nome}</h2>
           <p className="mt-0.5 mb-0 truncate text-[13px] text-tinta-fraca">
             {usuario.empresa || "Sem empresa vinculada"}
           </p>
-          <p className="mt-1 mb-0 font-mono text-[11px] tracking-[0.06em] text-tinta-apagada uppercase">
-            {PAPEL[usuario.papel] || usuario.papel}
-          </p>
+          <p className="mt-1 mb-0 text-[12px] text-tinta-apagada">{PAPEL[usuario.papel] || usuario.papel}</p>
         </div>
       </div>
 
-      {/*
-        O QUE SE MUDA, E ONDE.
+      <Bloco titulo="Senha e acessos" icone="icones.svg#key-round">
+        Trocar a senha é feito no painel web da empresa. Os acessos dos funcionários — criar,
+        desativar e excluir — ficam na aba Equipe, visível só para o dono da empresa.
+      </Bloco>
 
-        Dizer o lugar é o serviço que esta tela presta hoje. Sem esta caixa, a
-        pessoa procuraria o botão de trocar senha por toda a interface antes de
-        desistir e telefonar.
-      */}
-      <div className="rounded-xl border border-linha bg-painel p-4">
-        <span className="eyebrow">MUDANÇAS NA CONTA</span>
-        <p className="mt-2 mb-0 text-[13px] leading-relaxed text-tinta-fraca">
-          Os acessos dos funcionários — criar, desativar e excluir — ficam no
-          botão <strong className="font-semibold text-tinta">Painel</strong>,
-          logo acima do pé da barra, visível só para o administrador da
-          empresa. Trocar a senha é feito no painel web da empresa.
-        </p>
-        <p className="mt-2 mb-0 text-[13px] leading-relaxed text-tinta-apagada">
-          Não sabe o endereço do painel? Fale com quem cuida do Optmize na sua
-          empresa.
-        </p>
-      </div>
-
-      {/*
-        SAIR, também aqui.
-
-        É o mesmo botão do pé da barra, repetido de propósito: quem abre
-        "Configurações da conta" procurando como sair não deveria ter de
-        aprender que a saída fica noutro canto da tela.
-      */}
       <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={sair}
-          className="btn secondary flex w-fit items-center gap-2"
-        >
+        <button type="button" onClick={sair} className="btn secondary flex w-fit items-center gap-2">
           <Icone referencia="icones.svg#log-out" className="size-4" />
           Sair da conta
         </button>
@@ -132,6 +145,111 @@ export function Conta() {
           Na próxima vez o Optmize vai pedir o seu e-mail e a sua senha.
         </p>
       </div>
+    </>
+  );
+}
+
+/* ── Aparência ───────────────────────────────────────────────────────── */
+
+/*
+ * A PRÉVIA DE CADA TEMA: uma barra e um cartão em miniatura, nas cores do
+ * próprio tema — hex escrito à mão de propósito, porque a prévia mostra o
+ * tema que NÃO está valendo, e os tokens só sabem o que está.
+ */
+const TEMAS: { id: ModoDoTema; rotulo: string; texto: string; icone: string; fundo: string; painel: string; linha: string; acento: string }[] = [
+  { id: "escuro", rotulo: "Escuro", texto: "O de sempre do Optmize", icone: "icones.svg#moon", fundo: "#0b0b0c", painel: "#141416", linha: "#2a2a2f", acento: "#ff531f" },
+  { id: "claro", rotulo: "Claro", texto: "Para sala bem iluminada", icone: "icones.svg#sun", fundo: "#f5f4f1", painel: "#ffffff", linha: "#d9d5ce", acento: "#0062c4" },
+  { id: "sistema", rotulo: "Sistema", texto: "Segue o Windows", icone: "icones.svg#monitor", fundo: "", painel: "", linha: "", acento: "" },
+];
+
+function Previa({ tema }: { tema: (typeof TEMAS)[number] }) {
+  const escuro = TEMAS[0]!;
+  const claro = TEMAS[1]!;
+  const metade = (t: typeof escuro) => (
+    <div className="flex h-full flex-1 gap-1 p-1.5" style={{ background: t.fundo }}>
+      <div className="flex w-1/4 flex-col gap-1 rounded p-1" style={{ background: t.painel }}>
+        <div className="h-1.5 w-full rounded-full" style={{ background: t.acento }} />
+        <div className="h-1 w-3/4 rounded-full" style={{ background: t.linha }} />
+        <div className="h-1 w-2/3 rounded-full" style={{ background: t.linha }} />
+      </div>
+      <div className="flex flex-1 flex-col gap-1 rounded p-1.5" style={{ background: t.painel }}>
+        <div className="h-1.5 w-1/2 rounded-full" style={{ background: t.linha }} />
+        <div className="h-1 w-full rounded-full" style={{ background: t.linha }} />
+        <div className="mt-auto h-2 w-1/3 self-end rounded" style={{ background: t.acento }} />
+      </div>
     </div>
+  );
+  return (
+    <div className="mb-3 flex h-16 w-full overflow-hidden rounded-lg border border-linha">
+      {tema.id === "sistema" ? (
+        <>
+          {metade(escuro)}
+          {metade(claro)}
+        </>
+      ) : (
+        metade(tema)
+      )}
+    </div>
+  );
+}
+
+function AbaAparencia() {
+  const modo = useTema((e) => e.modo);
+  const escolher = useTema((e) => e.escolher);
+
+  return (
+    <>
+    <Bloco titulo="Tema" icone="icones.svg#palette" texto="Vale só para este computador.">
+      <div className="mt-4 grid max-w-[760px] gap-3 sm:grid-cols-3">
+        {TEMAS.map((tema) => {
+          const ativo = tema.id === modo;
+          return (
+            <button
+              key={tema.id}
+              type="button"
+              aria-pressed={ativo}
+              onClick={(e) => escolher(tema.id, { x: e.clientX, y: e.clientY })}
+              className={`rounded-xl border bg-painel p-3 text-left transition-colors ${
+                ativo ? "border-ambar shadow-[0_0_0_3px_var(--accent-soft)]" : "border-linha hover:border-[var(--accent-line)]"
+              }`}
+            >
+              <Previa tema={tema} />
+              <span className="flex items-center gap-2">
+                <Icone referencia={tema.icone} className={`size-4 ${ativo ? "text-ambar" : "text-tinta-apagada"}`} />
+                <span className="flex-1 text-[13.5px] text-tinta">{tema.rotulo}</span>
+                {ativo && (
+                  <span className="grid size-4 place-items-center rounded-full bg-ambar text-ambar-tinta">
+                    <Icone referencia="icones.svg#check" className="size-3" />
+                  </span>
+                )}
+              </span>
+              <span className="mt-0.5 block text-[12px] text-tinta-apagada">{tema.texto}</span>
+            </button>
+          );
+        })}
+      </div>
+    </Bloco>
+    </>
+  );
+}
+
+/* ── Peças ───────────────────────────────────────────────────────────── */
+
+function Bloco({ titulo, icone, texto, children }: { titulo: string; icone: string; texto?: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-linha bg-painel p-5">
+      <h3 className="m-0 flex items-center gap-2.5 text-[15px] text-tinta">
+        <span className="grid size-8 place-items-center rounded-lg bg-[var(--accent-soft)] text-ambar">
+          <Icone referencia={icone} className="size-4" />
+        </span>
+        {titulo}
+      </h3>
+      {texto && <p className="mt-2 mb-0 text-[13px] text-tinta-apagada">{texto}</p>}
+      {typeof children === "string" ? (
+        <p className="mt-3 mb-0 text-[13px] leading-relaxed text-tinta-fraca">{children}</p>
+      ) : (
+        children
+      )}
+    </section>
   );
 }

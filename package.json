@@ -79,6 +79,7 @@
     "logo-esp": "node empacotar/gera-logo.js"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.5",
     "better-sqlite3": "^13.0.3",
     "bytenode": "^1.6.0",
     "express": "^4.19.2",

@@ -53,7 +53,7 @@ const CAMPO =
   "h-10 w-full rounded-xl border border-linha bg-painel-suave px-3 text-sm text-tinta" +
   " placeholder:text-tinta-apagada focus:border-[var(--accent-line)] focus:outline-none";
 
-const ROTULO = "text-[11px] font-medium text-tinta-fraca";
+const ROTULO = "text-[11px]  text-tinta-fraca";
 
 /** A senha mínima do backend (`addMemberSchema`). Um CPF tem 11 dígitos, e passa. */
 const SENHA_MINIMA = 8;
@@ -137,7 +137,7 @@ export function Painel() {
   async function excluir(membro: Membro) {
     const ok = await dialogo.confirmar(
       `O acesso de ${membro.name} (${membro.email}) será apagado. Para ele voltar, será preciso criar de novo.`,
-      { titulo: "Excluir acesso", kicker: "PAINEL", confirmar: "Excluir" },
+      { titulo: "Excluir acesso", kicker: "Painel", confirmar: "Excluir" },
     );
     if (!ok) return;
     setOcupado(membro.id);
@@ -159,7 +159,7 @@ export function Painel() {
   */
   if (usuario.papel !== "dono" || (equipe && !equipe.isOwner)) {
     return (
-      <div className="mx-auto max-w-2xl py-2">
+      <div className="w-full">
         <Cartao titulo="Só o administrador" icone="icones.svg#lock">
           <p className="m-0 text-[13px] leading-relaxed text-tinta-fraca">
             O painel de acessos é da conta que criou a empresa. Peça a ela para
@@ -175,7 +175,7 @@ export function Painel() {
   const semEquipe = equipe ? !equipe.plan.team : false;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col py-2">
+    <div className="flex w-full flex-col">
       {erro && (
         <div className="mb-3.5 flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] px-4 py-3 text-[13px] text-[var(--danger)]">
           <Icone referencia="icones.svg#triangle-alert" className="size-4 shrink-0" />
@@ -254,7 +254,7 @@ export function Painel() {
                 {criando ? "Criando…" : "Criar acesso"}
               </Botao>
               {equipe && (
-                <span className="font-mono text-[11px] tracking-[0.06em] text-tinta-apagada uppercase">
+                <span className="font-mono text-[11px]  text-tinta-apagada ">
                   {equipe.used} de {equipe.seats} acessos em uso
                   {(equipe.extraSeats ?? 0) > 0 && ` · ${equipe.extraSeats} extra`}
                 </span>
@@ -294,18 +294,18 @@ export function Painel() {
               >
                 <span
                   aria-hidden="true"
-                  className="grid size-9 shrink-0 place-items-center rounded-[9px] border border-[var(--accent-line)] bg-[var(--accent-soft)] font-mono text-[11px] font-semibold text-ambar"
+                  className="grid size-9 shrink-0 place-items-center rounded-[9px] border border-[var(--accent-line)] bg-[var(--accent-soft)] font-mono text-[11px]  text-ambar"
                 >
                   {iniciais(membro.name)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="m-0 truncate text-[14px] font-medium text-tinta">{membro.name}</p>
+                  <p className="m-0 truncate text-[14px]  text-tinta">{membro.name}</p>
                   <p className="m-0 truncate text-[12px] text-tinta-fraca">{membro.email}</p>
                 </div>
 
                 <span
                   className={[
-                    "shrink-0 rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.08em] uppercase",
+                    "shrink-0 rounded-md px-2 py-0.5 font-mono text-[10px]   ",
                     dono
                       ? "bg-[var(--accent-soft)] text-ambar"
                       : membro.isActive

@@ -157,7 +157,7 @@ export function Historico() {
             href={`/api/impressoras/report-production.pdf?end=${fim}&machine=${encodeURIComponent(maquinaId)}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-3.5 py-2 text-[0.82rem] font-semibold text-tinta-fraca no-underline transition-colors hover:border-[var(--accent-line)] hover:text-tinta"
+            className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-3.5 py-2 text-[0.82rem]  text-tinta-fraca no-underline transition-colors hover:border-[var(--accent-line)] hover:text-tinta"
           >
             <Icone referencia="icones.svg#file-text" className="size-4" />
             Relatório de 30 dias (PDF)
@@ -207,7 +207,7 @@ export function Historico() {
                   type="button"
                   onClick={() => irParaODia(hojeIso())}
                   disabled={fim === hojeIso()}
-                  className="rounded-[9px] border border-linha bg-painel-suave px-3 py-2 text-[0.8rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta disabled:opacity-40 disabled:hover:text-tinta-fraca"
+                  className="rounded-[9px] border border-linha bg-painel-suave px-3 py-2 text-[0.8rem]  text-tinta-fraca transition-colors hover:text-tinta disabled:opacity-40 disabled:hover:text-tinta-fraca"
                 >
                   Hoje
                 </button>
@@ -284,7 +284,7 @@ export function Historico() {
             <button
               type="button"
               onClick={() => { setPedidoCriado(false); setLancando((antes) => !antes); }}
-              className="flex items-center gap-2 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro"
+              className="flex items-center gap-2 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem]  text-ambar-tinta transition-colors hover:bg-ambar-claro"
             >
               <Icone referencia="icones.svg#list-checks" className="size-4" />
               {lancando ? "Fechar" : "Lançar pedido"}
@@ -370,7 +370,7 @@ function BotaoDeModo({ atual, valor, aoEscolher, icone, rotulo }: {
       type="button"
       onClick={() => aoEscolher(valor)}
       aria-pressed={ligado}
-      className={`flex items-center gap-2 rounded-[7px] px-3 py-1.5 text-[0.8rem] font-semibold transition-colors ${
+      className={`flex items-center gap-2 rounded-[7px] px-3 py-1.5 text-[0.8rem]  transition-colors ${
         ligado ? "bg-ambar text-ambar-tinta" : "text-tinta-fraca hover:text-tinta"
       }`}
     >
@@ -393,7 +393,7 @@ function BotaoDeEscopo({ atual, valor, aoEscolher, icone, rotulo }: {
       type="button"
       onClick={() => aoEscolher(valor)}
       aria-pressed={ligado}
-      className={`flex items-center gap-2 rounded-[7px] px-3 py-1.5 text-[0.8rem] font-semibold transition-colors ${
+      className={`flex items-center gap-2 rounded-[7px] px-3 py-1.5 text-[0.8rem]  transition-colors ${
         ligado ? "bg-ambar text-ambar-tinta" : "text-tinta-fraca hover:text-tinta"
       }`}
     >
@@ -419,7 +419,7 @@ function BotaoDeImpressao({ itens, modo, rotulo, icone }: {
     <button
       type="button"
       onClick={() => void abrirFolha(itens, modo)}
-      className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem] font-semibold text-tinta transition-colors hover:border-[var(--accent-line)]"
+      className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem]  text-tinta transition-colors hover:border-[var(--accent-line)]"
     >
       <Icone referencia={icone} className="size-4" />
       {rotulo}
@@ -470,14 +470,14 @@ function Tabela({ registros, marcados, aoAlternar }: {
       <table className="w-full border-collapse text-[0.82rem]">
         <thead>
           <tr className="text-left text-tinta-apagada">
-            <th className="w-9 px-2 py-2 font-medium" />
-            <th className="px-2 py-2 font-medium">Data</th>
-            <th className="px-2 py-2 font-medium">Máquina</th>
-            <th className="px-2 py-2 font-medium">Trabalho</th>
-            <th className="px-2 py-2 text-right font-medium">Metragem</th>
-            <th className="px-2 py-2 text-right font-medium">Tempo</th>
-            <th className="px-2 py-2 text-right font-medium">Tinta</th>
-            <th className="px-2 py-2 font-medium">Situação</th>
+            <th className="w-9 px-2 py-2 " />
+            <th className="px-2 py-2 ">Data</th>
+            <th className="px-2 py-2 ">Máquina</th>
+            <th className="px-2 py-2 ">Trabalho</th>
+            <th className="px-2 py-2 text-right ">Metragem</th>
+            <th className="px-2 py-2 text-right ">Tempo</th>
+            <th className="px-2 py-2 text-right ">Tinta</th>
+            <th className="px-2 py-2 ">Situação</th>
           </tr>
         </thead>
         <tbody>
@@ -599,5 +599,5 @@ function Situacao({ registro }: { registro: Registro }) {
         ? { cor: "text-ambar", texto: registro.status || "Em impressão" }
         : { cor: "text-certo", texto: registro.status || "Concluído" };
 
-  return <span className={`text-[0.75rem] font-semibold ${cor}`}>{texto}</span>;
+  return <span className={`text-[0.75rem]  ${cor}`}>{texto}</span>;
 }

@@ -141,7 +141,7 @@ export function Moldes() {
     <div className="producao flex h-full min-h-0 flex-col bg-fundo">
       {/* ---------------------------------------------------------- A BARRA */}
       <div className="flex min-h-[43px] shrink-0 flex-wrap items-center gap-3 border-b border-linha bg-painel-suave px-3 py-1.5">
-        <span className="font-titulo text-[10px] font-bold tracking-[0.16em] text-ambar uppercase">
+        <span className="font-titulo text-[10px]   text-ambar ">
           MOLDES
         </span>
         <span className="font-mono text-[10px] text-tinta-apagada">
@@ -181,10 +181,10 @@ export function Moldes() {
       */}
       <p className="m-0 shrink-0 border-b border-linha bg-painel px-3 py-2 text-[0.78rem] leading-relaxed text-tinta-fraca">
         O desenho vem do seu programa em{" "}
-        <strong className="font-semibold text-tinta">DXF, PLT, SVG ou PDF vetorial</strong> — o que
-        fica guardado aqui é o <strong className="font-semibold text-tinta">contorno em
+        <strong className=" text-tinta">DXF, PLT, SVG ou PDF vetorial</strong> — o que
+        fica guardado aqui é o <strong className=" text-tinta">contorno em
         centímetros</strong>, e não uma figura, então o molde volta sempre na medida certa. De cada
-        molde você manda as peças para o <strong className="font-semibold text-tinta">Encaixe</strong>,
+        molde você manda as peças para o <strong className=" text-tinta">Encaixe</strong>,
         que as acomoda no tecido.
       </p>
 
@@ -347,12 +347,12 @@ function Vazia() {
   ];
 
   return (
-    <div className="grid h-full place-items-center p-4">
-      <div className="w-full max-w-[560px]">
-        <p className="m-0 text-center font-titulo text-[1.3rem] font-semibold tracking-[-0.02em] text-tinta">
+    <div className="h-full py-2">
+      <div className="w-full max-w-[640px]">
+        <p className="m-0 font-titulo text-[1.3rem] text-tinta">
           A estante está vazia
         </p>
-        <p className="mx-auto mt-2 mb-6 max-w-[420px] text-center text-[0.85rem] leading-relaxed text-tinta-fraca">
+        <p className="mt-2 mb-6 max-w-[520px] text-[0.85rem] leading-relaxed text-tinta-fraca">
           Um molde guardado aqui é o contorno das peças em centímetros — não uma imagem. É isso
           que o faz voltar exato, no tamanho certo, todas as vezes.
         </p>
@@ -363,11 +363,11 @@ function Vazia() {
               key={passo.titulo}
               className="flex items-start gap-3 rounded-[12px] border border-linha bg-painel-suave px-4 py-3"
             >
-              <span className="grid size-6 shrink-0 place-items-center rounded-full border border-[var(--accent-line)] bg-[var(--accent-soft)] font-mono text-[0.72rem] font-semibold text-ambar">
+              <span className="grid size-6 shrink-0 place-items-center rounded-full border border-[var(--accent-line)] bg-[var(--accent-soft)] font-mono text-[0.72rem]  text-ambar">
                 {i + 1}
               </span>
               <span className="min-w-0">
-                <strong className="block text-[0.88rem] font-semibold text-tinta">{passo.titulo}</strong>
+                <strong className="block text-[0.88rem]  text-tinta">{passo.titulo}</strong>
                 <span className="mt-0.5 block text-[0.8rem] leading-relaxed text-tinta-fraca">
                   {passo.texto}
                 </span>

@@ -71,7 +71,7 @@ export function Maquinas() {
             <button
               type="button"
               onClick={parar}
-              className="rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta"
+              className="rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem]  text-tinta-fraca transition-colors hover:text-tinta"
             >
               Parar
             </button>
@@ -81,7 +81,7 @@ export function Maquinas() {
                 type="button"
                 onClick={procurarFundo}
                 title="Desce os discos deste computador, pasta por pasta. Demora, e só vale quando a busca normal não achou."
-                className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-3.5 py-2 text-[0.85rem] font-semibold text-tinta-fraca transition-colors hover:text-tinta"
+                className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-3.5 py-2 text-[0.85rem]  text-tinta-fraca transition-colors hover:text-tinta"
               >
                 <Icone referencia="icones.svg#search" className="size-4" />
                 Procurar fundo
@@ -89,7 +89,7 @@ export function Maquinas() {
               <button
                 type="button"
                 onClick={comOsAlvosDoCampo}
-                className="flex items-center gap-2 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro"
+                className="flex items-center gap-2 rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.85rem]  text-ambar-tinta transition-colors hover:bg-ambar-claro"
               >
                 <Icone referencia="icones.svg#radar" className="size-4" />
                 Procurar máquinas
@@ -191,7 +191,7 @@ export function Maquinas() {
         acao={
           <Link
             to="/impressoras"
-            className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem] font-semibold text-tinta-fraca no-underline transition-colors hover:text-tinta"
+            className="flex items-center gap-2 rounded-[9px] border border-linha bg-painel-suave px-4 py-2 text-[0.85rem]  text-tinta-fraca no-underline transition-colors hover:text-tinta"
           >
             <Icone referencia="icones.svg#activity" className="size-4" />
             Ver o painel
@@ -266,7 +266,7 @@ function Pendente({ achado, aoMudar }: { achado: AchadoDaVarredura; aoMudar: () 
           type="button"
           onClick={cadastrar}
           disabled={salvando}
-          className="rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.82rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
+          className="rounded-[9px] border border-ambar bg-ambar px-4 py-2 text-[0.82rem]  text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
         >
           {salvando ? "Cadastrando..." : "Cadastrar"}
         </button>
@@ -393,7 +393,7 @@ function Cadastrada({ maquina, aoMudar }: { maquina: MaquinaGerenciada; aoMudar:
                 type="button"
                 onClick={salvarNome}
                 disabled={ocupado}
-                className="rounded-[9px] border border-ambar bg-ambar px-3 py-1.5 text-[0.78rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
+                className="rounded-[9px] border border-ambar bg-ambar px-3 py-1.5 text-[0.78rem]  text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
               >
                 Salvar
               </button>
@@ -484,7 +484,7 @@ function Cadastrada({ maquina, aoMudar }: { maquina: MaquinaGerenciada; aoMudar:
               type="button"
               onClick={excluir}
               disabled={ocupado}
-              className="rounded-[9px] border border-alerta px-3 py-1.5 text-[0.78rem] font-semibold text-alerta disabled:opacity-50"
+              className="rounded-[9px] border border-alerta px-3 py-1.5 text-[0.78rem]  text-alerta disabled:opacity-50"
             >
               Excluir mesmo
             </button>

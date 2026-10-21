@@ -297,9 +297,15 @@ export const TELAS: readonly Tela[] = [
   },
 
   // ------------------------------------------------------------ Impressão
+  /*
+   * Desde 2026-10-21 o grupo inteiro está fora do menu: Impressoras e Pedidos
+   * saíram também, por decisão de desenho. Os endereços (`/impressoras`,
+   * `/pedidos`) continuam abrindo; para devolvê-las, é só tirar o `foraDoMenu`.
+   */
   {
     nome: "impressoras",
     grupo: "impressao",
+    foraDoMenu: true,
     rotulo: "Impressoras",
     apoioMenu: "O que está saindo agora",
     apoioTopo: "Acompanhe a produção das impressoras em tempo real.",
@@ -310,6 +316,7 @@ export const TELAS: readonly Tela[] = [
   {
     nome: "pedidos",
     grupo: "impressao",
+    foraDoMenu: true,
     rotulo: "Pedidos",
     apoioMenu: "A fila da calandra",
     apoioTopo: "A lista de produção na ordem da calandra, e o que já passou por lá.",
@@ -383,20 +390,20 @@ export const TELAS: readonly Tela[] = [
     nome: "sobre",
     grupo: "relatorios",
     foraDoMenu: true,
-    rotulo: "Sobre",
+    rotulo: "Sobre e suporte",
     apoioMenu: "Que programa é este",
     apoioTopo: "A versão instalada, quem faz o Optmize e como falar com a gente.",
-    icone: "icones.svg#info",
+    icone: "icones.svg#life-buoy",
     Componente: Sobre,
   },
   {
     nome: "conta",
     grupo: "relatorios",
     foraDoMenu: true,
-    rotulo: "Configurações da conta",
-    apoioMenu: "Quem está usando",
-    apoioTopo: "A conta que está aberta nesta máquina e a empresa dela.",
-    icone: "icones.svg#user-cog",
+    rotulo: "Configurações",
+    apoioMenu: "Conta, aparência e equipe",
+    apoioTopo: "A conta aberta nesta máquina, o tema e os acessos da equipe.",
+    icone: "icones.svg#settings",
     Componente: Conta,
   },
   {

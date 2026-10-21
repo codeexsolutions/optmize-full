@@ -205,7 +205,7 @@ function CartaoDaMacro({ macro, temCorel, aoMudar }: {
           <strong className="block text-[0.85rem] text-tinta">
             {macro.nome}
             {macro.instalada && (
-              <span className="ml-1.5 rounded border border-linha px-1 py-px align-middle text-[0.62rem] font-normal text-certo">
+              <span className="ml-1.5 rounded border border-linha px-1 py-px align-middle text-[0.62rem]  text-certo">
                 instalada
               </span>
             )}
@@ -234,7 +234,7 @@ function CartaoDaMacro({ macro, temCorel, aoMudar }: {
             type="button"
             disabled={Boolean(ocupado)}
             onClick={() => void mexerNoCorel(false)}
-            className="rounded-[8px] border border-ambar bg-ambar px-2.5 py-1.5 text-[0.75rem] font-semibold text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
+            className="rounded-[8px] border border-ambar bg-ambar px-2.5 py-1.5 text-[0.75rem]  text-ambar-tinta transition-colors hover:bg-ambar-claro disabled:opacity-50"
           >
             {ocupado || "Instalar no Corel"}
           </button>

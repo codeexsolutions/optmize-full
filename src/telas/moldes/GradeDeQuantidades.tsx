@@ -39,11 +39,11 @@ export function GradeDeQuantidades({
         <table className="border-collapse text-[0.85rem]">
           <thead>
             <tr>
-              <th className="px-2 py-1 text-left font-semibold">Peças prontas</th>
+              <th className="px-2 py-1 text-left ">Peças prontas</th>
               {colunas.map((c) => (
-                <th key={c.nome} className="px-2 py-1 text-center font-semibold">
+                <th key={c.nome} className="px-2 py-1 text-center ">
                   {c.nome}
-                  {c.semDesenho && <span className="block text-[0.72rem] font-normal text-tinta-fraca">sem desenho</span>}
+                  {c.semDesenho && <span className="block text-[0.72rem]  text-tinta-fraca">sem desenho</span>}
                 </th>
               ))}
             </tr>
@@ -51,7 +51,7 @@ export function GradeDeQuantidades({
           <tbody>
             {linhas.map((l) => (
               <tr key={l.chave} className="border-t border-linha">
-                <th scope="row" className="px-2 py-1 text-left font-medium capitalize">{l.nome}</th>
+                <th scope="row" className="px-2 py-1 text-left  capitalize">{l.nome}</th>
                 {colunas.map((c) => {
                   const celula = chaveDaCelula(l.chave, c.nome);
                   const valor = inteiro(quantidades[l.chave]?.[c.nome]);
@@ -91,7 +91,7 @@ export function GradeDeQuantidades({
             const nome = x.peca.nome || x.peca.papel;
             return (
               <div key={i} className="flex flex-wrap items-center gap-2">
-                <span className={`w-40 capitalize ${x.mexida ? "font-semibold" : ""}`}>{nome}</span>
+                <span className={`w-40 capitalize ${x.mexida ? "" : ""}`}>{nome}</span>
                 <input
                   type="number" min="0" step="1" className="w-20!" aria-label={`Quantidade de ${nome}`}
                   value={x.quantidade} onChange={(e) => aoMexer(aberta, i, inteiro(e.target.value))}

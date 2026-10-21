@@ -312,13 +312,13 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
         >
           <Icone referencia="icones.svg#arrow-left" className="size-3.5" />
         </button>
-        <span className="text-[10px] font-bold tracking-widest text-tinta-apagada uppercase">
+        <span className="text-[10px]   text-tinta-apagada ">
           {projeto.cliente?.nome ?? "Cliente"}
         </span>
         <TextoEditavel
           valor={nome}
           aoMudar={setNome}
-          className="text-sm font-semibold text-tinta"
+          className="text-sm  text-tinta"
           rotulo="Nome do projeto"
         />
 
@@ -346,7 +346,7 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
               <Icone referencia="icones.svg#layers" className="size-6" />
             </span>
             <div>
-              <p className="m-0 font-titulo text-base font-semibold text-tinta">Adicione o primeiro subprojeto</p>
+              <p className="m-0 font-titulo text-base  text-tinta">Adicione o primeiro subprojeto</p>
               <p className="mt-1 mb-0 text-sm text-tinta-fraca">
                 É o que você produz: uma camisa, uma bandeira, um wind banner.
               </p>
@@ -385,7 +385,7 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
                         : "border-transparent bg-painel text-tinta-fraca hover:text-tinta",
                     ].join(" ")}
                   >
-                    <span className="max-w-40 truncate font-medium">{sub.nome}</span>
+                    <span className="max-w-40 truncate ">{sub.nome}</span>
                     <span className="font-mono text-[10px] text-tinta-apagada">{pecasDoSub(sub)}</span>
                   </button>
                 );
@@ -394,7 +394,7 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
                 type="button"
                 onClick={() => novoSubprojeto()}
                 title="Novo subprojeto"
-                className="flex shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-medium text-tinta-apagada transition-colors hover:bg-painel hover:text-ambar"
+                className="flex shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs  text-tinta-apagada transition-colors hover:bg-painel hover:text-ambar"
               >
                 <Icone referencia="icones.svg#plus" className="size-3" />
                 Subprojeto
@@ -434,7 +434,7 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
                   <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--warn)_30%,transparent)] bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] px-3 py-2.5">
                     <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-4 shrink-0 text-[var(--warn)]" />
                     <p className="m-0 text-xs leading-relaxed text-tinta-fraca">
-                      <span className="font-semibold text-[var(--warn)]">{faltam.length} arte(s) faltando:</span>{" "}
+                      <span className=" text-[var(--warn)]">{faltam.length} arte(s) faltando:</span>{" "}
                       {faltam.slice(0, 6).join(", ")}
                       {faltam.length > 6 && ` e mais ${faltam.length - 6}`}. Essas peças não vão para o Encaixe.
                     </p>
@@ -448,7 +448,7 @@ export function EditorDoProjeto({ projeto, aoFechar, aoMudarOProjeto }: {
                     <Icone referencia="icones.svg#layers" className="size-6" />
                   </span>
                   <div>
-                    <p className="m-0 font-titulo text-base font-semibold text-tinta">Escolha um subprojeto</p>
+                    <p className="m-0 font-titulo text-base  text-tinta">Escolha um subprojeto</p>
                     <p className="mt-1 mb-0 text-sm text-tinta-fraca">Escolha uma das abas acima, ou crie um novo.</p>
                   </div>
                   <Botao jeito="primario" onClick={() => novoSubprojeto()} icone={<Icone referencia="icones.svg#plus" className="size-4" />}>
@@ -578,7 +578,7 @@ function PainelDoSubprojeto({ sub, aoMexer, aoMexerNaCategoria, aoMexerNaPeca, a
         <TextoEditavel
           valor={sub.nome}
           aoMudar={(nome) => aoMexer((s) => ({ ...s, nome }))}
-          className="font-titulo text-xl font-semibold text-tinta"
+          className="font-titulo text-xl  text-tinta"
           rotulo="Nome do subprojeto"
         />
         <p className="mt-0.5 mb-0 font-mono text-[11px] text-tinta-apagada">
@@ -588,7 +588,7 @@ function PainelDoSubprojeto({ sub, aoMexer, aoMexerNaCategoria, aoMexerNaPeca, a
 
       {/* Categorias */}
       <section className="rounded-xl border border-linha bg-painel p-3">
-        <p className="mt-0 mb-2.5 text-[10px] font-bold tracking-widest text-tinta-apagada uppercase">Categoria</p>
+        <p className="mt-0 mb-2.5 text-[10px]   text-tinta-apagada ">Categoria</p>
 
         {sub.categorias.length === 0 ? (
           <p className="mt-0 mb-3 text-xs text-tinta-apagada">Nenhuma categoria. Pode ser P/M/G ou “1,5 × 3 m”.</p>
@@ -637,7 +637,7 @@ function PainelDoSubprojeto({ sub, aoMexer, aoMexerNaCategoria, aoMexerNaPeca, a
       {cat && (
         <section className="rounded-xl border border-linha bg-painel p-3">
           <div className="mb-3 flex flex-wrap items-baseline gap-2 border-b border-linha pb-2.5">
-            <span className="font-mono text-sm font-bold text-tinta">{cat.rotulo}</span>
+            <span className="font-mono text-sm  text-tinta">{cat.rotulo}</span>
             <span className="font-mono text-[10px] text-tinta-apagada">
               {cat.pecas.length} peça(s) × {cat.quantidade} unidade(s)
             </span>
@@ -720,7 +720,7 @@ function CartaoDaCategoria({ categoria, ativa, aoEscolher, aoRenomear, aoQuantid
         <TextoEditavel
           valor={categoria.rotulo}
           aoMudar={aoRenomear}
-          className={`min-w-0 truncate font-mono text-sm font-bold ${ativa ? "text-ambar" : "text-tinta"}`}
+          className={`min-w-0 truncate font-mono text-sm  ${ativa ? "text-ambar" : "text-tinta"}`}
           rotulo={`Nome da categoria ${categoria.rotulo}`}
         />
         <button
@@ -798,7 +798,7 @@ function CartaoDaPeca({ peca, aoRenomear, aoPorItem, aoMedida, aoApagar, aoEscol
               ? <img src={arte.miniatura} alt={arte.nome} className="size-full object-contain" />
               : <span className="font-mono text-[9px] text-tinta-apagada">carregando…</span>}
             <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-lg bg-[color-mix(in_srgb,var(--bg)_70%,transparent)] opacity-0 transition-opacity group-hover/arte:opacity-100">
-              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-ambar">
+              <span className="flex items-center gap-1.5 text-[11px]  text-ambar">
                 <Icone referencia="icones.svg#refresh-cw" className="size-3" />
                 trocar arte
               </span>
@@ -807,7 +807,7 @@ function CartaoDaPeca({ peca, aoRenomear, aoPorItem, aoMedida, aoApagar, aoEscol
         ) : (
           <span className="grid aspect-square w-full max-w-44 place-items-center content-center gap-1 rounded-lg border border-dashed border-linha text-tinta-apagada transition-colors group-hover/arte:text-ambar">
             <Icone referencia="icones.svg#plus" className="size-4.5" />
-            <span className="text-[10px] font-medium">anexar arquivo</span>
+            <span className="text-[10px] ">anexar arquivo</span>
           </span>
         )}
       </button>
@@ -819,7 +819,7 @@ function CartaoDaPeca({ peca, aoRenomear, aoPorItem, aoMedida, aoApagar, aoEscol
             <TextoEditavel
               valor={peca.nome}
               aoMudar={aoRenomear}
-              className="min-w-0 truncate text-xs font-semibold text-tinta"
+              className="min-w-0 truncate text-xs  text-tinta"
               rotulo={`Nome da peça ${peca.nome}`}
             />
           </span>
@@ -865,7 +865,7 @@ function CartaoDaPeca({ peca, aoRenomear, aoPorItem, aoMedida, aoApagar, aoEscol
                 type="button"
                 onClick={aoTirarArte}
                 aria-label={`Remover arquivo ${arte.nome}`}
-                className="shrink-0 text-[9px] font-semibold text-tinta-apagada transition-colors hover:text-[var(--danger)]"
+                className="shrink-0 text-[9px]  text-tinta-apagada transition-colors hover:text-[var(--danger)]"
               >
                 remover
               </button>
@@ -963,8 +963,8 @@ function Atalho({ rotulo, aoClicar }: { rotulo: string; aoClicar: () => void }) 
 function Status({ rotulo, valor, destaque = false }: { rotulo: string; valor: string; destaque?: boolean }) {
   return (
     <span className="flex shrink-0 items-baseline gap-1.5">
-      <span className="text-[9px] font-bold tracking-widest text-tinta-apagada uppercase">{rotulo}</span>
-      <span className={`font-mono text-[11px] ${destaque ? "font-bold text-ambar" : "text-tinta-fraca"}`}>{valor}</span>
+      <span className="text-[9px]   text-tinta-apagada ">{rotulo}</span>
+      <span className={`font-mono text-[11px] ${destaque ? " text-ambar" : "text-tinta-fraca"}`}>{valor}</span>
     </span>
   );
 }

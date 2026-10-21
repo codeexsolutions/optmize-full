@@ -36,7 +36,7 @@ import { Espera } from "../telas/Espera";
 import { ProvedorDeEscopos } from "./Escopos";
 import { useSessao } from "./usuario";
 import { ProvedorDeDialogo } from "./Dialogo";
-import { Cabecalho } from "./Cabecalho";
+import { Cabecalho, ProvedorDoEspacoDoCabecalho } from "./Cabecalho";
 import { Icone } from "./Icone";
 import { Producao } from "../producao/Producao";
 import { useTelaAtual, type NomeDeTela } from "../rotas";
@@ -47,6 +47,8 @@ export function Casca() {
   const navegar = useNavigate();
   const [menuAberto, setMenuAberto] = useState(false);
   const [semCabecalho, setSemCabecalho] = useState(false);
+  /** O espaço à direita do cabeçalho, onde as telas põem abas e ações. */
+  const [espacoDoCabecalho, setEspacoDoCabecalho] = useState<HTMLElement | null>(null);
 
   const irPara = (nome: NomeDeTela) => navegar(`/${nome}`);
 
@@ -181,6 +183,7 @@ export function Casca() {
     <ProvedorDeEscopos escopos={sessao.acesso?.escopos ?? null}>
     <ProvedorDeDialogo>
     <ProvedorSemCabecalho value={setSemCabecalho}>
+    <ProvedorDoEspacoDoCabecalho value={espacoDoCabecalho}>
     <div data-tela={tela.nome} className="app-react h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
       <Menu
         aberto={menuAberto}
@@ -197,7 +200,7 @@ export function Casca() {
       {/*
         As duas margens abaixo são A LARGURA DA BARRA, e têm que bater com as
         do `Menu.tsx` no pixel: a barra é `fixed`, então ela não empurra nada —
-        quem abre espaço para ela é este `ml`. Quando a barra encolheu de 244
+        quem abre espaço para ela é este `ml` (272px desde 2026-10-21). Quando a barra encolheu de 244
         para 236 e este número ficou para trás, sobrou uma faixa de 8px do
         fundo entre ela e a tela, e a bancada do Encaixe — que é colada na
         janela — deixou de ocupar a largura toda.
@@ -216,7 +219,7 @@ export function Casca() {
         </div>
       )}
 
-      <main className="flex h-screen flex-col overflow-hidden tela:ml-[236px] tela:max-[1100px]:ml-[78px]">
+      <main className="pagina-aurora flex h-screen flex-col overflow-hidden tela:ml-[72px]">
         {semTopo ? (
           /*
            * O BOTÃO FLUTUANTE DA GAVETA.
@@ -239,7 +242,7 @@ export function Casca() {
             <Icone referencia="icones.svg#menu" className="size-5" />
           </button>
         ) : (
-          <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} />
+          <Cabecalho tela={tela} aoAbrirMenu={() => setMenuAberto(true)} refDoEspaco={setEspacoDoCabecalho} />
         )}
 
         {/*
@@ -265,7 +268,8 @@ export function Casca() {
               // é o botão flutuante (abaixo), e sem esta faixa ele cairia em
               // cima da primeira barra da tela.
               ? "overflow-hidden pt-[52px] tela:pt-0"
-              : "overflow-y-auto px-3 pb-6 tela:px-[30px]",
+              // O respiro do corpo das páginas do Flow (`PAGE_PAD`), alinhado à esquerda.
+              : "overflow-y-auto px-4 py-3 lg:px-6 lg:py-4",
             // A tela que escondeu o cabeçalho continua sendo documento: mantém
             // a folga e a rolagem, e só abre a faixa do botão da gaveta.
             !bancada && semCabecalho ? "pt-[52px] tela:pt-3" : "",
@@ -291,6 +295,7 @@ export function Casca() {
         </div>
       </main>
     </div>
+    </ProvedorDoEspacoDoCabecalho>
     </ProvedorSemCabecalho>
     </ProvedorDeDialogo>
     </ProvedorDeEscopos>

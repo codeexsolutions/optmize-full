@@ -123,7 +123,7 @@ export function Carrossel({ imagens, aoAbrir }: { imagens: Imagem[]; aoAbrir: (i
       {/* A legenda, sobre um degradê que a separa da foto. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/70 via-black/25 to-transparent px-5 pt-10 pb-4">
         <div className="min-w-0">
-          <p className="m-0 truncate text-sm font-semibold text-white">{atual.nome}</p>
+          <p className="m-0 truncate text-sm  text-white">{atual.nome}</p>
           {atual.onde && <p className="m-0 mt-0.5 truncate text-[11px] text-white/70">{atual.onde}</p>}
         </div>
         <span className="shrink-0 rounded-full bg-black/40 px-2.5 py-0.5 font-mono text-[11px] text-white/80">

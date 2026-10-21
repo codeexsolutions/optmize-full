@@ -57,7 +57,7 @@ export function BlocoDaGraduacao({ base, baseDaGrade, grade, noDaRegra, aoMudarG
   if (!base) {
     return (
       <aside className="flex h-full w-[260px] shrink-0 flex-col gap-2 overflow-auto border-l border-linha p-3 text-[0.85rem]">
-        <p className="m-0 font-semibold">Graduação</p>
+        <p className="m-0 ">Graduação</p>
         <p className="m-0 text-tinta-fraca">
           Esta peça não tem desenho no {baseDaGrade}. Escolha outro base na Grade ou junte o {baseDaGrade}.
         </p>
@@ -99,7 +99,7 @@ export function BlocoDaGraduacao({ base, baseDaGrade, grade, noDaRegra, aoMudarG
   return (
     <aside className="flex h-full w-[260px] shrink-0 flex-col gap-3 overflow-auto border-l border-linha p-3 text-[0.85rem]">
       <div>
-        <p className="m-0 font-semibold">Graduação</p>
+        <p className="m-0 ">Graduação</p>
         <p className="m-0 text-tinta-fraca">Trabalha no {noBase} (o base); os outros tamanhos aparecem tracejados.</p>
       </div>
 
@@ -149,7 +149,7 @@ export function BlocoDaGraduacao({ base, baseDaGrade, grade, noDaRegra, aoMudarG
         </p>
       ) : (
         <div className="flex flex-col gap-2 rounded-[8px] border border-linha p-2">
-          <p className="m-0 font-semibold">Ponto {noDaRegra + 1}{regra ? "" : " (sem regra)"}</p>
+          <p className="m-0 ">Ponto {noDaRegra + 1}{regra ? "" : " (sem regra)"}</p>
           <div className="flex gap-3">
             <label className="flex items-center gap-1.5">
               <input type="radio" name="modo" checked={modoAberto === "igual"} onChange={() => void trocarModoDaRegra("igual")} />

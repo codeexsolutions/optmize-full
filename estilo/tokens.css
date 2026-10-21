@@ -107,15 +107,15 @@
    * continua valendo mesmo com a mesma letra atrás dos três. No dia em que
    * uma delas precisar de outra família, muda aqui e só aqui.
    */
-  --font-display: "Inter", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Inter Variable", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter Variable", "Inter", "Segoe UI", system-ui, sans-serif;
   /*
    * O "mono" perdeu a fonte monoespaçada, mas não o que ela fazia: os números
    * continuam alinhando em coluna por `font-variant-numeric: tabular-nums`
    * (ver `entrada.css`). É o que importava numa lista de metragens — a letra
    * de máquina de escrever era efeito, o alinhamento era função.
    */
-  --font-mono: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Inter Variable", "Inter", "Segoe UI", system-ui, sans-serif;
 }
 
 /*
@@ -144,4 +144,49 @@
   --peca-8: #c8d94a;
   --peca-9: #7f9cff;
   --peca-10: #ffb066;
+}
+
+/*
+ * O TEMA CLARO — desde 2026-10-21 (ver `src/estado/tema.ts`).
+ *
+ * Os MESMOS nomes do escuro, com outros valores: como toda tela pinta pelos
+ * tokens, trocar o atributo do `<html>` troca o programa inteiro. Papel
+ * quente em vez de branco puro (cansa menos o dia inteiro).
+ *
+ * O DESTAQUE DO CLARO É AZUL, o oposto do laranja no círculo das cores —
+ * pedido do dono em 2026-10-21: no escuro, laranja; no branco, o contrário.
+ * Um azul fechado o bastante para o texto azul passar contraste no papel.
+ */
+:root[data-tema="claro"] {
+  --bg: #f5f4f1;
+  --sidebar-bg: #eeece8;
+  --card-bg: #ffffff;
+  --card-bg-soft: #f1efeb;
+  --surface-hover: #e8e5e0;
+  --header-bg: rgba(245, 244, 241, 0.92);
+
+  --border: #d9d5ce;
+  --border-soft: #e6e2dc;
+  --border-hairline: rgba(27, 25, 22, 0.09);
+
+  --text: #1b1916;
+  --text-dim: #55504a;
+  --text-faint: #7b756d;
+
+  --accent: #0062c4;
+  --accent-dark: #004f9e;
+  --accent-bright: #0057ae;
+  --accent-soft: rgba(0, 98, 196, 0.10);
+  --accent-line: rgba(0, 98, 196, 0.32);
+  --accent-ink: #ffffff;
+
+  --danger: #d0345a;
+  --danger-dark: #b02848;
+  --warn: #b7790a;
+  --success: #198a52;
+
+  --shadow: 0 1px 2px rgba(27, 25, 22, 0.08), 0 18px 40px -28px rgba(27, 25, 22, 0.35);
+  --shadow-lift: 0 2px 4px rgba(27, 25, 22, 0.10), 0 26px 60px -30px rgba(27, 25, 22, 0.40);
+
+  --aurora-frio: rgba(120, 90, 255, 0.06);
 }

@@ -48,7 +48,8 @@ import { lazy, Suspense, useEffect, useState } from "react";
 
 import { alerta } from "../casca/Alerta";
 import { encerrarEntrada, tocarEntrada } from "./Entrada";
-import { Alternativa, BotaoPrincipal, Cabecalho, Campo, mascararDocumento, Porta } from "./Porta";
+import { Icone } from "../casca/Icone";
+import { BotaoPrincipal, Cabecalho, Campo, mascararDocumento, Porta } from "./Porta";
 import { usePlanos } from "../estado/planos";
 
 /*
@@ -231,26 +232,7 @@ export function Entrar({
   }
 
   return (
-    <Porta
-      consumido={consumindo}
-      rodape={
-        /*
-          O CONVITE DE QUEM AINDA NÃO TEM CONTA.
-
-          Este botão só passou a fazer sentido quando o programa ganhou plano
-          sem mensalidade: antes, mandar alguém se cadastrar levaria a um
-          pagamento que não destrava o programa instalado. Com o Padrão, o
-          cadastro TERMINA em alguém trabalhando.
-        */
-        <Alternativa
-          pergunta="Ainda não tem conta?"
-          icone="icones.svg#building-2"
-          onClick={() => setCadastrando(true)}
-        >
-          Cadastrar a minha empresa
-        </Alternativa>
-      }
-    >
+    <Porta consumido={consumindo}>
       <form onSubmit={enviar}>
         {/*
           O "ENTRANDO" ACONTECE AQUI DENTRO, como no optmize-lite: o botão
@@ -316,6 +298,23 @@ export function Entrar({
           <BotaoPrincipal icone="icones.svg#arrow-right" esperando={enviando} disabled={enviando} className="mt-2">
             {enviando ? "Entrando…" : "Entrar"}
           </BotaoPrincipal>
+
+          {/*
+            O CONVITE DE QUEM AINDA NÃO TEM CONTA, como no Flow: um botão de
+            largura cheia logo abaixo do "Entrar", separado por um traço com a
+            pergunta. No pé do cartão ele era a coisa menos visível da tela.
+          */}
+          <div className="entrada-degrau -mt-1 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-linha" />
+              <span className="text-[12px] text-tinta-apagada">Ainda não tem conta?</span>
+              <span className="h-px flex-1 bg-linha" />
+            </div>
+            <button type="button" onClick={() => setCadastrando(true)} className="botao-cadastrar group/cad">
+              <Icone referencia="icones.svg#building-2" className="size-4" />
+              Cadastrar minha empresa
+            </button>
+          </div>
         </fieldset>
       </form>
     </Porta>

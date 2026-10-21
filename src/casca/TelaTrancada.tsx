@@ -24,7 +24,7 @@ export function TelaTrancada() {
     <div className="flex min-h-[50vh] items-center justify-center px-4">
       <div className="flex max-w-[420px] flex-col items-center gap-3 text-center">
         <Icone referencia="icones.svg#lock" className="size-8 text-tinta-apagada" />
-        <p className="m-0 text-[0.95rem] font-semibold text-tinta">Esta tela está trancada</p>
+        <p className="m-0 text-[0.95rem]  text-tinta">Esta tela está trancada</p>
         <p className="m-0 text-[0.85rem] leading-relaxed text-tinta-fraca">
           Ela não está disponível por enquanto. Se você precisa dela, fale com quem cuida do Optmize.
         </p>

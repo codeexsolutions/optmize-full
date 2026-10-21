@@ -373,6 +373,15 @@ fn abrir_lancador(app: &tauri::AppHandle) -> tauri::Result<()> {
 fn abrir_principal(app: &tauri::AppHandle, url: WebviewUrl, cheia: bool) -> tauri::Result<()> {
     let janela = WebviewWindowBuilder::new(app, "principal", url)
         .title("Optimize")
+        /*
+         * SEM A BARRA DO WINDOWS no programa (`cheia`): o nome já está na
+         * barra lateral, e minimizar, maximizar e fechar moram na barra
+         * própria do topo (`src/casca/BarraDaJanela.tsx`), que fala com a
+         * janela pelas permissões de `capabilities/principal.json`. As
+         * páginas de erro mantêm a borda: elas não têm a barra própria, e
+         * sem borda ninguém conseguiria fechá-las.
+         */
+        .decorations(!cheia)
         .inner_size(1360.0, 900.0)
         .min_inner_size(1024.0, 640.0)
         .center()

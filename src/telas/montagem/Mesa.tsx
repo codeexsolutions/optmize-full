@@ -233,7 +233,7 @@ export function Mesa(props: Props) {
         }
       }
       ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.font = `${Math.max(11, d.texto.tamanho * escala * 0.8)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.font = `${Math.max(11, d.texto.tamanho * escala * 0.8)}px "Inter Variable", "Inter", "Segoe UI", sans-serif`;
       ctx.textAlign = "center";
       d.texto.linhas.forEach((l: string, i: number) => {
         const c = em({ x: d.texto.x, y: d.texto.y + i * d.texto.tamanho * 1.3 });
@@ -271,7 +271,7 @@ export function Mesa(props: Props) {
       const naTela = canvas.getBoundingClientRect().width;
       const fator = naTela > 0 ? canvas.width / naTela : 1;
       ctx.fillStyle = "#ff4d4d";
-      ctx.font = `bold ${Math.round(14 * fator)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.font = `${Math.round(14 * fator)}px "Inter Variable", "Inter", "Segoe UI", sans-serif`;
       ctx.textAlign = "left";
       ctx.fillText("A margem fecha a peça sobre ela mesma: diminua a margem.", 12 * fator, 22 * fator);
     }

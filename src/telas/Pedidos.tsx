@@ -157,7 +157,7 @@ export function Pedidos() {
 
 function Andamento({ status }: { status: AndamentoDoPedido }) {
   const cor = status === "concluido" ? "text-certo" : status === "pausado" ? "text-atencao" : "text-tinta-fraca";
-  return <span className={`shrink-0 text-[0.75rem] font-semibold ${cor}`}>{ROTULO_DO_ANDAMENTO[status]}</span>;
+  return <span className={`shrink-0 text-[0.75rem]  ${cor}`}>{ROTULO_DO_ANDAMENTO[status]}</span>;
 }
 
 /**
@@ -284,7 +284,7 @@ function Detalhe({ id, aoMudar }: { id: string; aoMudar: () => void }) {
             <button
               type="button"
               onClick={excluir}
-              className="rounded-[9px] border border-alerta px-3 py-1.5 text-[0.78rem] font-semibold text-alerta"
+              className="rounded-[9px] border border-alerta px-3 py-1.5 text-[0.78rem]  text-alerta"
             >
               Excluir mesmo — o pedido some, os trabalhos ficam
             </button>
@@ -313,12 +313,12 @@ function Detalhe({ id, aoMudar }: { id: string; aoMudar: () => void }) {
 /** O que a calandra marcou neste item — e, quando deu errado, por quê. */
 function ResultadoNaCalandra({ item }: { item: ItemDoPedido }) {
   if (item.calandraStatus === "ok") {
-    return <span className="text-[0.73rem] font-semibold text-certo">passou</span>;
+    return <span className="text-[0.73rem]  text-certo">passou</span>;
   }
   if (item.calandraStatus === "erro") {
     const motivo = item.calandraCustomReason || item.calandraReason;
     return (
-      <span className="text-[0.73rem] font-semibold text-alerta" title={motivo || undefined}>
+      <span className="text-[0.73rem]  text-alerta" title={motivo || undefined}>
         erro{motivo ? `: ${motivo}` : ""}
       </span>
     );

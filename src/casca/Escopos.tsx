@@ -103,7 +103,7 @@ function ForaDoPlano({ rotulo, escopo }: { rotulo: string; escopo: Tela["escopo"
         <span className="grid size-12 place-items-center rounded-2xl border border-[var(--accent-line)] bg-[var(--accent-soft)]">
           <Icone referencia="icones.svg#lock" className="size-6 text-ambar" />
         </span>
-        <p className="m-0 text-[0.95rem] font-semibold text-tinta">
+        <p className="m-0 text-[0.95rem]  text-tinta">
           {rotulo} não está no seu plano
         </p>
         <p className="m-0 text-[0.85rem] leading-relaxed text-tinta-fraca">

@@ -176,7 +176,7 @@ function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
   const novoCliente = async () => {
     const nome = await dialogo.perguntar({
       titulo: "Novo cliente",
-      kicker: "PASTA DO CLIENTE",
+      kicker: "Pasta do cliente",
       texto: "O nome da pasta onde os projetos dele vão ficar.",
       exemplo: "Time Azul",
       confirmar: "Criar",
@@ -190,7 +190,7 @@ function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
 
   const renomearCliente = async (cliente: Cliente) => {
     const nome = await dialogo.perguntar({
-      titulo: "Renomear cliente", kicker: "PASTA DO CLIENTE", valor: cliente.nome, confirmar: "Salvar",
+      titulo: "Renomear cliente", kicker: "Pasta do cliente", valor: cliente.nome, confirmar: "Salvar",
     });
     if (!nome) return;
     await tentar(async () => {
@@ -216,7 +216,7 @@ function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
   const novoProjeto = async (cliente: Cliente) => {
     const nome = await dialogo.perguntar({
       titulo: "Novo projeto",
-      kicker: `PASTA DE ${cliente.nome.toUpperCase()}`,
+      kicker: `Pasta de ${cliente.nome}`,
       texto: "O nome deste trabalho, do jeito que você o chama.",
       exemplo: "Camisa Time Azul 2026",
       confirmar: "Criar",
@@ -259,7 +259,7 @@ function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
                 <button
                   type="button"
                   onClick={() => void carregarClientes()}
-                  className="mt-1 text-[11px] font-semibold text-ambar underline-offset-2 hover:underline"
+                  className="mt-1 text-[11px]  text-ambar underline-offset-2 hover:underline"
                 >
                   Tentar de novo
                 </button>
@@ -321,7 +321,7 @@ function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
             </nav>
             <div className="mb-6 flex flex-wrap items-end gap-4">
               <div className="min-w-0 flex-1">
-                <h1 className="m-0 truncate font-titulo text-3xl font-semibold tracking-tight text-tinta">
+                <h1 className="m-0 truncate font-titulo text-3xl   text-tinta">
                   {clienteAberto ? clienteAberto.nome : "Clientes"}
                 </h1>
                 <p className="mt-1 mb-0 text-xs text-tinta-apagada">
@@ -344,7 +344,7 @@ function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
                 <button
                   type="button"
                   onClick={() => void (clienteAberto ? novoProjeto(clienteAberto) : novoCliente())}
-                  className="galeria-novo flex h-10 items-center gap-2 rounded-full px-5 text-sm font-semibold"
+                  className="galeria-novo flex h-10 items-center gap-2 rounded-full px-5 text-sm "
                 >
                   <Icone referencia="icones.svg#plus" className="size-4" />
                   {clienteAberto ? "Novo projeto" : "Novo cliente"}
@@ -372,7 +372,7 @@ function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
                     >
                       <span className="galeria-pasta" aria-hidden="true" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-tinta">{cliente.nome}</span>
+                        <span className="block truncate text-sm  text-tinta">{cliente.nome}</span>
                         <span className="block text-[11px] text-tinta-apagada">{cliente.projetos} projeto(s)</span>
                       </span>
                       <Icone referencia="icones.svg#chevron-right" className="size-4 shrink-0 text-tinta-apagada" />
@@ -405,7 +405,7 @@ function ProjetosDaGaleria({ nav }: { nav: NavegacaoDaGaleria }) {
                         : <span className="galeria-pasta scale-150" aria-hidden="true" />}
                     </span>
                     <span className="block min-w-0 px-3.5 py-3">
-                      <span className="block truncate text-sm font-medium text-tinta">{projeto.nome}</span>
+                      <span className="block truncate text-sm  text-tinta">{projeto.nome}</span>
                       <span className="block text-[11px] text-tinta-apagada">
                         {projeto.pecas} arte(s) · {projeto.pecasPorUnidade} peça(s) por unidade
                       </span>
@@ -433,10 +433,10 @@ function VazioDosProjetos({ titulo, texto, botao, aoClicar }: {
           <span className="galeria-pasta absolute top-9 left-1/2 -ml-[23px] scale-[2] drop-shadow-[0_20px_40px_rgba(255,83,31,0.45)]" />
         </div>
         <div>
-          <p className="m-0 font-titulo text-2xl font-semibold text-tinta">{titulo}</p>
+          <p className="m-0 font-titulo text-2xl  text-tinta">{titulo}</p>
           <p className="mt-2 mb-0 text-sm leading-relaxed text-tinta-fraca">{texto}</p>
         </div>
-        <button type="button" onClick={aoClicar} className="galeria-novo flex h-11 items-center gap-2 rounded-full px-6 text-sm font-semibold">
+        <button type="button" onClick={aoClicar} className="galeria-novo flex h-11 items-center gap-2 rounded-full px-6 text-sm ">
           <Icone referencia="icones.svg#plus" className="size-4" />
           {botao}
         </button>
@@ -492,7 +492,7 @@ function PastaDoCliente({
             className={`size-4 shrink-0 ${ativo || aberto ? "text-ambar" : "text-tinta-apagada"}`}
           />
           <span className="min-w-0">
-            <span className={`block truncate text-xs font-medium ${ativo ? "text-ambar" : "text-tinta"}`}>
+            <span className={`block truncate text-xs  ${ativo ? "text-ambar" : "text-tinta"}`}>
               {cliente.nome}
             </span>
             <span className="block font-mono text-[10px] text-tinta-apagada">
@@ -544,7 +544,7 @@ function PastaDoCliente({
                 className={[
                   "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] transition-colors",
                   projeto.id === projetoAbertoId
-                    ? "bg-[var(--accent-soft)] font-medium text-ambar"
+                    ? "bg-[var(--accent-soft)]  text-ambar"
                     : "text-tinta-fraca hover:bg-painel-suave hover:text-tinta",
                 ].join(" ")}
               >
