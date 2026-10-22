@@ -238,6 +238,7 @@ export function CriarConta({
   const [escolhido, setEscolhido] = useState<string | null>(null);
 
   const [documento, setDocumento] = useState("");
+  const [nomeEmpresa, setNomeEmpresa] = useState("");
   const [nomeDono, setNomeDono] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -310,10 +311,11 @@ export function CriarConta({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           /*
-            SEM `nome`: quem identifica a empresa é o documento, e o servidor
-            usa o documento formatado como nome de quem não manda um.
+            O NOME DA EMPRESA VOLTOU (pedido do dono em 2026-10-21): é ele que
+            aparece no programa, no pé da barra de cada funcionário. O
+            documento continua sendo o que torna a empresa única.
           */
-          empresa: { documento },
+          empresa: { nome: nomeEmpresa.trim(), documento },
           dono: {
             nome: nomeDono.trim(),
             email: email.trim().toLowerCase(),
@@ -646,19 +648,29 @@ export function CriarConta({
           campo que a pessoa INVENTA em vez de lembrar, e interromper a
           digitação com ele no meio faz voltar ao formulário depois de pensar.
 
-          "Nome da empresa" saiu. Numa gráfica que trabalha no CPF do dono, é
-          uma pergunta sem resposta boa — e quem identifica a conta é o
-          documento, que é único no banco. O servidor usa o documento como
-          nome até alguém acertar isso no painel.
+          A EMPRESA VEM PRIMEIRO, e o responsável depois (pedido do dono em
+          2026-10-21): a conta é da empresa, e quem trabalha nela entra pelos
+          acessos de funcionário. O nome do responsável fica só para contato.
         */}
         <fieldset className="entrada-degrau m-0 flex flex-col gap-6 border-0 p-0">
           <legend className="sr-only">Os seus dados</legend>
 
           <Campo
-            rotulo="Nome do representante"
-            icone="icones.svg#users"
+            rotulo="Nome da empresa"
+            icone="icones.svg#building-2"
             required
             autoFocus
+            maxLength={200}
+            autoComplete="organization"
+            value={nomeEmpresa}
+            onChange={(e) => setNomeEmpresa(e.target.value)}
+            placeholder="Como a sua gráfica se chama"
+          />
+
+          <Campo
+            rotulo="Nome do responsável"
+            icone="icones.svg#users"
+            required
             maxLength={200}
             autoComplete="name"
             value={nomeDono}

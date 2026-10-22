@@ -34,8 +34,13 @@ export interface Usuario {
   nome: string;
   /** A empresa dona da conta. Uma pessoa sozinha é uma empresa de um membro. */
   empresa: string;
+  /** A logo da empresa (data URL), ou `null` — aí a barra mostra as iniciais da empresa. */
+  logo?: string | null;
   papel: Papel;
 }
+
+/** Quem muda a sessão por fora (a logo nova, em Configurações) avisa por este evento. */
+export const SESSAO_MUDOU = "optmize:sessao-mudou";
 
 /*
  * O PAPEL É DADO, E NÃO APARECE NA BARRA.
@@ -175,6 +180,11 @@ export function useSessao(): Sessao {
   useEffect(() => {
     const relogio = setInterval(recarregar, 5 * 60 * 1000);
     return () => clearInterval(relogio);
+  }, [recarregar]);
+
+  useEffect(() => {
+    window.addEventListener(SESSAO_MUDOU, recarregar);
+    return () => window.removeEventListener(SESSAO_MUDOU, recarregar);
   }, [recarregar]);
 
   return { estado, usuario, acesso, recarregar, conferir, aviso, tarja };

@@ -20,12 +20,12 @@
  *              de verdade continua no backend.
  */
 
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { Icone } from "../casca/Icone";
 import { NoCabecalho } from "../casca/Cabecalho";
-import { iniciais, useSessao } from "../casca/usuario";
+import { iniciais, SESSAO_MUDOU, useSessao } from "../casca/usuario";
 import { useTema, type ModoDoTema } from "../estado/tema";
 import { Painel } from "./Painel";
 
@@ -118,18 +118,23 @@ function AbaConta() {
 
   return (
     <>
+      {/* A EMPRESA em cima, com a logo; quem está nesta máquina embaixo dela. */}
       <div className="flex items-center gap-4 rounded-2xl border border-linha bg-painel p-5">
-        <span className="menu-avatar grid size-14 shrink-0 place-items-center rounded-full font-titulo text-lg text-ambar-tinta">
-          {iniciais(usuario.nome)}
-        </span>
+        {usuario.logo ? (
+          <img src={usuario.logo} alt="" className="size-14 shrink-0 rounded-2xl border border-linha bg-white object-contain p-1.5" />
+        ) : (
+          <span className="menu-avatar grid size-14 shrink-0 place-items-center rounded-2xl font-titulo text-lg text-ambar-tinta">
+            {iniciais(usuario.empresa || usuario.nome)}
+          </span>
+        )}
         <div className="min-w-0">
-          <h2 className="m-0 truncate font-titulo text-lg text-tinta">{usuario.nome}</h2>
-          <p className="mt-0.5 mb-0 truncate text-[13px] text-tinta-fraca">
-            {usuario.empresa || "Sem empresa vinculada"}
-          </p>
+          <h2 className="m-0 truncate font-titulo text-lg text-tinta">{usuario.empresa || "Sem empresa vinculada"}</h2>
+          <p className="mt-0.5 mb-0 truncate text-[13px] text-tinta-fraca">{usuario.nome}</p>
           <p className="mt-1 mb-0 text-[12px] text-tinta-apagada">{PAPEL[usuario.papel] || usuario.papel}</p>
         </div>
       </div>
+
+      {usuario.papel === "dono" && <LogoDaEmpresa logo={usuario.logo ?? null} />}
 
       <Bloco titulo="Senha e acessos" icone="icones.svg#key-round">
         Trocar a senha é feito no painel web da empresa. Os acessos dos funcionários — criar,
@@ -146,6 +151,101 @@ function AbaConta() {
         </p>
       </div>
     </>
+  );
+}
+
+/**
+ * A LOGO DA EMPRESA, que aparece no pé da barra de todo mundo da empresa.
+ *
+ * Só o dono vê este bloco (o backend recusa os outros de qualquer jeito). A
+ * imagem é reduzida AQUI, num canvas, para caber em 256 px: a logo vai em toda
+ * renovação do token de cada máquina, e uma foto de 4 MB viajando a cada hora
+ * seria peso à toa. PNG para manter o fundo transparente da logo.
+ */
+const LADO_DA_LOGO = 256;
+
+async function logoReduzida(arquivo: File): Promise<string> {
+  const bitmap = await createImageBitmap(arquivo);
+  const escala = Math.min(1, LADO_DA_LOGO / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * escala));
+  canvas.height = Math.max(1, Math.round(bitmap.height * escala));
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const png = canvas.toDataURL("image/png");
+  // Logo que é foto (muita cor, nada liso) pode passar do teto do servidor em
+  // PNG; WebP guarda a transparência e cabe.
+  return png.length <= 280_000 ? png : canvas.toDataURL("image/webp", 0.9);
+}
+
+function LogoDaEmpresa({ logo }: { logo: string | null }) {
+  const campo = useRef<HTMLInputElement>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function gravar(nova: string | null) {
+    setSalvando(true);
+    setErro(null);
+    try {
+      const resposta = await fetch("/api/sessao/empresa/logo", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logo: nova }),
+      });
+      if (!resposta.ok) {
+        const dados = await resposta.json().catch(() => ({}));
+        throw new Error(dados.message || "Não deu para salvar a logo.");
+      }
+      // A barra (e este bloco) releem a sessão, que já tem a logo nova.
+      window.dispatchEvent(new Event(SESSAO_MUDOU));
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function escolher(arquivo: File | undefined) {
+    if (!arquivo) return;
+    try {
+      await gravar(await logoReduzida(arquivo));
+    } catch {
+      setErro("Não deu para ler esta imagem. Use um PNG ou JPG.");
+    }
+  }
+
+  return (
+    <Bloco titulo="Logo da empresa" icone="icones.svg#image" texto="Aparece no pé da barra, para todo mundo da empresa, no lugar das iniciais.">
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <span className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-linha bg-white">
+          {logo ? (
+            <img src={logo} alt="Logo da empresa" className="size-full object-contain p-1.5" />
+          ) : (
+            <Icone referencia="icones.svg#image-plus" className="size-6 text-[#9a948d]" />
+          )}
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={salvando} onClick={() => campo.current?.click()} className="btn primary flex items-center gap-2">
+            <Icone referencia="icones.svg#upload" className="size-4" />
+            {salvando ? "Salvando…" : logo ? "Trocar a logo" : "Enviar a logo"}
+          </button>
+          {logo && (
+            <button type="button" disabled={salvando} onClick={() => gravar(null)} className="btn secondary flex items-center gap-2">
+              <Icone referencia="icones.svg#trash-2" className="size-4" />
+              Tirar
+            </button>
+          )}
+        </div>
+        <input
+          ref={campo}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(e) => { escolher(e.target.files?.[0]); e.target.value = ""; }}
+        />
+      </div>
+      {erro && <p className="mt-3 mb-0 text-[13px] text-alerta">{erro}</p>}
+    </Bloco>
   );
 }
 

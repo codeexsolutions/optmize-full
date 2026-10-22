@@ -50,6 +50,7 @@ import { alerta } from "../casca/Alerta";
 import { encerrarEntrada, tocarEntrada } from "./Entrada";
 import { Icone } from "../casca/Icone";
 import { BotaoPrincipal, Cabecalho, Campo, mascararDocumento, Porta } from "./Porta";
+import { iniciais } from "../casca/usuario";
 import { usePlanos } from "../estado/planos";
 
 /*
@@ -84,6 +85,12 @@ export function Entrar({
     daquela empresa.
   */
   const [documento, setDocumento] = useState("");
+  /*
+    A EMPRESA LEMBRADA. Sair da conta não faz a máquina esquecer de qual
+    empresa ela é (ver `servidor/sessao.js`): o documento volta preenchido, com
+    a logo e o nome no lugar do campo. Só "Trocar empresa" apaga.
+  */
+  const [lembrada, setLembrada] = useState<{ documento: string; nome: string; logo: string | null } | null>(null);
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -122,6 +129,29 @@ export function Entrar({
     const quadro = requestAnimationFrame(() => encerrarEntrada());
     return () => cancelAnimationFrame(quadro);
   }, []);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/sessao/empresa-lembrada")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((dados) => {
+        const empresa = dados && dados.empresa;
+        if (!vivo || !empresa) return;
+        setLembrada(empresa);
+        setDocumento(mascararDocumento(empresa.documento));
+        // O campo do documento saiu da tela; quem digita começa pelo e-mail.
+        requestAnimationFrame(() => document.getElementById("entrar-email")?.focus());
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
+  function trocarEmpresa() {
+    setLembrada(null);
+    setDocumento("");
+    void fetch("/api/sessao/empresa-lembrada", { method: "DELETE" }).catch(() => {});
+    requestAnimationFrame(() => document.getElementById("entrar-documento")?.focus());
+  }
 
   // Quem foi tirado da conta precisa saber por quê, senão parece defeito.
   useEffect(() => {
@@ -243,21 +273,46 @@ export function Entrar({
         <fieldset disabled={enviando} className="m-0 flex min-w-0 flex-col gap-6 border-0 p-0">
           <Cabecalho titulo="Entrar" />
 
-          <Campo
-            classe="entrada-degrau"
-            rotulo="CNPJ ou CPF"
-            icone="icones.svg#file-text"
-            inputMode="numeric"
-            required
-            autoFocus
-            value={documento}
-            onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
-            placeholder="00.000.000/0000-00"
-            className="font-mono placeholder:font-texto"
-          />
+          {lembrada ? (
+            <div className="entrada-degrau flex items-center gap-3 rounded-md border border-linha p-3">
+              {lembrada.logo ? (
+                <img src={lembrada.logo} alt="" className="size-11 shrink-0 rounded-xl border border-linha bg-white object-contain p-1" />
+              ) : (
+                <span className="menu-avatar grid size-11 shrink-0 place-items-center rounded-xl font-titulo text-ambar-tinta">
+                  {iniciais(lembrada.nome || documento)}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="m-0 truncate text-[15px] text-tinta">{lembrada.nome || "Sua empresa"}</p>
+                <p className="m-0 truncate font-mono text-[12px] text-tinta-apagada">{documento}</p>
+              </div>
+              <button
+                type="button"
+                onClick={trocarEmpresa}
+                className="shrink-0 border-0 bg-transparent p-0 text-[12px] text-tinta-apagada transition-colors hover:text-ambar"
+              >
+                Trocar empresa
+              </button>
+            </div>
+          ) : (
+            <Campo
+              classe="entrada-degrau"
+              rotulo="CNPJ ou CPF"
+              icone="icones.svg#file-text"
+              id="entrar-documento"
+              inputMode="numeric"
+              required
+              autoFocus
+              value={documento}
+              onChange={(e) => setDocumento(mascararDocumento(e.target.value))}
+              placeholder="00.000.000/0000-00"
+              className="font-mono placeholder:font-texto"
+            />
+          )}
 
           <Campo
             classe="entrada-degrau"
+            id="entrar-email"
             rotulo="E-mail"
             icone="icones.svg#mail"
             type="email"

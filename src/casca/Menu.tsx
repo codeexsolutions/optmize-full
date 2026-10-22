@@ -52,6 +52,7 @@ import { Icone } from "./Icone";
 import { iniciais, type Usuario } from "./usuario";
 import { GRUPOS, telasDoGrupo, type Tela } from "../rotas";
 import { useEscopos, useForaDoPlano } from "./Escopos";
+import { useTema } from "../estado/tema";
 
 interface Props {
   aberto: boolean;
@@ -242,7 +243,8 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
           O SOBRE fica fora da navegação, como o "Ajuda e suporte" do Flow: não
           é lugar que se visita no trabalho, é a saída para quando algo trava.
         */}
-        <div className="relative mx-3 mb-3 shrink-0">
+        <div className="relative mx-3 mb-3 flex shrink-0 flex-col gap-0.5">
+          <BotaoDoTema />
           <NavLink
             to="/sobre"
             onClick={aoFechar}
@@ -269,20 +271,38 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
         */}
         <div className="relative shrink-0 border-t border-[var(--border-hairline)] p-2.5">
           <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--border-hairline)] bg-[var(--surface-hover)]/40 p-2">
+            {/*
+              A EMPRESA EM PRIMEIRO, e não a pessoa (pedido do dono em
+              2026-10-21): quem compra é a empresa, e quem senta na máquina é
+              um funcionário dela. A logo no lugar das iniciais — sem logo
+              enviada, as iniciais da EMPRESA —, e embaixo, pequeno, quem
+              entrou nesta máquina.
+            */}
             {usuario && (
               <>
-                <span
-                  aria-hidden="true"
-                  className="menu-avatar grid size-10 shrink-0 place-items-center rounded-full text-[13px] text-ambar-tinta"
-                >
-                  {iniciais(usuario.nome)}
-                </span>
-                <span className="menu-some min-w-0 flex-1">
-                  <span title={usuario.nome} className="block truncate text-[14px] leading-tight text-tinta">
-                    {usuario.nome}
+                {usuario.logo ? (
+                  <img
+                    src={usuario.logo}
+                    alt=""
+                    className="size-10 shrink-0 rounded-xl border border-[var(--border-hairline)] bg-white object-contain p-1"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="menu-avatar grid size-10 shrink-0 place-items-center rounded-xl text-[13px] text-ambar-tinta"
+                  >
+                    {iniciais(usuario.empresa || usuario.nome)}
                   </span>
-                  <span className="mt-0.5 block truncate text-[12px] leading-tight text-tinta-apagada">
-                    {PAPEL[usuario.papel] || "Conectado"}
+                )}
+                <span className="menu-some min-w-0 flex-1">
+                  <span title={usuario.empresa || usuario.nome} className="block truncate text-[14px] leading-tight text-tinta">
+                    {usuario.empresa || usuario.nome}
+                  </span>
+                  <span
+                    title={`${usuario.nome} · ${PAPEL[usuario.papel] || "Conectado"}`}
+                    className="mt-0.5 block truncate text-[12px] leading-tight text-tinta-apagada"
+                  >
+                    {usuario.empresa ? usuario.nome : PAPEL[usuario.papel] || "Conectado"}
                   </span>
                 </span>
               </>
@@ -322,6 +342,44 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
   );
 }
 
+
+/**
+ * CLARO OU ESCURO, num clique, logo acima do Sobre.
+ *
+ * O ícone é o tema que está valendo (sol no claro, lua no escuro); o clique
+ * troca para o outro, com o círculo de `estado/tema.ts` saindo do botão. No
+ * modo "Sistema" (escolhido em Configurações › Aparência) vale o que o Windows
+ * está mostrando agora, e o clique passa a fixar o oposto.
+ */
+function BotaoDoTema() {
+  const modo = useTema((e) => e.modo);
+  const escolher = useTema((e) => e.escolher);
+  const escuro = modo === "sistema" ? document.documentElement.dataset.tema !== "claro" : modo === "escuro";
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => escolher(escuro ? "claro" : "escuro", { x: e.clientX, y: e.clientY })}
+      title={escuro ? "Mudar para o tema claro" : "Mudar para o tema escuro"}
+      aria-label={escuro ? "Mudar para o tema claro" : "Mudar para o tema escuro"}
+      className={`${ITEM} ${ITEM_PARADO} w-full cursor-pointer border-0 bg-transparent`}
+    >
+      <span className={`${ICONE_CAIXA} ${ICONE_PARADO}`}>
+        <Icone referencia={escuro ? "icones.svg#moon" : "icones.svg#sun"} className="size-[21px]" />
+      </span>
+      <span className={TEXTO_DO_ITEM}>{escuro ? "Tema escuro" : "Tema claro"}</span>
+      {/* O par, com o que está valendo aceso. */}
+      <span aria-hidden="true" className="menu-some relative flex shrink-0 gap-0.5 rounded-lg border border-[var(--border-hairline)] p-0.5">
+        <span className={`grid size-6 place-items-center rounded-md ${escuro ? "text-tinta-apagada" : "bg-[var(--surface-hover)] text-ambar"}`}>
+          <Icone referencia="icones.svg#sun" className="size-3.5" />
+        </span>
+        <span className={`grid size-6 place-items-center rounded-md ${escuro ? "bg-[var(--surface-hover)] text-ambar" : "text-tinta-apagada"}`}>
+          <Icone referencia="icones.svg#moon" className="size-3.5" />
+        </span>
+      </span>
+    </button>
+  );
+}
 
 /**
  * Uma linha do menu.

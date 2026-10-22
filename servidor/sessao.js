@@ -171,6 +171,46 @@ function apagar() {
   }
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * A EMPRESA DESTA MÁQUINA
+ * ---------------------------------------------------------------------------
+ *
+ * O documento, o nome e a logo da última empresa que entrou aqui, num arquivo
+ * À PARTE do token. Sair da conta apaga a sessão e deixa este: o computador da
+ * gráfica continua sendo da gráfica, e quem entra de novo só põe e-mail e
+ * senha, com a logo já na tela. Ele só some quando alguém escolhe "Trocar
+ * empresa" no login.
+ *
+ * Nada aqui abre a conta: o documento ainda vai junto no login e o backend
+ * confere tudo de novo.
+ */
+const ARQUIVO_DA_EMPRESA = path.join(pastaDeDados("sessao"), "empresa.json");
+
+function lerEmpresa() {
+  try {
+    const dados = JSON.parse(fs.readFileSync(ARQUIVO_DA_EMPRESA, "utf8"));
+    return dados && typeof dados.documento === "string" && dados.documento ? dados : null;
+  } catch {
+    return null;
+  }
+}
+
+function gravarEmpresa(dados) {
+  try {
+    fs.writeFileSync(ARQUIVO_DA_EMPRESA, JSON.stringify(dados), { mode: 0o600 });
+  } catch {
+    // Sem lembrar a empresa o login só pede o documento de novo. Não é erro.
+  }
+}
+
+/** Nome e logo novos, de uma renovação ou da troca da logo — o documento fica. */
+function atualizarEmpresa(perfil) {
+  const atual = lerEmpresa();
+  if (!atual || !perfil) return;
+  gravarEmpresa({ ...atual, nome: perfil.empresa || atual.nome, logo: perfil.logo || null });
+}
+
 /**
  * Por que a pessoa saiu da conta sem ter clicado em "Sair" — a tela de entrar
  * mostra. Só em memória: é recado para a próxima tela, não estado.
@@ -366,6 +406,8 @@ function aplicarResposta(dados) {
       nome: (dados.usuario && dados.usuario.nome) || "",
       email: (dados.usuario && dados.usuario.email) || "",
       empresa: (dados.empresa && dados.empresa.nome) || "",
+      // A logo da empresa (data URL), que a barra mostra no lugar das iniciais.
+      logo: (dados.empresa && dados.empresa.logo) || null,
       papel: dados.papel === "dono" ? "dono" : "operador",
     },
     acesso: {
@@ -385,6 +427,7 @@ function aplicarResposta(dados) {
       conferidoEm: new Date().toISOString(),
     },
   });
+  atualizarEmpresa(ler().perfil);
   motivoDaSaida = null;
 }
 
@@ -548,7 +591,24 @@ rotas.post("/entrar", async (req, res) => {
   }
 
   aplicarResposta(vinculo.dados);
+  const { perfil } = ler();
+  gravarEmpresa({ documento, nome: perfil.empresa, logo: perfil.logo });
   res.json(perfilDaTela());
+});
+
+/** A empresa lembrada, para o login vir com ela preenchida. */
+rotas.get("/empresa-lembrada", (_req, res) => {
+  res.json({ empresa: lerEmpresa() });
+});
+
+/** "Trocar empresa": só assim a máquina esquece o documento. */
+rotas.delete("/empresa-lembrada", (_req, res) => {
+  try {
+    fs.unlinkSync(ARQUIVO_DA_EMPRESA);
+  } catch {
+    // Já não havia nenhuma.
+  }
+  res.json({ empresa: null });
 });
 
 /*
@@ -697,6 +757,39 @@ rotas.patch("/equipe/:id/ativo", (req, res) =>
 
 rotas.delete("/equipe/:id", (req, res) =>
   repassar(res, `/team/members/${encodeURIComponent(req.params.id)}`, { method: "DELETE" }));
+
+/*
+ * A LOGO DA EMPRESA. Quem decide se pode trocar (só o dono) é o backend. Deu
+ * certo, a logo nova vai direto para o perfil guardado: a barra a mostra na
+ * hora, sem esperar a próxima renovação do token.
+ */
+rotas.put("/empresa/logo", async (req, res) => {
+  const logo = req.body && typeof req.body.logo === "string" ? req.body.logo : null;
+  let resposta;
+  try {
+    resposta = await pedirComToken("/team/logo", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ logo }),
+    });
+  } catch {
+    return res.status(503).json({
+      code: "sem_rede",
+      message: "O Optmize não conseguiu falar com o servidor. Confira a internet.",
+    });
+  }
+  if (!resposta) return res.status(401).json({ code: "fora", message: "Entre na conta de novo." });
+  if (!resposta.ok) {
+    const dados = await resposta.json().catch(() => ({}));
+    return res.status(resposta.status).json(dados);
+  }
+  const atual = ler();
+  if (atual && atual.perfil) {
+    gravar({ ...atual, perfil: { ...atual.perfil, logo } });
+    atualizarEmpresa(ler().perfil);
+  }
+  res.json(perfilDaTela());
+});
 
 /*
  * A LOJA DE ACESSOS — mais um acesso além do plano.
