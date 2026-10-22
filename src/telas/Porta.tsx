@@ -3,14 +3,15 @@
  * A PORTA — a moldura de quem ainda não entrou
  * ===========================================================================
  *
- * Duas colunas no computador: a marca, a impressora e o que o programa faz à
+ * Duas colunas no computador: a marca, o rolo de moldes e o que o programa faz à
  * esquerda, o cartão à direita. É o desenho do painel web
  * (`layouts/AuthLayout.tsx`, no outro repositório), com a rede animada no
  * fundo da coluna da esquerda.
  *
- * A IMPRESSORA voltou em 3D (`Impressora3D.tsx`, em Three.js): uma impressora
- * de grande formato imprimindo a marca num filme que desce pela saída. Fica
- * por cima da rede, com fundo transparente, entre a marca e as vantagens.
+ * O ROLO DE MOLDES (`RoloDeMoldes3D.tsx`, em Three.js) é a abertura do site:
+ * um encaixe de camisas desenhado em linha, passando devagar sob o cabeçote.
+ * Veio no lugar da impressora 3D (2026-10-21). Fica por cima da rede, com
+ * fundo transparente, entre a marca e as vantagens.
  *
  * Há várias telas antes de entrar — login, cadastro, senha, espera — e todas
  * usam esta moldura. O que muda entre elas é só o miolo do cartão
@@ -34,7 +35,7 @@ import { RedeAnimada } from "./RedeAnimada";
   O THREE.JS SÓ CHEGA COM A PORTA. São centenas de KB que nenhuma outra tela
   usa; carregado sob demanda, o programa não paga por ele depois de entrar.
 */
-const Impressora3D = lazy(() => import("./Impressora3D").then((m) => ({ default: m.Impressora3D })));
+const RoloDeMoldes3D = lazy(() => import("./RoloDeMoldes3D").then((m) => ({ default: m.RoloDeMoldes3D })));
 
 /** O que o programa faz, para a coluna da esquerda. */
 const VANTAGENS = [
@@ -99,6 +100,16 @@ export function Porta({
         */}
         <RedeAnimada className="absolute inset-0 z-0" quadrosPorSegundo={60} pararAposMs={60000} />
 
+        {/*
+          O ROLO DE MOLDES OCUPA A COLUNA INTEIRA (pedido do dono, 2026-10-21):
+          por cima da rede e por baixo dos textos, que vêm depois no HTML. Ele
+          some nas bordas pela máscara (`.rolo-de-moldes-3d`), então a marca no
+          alto e as vantagens embaixo continuam legíveis.
+        */}
+        <Suspense fallback={null}>
+          <RoloDeMoldes3D className="pointer-events-none absolute inset-0 z-0" />
+        </Suspense>
+
         <div className="relative flex items-center gap-3">
           {/* O halo que respira atrás da marca, como no painel web. */}
           <span className="relative grid shrink-0 place-items-center">
@@ -119,15 +130,10 @@ export function Porta({
         </div>
 
         {/*
-          A IMPRESSORA OCUPA O QUE SOBRA entre a marca e as vantagens
-          (`flex-1 min-h-0`): numa janela baixa ela encolhe, e o texto não é
-          empurrado para fora.
+          O vão entre a marca e as vantagens (`flex-1 min-h-0`): é por ele que
+          o rolo de moldes aparece inteiro, sem texto na frente.
         */}
-        <div className="relative my-4 min-h-0 flex-1">
-          <Suspense fallback={null}>
-            <Impressora3D className="absolute inset-0" />
-          </Suspense>
-        </div>
+        <div className="min-h-0 flex-1" />
 
         <div className="relative">
           <h2 className="m-0 font-titulo text-[30px] leading-[1.1]  text-tinta">
@@ -136,7 +142,7 @@ export function Porta({
             <span className="text-ambar">no mesmo pedido.</span>
           </h2>
 
-          {/* Em duas colunas, para a impressora ficar com a altura. */}
+          {/* Em duas colunas, para o rolo ficar com a altura. */}
           <ul className="mt-6 mb-0 grid list-none grid-cols-2 gap-x-6 gap-y-4 p-0">
             {VANTAGENS.map((v) => (
               <li key={v.titulo} className="flex items-start gap-3">

@@ -39,12 +39,6 @@ const PERGUNTAS: { titulo: string; resumo: string; resposta: string }[] = [
     resposta:
       "Só o dono da empresa vê a aba Equipe, em Configurações (a engrenagem no pé da barra). Lá se cria, desativa e exclui cada acesso.",
   },
-  {
-    titulo: "Como deixo o programa claro?",
-    resumo: "Em Configurações, na aba Aparência",
-    resposta:
-      "Em Configurações › Aparência você escolhe entre escuro, claro ou o tema do Windows. A escolha vale só para este computador.",
-  },
 ];
 
 export function Sobre() {

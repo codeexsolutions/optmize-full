@@ -126,22 +126,90 @@
    * e vale também para o que ele desenha sozinho: o calendário do campo de
    * data, a setinha do <select>, a barra de rolagem em Firefox.
    */
-  #raiz {
-    color-scheme: dark;
-    scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--text-dim) 42%, transparent) transparent;
+  /*
+   * O `color-scheme` vem do `<html>`, que `estado/tema.ts` acerta a cada troca
+   * de tema. Ele ficava fixo em `dark` aqui, e aí no tema claro o navegador
+   * seguia desenhando calendário, setinha do <select> e barra de rolagem do
+   * Firefox como se a tela fosse escura.
+   */
+
+  /*
+   * A BARRA DE ROLAGEM, sem setas, nos dois navegadores.
+   *
+   * Chrome e Edge: o `::-webkit-scrollbar` desenha a barra inteira, e o
+   * `-button` sem tamanho tira as setas. Mas desde o Chrome 121 basta um
+   * `scrollbar-width` em qualquer lugar da página para ele ignorar tudo isso
+   * e voltar à barra do Windows — COM as setas. Por isso o `scrollbar-width`
+   * e o `scrollbar-color` só valem dentro do `@supports` do Firefox, que não
+   * tem as setas e não lê o `::-webkit-scrollbar`.
+   *
+   * As cores são os tokens `--rolagem-*` (em `tokens.css`), que mudam com o
+   * tema. A mesma barra serve o Y e o X: a de lado (a tira das artes sem
+   * perfil, os números do encaixe) tem a mesma espessura e o mesmo desenho.
+   *
+   *   - em repouso, um traço fino e discreto num trilho quase invisível;
+   *   - com o mouse na área que rola, o traço fica mais firme;
+   *   - com o mouse no traço, ele engrossa e ganha a cor do destaque
+   *     (laranja no escuro, azul no claro); arrastando, o tom mais fundo.
+   *
+   * O "engrossar" é a borda transparente diminuindo: o tamanho da barra não
+   * muda, então o conteúdo não pula.
+   */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background: transparent;
   }
 
-  #raiz ::-webkit-scrollbar {
-    width: 9px;
-    height: 9px;
+  ::-webkit-scrollbar-button,
+  ::-webkit-scrollbar-button:single-button {
+    display: none;
+    width: 0;
+    height: 0;
   }
 
-  #raiz ::-webkit-scrollbar-thumb {
-    border: 2px solid transparent;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--text-dim) 38%, transparent);
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-track {
+    margin: 3px;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: var(--rolagem-trilho);
     background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    min-height: 32px;
+    min-width: 32px;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-color: var(--rolagem-polegar);
+    background-clip: padding-box;
+  }
+
+  *:hover::-webkit-scrollbar-thumb {
+    background-color: var(--rolagem-polegar-perto);
+  }
+
+  ::-webkit-scrollbar-thumb:hover,
+  *:hover::-webkit-scrollbar-thumb:hover {
+    border-width: 2px;
+    background-color: var(--rolagem-polegar-em-cima);
+  }
+
+  ::-webkit-scrollbar-thumb:active,
+  *:hover::-webkit-scrollbar-thumb:active {
+    border-width: 2px;
+    background-color: var(--rolagem-polegar-arrastando);
+  }
+
+  @supports (-moz-appearance: none) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--rolagem-polegar-perto) transparent;
+    }
   }
 
   /*
@@ -820,8 +888,26 @@ html.leve *::after {
 }
 .porta-pulsa { animation: porta-pulsa 2.8s ease-in-out infinite; }
 
-/* A impressora 3D (`telas/Impressora3D.tsx`) entra subindo, como o cartão. */
-.impressora-3d { animation: entrada-sobe .8s cubic-bezier(.22, 1, .36, 1) .1s both; }
+/* O rolo de moldes (`telas/RoloDeMoldes3D.tsx`) entra subindo, como o cartão. */
+.rolo-de-moldes-3d { animation: entrada-sobe .8s cubic-bezier(.22, 1, .36, 1) .1s both; }
+
+/*
+ * O rolo ocupa a coluna inteira, por baixo dos textos, e não é cortado seco
+ * por borda nenhuma: duas máscaras somadas o apagam devagar.
+ *
+ *   - na vertical, ele nasce sob a marca, fica inteiro no meio e cai para um
+ *     quinto na faixa do título e das vantagens — o texto por cima continua
+ *     sendo o que se lê;
+ *   - na horizontal, some antes da divisa com o cartão.
+ */
+.rolo-de-moldes-3d {
+  --rolo-vertical: linear-gradient(to bottom, transparent 0%, #000 20%, #000 50%, rgba(0, 0, 0, .22) 72%, rgba(0, 0, 0, .14) 100%);
+  --rolo-horizontal: linear-gradient(to right, #000 68%, transparent 100%);
+  -webkit-mask-image: var(--rolo-vertical), var(--rolo-horizontal);
+  -webkit-mask-composite: source-in;
+  mask-image: var(--rolo-vertical), var(--rolo-horizontal);
+  mask-composite: intersect;
+}
 
 /*
  * ===========================================================================
@@ -1036,7 +1122,7 @@ html.leve *::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .impressora-3d { animation: none; }
+  .rolo-de-moldes-3d { animation: none; }
   /* Parado, e não ausente: o brilho também assenta a marca no fundo. */
   .porta-pulsa { animation: none; opacity: .45; }
   .porta-tira i { animation: none; }

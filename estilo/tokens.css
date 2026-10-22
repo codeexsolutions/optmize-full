@@ -132,6 +132,25 @@
   --aurora-frio: rgba(120, 90, 255, 0.10);
 }
 
+/*
+ * A BARRA DE ROLAGEM (ver `entrada.css`): quieta em repouso, mais firme com o
+ * mouse na área que rola, na cor do destaque com o mouse nela. Os valores
+ * mudam com o tema, como todo o resto.
+ */
+:root {
+  --rolagem-trilho: rgba(244, 242, 239, 0.035);
+  --rolagem-polegar: rgba(244, 242, 239, 0.16);
+  --rolagem-polegar-perto: rgba(244, 242, 239, 0.28);
+  --rolagem-polegar-em-cima: var(--accent);
+  --rolagem-polegar-arrastando: var(--accent-dark);
+}
+
+:root[data-tema="claro"] {
+  --rolagem-trilho: rgba(27, 25, 22, 0.04);
+  --rolagem-polegar: rgba(27, 25, 22, 0.18);
+  --rolagem-polegar-perto: rgba(27, 25, 22, 0.32);
+}
+
 /* Identificação das peças no risco, preservada da tela original. */
 :root {
   --peca-1: #2bd672;
