@@ -724,9 +724,16 @@ fn atualizar_na_abertura(app: &tauri::AppHandle, base: &serde_json::Value) -> Re
 /// De quanto em quanto tempo o programa aberto pergunta se há versão nova.
 ///
 /// A abertura já perguntou; isto é para quem deixa o Optmize aberto o dia
-/// inteiro. Vinte minutos põem a pergunta na tela no mesmo expediente em que
-/// a versão foi lançada, sem que o servidor seja consultado a toda hora.
-const INTERVALO_DA_BUSCA: Duration = Duration::from_secs(20 * 60);
+/// inteiro. Eram vinte minutos, e o dono pediu que o aviso chegasse antes
+/// (2026-10-21): quem abriu o programa às 8h e recebeu uma versão às 8h05 só
+/// ficava sabendo às 8h20. A consulta é uma pergunta curta ao servidor de
+/// versões — cinco minutos não pesam para ninguém.
+const INTERVALO_DA_BUSCA: Duration = Duration::from_secs(5 * 60);
+
+/// A primeira busca com o programa aberto: logo depois de ele subir, para
+/// pegar a versão lançada entre a abertura e o começo do trabalho. Não é
+/// imediata porque a abertura acabou de perguntar.
+const PRIMEIRA_BUSCA: Duration = Duration::from_secs(2 * 60);
 
 /// Com o programa aberto a busca não segura a abertura de ninguém, então pode
 /// esperar mais pelo servidor do que a busca da tela de abertura.
@@ -771,8 +778,10 @@ fn atualizar_com_o_programa_aberto(
 /// erro na cara de quem está trabalhando.
 fn vigiar_atualizacoes(app: tauri::AppHandle) {
     let mut recusada: Option<String> = None;
+    let mut espera = PRIMEIRA_BUSCA;
     loop {
-        std::thread::sleep(INTERVALO_DA_BUSCA);
+        std::thread::sleep(espera);
+        espera = INTERVALO_DA_BUSCA;
         let Some(janela) = app.get_webview_window("principal") else {
             return;
         };

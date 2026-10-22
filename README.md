@@ -37,9 +37,9 @@ Siga estes passos a cada lançamento, sem pular nenhum:
    `.github/workflows/lancar.yml`: compila, assina, monta as notas, publica no
    backend e etiqueta `v1.2.<commits>`. Acompanhe na aba **Actions**.
 4. **O lançador sempre pergunta.** Em toda máquina, na abertura (e com o
-   programa aberto, a cada 20 minutos), aparece "Versão X disponível" com as
-   listas **Correções** e **Adições** e os botões **Depois** e **Atualizar
-   agora**. Nada instala sem o clique. Não troque isso por instalação
+   programa aberto, 2 minutos depois de abrir e depois a cada 5), aparece
+   "Versão X disponível" com as listas **Correções** e **Adições** e os
+   botões **Depois** e **Atualizar agora**. Nada instala sem o clique. Não troque isso por instalação
    silenciosa.
 
 Detalhes, Secrets e como lançar à mão: [docs/LANCAMENTO.md](docs/LANCAMENTO.md).
