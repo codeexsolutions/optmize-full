@@ -91,16 +91,19 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </div>
 
-<div className="flex items-stretch gap-2">
-
-<button id="btn-encaixar" className="btn primary min-w-0 flex-1 justify-center">
+{/* O Optmizar na largura inteira e na altura do "Entrar" da entrada (50px):
+    é o botão mais apertado da tela, e espremido ao lado dos outros dois ele
+    ficava do tamanho de um botão qualquer. */}
+<button id="btn-encaixar" className="btn primary min-h-[50px]! w-full justify-center text-[15px]!">
 {"Optmizar"}
 </button>
+
+<div className="flex items-stretch gap-2">
 
 {/* Os três sempre à vista: Optmizar, Arquivos e a lixeira. A lixeira nasce
     desligada e só acende quando há arquivo na lista (ver
     `atualizarPainelDoTrabalho`, em producao/controlador.js). */}
-<label className="btn secondary file-label mt-0! shrink-0 gap-1.5 px-3!" title="Adicionar arquivos">
+<label className="btn secondary file-label mt-0! min-w-0 flex-1 justify-center gap-1.5 px-3!" title="Adicionar arquivos">
 <svg className="size-[15px]" viewBox="0 0 24 24" aria-hidden="true">
 <use href="icones.svg#file-plus">
 
@@ -134,9 +137,10 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <div className="barra-bancada flex shrink-0 items-center gap-3 border-b border-linha bg-painel-suave">
 
-<span className="eyebrow shrink-0">
-{"Área de trabalho"}
-</span>
+{/* As áreas de trabalho, em abas: quem desenha é o controlador (ver "AS ÁREAS DE TRABALHO"). */}
+<div id="encaixe-areas" className="encaixe-areas" role="toolbar" aria-label="Áreas de trabalho">
+
+</div>
 
 <p id="encaixe-andamento" className="hint hidden m-0! min-w-0 truncate">
 
@@ -290,24 +294,6 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <div className="encaixe-loading-caixa">
 
-{/*
-    A ANIMAÇÃO DA BUSCA — peças entrando e se encaixando.
-
-    Fica no lugar do poço de tetris logo abaixo, e o esconde enquanto a busca
-    corre (ver `.mostrando-previa`, em producao.css): peças chegam de fora e
-    vão se assentando no rolo até fechá-lo, e então recomeça com outro arranjo.
-
-    `aria-hidden` pelo mesmo motivo do poço: quem não enxerga a tela recebe o
-    andamento pelo texto e pela barra, logo abaixo, que dizem tentativa, tempo
-    e melhor consumo em palavras.
-
-    É ILUSTRAÇÃO, e não as tentativas de verdade do motor — está dito em voz
-    alta no `controlador.js`, junto do porquê.
-*/}
-<div id="encaixe-previa" className="encaixe-previa hidden" aria-hidden="true">
-<canvas id="encaixe-previa-canvas">
-</canvas>
-</div>
 
 {/* O poço: as peças caem e vão fechando o risco. É decoração, e por isso
     `aria-hidden` — quem não vê a tela recebe o andamento pelo texto e pela

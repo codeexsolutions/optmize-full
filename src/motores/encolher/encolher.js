@@ -14,6 +14,8 @@
  * - `trabalhadores`: os "workers" do separador do sparrow. Em wasm32 eles se
  *   revezam numa thread só.
  * - `relatar(json, largura)`: chamada a cada encaixe válido mais curto.
+ * - `andamento(voltas)`: quantas voltas o sparrow já deu, umas quatro vezes
+ *   por segundo.
  * @param {string} instancia
  * @param {string | null | undefined} partida
  * @param {number} tempo_ms
@@ -22,9 +24,10 @@
  * @param {number} separacao
  * @param {number} trabalhadores
  * @param {Function} relatar
+ * @param {Function} andamento
  * @returns {string}
  */
-export function encolher(instancia, partida, tempo_ms, fracao_compressao, semente, separacao, trabalhadores, relatar) {
+export function encolher(instancia, partida, tempo_ms, fracao_compressao, semente, separacao, trabalhadores, relatar, andamento) {
     let deferred4_0;
     let deferred4_1;
     try {
@@ -33,7 +36,7 @@ export function encolher(instancia, partida, tempo_ms, fracao_compressao, sement
         const len0 = WASM_VECTOR_LEN;
         var ptr1 = isLikeNone(partida) ? 0 : passStringToWasm0(partida, wasm.__wbindgen_export2, wasm.__wbindgen_export3);
         var len1 = WASM_VECTOR_LEN;
-        wasm.encolher(retptr, ptr0, len0, ptr1, len1, tempo_ms, fracao_compressao, semente, separacao, trabalhadores, addBorrowedObject(relatar));
+        wasm.encolher(retptr, ptr0, len0, ptr1, len1, tempo_ms, fracao_compressao, semente, separacao, trabalhadores, addBorrowedObject(relatar), addBorrowedObject(andamento));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -50,6 +53,7 @@ export function encolher(instancia, partida, tempo_ms, fracao_compressao, sement
     } finally {
         wasm.__wbindgen_add_to_stack_pointer(16);
         heap[stack_pointer++] = undefined;
+        heap[stack_pointer++] = undefined;
         wasm.__wbindgen_export4(deferred4_0, deferred4_1, 1);
     }
 }
@@ -63,6 +67,10 @@ function __wbg_get_imports() {
         __wbg___wbindgen_throw_5d9e815e6fdf150f: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
+        __wbg_call_6bcf8d3e20937e46: function() { return handleError(function (arg0, arg1, arg2) {
+            const ret = getObject(arg0).call(getObject(arg1), getObject(arg2));
+            return addHeapObject(ret);
+        }, arguments); },
         __wbg_call_7bbd9cceba9949ad: function() { return handleError(function (arg0, arg1, arg2, arg3) {
             const ret = getObject(arg0).call(getObject(arg1), getObject(arg2), getObject(arg3));
             return addHeapObject(ret);

@@ -356,9 +356,16 @@ export function partidaParaWorker(resultado) {
   };
 }
 
-// Folga do prazo duro da segunda fase, além do tempo pedido. O sparrow para no
-// relógio dele; o que passa disso é importar a instância e conferir a volta.
-const MARGEM_DO_ENCOLHER_MS = 10000;
+/*
+  Folga do prazo duro da segunda fase, além do tempo pedido: NENHUMA.
+
+  Era 10 s, contando que o sparrow parasse no relógio dele. Ele não para: só
+  arma o relógio de cada fase depois de montar o encaixe de partida, e as fases
+  somadas passavam do pedido — medido, 72 s pedidos e 90 s na tela. Encerrar
+  no prazo não perde nada: cada encaixe mais curto que ele acha já chegou aqui
+  na hora (`encolhido`), e é com o melhor deles que a busca fica.
+*/
+const MARGEM_DO_ENCOLHER_MS = 0;
 
 /**
  * A segunda fase: o sparrow em todos os workers.
@@ -382,6 +389,9 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
 
   const tempoDoSparrow = Math.max(0, restoMs - ENCOLHER_RESERVA_MS);
   const ultimos = new Array(workers.length).fill(null);
+  // As voltas que cada sparrow já deu: somadas às tentativas da busca, são o
+  // contador da tela nesta fase.
+  const voltas = new Array(workers.length).fill(0);
   const estados = new Array(workers.length).fill(null);
   const encerrar = new Array(workers.length).fill(null);
   const respondeu = new Array(workers.length).fill(false);
@@ -395,7 +405,7 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
     if (!config.aoProgredir) return;
     config.aoProgredir({
       fase: "encolhendo",
-      tentativas: base.tentativas || 0,
+      tentativas: (base.tentativas || 0) + voltas.reduce((soma, v) => soma + v, 0),
       semGanho: 0,
       alvo: config.alvo || null,
       consumo: melhorAgora(),
@@ -482,9 +492,17 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
       const aoResponder = (evento) => {
         const msg = evento.data;
         if (!msg) return;
+        if (msg.tipo === "encolhendo") {
+          voltas[k] = msg.voltas || 0;
+          relatar();
+          return;
+        }
         if (msg.tipo === "encolhido") {
           ultimos[k] = msg.resultado;
           relatar();
+          // O rolo mais curto vai para a mesa como recorde: nesta fase não há
+          // fantasma, e é só por aqui que a animação ganha arranjo novo.
+          if (config.aoDesenhar) config.aoDesenhar("recorde", msg.resultado);
           return;
         }
         if (msg.tipo === "encolheu" || msg.tipo === "falhou") {

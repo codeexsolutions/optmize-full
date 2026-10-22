@@ -43,6 +43,11 @@ export interface ProjetoParaOEncaixe {
   pecas: PecaParaOEncaixe[];
   unidades: number;
   ajustes: AjustesDoEncaixe;
+  /**
+   * Abre uma área de trabalho própria no Encaixe, com o nome do projeto, em
+   * vez de somar à lista que está na mesa. A Reposição pede.
+   */
+  novaArea?: boolean;
 }
 
 /** Uma peça de molde a caminho do tecido, com a arte já colocada nela. */

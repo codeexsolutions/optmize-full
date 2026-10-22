@@ -531,6 +531,9 @@ export function encolherEncaixe(itens, resultado, config, opcoes = {}) {
       opcoes.separacao != null ? opcoes.separacao : ENCOLHER_SEPARACAO,
       opcoes.trabalhadores || ENCOLHER_TRABALHADORES,
       (json) => avaliar(json),
+      // Quantas voltas o sparrow já deu, umas quatro vezes por segundo: é o
+      // contador de tentativas desta fase (ver `Terminador`, em wasm-encolher).
+      (voltas) => { if (opcoes.aoAndar) opcoes.aoAndar(voltas); },
     );
     avaliar(final);
   } catch (erro) {

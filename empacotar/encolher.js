@@ -40,7 +40,18 @@ const path = require("path");
 const RAIZ = path.join(__dirname, "..");
 const CRATE = path.join(RAIZ, "wasm-encolher");
 const SAIDA = path.join(RAIZ, "src", "motores", "encolher");
-const WASM_CRU = path.join(CRATE, "target", "wasm32-unknown-unknown", "release", "encolher.wasm");
+/*
+  A pasta de saída do cargo, quando apontada para fora (`CARGO_TARGET_DIR`).
+  Serve para máquina em que o caminho do projeto tem acento ("Área de
+  Trabalho"): o linker do GCC não acha os próprios arquivos num caminho assim,
+  e a saída precisa morar noutro lugar. Com o toolchain GNU:
+
+    set RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-gnu
+    set CARGO_TARGET_DIR=C:\Users\voce\AppData\Local\encolher-target
+    npm run build:encolher
+*/
+const PASTA_DO_CARGO = process.env.CARGO_TARGET_DIR || path.join(CRATE, "target");
+const WASM_CRU = path.join(PASTA_DO_CARGO, "wasm32-unknown-unknown", "release", "encolher.wasm");
 
 function rodar(programa, argumentos, onde) {
   execFileSync(programa, argumentos, { cwd: onde || RAIZ, stdio: "inherit" });

@@ -334,21 +334,35 @@ export async function arteDesenhadaDaPeca(peca) {
 }
 
 /**
- * Uma arte por chave de giro do ENCAIXE, que é como o PDF procura a arte. O
- * `giro` que acompanha é o total, contando o giro que a peça recebeu antes
- * (ver "O GIRO DA PEÇA ANTES DO ENCAIXE", em encaixeMascara.js); quem o aplica
- * é o servidor. Peças iguais em giros diferentes leem o arquivo uma vez só.
+ * A chave da arte no PDF: UMA POR PEÇA, seja qual for o giro.
+ *
+ * Era uma por peça e giro (`3-0`, `3-90`), porque o servidor girava os
+ * pixels: a mesma arte subia duas vezes, entrava duas vezes no PDF e, com
+ * remoção de fundo, tinha o fundo tirado duas vezes. Agora o giro vai em cada
+ * posição (`giroDaPosicao`) e o servidor o aplica na matriz da página (ver "O
+ * GIRO É DA PÁGINA, NÃO DOS PIXELS", em servidor/encaixe-pdf.js).
+ */
+export const chaveDaArte = (item) => String(item.indice);
+
+/**
+ * O giro total de uma posição: o do encaixe mais o que a peça recebeu antes
+ * dele (ver "O GIRO DA PEÇA ANTES DO ENCAIXE", em encaixeMascara.js).
+ */
+export function giroDaPosicao(p) {
+  const rot = p.rot || (p.girado ? 90 : 0);
+  return (rot + (Number(p.item.rotacaoBase) || 0)) % 360;
+}
+
+/**
+ * Uma arte por peça, do jeito que ela vai para o servidor: sem giro. As cópias
+ * da peça (`p.item` é a cópia, e não a peça) leem o arquivo uma vez só.
  */
 export async function prepararArtes(posicoes) {
   const artes = new Map();
-  const porPeca = new Map();
   for (const p of posicoes) {
-    const rot = p.rot || (p.girado ? 90 : 0);
-    const chave = `${p.item.indice}-${rot}`;
+    const chave = chaveDaArte(p.item);
     if (artes.has(chave)) continue;
-    const giro = (rot + (Number(p.item.rotacaoBase) || 0)) % 360;
-    if (!porPeca.has(p.item)) porPeca.set(p.item, await arteDaPeca(p.item));
-    artes.set(chave, { ...porPeca.get(p.item), giro, peca: p.item });
+    artes.set(chave, { ...(await arteDaPeca(p.item)), peca: p.item });
   }
   return artes;
 }

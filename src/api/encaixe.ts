@@ -86,13 +86,14 @@ export const encaixeApi = {
    * o servidor com arte de verdade.
    */
   /**
-   * Manda uma arte, ainda sem giro: `giro` (0, 90, 180, 270) é aplicado pelo
-   * servidor. Devolve `false` quando o servidor não consegue abrir o arquivo
-   * — aí quem chama manda a arte desenhada no lugar.
+   * Manda uma arte, de pé e sem giro nenhum: o giro de cada peça vai na
+   * posição, e o servidor o aplica na página. Devolve `false` quando o
+   * servidor não consegue abrir o arquivo — aí quem chama manda a arte
+   * desenhada no lugar.
    */
-  async mandarArte(sessao: string, chave: string, arte: Blob, giro = 0): Promise<boolean> {
+  async mandarArte(sessao: string, chave: string, arte: Blob): Promise<boolean> {
     const endereco = `/api/encaixe/arte?sessao=${encodeURIComponent(sessao)}`
-      + `&chave=${encodeURIComponent(chave)}&giro=${giro}`;
+      + `&chave=${encodeURIComponent(chave)}`;
     const envio = await fetch(endereco, { method: "POST", body: arte });
     if (!envio.ok) throw new Error("o servidor não aceitou uma das artes.");
     const resposta = await envio.json().catch(() => ({}));

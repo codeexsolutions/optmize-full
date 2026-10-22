@@ -408,15 +408,19 @@ export function desenharEncaixe(canvas, r, {
   // Na tela, as cores do tema; no arquivo (`escala`), as de sempre.
   const tema = escala ? null : coresDaTela();
   const cor = {
-    fundo: tema ? tema.fundo : "#0d1113",
-    tecido: tema ? tema.tecido : "#171d21",
     risco: tema ? tema.linha : "#2b3438",
     numero: tema ? tema.texto : "#5e696d",
     borda: tema ? tema.linha : "#3a4448",
   };
 
-  ctx.fillStyle = cor.fundo;
-  ctx.fillRect(0, 0, larguraCanvas, alturaCanvas);
+  /*
+   * SEM FUNDO: o canvas fica transparente, como um PNG recortado. O rolo era
+   * um retângulo cheio — branco no tema claro, preto no escuro — e a arte
+   * aparecia em cima dele, e não do jeito que ela é. Agora o que dá a forma do
+   * tecido é só a borda (mais abaixo), e por trás das peças aparece a mesa da
+   * tela.
+   */
+  ctx.clearRect(0, 0, larguraCanvas, alturaCanvas);
 
   /*
    * Daqui até o `restore` o desenho acontece no sentido DE PÉ — largura do
@@ -432,10 +436,6 @@ export function desenharEncaixe(canvas, r, {
     ctx.translate(0, REGUA + r.larguraTecido * px);
     ctx.rotate(-Math.PI / 2);
   }
-
-  // Fundo do tecido
-  ctx.fillStyle = cor.tecido;
-  ctx.fillRect(REGUA, 0, r.larguraTecido * px, r.consumo * px);
 
   // Régua do rolo em pé. Deitado, ela é desenhada depois, fora do giro, para o
   // número não sair de lado.
@@ -730,6 +730,17 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, largura, altura);
+  pintarMidia(ctx, { largura, altura, px, larguraTecido, tema: coresDaTela() });
+}
+
+/**
+ * O desenho da mídia vazia em si — superfície, grade, borda, régua e largura —
+ * num contexto já na escala certa. Mora à parte porque o rascunho da busca
+ * (`desenharRascunho`) põe as tentativas em cima desta mesma mesa.
+ */
+function pintarMidia(ctx, { largura, altura, px, larguraTecido, tema }) {
+  const REGUA = 34;
+  const alturaDoTecido = larguraTecido * px;
   ctx.textBaseline = "middle";
 
   /*
@@ -757,7 +768,6 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
    * outro programa.
    */
   // A superfície é a cor dos cartões do tema, sumindo até o fundo.
-  const tema = coresDaTela();
   ctx.fillStyle = sumindo(tema.tecido, comAlfa(tema.tecido, 0));
   ctx.fillRect(0, 0, largura, alturaDoTecido);
 
@@ -888,9 +898,8 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
  * O RASCUNHO — o encaixe enquanto ele ainda está sendo procurado
  * ===========================================================================
  *
- * A tela mostrava uma barra de carregamento durante a procura. Agora mostra o
- * rolo encolhendo: o melhor encaixe até agora, cheio, e por cima o fantasma do
- * que está sendo tentado neste instante.
+ * Enquanto a busca corre, a mesa mostra a tentativa da vez: cada peça no
+ * lugar em que o motor a pôs, com a arte dela em miniatura.
  *
  * ISTO NÃO É O `desenharEncaixe`, e a diferença é o ponto:
  *
@@ -899,70 +908,134 @@ export function desenharMidiaVazia(canvas, { larguraTecido } = {}) {
  *                       caro, e tem de ser: é o que a pessoa vai conferir
  *                       antes de mandar cortar tecido de verdade.
  *
- *   `desenharRascunho`  desenha a SILHUETA e nada mais. Chega dezesseis vezes
- *                       por segundo enquanto a busca corre, e carregar arte a
- *                       esse ritmo tiraria da tela a folga que ela tem para
- *                       animar.
- *
- * Por isso duas funções, e não uma com bandeira: as duas só coincidem no
- * retângulo do rolo, e tudo o que uma faz bem a outra não pode fazer.
+ *   `desenharRascunho`  desenha a MINIATURA da arte e nada mais. Chega várias
+ *                       vezes por segundo enquanto a busca corre, e desenhar a
+ *                       arte de trabalho a esse ritmo roubaria o processador
+ *                       que a busca está usando.
  *
  * O QUE CHEGA AQUI é o quadro compacto que o worker transferiu — um
- * `Float32Array` de seis números por peça (x, y, largura, altura, rotação,
- * girado). Ele não tem máscara nem contorno, então a peça é um retângulo. Num
- * fantasma que dura 60 ms isso é fiel o bastante; no resultado, jamais.
+ * `Float32Array` de sete números por peça (x, y, largura, altura, rotação,
+ * girado, índice da peça). Sem máscara nem contorno: a arte vai esticada na
+ * caixa, girada como no resultado. Peça cuja miniatura ainda não ficou pronta
+ * sai como retângulo.
  */
 
-/** Seis números por peça, na ordem que `quadroDoEncaixe` empacota. */
-const POR_PECA = 6;
+/** Sete números por peça, na ordem que `quadroDoEncaixe` empacota. */
+const POR_PECA = 7;
+
+/*
+  A MINIATURA DA ARTE — 160 px no lado maior.
+
+  A prévia da tela (`LADO_DA_PREVIA`, lá em cima) tem 1024 px e é feita para o
+  risco pronto, visto de perto. O rascunho desenha dezenas de peças várias
+  vezes por segundo num rolo que cabe na mesa: cada peça tem poucos pixels, e
+  reduzir 1024 px a isso a cada quadro é trabalho jogado fora.
+*/
+const LADO_DA_MINIATURA = 160;
+const miniaturas = new WeakMap();
+
+/**
+ * Faz (uma vez, sem esperar) a miniatura de cada arte — reduzida da prévia de
+ * 1024 px quando ela já existe, que é bem mais barato que partir da arte de
+ * trabalho, e em qualidade baixa de propósito: é rascunho.
+ */
+export function prepararMiniaturas(imagens) {
+  for (const img of imagens) {
+    if (!img || miniaturas.has(img)) continue;
+    const fonte = previas.get(img) || img;
+    const largura = img.naturalWidth || img.width;
+    const altura = img.naturalHeight || img.height;
+    const maior = Math.max(largura, altura);
+    if (!maior || typeof createImageBitmap !== "function") {
+      miniaturas.set(img, null);
+      continue;
+    }
+    const fator = Math.min(1, LADO_DA_MINIATURA / maior);
+    // Marcada antes de ficar pronta: outro quadro não começa a mesma.
+    miniaturas.set(img, null);
+    createImageBitmap(fonte, {
+      resizeWidth: Math.max(1, Math.round(largura * fator)),
+      resizeHeight: Math.max(1, Math.round(altura * fator)),
+      resizeQuality: "low",
+    })
+      .then((mini) => { miniaturas.set(img, mini); })
+      .catch(() => {});
+  }
+}
+
+/*
+  A MESA DO RASCUNHO, pronta. A grade, a borda e a régua são as mesmas em todo
+  quadro da busca; repintá-las trinta vezes por segundo seria trabalho jogado
+  fora. Ela é pintada uma vez num canvas à parte e só COPIADA a cada quadro —
+  e refeita quando o tamanho, a largura do tecido ou o tema mudam.
+*/
+let mesaDoRascunho = null;
+// Tema trocado: a mesa pronta tem as cores do outro. A guarda é para a
+// bancada, que carrega este módulo no Node, sem janela.
+if (typeof window !== "undefined") {
+  window.addEventListener("optmize:tema", () => { mesaDoRascunho = null; });
+}
+
+function mesaPronta(largura, altura, px, larguraTecido, dpr) {
+  const m = mesaDoRascunho;
+  if (m && m.largura === largura && m.altura === altura
+      && m.larguraTecido === larguraTecido && m.dpr === dpr) return m;
+  const tema = coresDaTela();
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(largura * dpr);
+  canvas.height = Math.round(altura * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  pintarMidia(ctx, { largura, altura, px, larguraTecido, tema });
+  mesaDoRascunho = { canvas, largura, altura, larguraTecido, dpr, tema };
+  return mesaDoRascunho;
+}
+
+/**
+ * Até onde do rolo a mesa mostra, em centímetros, na escala de 100%: o que
+ * cabe na largura da caixa. Quem anima usa para não montar peça que ficaria
+ * fora da tela.
+ */
+export function alcanceDoRascunho(canvas, larguraTecido) {
+  const pai = canvas.parentElement;
+  if (!pai || !(larguraTecido > 0)) return 0;
+  const px = Math.max(0.6, (pai.clientHeight - 22 - 34) / larguraTecido);
+  return (pai.clientWidth - 22) / px;
+}
 
 export function desenharRascunho(canvas, {
-  larguraTecido, consumo, pecas, fantasma, pulso = 0,
-  /*
-    O tamanho, quando quem chama já sabe qual é.
-
-    A miniatura da faixa de tentativas tem medida própria e NÃO pode medir o
-    pai: as miniaturas dividem o mesmo contêiner, então o pai delas é o mesmo
-    para todas e mede a faixa inteira. Sem esta saída, as oito sairiam do
-    tamanho da coluna, empilhadas por cima uma da outra.
-  */
-  caixa = null,
+  larguraTecido, pecas,
+  /** As peças do trabalho: o índice do quadro aponta para a arte daqui. */
+  artes = [],
+  /** Peça que começa depois disto no rolo não é desenhada. */
+  ateCm = Infinity,
+  /** Os metros do rótulo — o melhor até agora. `null` não escreve nada. */
+  metros = null,
+  /**
+   * Para animar a montagem: recebe o número da peça e diz se ela já entrou
+   * (`0`) ou ainda não (`null`). Sem isto, todas são desenhadas.
+   */
+  momento = null,
 } = {}) {
-  // A miniatura não tem régua: 34px de faixa numa caixa de 54 seria a régua
-  // com um fiapo de encaixe embaixo.
-  const REGUA = caixa ? 0 : 34;
-  const pai = canvas.parentElement;
-  const larguraDisponivel = caixa ? caixa.largura : (pai ? pai.clientWidth - 22 : 900);
-  const alturaDisponivel = caixa ? caixa.altura : (pai ? pai.clientHeight - 22 : 500);
-
-  if (!larguraTecido || larguraTecido <= 0 || !consumo || consumo <= 0) return;
-  if (larguraDisponivel < 20 || alturaDisponivel < 20) return;
-
-  const ctx = canvas.getContext("2d");
-
   /*
-    A ESCALA É A DO ROLO INTEIRO NA CAIXA, e ela muda a cada quadro de
-    propósito: o rolo encolhe conforme a busca melhora, e uma escala fixa faria
-    o desenho ir minguando para um canto. Recalculada, o rolo ocupa sempre a
-    caixa toda e o que a pessoa vê é a densidade das peças aumentando — que é
-    exatamente o que "melhorou" quer dizer aqui.
+    A MESMA MESA E A MESMA ESCALA DA MÍDIA VAZIA (`desenharMidiaVazia`): a
+    largura do tecido ocupa a altura da caixa — o zoom de 100% —, a grade e a
+    régua ficam atrás, e o rolo corre para a direita até a beirada. A busca
+    acontece na mesa que a pessoa já estava olhando.
   */
-  const porAltura = (alturaDisponivel - REGUA) / larguraTecido;
-  const porLargura = larguraDisponivel / consumo;
-  const px = Math.max(0.2, Math.min(porAltura, porLargura));
+  const REGUA = 34;
+  const pai = canvas.parentElement;
+  const largura = pai ? pai.clientWidth - 22 : 900;
+  const alturaDisponivel = pai ? pai.clientHeight - 22 : 500;
+  if (!larguraTecido || larguraTecido <= 0 || largura < 40 || alturaDisponivel < 40) return;
 
-  // Na miniatura a caixa manda: o rolo é desenhado centrado dentro dela, em vez
-  // de o canvas crescer com o rolo. Oito canvas de tamanhos diferentes numa
-  // coluna dariam uma escada, e o que se quer comparar de relance é a DENSIDADE
-  // das peças, não o tamanho do quadrinho.
-  const largura = caixa ? caixa.largura : Math.round(consumo * px);
-  const altura = caixa ? caixa.altura : Math.round(larguraTecido * px) + REGUA;
-
+  const px = Math.max(0.6, (alturaDisponivel - REGUA) / larguraTecido);
+  const alturaDoTecido = larguraTecido * px;
+  const altura = Math.round(alturaDoTecido) + REGUA;
   const dpr = window.devicePixelRatio || 1;
+
   // Só mexe no tamanho do canvas quando ele realmente mudou: atribuir
-  // `canvas.width` LIMPA o bitmap e refaz o buffer, e fazer isso dezesseis
-  // vezes por segundo à toa é o tipo de desperdício que este arquivo existe
-  // para evitar.
+  // `canvas.width` LIMPA o bitmap e refaz o buffer.
   const larguraCrua = Math.round(largura * dpr);
   const alturaCrua = Math.round(altura * dpr);
   if (canvas.width !== larguraCrua || canvas.height !== alturaCrua) {
@@ -972,57 +1045,60 @@ export function desenharRascunho(canvas, {
     canvas.style.height = `${altura}px`;
   }
 
+  const ctx = canvas.getContext("2d");
+  const mesa = mesaPronta(largura, altura, px, larguraTecido, dpr);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(mesa.canvas, 0, 0);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, largura, altura);
-
-  // O rolo: o retângulo do tecido, abaixo da régua.
-  const temaDoRascunho = coresDaTela();
-  ctx.fillStyle = comAlfa(temaDoRascunho.tinta, 0.03);
-  ctx.fillRect(0, REGUA, largura, altura - REGUA);
-  ctx.strokeStyle = comAlfa(temaDoRascunho.tinta, 0.10);
-  ctx.lineWidth = 1;
-  ctx.strokeRect(0.5, REGUA + 0.5, largura - 1, altura - REGUA - 1);
+  ctx.imageSmoothingQuality = "low";
 
   /*
-    O FANTASMA É TRAÇO; O RECORDE É CHEIO.
-
-    A diferença tem de ser de ESPÉCIE, e não de tom, porque as duas camadas se
-    sobrepõem o tempo todo. Dois preenchimentos em opacidades diferentes viram
-    uma sopa em que não se distingue o que já foi conquistado do que está só
-    sendo experimentado; contorno contra massa se lê de relance.
+    DEITADO COMO O RESULTADO: a mesma moldura do `desenharEncaixe` — o desenho
+    é feito em pé e a folha gira um quarto de volta, com o tecido em cima e a
+    régua embaixo. A peça aparece no mesmo canto em que vai estar no final.
   */
-  const n = pecas ? Math.floor(pecas.length / POR_PECA) : 0;
-  if (fantasma) {
-    ctx.strokeStyle = comAlfa(temaDoRascunho.acento, 0.28);
-    ctx.lineWidth = 1;
-  } else {
-    // O pulso é o clarão curto de quando um recorde acaba de cair: some em
-    // poucos quadros e é o que faz a melhora ser PERCEBIDA, não só mostrada.
-    ctx.fillStyle = comAlfa(temaDoRascunho.acento, 0.22 + pulso * 0.45);
-    ctx.strokeStyle = comAlfa(temaDoRascunho.acento, 0.45 + pulso * 0.4);
-    ctx.lineWidth = 1;
-  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, largura, alturaDoTecido);
+  ctx.clip();
+  ctx.translate(0, alturaDoTecido);
+  ctx.rotate(-Math.PI / 2);
 
+  ctx.fillStyle = comAlfa(mesa.tema.acento, 0.22);
+  ctx.strokeStyle = comAlfa(mesa.tema.acento, 0.5);
+  ctx.lineWidth = 1;
+  const n = pecas ? Math.floor(pecas.length / POR_PECA) : 0;
   for (let i = 0; i < n; i++) {
     const b = i * POR_PECA;
+    if (pecas[b + 1] >= ateCm) continue;
+    if (momento && momento(i) == null) continue;
     const x = pecas[b] * px;
-    const y = REGUA + pecas[b + 1] * px;
+    const y = pecas[b + 1] * px;
     const w = pecas[b + 2] * px;
     const h = pecas[b + 3] * px;
     // Peça menor que um pixel não vira desenho, vira ruído cinza no canvas.
     if (w < 0.7 || h < 0.7) continue;
-    if (fantasma) ctx.strokeRect(x, y, w, h);
-    else {
+    const peca = artes[pecas[b + 6]];
+    const mini = peca && peca.img ? miniaturas.get(peca.img) : null;
+    if (mini) {
+      desenharArte(ctx, { rot: pecas[b + 4], girado: pecas[b + 5] === 1, item: peca }, x, y, w, h, mini);
+    } else {
       ctx.fillRect(x, y, w, h);
       if (w > 3 && h > 3) ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     }
   }
+  ctx.restore();
 
-  // Os metros, no alto: é o número que a pessoa está esperando ver cair.
-  if (!caixa) {
+  // O melhor até agora, no lugar em que a mesa vazia escreve a largura.
+  if (metros != null) {
     ctx.font = '11px "Inter Variable", "Inter", "Segoe UI", sans-serif';
-    ctx.fillStyle = fantasma ? comAlfa(temaDoRascunho.acento, 0.45) : temaDoRascunho.acento;
+    const texto = `melhor até agora: ${(metros / 100).toFixed(2).replace(".", ",")} m`;
+    const larguraDoTexto = ctx.measureText(texto).width;
+    ctx.fillStyle = comAlfa(mesa.tema.fundo, 0.85);
+    ctx.fillRect(6, 5, larguraDoTexto + 10, 18);
+    ctx.fillStyle = mesa.tema.acento;
     ctx.textBaseline = "middle";
-    if (!fantasma) ctx.fillText(`${(consumo / 100).toFixed(2).replace(".", ",")} m`, 10, 15);
+    ctx.fillText(texto, 11, 14);
   }
 }

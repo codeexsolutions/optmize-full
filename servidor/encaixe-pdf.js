@@ -70,8 +70,8 @@
  * Ela chegou tarde a esta lista, e o preço foi um RIP recusando o arquivo:
  * toda peça girada vira PNG de canvas, canvas sempre tem canal alfa, e o PDF
  * saía 1.3 carregando máscara. Hoje são duas travas — a máscara só entra
- * quando esconde alguma coisa (ver `mascaraServe`) e, quando entra, o
- * documento nasce 1.4 (ver `pngComAlfa`).
+ * quando esconde alguma coisa (ver `transparente`, em `pixelsDaArte`) e,
+ * quando entra, o documento nasce 1.4 (ver `pngComAlfa`).
  */
 
 const express = require("express");
@@ -171,9 +171,11 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), async (r
         // porque na hora do PDF elas já estão em disco e a pergunta custaria
         // abrir cada arquivo de novo. Ver `pngComAlfa`.
         comAlfa: new Set(),
-        // O giro de cada arte (0, 90, 180, 270), que agora é feito aqui — ver
-        // "A ARTE CHEGA COMO VEIO". E, das que são PDF, a versão: embutir um
-        // desenho vetorial obriga o documento a ser pelo menos dessa versão.
+        // O giro da arte (0, 90, 180, 270), para quem ainda manda uma arte por
+        // giro: a tela de hoje manda o giro em cada posição, e este vale só
+        // para a posição que vier sem (ver "O GIRO É DA PÁGINA"). E, das que
+        // são PDF, a versão: embutir um desenho vetorial obriga o documento a
+        // ser pelo menos dessa versão.
         giros: new Map(),
         versoes: new Map(),
       };
@@ -190,12 +192,16 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), async (r
 
   const arquivo = guardadas.artes.get(chave)
     || path.join(guardadas.pasta, `${guardadas.artes.size}.arte`);
+  // O nome fica reservado ANTES de gravar: a gravação é assíncrona, e outro
+  // envio chegando no meio dela pegaria o mesmo `artes.size`.
+  guardadas.artes.set(chave, arquivo);
   try {
-    fs.writeFileSync(arquivo, req.body);
+    // Assíncrono: uma arte de 40 MB gravada de uma vez seguraria o servidor.
+    await fs.promises.writeFile(arquivo, req.body);
   } catch (erro) {
+    guardadas.artes.delete(chave);
     return res.status(500).json({ error: `Não deu para guardar a arte: ${erro.message}` });
   }
-  guardadas.artes.set(chave, arquivo);
   // Reenviar a mesma chave substitui a arte: o que valia da anterior não vale.
   if (pngComAlfa(req.body)) guardadas.comAlfa.add(chave);
   else guardadas.comAlfa.delete(chave);
@@ -270,7 +276,7 @@ const ASSINATURA_PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
  *
  * Note que isto é um "pode ter", não um "tem": arte girada vem sempre com
  * canal alfa, e quase sempre opaca. Quem decide se a máscara entra de verdade
- * é o `mascaraServe`, olhando os pixels. Declarar 1.4 e não usar máscara
+ * é `pixelsDaArte`, olhando os pixels. Declarar 1.4 e não usar máscara
  * nenhuma é honesto — o arquivo diz do que é capaz, não do que fez.
  */
 function pngComAlfa(bytes) {
@@ -297,17 +303,11 @@ function pngComAlfa(bytes) {
  * documento se declara 1.3 quando não precisa de `/UserUnit`. Um arquivo que
  * usa o que diz não usar é um arquivo que o RIP tem o direito de recusar.
  *
- * Olhar os bytes é barato perto do que se economiza: o canal já vem decodificado
- * para montar a máscara, e a varredura é um laço sobre bytes que para no
- * primeiro pixel transparente. Quando não há nenhum, a máscara nem chega a ser
- * comprimida — que era o passo caro.
+ * Olhar os bytes sai de graça: a pergunta é respondida no mesmo laço que
+ * separa a cor do alfa (`transparente`, em `pixelsDaArte`). Quando não há
+ * pixel transparente nenhum, a máscara nem chega a ser comprimida — que era o
+ * passo caro.
  */
-function mascaraServe(alfa) {
-  for (let i = 0; i < alfa.length; i++) {
-    if (alfa[i] !== 255) return true;
-  }
-  return false;
-}
 
 /**
  * Um canal de imagem para o PDF: pixels crus, comprimidos com Flate.
@@ -315,8 +315,106 @@ function mascaraServe(alfa) {
  * Sem `/DecodeParms`, e é esse o ponto — ver "POR QUE OS PIXELS VÃO CRUS", lá
  * em cima. Nível 1 na compressão porque este fluxo só vive até o PDF, e cada
  * nível acima custa tempo para ganhar pouco; não há perda em nível nenhum.
+ *
+ * A compressão é ASSÍNCRONA: roda nas threads do libuv, e não na linha
+ * principal. Síncrona, ela segurava o servidor inteiro por mais de um segundo
+ * a cada arte grande (medido: 1,4 s) — nem a barra de andamento respondia — e
+ * a cor e o alfa de uma arte não podiam ser comprimidos ao mesmo tempo.
  */
-function canalCru(pixels, largura, altura, cores) {
+const { promisify } = require("util");
+const comprimirInteiro = promisify(zlib.deflate);
+const comprimirTrecho = promisify(zlib.deflateRaw);
+
+/*
+ * ---------------------------------------------------------------------------
+ * ARTE GRANDE É COMPRIMIDA EM PEDAÇOS, EM PARALELO — NUM FLUXO SÓ
+ * ---------------------------------------------------------------------------
+ *
+ * O Flate de uma imagem é UM fluxo, e o zlib o comprime numa thread só. Em
+ * arte de cores chapadas isso é rápido (medido: 71 MB em 133 ms); em arte
+ * fotográfica, que comprime pouco, a mesma conta anda a uns 50 MB/s — meio
+ * segundo por peça de sublimação total, com os outros núcleos parados.
+ *
+ * O formato permite repartir sem mudar nada do que o leitor vê: cada pedaço é
+ * comprimido sozinho e termina num ponto de sincronia (`Z_SYNC_FLUSH`, um
+ * bloco vazio que alinha o byte), só o último fecha o fluxo, e o conjunto
+ * leva o cabeçalho do zlib na frente e a soma de conferência (adler32) dos
+ * pixels inteiros no fim. É um fluxo zlib comum, como o de qualquer outro
+ * PDF — a mesma técnica do `pigz` —, e quem descomprime recebe exatamente os
+ * mesmos bytes (conferido em `bancada/conferir-cor-e-vetor.mjs`). Nada de
+ * preditor (ver "POR QUE OS PIXELS VÃO CRUS").
+ *
+ * Quantos pedaços ao mesmo tempo: os núcleos da máquina menos um, até quatro
+ * (o que o libuv atende de uma vez). O núcleo que sobra é da tela — num PC
+ * fraco, ela continua respondendo enquanto o PDF sai.
+ */
+const PEDACO_DO_FLATE = 4 * 1024 * 1024;
+const NUCLEOS = (typeof os.availableParallelism === "function" ? os.availableParallelism() : os.cpus().length) || 2;
+const AO_MESMO_TEMPO = Math.max(1, Math.min(4, NUCLEOS - 1));
+
+// Uma fila só para o servidor inteiro: a cor, o alfa e a arte seguinte (ver
+// `montarPdf`) disputam os mesmos núcleos.
+let comprimindo = 0;
+const esperando = [];
+function naVez(tarefa) {
+  return new Promise((pronto, falhou) => {
+    const rodar = () => {
+      comprimindo++;
+      tarefa().then(pronto, falhou).finally(() => {
+        comprimindo--;
+        const proxima = esperando.shift();
+        if (proxima) proxima();
+      });
+    };
+    if (comprimindo < AO_MESMO_TEMPO) rodar();
+    else esperando.push(rodar);
+  });
+}
+
+/**
+ * A adler32 dos pixels, em trechos, devolvendo a vez entre eles: numa arte de
+ * 70 MB a conta inteira de uma vez seguraria a linha principal.
+ */
+async function adler32(dados) {
+  const BASE = 65521;
+  let a = 1;
+  let b = 0;
+  for (let inicio = 0; inicio < dados.length; inicio += PEDACO_DO_FLATE) {
+    const fim = Math.min(inicio + PEDACO_DO_FLATE, dados.length);
+    // 5552 é o maior trecho em que `b` não estoura antes do módulo (zlib).
+    for (let i = inicio; i < fim;) {
+      const ate = Math.min(i + 5552, fim);
+      for (; i < ate; i++) { a += dados[i]; b += a; }
+      a %= BASE;
+      b %= BASE;
+    }
+    if (fim < dados.length) await new Promise(setImmediate);
+  }
+  return ((b << 16) | a) >>> 0;
+}
+
+async function comprimir(pixels) {
+  if (pixels.length <= PEDACO_DO_FLATE || AO_MESMO_TEMPO === 1) {
+    return naVez(() => comprimirInteiro(pixels, { level: 1 }));
+  }
+  const trechos = [];
+  for (let i = 0; i < pixels.length; i += PEDACO_DO_FLATE) {
+    trechos.push(pixels.subarray(i, Math.min(i + PEDACO_DO_FLATE, pixels.length)));
+  }
+  const [comprimidos, soma] = await Promise.all([
+    Promise.all(trechos.map((trecho, k) => naVez(() => comprimirTrecho(trecho, {
+      level: 1,
+      finishFlush: k < trechos.length - 1 ? zlib.constants.Z_SYNC_FLUSH : zlib.constants.Z_FINISH,
+    })))),
+    adler32(pixels),
+  ]);
+  const rabo = Buffer.alloc(4);
+  rabo.writeUInt32BE(soma);
+  // 78 01: o cabeçalho que o zlib escreve no nível 1 (sem dicionário).
+  return Buffer.concat([Buffer.from([0x78, 0x01]), ...comprimidos, rabo]);
+}
+
+async function canalCru(pixels, largura, altura, cores) {
   return {
     largura,
     altura,
@@ -329,20 +427,93 @@ function canalCru(pixels, largura, altura, cores) {
       ColorSpace: cores === 3 ? "DeviceRGB" : "DeviceGray",
       Filter: "FlateDecode",
     },
-    fluxo: zlib.deflateSync(pixels, { level: 1 }),
+    fluxo: await comprimir(pixels),
   };
+}
+
+/**
+ * Os pixels da arte em sRGB (ou em cinza), com a cor e o alfa saindo da MESMA
+ * leitura do arquivo.
+ *
+ * Eram duas: uma para a cor (sem o alfa) e outra só para o alfa — e ler um PNG
+ * grande, desfazer a compressão e os filtros dele, é a parte cara de abrir a
+ * arte. Agora o arquivo é lido uma vez, já convertido pelo perfil dele, e os
+ * canais são separados aqui.
+ *
+ * SÓ ONDE OS NÚMEROS SAEM OS MESMOS, byte a byte, que a leitura dupla dava —
+ * conferido contra ela em `bancada/conferir-cor-e-vetor.mjs`:
+ *
+ *   sem alfa              é a mesma conta de sempre (tirar o alfa não fazia
+ *                         nada), numa leitura só
+ *   RGB de 8 bits + alfa  leitura única: igual em PNG com e sem perfil (P3),
+ *                         paleta, WebP e com giro de EXIF
+ *   cinza + alfa          LEITURA DUPLA, como antes: convertido para cinza
+ *                         numa leitura só, o alfa some (a peça perderia a
+ *                         transparência)
+ *   16 bits + alfa        LEITURA DUPLA, como antes: o alfa sairia com 1 de
+ *                         diferença em parte dos pixels, de arredondamento
+ *
+ * `transparente` diz se algum pixel tem alfa abaixo de 255 — se a máscara
+ * esconde alguma coisa.
+ */
+async function pixelsDaArte(bytes, meta) {
+  const cinza = meta.space === "b-w" || meta.space === "grey16";
+  const abrir = () => sharp(bytes, { limitInputPixels: false }).autoOrient();
+  const cru = (s) => s.raw({ depth: "uchar" }).toBuffer({ resolveWithObject: true });
+
+  if (!meta.hasAlpha) {
+    const { data, info } = await cru(abrir().toColourspace(cinza ? "b-w" : "srgb"));
+    return { cor: data, alfa: null, width: info.width, height: info.height, cores: info.channels, transparente: false };
+  }
+
+  // A leitura dupla de antes, sem mudar nada: ver a tabela acima.
+  const leituraDupla = async () => {
+    const [cor, alfa] = await Promise.all([
+      cru(abrir().removeAlpha().toColourspace(cinza ? "b-w" : "srgb")),
+      // O alfa é o último canal da entrada; o `b-w` faz a /SMask sair com um
+      // canal só, como ela tem de ser.
+      cru(abrir().extractChannel(meta.channels - 1).toColourspace("b-w")),
+    ]);
+    return {
+      cor: cor.data, alfa: alfa.info.channels === 1 ? alfa.data : null,
+      width: cor.info.width, height: cor.info.height, cores: cor.info.channels,
+      transparente: alfa.info.channels === 1 && alfa.data.some((a) => a !== 255),
+    };
+  };
+  if (cinza || meta.depth !== "uchar") return leituraDupla();
+
+  const { data, info } = await cru(abrir().toColourspace("srgb"));
+  const { width, height, channels } = info;
+  // Formato que não chegou como RGB + alfa: a leitura única não foi conferida
+  // para ele, e o alfa não pode sumir calado.
+  if (channels !== 4) return leituraDupla();
+  const total = width * height;
+  const cor = Buffer.allocUnsafe(total * 3);
+  const alfa = Buffer.allocUnsafe(total);
+  let opaco = 255;
+  for (let p = 0, i = 0, j = 0; p < total; p++, i += 4, j += 3) {
+    cor[j] = data[i];
+    cor[j + 1] = data[i + 1];
+    cor[j + 2] = data[i + 2];
+    const a = data[i + 3];
+    alfa[p] = a;
+    opaco &= a; // o E bit a bit de todos os alfas só dá 255 se todos forem 255
+  }
+  return { cor, alfa, width, height, cores: 3, transparente: opaco !== 255 };
 }
 
 /*
  * ===========================================================================
- * A ARTE CHEGA COMO VEIO, E É AQUI QUE ELA GIRA E VIRA sRGB (2026-10-19)
+ * A ARTE CHEGA COMO VEIO, E É AQUI QUE ELA VIRA sRGB (2026-10-19)
  * ===========================================================================
  *
  * A tela mandava a arte já girada, desenhada num canvas — e o canvas mudava a
  * cor (converte ao decodificar, guarda a cor multiplicada pelo alfa) e perdia
- * o perfil do arquivo. Agora ela manda o arquivo intocado e o giro (`giro`,
- * no envio), e o giro é feito aqui pelo `sharp`: de 90 em 90 graus, pixel por
- * pixel, sem reamostrar nada.
+ * o perfil do arquivo. Agora ela manda o arquivo intocado, e o giro não toca
+ * nos pixels em lugar nenhum: a imagem entra no PDF UMA vez, de pé, e cada
+ * peça a desenha com o seu giro na matriz de posição — a mesma conta que a
+ * arte vetorial já usa (ver `matrizDoVetor` e "O GIRO É DA PÁGINA, NÃO DOS
+ * PIXELS", mais abaixo).
  *
  * A COR. O PDF declara as imagens como `DeviceRGB`, e o RIP lê `DeviceRGB`
  * como sRGB. Uma arte salva em Adobe RGB ou Display P3 embutia os números do
@@ -355,6 +526,7 @@ function canalCru(pixels, largura, altura, cores) {
  *
  * O JPEG que pode ir direto continua indo direto, sem recompressão: sequencial,
  * de 8 bits, RGB ou cinza, sem giro de EXIF, e sem perfil que não seja sRGB.
+ * Girado pelo encaixe ou não — o giro agora é da página.
  */
 function perfilJaESrgb(icc) {
   if (!icc || icc.length < 132) return true; // sem perfil: o arquivo já fala sRGB
@@ -383,42 +555,29 @@ function jpegSequencial(bytes) {
 /**
  * Abre uma arte de pixels como imagem do pdfkit: o objeto que `doc.image`
  * aceita no lugar do que `doc.openImage` devolveria (largura, altura, `embed`).
- * `giro` é 0, 90, 180 ou 270, no sentido do relógio.
+ * Sempre de pé, como o arquivo é visto (o EXIF vale); o giro do encaixe é de
+ * quem desenha (`desenharImagem`).
  */
-async function abrirImagem(doc, bytes, giro = 0) {
+async function abrirImagem(doc, bytes) {
   const meta = await sharp(bytes, { limitInputPixels: false }).metadata();
 
-  if (!giro && meta.format === "jpeg" && !meta.isProgressive
+  if (meta.format === "jpeg" && !meta.isProgressive
     && (meta.channels === 3 || meta.channels === 1)
     && (!meta.orientation || meta.orientation === 1)
     && perfilJaESrgb(meta.icc) && jpegSequencial(bytes)) {
     return doc.openImage(bytes);
   }
 
-  // O EXIF primeiro (é como a tela mostra a arte), depois o giro do encaixe.
-  const abrir = () => {
-    const s = sharp(bytes, { limitInputPixels: false }).autoOrient();
-    return giro ? s.rotate(giro) : s;
-  };
-  const cinza = meta.space === "b-w" || meta.space === "grey16";
-  const [corCrua, alfaCru] = await Promise.all([
-    abrir().removeAlpha().toColourspace(cinza ? "b-w" : "srgb").raw({ depth: "uchar" })
-      .toBuffer({ resolveWithObject: true }),
-    // O alfa é o último canal da entrada; o `b-w` faz a /SMask sair com um
-    // canal só, como ela tem de ser.
-    meta.hasAlpha
-      ? abrir().extractChannel(meta.channels - 1).toColourspace("b-w").raw({ depth: "uchar" })
-        .toBuffer({ resolveWithObject: true })
-      : null,
-  ]);
-  if (corCrua.info.channels !== 1 && corCrua.info.channels !== 3) {
-    throw new Error(`a arte saiu com ${corCrua.info.channels} canais de cor`);
+  const px = await pixelsDaArte(bytes, meta);
+  if (px.cores !== 1 && px.cores !== 3) {
+    throw new Error(`a arte saiu com ${px.cores} canais de cor`);
   }
-
-  const cor = canalCru(corCrua.data, corCrua.info.width, corCrua.info.height, corCrua.info.channels);
-  const alfa = alfaCru && alfaCru.info.channels === 1 && mascaraServe(alfaCru.data)
-    ? canalCru(alfaCru.data, alfaCru.info.width, alfaCru.info.height, 1)
-    : null;
+  // Cor e alfa comprimidos ao mesmo tempo; a máscara só se esconder alguma
+  // coisa (ver "MÁSCARA QUE NÃO ESCONDE NADA").
+  const [cor, alfa] = await Promise.all([
+    canalCru(px.cor, px.width, px.height, px.cores),
+    px.transparente ? canalCru(px.alfa, px.width, px.height, 1) : null,
+  ]);
 
   return {
     label: `I${++doc._imageCount}`,
@@ -598,10 +757,60 @@ function desenharVetor(doc, vetor, giro, x, y, w, h) {
   doc.restore();
 }
 
-/** Abre a arte do jeito que o formato dela pede. */
-async function abrirArte(doc, bytes, giro = 0) {
+/*
+ * ===========================================================================
+ * O GIRO É DA PÁGINA, NÃO DOS PIXELS (2026-10-21)
+ * ===========================================================================
+ *
+ * A imagem do PDF é desenhada num quadrado de 1 x 1, e a matriz de posição é
+ * quem a estica até a caixa da peça. Girar é só outra matriz: a MESMA conta
+ * que já põe a arte vetorial no lugar (`matrizDoVetor`, conferida desenhando o
+ * PDF em `bancada/conferir-cor-e-vetor.mjs`), com uma "página" de 1 x 1.
+ *
+ * O giro saiu dos pixels porque ali ele custava caro e não comprava nada:
+ *
+ *   - cada giro de uma arte era uma imagem À PARTE no arquivo. Com giro livre,
+ *     a mesma arte em 0° e 90° era lida, comprimida e embutida duas vezes —
+ *     o dobro do tempo e do tamanho;
+ *   - o JPEG girado perdia o caminho direto: era aberto e regravado em pixels
+ *     crus, de 5 MB para uns 70 MB cada;
+ *   - girar 90° em pixels não muda número nenhum, e girar na matriz também
+ *     não: é a mesma imagem, posta de lado.
+ *
+ * Medido (2026-10-21), com a leitura única, o Flate em pedaços e a arte
+ * seguinte preparada junto — tudo isto é deste dia —, presos a 2 núcleos
+ * como num PC fraco:
+ *
+ *   12 artes de DTF, dois giros cada     16,6 s → 3,8 s    PDF 122 → 59 MB
+ *   14 artes fotográficas, dois giros    38,4 s → 10,9 s   PDF 1010 → 383 MB
+ *                                        (memória 1189 → 455 MB)
+ *
+ * E os pixels são os mesmos: a imagem embutida é byte a byte a do arquivo de
+ * pé, e o PDF de antes e o de agora, desenhados no Ghostscript e no pdf.js,
+ * põem cada peça no mesmo lugar, no mesmo giro.
+ */
+const QUADRADO_DA_IMAGEM = { rotacao: 0, largura: 1, altura: 1 };
+
+function desenharImagem(doc, imagem, giro, x, y, w, h) {
+  if (!imagem.obj) imagem.embed(doc);
+  doc.page.xobjects[imagem.label] = imagem.obj;
+  doc.save();
+  doc.transform(...matrizDoVetor(QUADRADO_DA_IMAGEM, giro, x, y, w, h));
+  doc.addContent(`/${imagem.label} Do`);
+  doc.restore();
+}
+
+/** Abre a arte do jeito que o formato dela pede, sempre de pé. */
+async function abrirArte(doc, bytes) {
   if (ehPdf(bytes)) return abrirVetor(doc, bytes);
-  return abrirImagem(doc, bytes, giro);
+  return abrirImagem(doc, bytes);
+}
+
+/** O giro de uma posição: 0, 90, 180 ou 270, ou `null` quando não veio. */
+function giroDaPosicao(pos) {
+  if (!pos || pos.giro === undefined || pos.giro === null) return null;
+  const giro = Number(pos.giro);
+  return [0, 90, 180, 270].includes(giro) ? giro : null;
 }
 
 /**
@@ -856,23 +1065,55 @@ async function montarPdf({
    * `lerArte` é quem sabe de onde vem o byte: do disco, no caminho normal (ver
    * a rota do PDF), ou de um Map de buffers, que é como a bancada e os testes
    * chamam.
+   *
+   * O giro de cada peça vem na própria posição (`giro`), e a arte é uma por
+   * peça. Quem chama do jeito antigo — uma chave por giro, com o giro no mapa
+   * da arte — continua certo: a posição sem `giro` usa o da arte.
    */
   const buscar = lerArte || ((chave) => (buffers ? buffers.get(chave) : null));
   const giroDaArte = giroDe || ((chave) => (giros ? giros.get(chave) || 0 : 0));
+  const giroDaPeca = (pos) => {
+    const proprio = giroDaPosicao(pos);
+    return proprio === null ? giroDaArte(pos.chave) : proprio;
+  };
+
+  /*
+   * A PRÓXIMA ARTE É PREPARADA ENQUANTO A ATUAL ESCOA.
+   *
+   * Abrir uma arte (ler o arquivo, converter a cor, comprimir) é trabalho das
+   * threads do sharp e do zlib; escoar é a linha principal esperando o disco.
+   * Um depois do outro, as duas esperas se somavam. Agora, quando uma arte é
+   * pedida, a seguinte da fila já começa a ser aberta — UMA só à frente, para
+   * o pico de memória continuar sendo o de duas artes, e não o do trabalho.
+   * O mapa guarda a PROMESSA, então quem chega depois espera a mesma abertura
+   * em vez de começar outra.
+   */
+  const ordem = [];
+  const naOrdem = new Map();
+  paginas.forEach((pagina) => pagina.posicoes.forEach((pos) => {
+    if (!naOrdem.has(pos.chave)) { naOrdem.set(pos.chave, ordem.length); ordem.push(pos.chave); }
+  }));
   const desenhos = new Map();
-  const desenhoDe = async (chave) => {
-    if (desenhos.has(chave)) return desenhos.get(chave);
-    let desenho = null;
-    try {
-      const bytes = buscar(chave);
-      // Ver "O PNG NÃO PASSA PELO LEITOR DO PDFKIT", lá em cima.
-      if (bytes) desenho = await abrirArte(doc, bytes, giroDaArte(chave));
-    } catch (err) {
-      // arte ilegível: as outras continuam
-      console.warn(`[encaixe-pdf] arte ilegível (${chave}):`, err && err.message);
+  const abrir = (chave) => {
+    if (!desenhos.has(chave)) {
+      desenhos.set(chave, (async () => {
+        try {
+          const bytes = buscar(chave);
+          // Ver "O PNG NÃO PASSA PELO LEITOR DO PDFKIT", lá em cima.
+          return bytes ? await abrirArte(doc, bytes) : null;
+        } catch (err) {
+          // arte ilegível: as outras continuam
+          console.warn(`[encaixe-pdf] arte ilegível (${chave}):`, err && err.message);
+          return null;
+        }
+      })());
     }
-    desenhos.set(chave, desenho);
-    return desenho;
+    return desenhos.get(chave);
+  };
+  const desenhoDe = (chave) => {
+    const seguinte = ordem[naOrdem.get(chave) + 1];
+    if (seguinte !== undefined) abrir(seguinte);
+    return abrir(chave);
   };
 
   let desenhadas = 0;
@@ -888,11 +1129,10 @@ async function montarPdf({
         // do começo da bancada.
         const x = pos.x * PT_POR_CM;
         const y = (pos.y - pagina.topo) * PT_POR_CM;
-        if (desenho.vetor) {
-          desenharVetor(doc, desenho, giroDaArte(pos.chave), x, y, pos.largura * PT_POR_CM, pos.altura * PT_POR_CM);
-        } else {
-          doc.image(desenho, x, y, { width: pos.largura * PT_POR_CM, height: pos.altura * PT_POR_CM });
-        }
+        const w = pos.largura * PT_POR_CM;
+        const h = pos.altura * PT_POR_CM;
+        if (desenho.vetor) desenharVetor(doc, desenho, giroDaPeca(pos), x, y, w, h);
+        else desenharImagem(doc, desenho, giroDaPeca(pos), x, y, w, h);
         desenhadas++;
       } catch (err) {
         // uma imagem ruim não pode derrubar o PDF inteiro
@@ -938,6 +1178,8 @@ router.post("/pdf", async (req, res) => {
   // presta vira peça sem marca.
   posicoes.forEach((pos) => {
     if (pos && pos.marca) pos.marca = marcaLimpa(pos.marca, larguraTecido, consumo);
+    // Giro fora de 0/90/180/270 não passa: a posição fica com o giro da arte.
+    if (pos && pos.giro !== undefined && giroDaPosicao(pos) === null) delete pos.giro;
   });
   if (posicoes.some((pos) => pos && pos.marca)) {
     try {
@@ -1086,3 +1328,4 @@ module.exports.paginasDoEncaixe = paginasDoEncaixe;
 module.exports.unidadeDaPagina = unidadeDaPagina;
 module.exports.PT_POR_CM = PT_POR_CM;
 module.exports.LIMITE_PT = LIMITE_PT;
+module.exports.comprimir = comprimir;

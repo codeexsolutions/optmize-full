@@ -26,9 +26,9 @@ import {
 import { lerQuantidadeDoNome } from "../motores/nomeDeArquivo";
 import {
   bancadasDoResultado, cortesEntreBancadas, desenharEncaixe, desenharMidiaVazia,
-  desenharRascunho, prepararPrevias, previaDaArte,
+  alcanceDoRascunho, desenharRascunho, prepararMiniaturas, prepararPrevias, previaDaArte,
 } from "../motores/desenhoDoEncaixe";
-import { arteDesenhadaDaPeca, prepararArtes } from "../motores/exportarEncaixe";
+import { arteDesenhadaDaPeca, chaveDaArte, giroDaPosicao, prepararArtes } from "../motores/exportarEncaixe";
 import { DPI_PREVIA } from "../motores/resolucaoDaArte";
 import {
   chaveDoTrabalho, encaixeApi, pecasParaGuardar, posicoesParaGuardar, traduzirIndicesDoGuardado,
@@ -324,8 +324,6 @@ const encaixeResumo = document.getElementById("encaixe-resumo");
 const encaixeSobras = document.getElementById("encaixe-sobras");
 const encaixeCanvas = document.getElementById("encaixe-canvas");
 const encaixeCanvasVazio = document.getElementById("encaixe-canvas-vazio");
-const encaixePrevia = document.getElementById("encaixe-previa");
-const encaixePreviaCanvas = document.getElementById("encaixe-previa-canvas");
 const btnExportar = document.getElementById("btn-exportar");
 const btnExportarRotulo = document.getElementById("btn-exportar-rotulo");
 const ROTULO_EXPORTAR = "Exportar";
@@ -954,6 +952,10 @@ async function miniaturaDaArte(img) {
     canvas.height = Math.max(1, Math.round(altura * fator));
     const ctx = canvas.getContext("2d");
     await prepararPrevias([img]);
+    // A miniatura da animação da busca já sai daqui, da prévia pronta: quando
+    // a pessoa clicar em Optmizar, a mesa monta com a arte desde o primeiro
+    // quadro, em vez de retângulos esperando a imagem.
+    prepararMiniaturas([img]);
     // A redução de 1.024 para 96 px sai do bitmap, e não do canvas: desenhar a
     // prévia no canvas a subia para a placa de vídeo, e o `toDataURL` esperava
     // por isso. Nesse tamanho a "high" é barata e evita a miniatura serrilhada.
@@ -1355,6 +1357,220 @@ escopo.ouvir(btnLimparPecas, "click", async () => {
 });
 
 /*
+ * ===========================================================================
+ * AS ÁREAS DE TRABALHO — vários encaixes abertos ao mesmo tempo, em abas
+ * ===========================================================================
+ *
+ * Cada aba é um encaixe inteiro: a lista de peças, o risco pronto, a seleção,
+ * o zoom e os campos do tecido. A aba da vez é a que mora nas variáveis de
+ * sempre (`pecasEncaixe`, `ultimoResultado`...): o resto do arquivo não sabe
+ * que existem outras. Trocar de aba é guardar o retrato da atual na sua
+ * entrada de `areas` e vestir as variáveis com o retrato da outra.
+ *
+ * A Reposição abre a sua própria aba (pedido do dono em 2026-10-21): a peça
+ * refeita não se mistura com o trabalho que estava na mesa, e ele continua
+ * lá, intacto, a um clique.
+ *
+ * As abas vivem enquanto o programa está aberto, como a lista sempre viveu.
+ * O nome se troca com dois cliques na aba.
+ *
+ * Não se troca de aba com trabalho rodando (leitura de arquivo ou busca): os
+ * dois escrevem nas variáveis da aba da vez, e trocar no meio faria o
+ * resultado cair na aba errada.
+ */
+const encaixeAreas = document.getElementById("encaixe-areas");
+let proximoIdArea = 1;
+let areas = [{ id: proximoIdArea++, nome: "Área 1", estado: null }];
+let areaAtiva = areas[0].id;
+
+const areaDaVez = () => areas.find((a) => a.id === areaAtiva);
+const ocupadoDemaisParaTrocar = () => carregamentoAtivo || rodadaMarcada;
+
+function retratoDaArea() {
+  return {
+    pecas: pecasEncaixe,
+    resultado: ultimoResultado,
+    antesDoComplemento,
+    selecionadas: [...selecionadas],
+    zoom: zoomDoRisco,
+    campos: {
+      largura: encaixeLarguraInput?.value,
+      espaco: encaixeEspacoInput?.value,
+      espacoY: encaixeEspacoYInput?.value,
+      comprimento: encaixeComprimentoInput?.value,
+      giro: encaixeGiroTodasSelect?.value,
+    },
+  };
+}
+
+/** Veste a tela com o retrato. Sem retrato (aba nova), mesa limpa e os campos como estão. */
+function vestirArea(estado) {
+  pecasEncaixe = estado ? estado.pecas : [];
+  selecionadas.clear();
+  if (estado) estado.selecionadas.forEach((id) => selecionadas.add(id));
+  selecaoNoRisco.clear();
+  atualizarBarraDaSelecao();
+  zoomDoRisco = estado ? estado.zoom : 1;
+  mostrarZoom();
+
+  if (estado) {
+    const voltar = (campo, valor) => { if (campo && valor !== undefined) campo.value = valor; };
+    voltar(encaixeLarguraInput, estado.campos.largura);
+    voltar(encaixeEspacoInput, estado.campos.espaco);
+    voltar(encaixeEspacoYInput, estado.campos.espacoY);
+    voltar(encaixeComprimentoInput, estado.campos.comprimento);
+    voltar(encaixeGiroTodasSelect, estado.campos.giro);
+  }
+
+  limparErroEncaixe();
+  if (ofertaDoGuardado) esconderOfertaDoGuardado();
+
+  ultimoResultado = estado ? estado.resultado : null;
+  antesDoComplemento = estado ? estado.antesDoComplemento : null;
+  // A conferência pela arte para sozinha quando o risco deixa de ser o da
+  // tela (`deveParar`). Se a aba saiu no meio dela, ela recomeça na volta —
+  // senão o Exportar ficaria apagado para sempre esperando uma resposta.
+  if (ultimoResultado && !ultimoResultado.sobreposto
+      && ultimoResultado.conferencia?.estado === "conferindo") {
+    conferirPelaArte(ultimoResultado, true);
+  }
+  if (btnExportar) btnExportar.disabled = !ultimoResultado || !!producaoTravada();
+  if (!btnEncaixar.disabled) atualizarBotaoPrincipal();
+
+  renderPecasEncaixe();
+  if (ultimoResultado) {
+    renderResultado();
+  } else {
+    encaixeResultado.classList.add("hidden");
+    if (encaixeResumoLateral) encaixeResumoLateral.classList.add("hidden");
+    redesenharMesaVazia();
+  }
+}
+
+function trocarDeArea(id) {
+  if (id === areaAtiva) return true;
+  if (ocupadoDemaisParaTrocar()) {
+    mostrarErroEncaixe("Espere o trabalho desta área terminar para trocar de área.", "aviso");
+    return false;
+  }
+  const atual = areaDaVez();
+  const destino = areas.find((a) => a.id === id);
+  if (!destino) return false;
+  atual.estado = retratoDaArea();
+  areaAtiva = destino.id;
+  vestirArea(destino.estado);
+  destino.estado = null; // quem guarda agora são as variáveis da tela
+  renderAreas();
+  return true;
+}
+
+/** Abre uma aba vazia e vai para ela. Devolve `false` se não deu para trocar. */
+function abrirAreaNova(nome) {
+  if (ocupadoDemaisParaTrocar()) {
+    mostrarErroEncaixe("Espere o trabalho desta área terminar para abrir outra.", "aviso");
+    return false;
+  }
+  const nova = { id: proximoIdArea++, nome: nome || `Área ${proximoIdArea - 1}`, estado: null };
+  // Entra logo depois da aba da vez, e não no fim: é ao lado dela que o olho procura.
+  areas.splice(areas.findIndex((a) => a.id === areaAtiva) + 1, 0, nova);
+  areaDaVez().estado = retratoDaArea();
+  areaAtiva = nova.id;
+  vestirArea(null);
+  renderAreas();
+  return true;
+}
+
+async function fecharArea(id) {
+  const area = areas.find((a) => a.id === id);
+  if (!area) return;
+  const daVez = id === areaAtiva;
+  if (daVez && ocupadoDemaisParaTrocar()) {
+    mostrarErroEncaixe("Espere o trabalho desta área terminar para fechá-la.", "aviso");
+    return;
+  }
+  const pecas = daVez ? pecasEncaixe : area.estado?.pecas || [];
+  const comRisco = daVez ? !!ultimoResultado : !!area.estado?.resultado;
+  if ((pecas.length || comRisco)
+      && !(await uiConfirm(`Fechar "${area.nome}"? As peças e o risco desta área saem junto.`))) return;
+
+  // A última aba não some: ela se esvazia, e a mesa continua tendo uma área.
+  if (areas.length === 1) {
+    for (const p of pecas) p.img?.close?.();
+    area.nome = "Área 1";
+    vestirArea(null);
+    renderAreas();
+    return;
+  }
+
+  const indice = areas.indexOf(area);
+  if (daVez) {
+    const vizinha = areas[indice + 1] || areas[indice - 1];
+    areaAtiva = vizinha.id;
+    vestirArea(vizinha.estado);
+    vizinha.estado = null;
+  }
+  areas.splice(indice, 1);
+  for (const p of pecas) p.img?.close?.();
+  renderAreas();
+}
+
+async function renomearArea(id) {
+  const area = areas.find((a) => a.id === id);
+  if (!area) return;
+  const nome = await uiPergunta({
+    titulo: "Nome da área",
+    texto: "Como esta área de trabalho vai se chamar?",
+    valor: area.nome,
+    confirmar: "Salvar",
+  });
+  const limpo = (nome || "").trim().slice(0, 60);
+  if (!limpo) return;
+  area.nome = limpo;
+  renderAreas();
+}
+
+function renderAreas() {
+  if (!encaixeAreas) return;
+  encaixeAreas.innerHTML = areas.map((a) => {
+    const ativa = a.id === areaAtiva;
+    return `
+      <span class="encaixe-area${ativa ? " ativa" : ""}" data-area="${a.id}">
+        <button type="button" class="encaixe-area-nome" data-area-ir="${a.id}"
+                title="${escapeHtml(a.nome)} — dois cliques para renomear"
+                aria-pressed="${ativa ? "true" : "false"}">${escapeHtml(a.nome)}</button>
+        <button type="button" class="encaixe-area-fechar" data-area-fechar="${a.id}"
+                title="Fechar esta área" aria-label="Fechar ${escapeHtml(a.nome)}">×</button>
+      </span>`;
+  }).join("") + `
+    <button type="button" class="encaixe-area-nova" data-area-nova title="Nova área de trabalho" aria-label="Nova área de trabalho">
+      <svg class="size-3.5" viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#plus" /></svg>
+    </button>`;
+  encaixeAreas.querySelector(".encaixe-area.ativa")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+if (encaixeAreas) {
+  escopo.ouvir(encaixeAreas, "click", (e) => {
+    const alvo = e.target.closest("[data-area-ir], [data-area-fechar], [data-area-nova]");
+    if (!alvo) return;
+    if (alvo.dataset.areaNova !== undefined) abrirAreaNova();
+    else if (alvo.dataset.areaFechar) fecharArea(Number(alvo.dataset.areaFechar));
+    else trocarDeArea(Number(alvo.dataset.areaIr));
+  });
+  escopo.ouvir(encaixeAreas, "dblclick", (e) => {
+    const alvo = e.target.closest("[data-area-ir]");
+    if (alvo) renomearArea(Number(alvo.dataset.areaIr));
+  });
+  // A faixa corre de lado: a roda do mouse anda para baixo, então vira lado aqui também.
+  escopo.ouvir(encaixeAreas, "wheel", (e) => {
+    if (e.deltaY === 0 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    if (encaixeAreas.scrollWidth <= encaixeAreas.clientWidth) return;
+    e.preventDefault();
+    encaixeAreas.scrollLeft += e.deltaY;
+  }, { passive: false });
+  renderAreas();
+}
+
+/*
  * A MESA VAZIA É CLICÁVEL, INTEIRA: o convite "Arraste seus arquivos aqui"
  * cobre a mesa toda, e clicar em qualquer ponto dela abre o seletor. Ele só
  * aparece enquanto não há risco (ver `producao.css`), então não rouba o clique
@@ -1714,10 +1930,21 @@ function renderAvisosDeCor() {
   encaixeAvisoCor.innerHTML = `
     <p class="aviso-cor-titulo">
       ${quantos === 1 ? "1 arte pode sair com a cor diferente" : `${quantos} artes podem sair com a cor diferente`}
-      — o desenho e a medida estão certos.
     </p>
     <div class="aviso-cor-tira">${cartoes}</div>`;
   encaixeAvisoCor.classList.remove("hidden");
+
+  // A tira corre de lado, mas a roda do mouse anda para baixo: a rolada em
+  // cima dela vira rolada para o lado. Quando ela já chegou na ponta, a roda
+  // volta a rolar a página, para não prender o mouse ali.
+  const tira = encaixeAvisoCor.querySelector(".aviso-cor-tira");
+  tira?.addEventListener("wheel", (e) => {
+    if (e.deltaY === 0 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    const fim = tira.scrollWidth - tira.clientWidth;
+    if ((e.deltaY < 0 && tira.scrollLeft <= 0) || (e.deltaY > 0 && tira.scrollLeft >= fim)) return;
+    e.preventDefault();
+    tira.scrollLeft += e.deltaY;
+  }, { passive: false });
 }
 
 /**
@@ -1771,7 +1998,7 @@ function renderPecasEncaixe() {
         clique de marcar, e a ordem do despachante deixa de ser o que segura
         a coisa de pé.
       -->
-      <div class="flex items-stretch">
+      <div class="flex items-end">
       <div class="peca-linha min-w-0 flex-1 px-3 py-2${selecionadas.has(peca.id) ? " marcada" : ""}" data-sel-peca="${peca.id}"
            role="button" tabindex="0" aria-pressed="${selecionadas.has(peca.id) ? "true" : "false"}"
            aria-label="${escapeHtml(peca.nome)} — marcar para agrupar">
@@ -1802,24 +2029,25 @@ function renderPecasEncaixe() {
 
         <input type="number" min="1" step="1" value="${peca.qtd}" data-campo="qtd" data-id="${peca.id}"
                aria-label="Cópias de ${escapeHtml(peca.nome)}"
-               class="w-12! shrink-0 px-1.5! py-1! text-center! text-[0.8rem]!" />
+               class="size-8! min-h-8! shrink-0 self-end rounded-md! p-0! text-center! text-[0.8rem]!" />
         </div>
       </div>
 
       <!--
         O BOTÃO DE TIRAR, FORA DA CAIXA DO ITEM.
 
-        Uma coluna de 32px colada na direita, da altura inteira da linha: o
-        alvo deixa de ser um quadradinho de 24 e passa a ser a faixa toda, que
-        é o que se acerta com o mouse sem mirar. O \`border-l\` diz, sem
-        palavra nenhuma, que ali começa outra coisa.
+        Um quadrado de 32px, do mesmo tamanho do campo de cópias ao lado,
+        para os dois lerem como um par. Os dois se alinham pelo pé: o campo
+        no fim da linha do item, o × no fim da linha toda, com o mesmo
+        \`py-2\` de folga embaixo — assim ficam na mesma altura mesmo quando o
+        selo de cor empurra o item para baixo.
 
-        O vermelho só aparece no passar do mouse. Uma coluna vermelha fixa ao
-        lado de cada peça faria a lista parecer um monte de erro.
+        O vermelho só aparece no passar do mouse. Um × vermelho fixo ao lado
+        de cada peça faria a lista parecer um monte de erro.
       -->
       <button type="button" data-del-peca="${peca.id}" aria-label="Tirar ${escapeHtml(peca.nome)}"
               title="Tirar esta peça do encaixe"
-              class="grid w-8 shrink-0 place-items-center self-stretch border-l border-linha text-[13px] leading-none text-tinta-apagada transition-colors hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]">×</button>
+              class="mr-2 mb-2 grid size-8 shrink-0 place-items-center rounded-md border border-linha text-[13px] leading-none text-tinta-apagada transition-colors hover:border-[var(--danger)]/40 hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]">×</button>
       </div>
 
       <div data-detalhes="${peca.id}" class="hidden border-t border-linha bg-painel-suave px-3 py-2.5">
@@ -2543,136 +2771,209 @@ function atualizarTempoDoCarregamento() {
 
 /*
  * ===========================================================================
- * A ANIMAÇÃO DA BUSCA — peças entrando e se encaixando
+ * AS TENTATIVAS NA MESA — o encaixe aparecendo enquanto é procurado
  * ===========================================================================
  *
- * Fica no lugar do poço de tetris, dentro da caixa de carregamento, enquanto o
- * motor procura. É ILUSTRAÇÃO, e está escrito aqui em voz alta para ninguém
- * confundir depois: as peças que entram na tela NÃO são as que o motor está
- * testando neste instante.
+ * Enquanto o motor procura, a própria mesa mostra o que ele está testando.
+ * Cada worker manda o encaixe da vez (o "fantasma", duas vezes por segundo) e
+ * cada recorde (ver "O DESENHO AO VIVO", em `encaixeWorker.js`), e a mesa
+ * MONTA cada um deles: as peças aparecem uma a uma, direto no lugar que o
+ * motor deu a elas. Fechado o arranjo, vem o próximo, quase sem pausa.
  *
- * Houve uma tentativa de mostrar as tentativas de verdade — o motor avisando
- * cada encaixe experimentado, o worker transferindo as posições, a tela
- * desenhando. Ela não chegou à tela e foi trocada por isto a pedido: o que se
- * quer aqui é dizer "estou trabalhando" de um jeito que combine com o que o
- * programa faz, e para isso a ilustração basta e custa quase nada.
+ * A ANIMAÇÃO NUNCA PARA. Há trechos em que o motor não manda quadro nenhum —
+ * o "Encolhendo o rolo" roda noutros workers, que não desenham —, e uma mesa
+ * congelada parece programa travado. Por isso os últimos quadros ficam
+ * guardados (`QUADROS_GUARDADOS`) e, sem quadro novo, a mesa volta a montar
+ * os que já tem. São todos tentativas de verdade, com as peças do trabalho.
  *
- * O que ela desenha: um rolo de tecido, e peças que chegam de fora e vão se
- * assentando nele, uma a uma, até fechar. Cheio, recomeça com outro arranjo.
+ * É RASCUNHO DE PROPÓSITO (`desenharRascunho`): a arte é uma miniatura de
+ * poucos pixels, sem nome, régua ou contorno, e só os primeiros
+ * `RASCUNHO_ATE_CM` do rolo. Quando a busca termina, o `renderResultado`
+ * desenha o encaixe final com a qualidade de sempre — é ele que vai para o PDF.
  *
- * O CUSTO É PROPOSITADAMENTE BAIXO. A busca está nos workers, mas a thread da
- * tela precisa continuar atendendo o botão de parar, e é a mesma thread que
- * desenha aqui: são retângulos, sem imagem, sem sombra e sem filtro, num
- * canvas de 396x96.
+ * O aviso de carregamento vira um cartão no canto inferior direito assim que o
+ * primeiro quadro chega (`.mostrando-previa`, em producao.css), e o resto da
+ * tela continua sem aceitar clique. Antes disso não há nada na mesa para ver,
+ * e o véu com o poço de tetris segura a espera.
  */
 
-const PREVIA_LARGURA = 396;
-const PREVIA_ALTURA = 96;
+/** Quanto do rolo o rascunho mostra: os primeiros 5 m. */
+const RASCUNHO_ATE_CM = 500;
+/** Quantas tentativas ficam guardadas para a mesa remontar quando o motor cala. */
+const QUADROS_GUARDADOS = 12;
+/** Quanto leva para montar um arranjo inteiro, e a pausa com ele pronto. */
+const MONTAGEM_MS = 450;
+const PAUSA_MONTADO_MS = 120;
 
 let lacoDaPrevia = 0;
-let pecasDaAnimacao = [];
-let inicioDaAnimacao = 0;
+let previaAberta = false;
+/** O risco estava na tela antes da busca — para devolver se ela não der em nada. */
+let riscoVisivelAntes = false;
+/** As últimas tentativas recebidas, a que ainda não foi montada e o melhor consumo. */
+let quadrosGuardados = [];
+let quadroNaoMontado = null;
+let consumoDoMelhor = null;
+let ultimoQuadroDaThreadEm = 0;
+/** O arranjo que a mesa está montando agora. */
+let montagem = null;
+let proximoGuardado = 0;
 
 /**
- * Monta um arranjo de peças que preenche o rolo em fileiras.
+ * Recebe um quadro do motor, nos dois formatos em que ele chega:
  *
- * Não é o encaixe do motor e não tenta ser: é um empacotamento simples, em
- * linhas, com larguras sorteadas. O que ele precisa entregar é a LEITURA de
- * peças de tamanhos diferentes se ajeitando até não sobrar vão — que é o que a
- * pessoa reconhece como encaixe.
+ *   dos workers, `(msg)`: o quadro já pronto e estrangulado lá
+ *   (`encaixeParalelo.js`), com sete números por peça;
+ *   da busca numa thread só, `(especie, resultado)`: o motor chama em TODA
+ *   tentativa, então o estrangulamento é aqui — e o quadro é montado igual.
  */
-function sortearArranjo() {
-  const pecas = [];
-  const margem = 6;
-  const alturaUtil = PREVIA_ALTURA - margem * 2;
-  const fileiras = 3;
-  const altura = alturaUtil / fileiras - 4;
-  for (let f = 0; f < fileiras; f++) {
-    let x = margem;
-    const y = margem + f * (altura + 4);
-    while (x < PREVIA_LARGURA - margem - 12) {
-      const largura = 18 + Math.random() * 46;
-      const cabe = Math.min(largura, PREVIA_LARGURA - margem - x);
-      if (cabe < 12) break;
-      pecas.push({
-        x, y, largura: cabe - 3, altura,
-        // De onde ela vem: fora da tela, pelo lado mais perto.
-        deX: x < PREVIA_LARGURA / 2 ? -60 - Math.random() * 80 : PREVIA_LARGURA + 60 + Math.random() * 80,
-        deY: y + (Math.random() - 0.5) * 50,
-        // O atraso escalonado é o que faz parecer uma peça DEPOIS da outra, em
-        // vez de um bloco inteiro deslizando junto.
-        atraso: pecas.length * 90,
-      });
-      x += cabe;
+function receberTentativa(especieOuQuadro, resultado, larguraTecido) {
+  if (!previaAberta) return;
+  let quadro = especieOuQuadro;
+  if (typeof especieOuQuadro === "string") {
+    const agora = Date.now();
+    if (especieOuQuadro === "fantasma" && agora - ultimoQuadroDaThreadEm < 500) return;
+    ultimoQuadroDaThreadEm = agora;
+    const posicoes = resultado.posicoes || [];
+    const pecas = new Float32Array(posicoes.length * 7);
+    posicoes.forEach((pos, i) => {
+      pecas.set([pos.x, pos.y, pos.largura, pos.altura, pos.rot || 0, pos.girado ? 1 : 0,
+        pos.item ? pos.item.indice : -1], i * 7);
+    });
+    quadro = {
+      especie: especieOuQuadro,
+      consumo: resultado.consumo,
+      larguraTecido,
+      inteiro: !resultado.naoEncaixadas || resultado.naoEncaixadas.length === 0,
+      pecas,
+    };
+  }
+  if (!quadro || !quadro.pecas || !(quadro.larguraTecido > 0) || !(quadro.consumo > 0)) return;
+  if (quadro.especie === "recorde" && quadro.inteiro
+      && (consumoDoMelhor == null || quadro.consumo < consumoDoMelhor)) {
+    consumoDoMelhor = quadro.consumo;
+  }
+  quadrosGuardados.push(quadro);
+  if (quadrosGuardados.length > QUADROS_GUARDADOS) quadrosGuardados.shift();
+  quadroNaoMontado = quadro;
+}
+
+/**
+ * Começa a montar um arranjo: o mais novo que ainda não foi montado, ou, com o
+ * motor calado, o próximo dos guardados, em roda.
+ */
+function comecarMontagem(agora) {
+  let quadro = quadroNaoMontado;
+  quadroNaoMontado = null;
+  if (!quadro) {
+    if (!quadrosGuardados.length) return null;
+    proximoGuardado = (proximoGuardado + 1) % quadrosGuardados.length;
+    quadro = quadrosGuardados[proximoGuardado];
+  }
+  // Só o que aparece na mesa no zoom de 100%, e nunca além dos primeiros 5 m.
+  const vista = Math.min(RASCUNHO_ATE_CM, quadro.consumo,
+    alcanceDoRascunho(encaixeCanvas, quadro.larguraTecido) || Infinity);
+  // As peças entram na ordem do rolo: da que começa mais perto do início.
+  const total = Math.floor(quadro.pecas.length / 7);
+  const ordem = [];
+  for (let i = 0; i < total; i++) if (quadro.pecas[i * 7 + 1] < vista) ordem.push(i);
+  ordem.sort((a, b) => quadro.pecas[a * 7 + 1] - quadro.pecas[b * 7 + 1]);
+  const chegada = new Float32Array(total).fill(Infinity);
+  const passo = ordem.length > 1 ? MONTAGEM_MS / (ordem.length - 1) : 0;
+  ordem.forEach((indice, k) => { chegada[indice] = k * passo; });
+  return { quadro, vista, chegada, inicio: agora, fim: MONTAGEM_MS + PAUSA_MONTADO_MS };
+}
+
+/*
+  UM TIMER, E NÃO `requestAnimationFrame`. O Windows segura o rAF de janela que
+  ele acha encoberta — medido: 2 a 3 quadros por segundo —, e a montagem, que
+  troca de peça a cada poucos milissegundos, virava um slide.
+
+  E O RITMO SE AJUSTA À MÁQUINA. Num PC fraco, com vídeo integrado, um quadro
+  da mesa pode custar 10 ou 20 ms — e é a mesma linha que atende o "Parar" e
+  recebe o andamento dos workers. O custo de cada quadro é medido e o próximo
+  espera quatro vezes a média dele: a animação nunca come mais que um quarto
+  da linha principal. Numa máquina boa continua em 30 quadros por segundo.
+*/
+const INTERVALO_DA_PREVIA_MS = 33;
+const INTERVALO_MAXIMO_DA_PREVIA_MS = 250;
+let custoMedioDaPrevia = 0;
+
+function agendarPrevia() {
+  const intervalo = Math.min(INTERVALO_MAXIMO_DA_PREVIA_MS,
+    Math.max(INTERVALO_DA_PREVIA_MS, custoMedioDaPrevia * 4));
+  lacoDaPrevia = setTimeout(passoDaPrevia, intervalo);
+}
+
+function passoDaPrevia() {
+  const antes = performance.now();
+  pintarPrevia();
+  custoMedioDaPrevia = custoMedioDaPrevia * 0.8 + (performance.now() - antes) * 0.2;
+  // `fecharPrevia` zera o laço: aí não há próximo quadro.
+  if (lacoDaPrevia) agendarPrevia();
+}
+
+function pintarPrevia() {
+  const agora = performance.now();
+  // A busca devolveu: daqui em diante a mesa é do resultado de verdade.
+  if (resultadoGeradoNesteCarregamento) return;
+
+  if (!montagem || agora - montagem.inicio > montagem.fim) {
+    montagem = comecarMontagem(agora);
+    if (!montagem) return;
+  }
+  if (!encaixeCarregamento.classList.contains("mostrando-previa")) {
+    encaixeCarregamento.classList.add("mostrando-previa");
+    encaixeResultado.classList.remove("hidden");
+    // O rascunho é sempre no zoom de 100%: a caixa volta ao começo do rolo.
+    const caixaDaMesa = encaixeCanvas.parentElement;
+    if (caixaDaMesa) { caixaDaMesa.scrollLeft = 0; caixaDaMesa.scrollTop = 0; }
+  }
+
+  const { quadro, vista, chegada, inicio } = montagem;
+  const decorrido = agora - inicio;
+  desenharRascunho(encaixeCanvas, {
+    larguraTecido: quadro.larguraTecido, ateCm: vista,
+    metros: consumoDoMelhor, pecas: quadro.pecas, artes: pecasEncaixe,
+    // Fora (`null`) até a vez dela; dali em diante, no lugar.
+    momento: (i) => (decorrido >= chegada[i] ? 0 : null),
+  });
+}
+
+function abrirPrevia() {
+  previaAberta = true;
+  prepararMiniaturas(pecasEncaixe.map((peca) => peca.img));
+  riscoVisivelAntes = !encaixeResultado.classList.contains("hidden");
+  quadrosGuardados = [];
+  quadroNaoMontado = null;
+  consumoDoMelhor = null;
+  montagem = null;
+  proximoGuardado = 0;
+  ultimoQuadroDaThreadEm = 0;
+  custoMedioDaPrevia = 0;
+  if (!lacoDaPrevia) agendarPrevia();
+}
+
+/** Desliga a prévia. Sem isto, o timer continua rodando depois da busca. */
+function fecharPrevia() {
+  if (lacoDaPrevia) clearTimeout(lacoDaPrevia);
+  lacoDaPrevia = 0;
+  const desenhou = encaixeCarregamento && encaixeCarregamento.classList.contains("mostrando-previa");
+  if (encaixeCarregamento) encaixeCarregamento.classList.remove("mostrando-previa");
+  quadrosGuardados = [];
+  quadroNaoMontado = null;
+  montagem = null;
+  if (!previaAberta) return;
+  previaAberta = false;
+  // A busca não deu resultado (erro, peça que não cabe): o rascunho não pode
+  // ficar na mesa fingindo ser encaixe. Volta o que estava antes.
+  if (desenhou && !resultadoGeradoNesteCarregamento) {
+    if (riscoVisivelAntes && ultimoResultado) {
+      redesenharEncaixe();
+    } else {
+      encaixeResultado.classList.add("hidden");
+      redesenharMesaVazia();
     }
   }
-  return pecas;
-}
-
-/** Suaviza o movimento: rápido no começo, parando de leve no lugar. */
-const suavizar = (t) => 1 - Math.pow(1 - t, 3);
-
-function pintarPrevia(agora) {
-  lacoDaPrevia = requestAnimationFrame(pintarPrevia);
-  if (!encaixePreviaCanvas) return;
-  if (!inicioDaAnimacao) inicioDaAnimacao = agora;
-  const decorrido = agora - inicioDaAnimacao;
-
-  const ctx = encaixePreviaCanvas.getContext("2d");
-  ctx.clearRect(0, 0, PREVIA_LARGURA, PREVIA_ALTURA);
-
-  // O rolo.
-  ctx.fillStyle = "rgba(255,255,255,0.03)";
-  ctx.fillRect(0, 0, PREVIA_LARGURA, PREVIA_ALTURA);
-  ctx.strokeStyle = "rgba(255,255,255,0.10)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(0.5, 0.5, PREVIA_LARGURA - 1, PREVIA_ALTURA - 1);
-
-  const DURACAO = 620;
-  let assentadas = 0;
-  for (const p of pecasDaAnimacao) {
-    const t = Math.max(0, Math.min(1, (decorrido - p.atraso) / DURACAO));
-    if (t <= 0) continue;
-    if (t >= 1) assentadas++;
-    const e = suavizar(t);
-    const x = p.deX + (p.x - p.deX) * e;
-    const y = p.deY + (p.y - p.deY) * e;
-    // A peça chega apagada e ACENDE ao assentar: é o que marca o encaixe dela
-    // sem precisar de um efeito à parte.
-    ctx.fillStyle = `rgba(255,133,86,${0.14 + e * 0.28})`;
-    ctx.fillRect(x, y, p.largura, p.altura);
-    ctx.strokeStyle = `rgba(255,133,86,${0.25 + e * 0.45})`;
-    ctx.strokeRect(x + 0.5, y + 0.5, p.largura - 1, p.altura - 1);
-  }
-
-  // Cheio o rolo, espera um instante e recomeça com outro arranjo: a busca
-  // continua, e uma tela parada diria que ela travou.
-  if (pecasDaAnimacao.length && assentadas === pecasDaAnimacao.length
-      && decorrido > pecasDaAnimacao[pecasDaAnimacao.length - 1].atraso + DURACAO + 700) {
-    pecasDaAnimacao = sortearArranjo();
-    inicioDaAnimacao = agora;
-  }
-}
-
-/** Liga a animação e troca o poço de tetris por ela. */
-function abrirPrevia() {
-  if (!encaixePreviaCanvas) return;
-  encaixePreviaCanvas.width = PREVIA_LARGURA;
-  encaixePreviaCanvas.height = PREVIA_ALTURA;
-  pecasDaAnimacao = sortearArranjo();
-  inicioDaAnimacao = 0;
-  if (encaixeCarregamento) encaixeCarregamento.classList.add("mostrando-previa");
-  if (encaixePrevia) encaixePrevia.classList.remove("hidden");
-  if (!lacoDaPrevia) lacoDaPrevia = requestAnimationFrame(pintarPrevia);
-}
-
-/** Desliga a animação. Sem isto, o rAF continua rodando depois da busca. */
-function fecharPrevia() {
-  if (lacoDaPrevia) cancelAnimationFrame(lacoDaPrevia);
-  lacoDaPrevia = 0;
-  pecasDaAnimacao = [];
-  if (encaixeCarregamento) encaixeCarregamento.classList.remove("mostrando-previa");
-  if (encaixePrevia) encaixePrevia.classList.add("hidden");
 }
 
 
@@ -3185,6 +3486,7 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
       tentativasPorLote: loteGrande ? 1 : 8,
       deveParar: () => pararBusca,
       aoProgredir: (estado) => mostrarAndamento(estado, aprendido),
+      aoDesenhar: (especieOuQuadro, resultado) => receberTentativa(especieOuQuadro, resultado, larguraTecido),
     }), { semJanela: true });
     resultadoGeradoNesteCarregamento = true;
 
@@ -3601,11 +3903,9 @@ function renderResultado() {
         <span class="font-mono text-2xl leading-none font-bold text-ambar">${formatarNumero(midia / 100, 2)}</span>
         <span class="text-sm font-semibold text-ambar">m</span>
         <span class="text-[11px] text-tinta-apagada">em ${r.larguraTecido} cm</span>
-      </div>
-      <p class="mt-1.5 mb-0 text-[11px] text-tinta-fraca">
-        ${formatarPorcento(aproveitamento)} de aproveitamento · ${r.posicoes.length} peça(s) encaixada(s)${
-        bancadas.length > 1 ? ` · ${bancadas.length} bancadas` : ""}
-      </p>
+      </div>${
+      bancadas.length > 1 ? `
+      <p class="mt-1.5 mb-0 text-[11px] text-tinta-fraca">${bancadas.length} bancadas</p>` : ""}
     `;
   }
 
@@ -3918,12 +4218,13 @@ async function escolherPastaDeSaida(quantos) {
 /**
  * O PDF em tamanho real.
  *
- * O trabalho aqui é preparar as imagens: cada peça é desenhada uma vez por
- * rotação usada, na resolução de impressão, e o servidor só posiciona esses
- * desenhos na página (ver `servidor/encaixe-pdf.js`). Desenhar a peça já
- * girada evita depender de rotação dentro do PDF, que é onde um sinal trocado
- * passa despercebido até alguém imprimir 12 metros de tecido com as peças de
- * cabeça para baixo.
+ * O trabalho aqui é mandar as artes: o ORIGINAL de cada peça, uma vez por
+ * peça, de pé (ver `prepararArtes`), e o giro de cada posição junto com ela.
+ * O servidor embute a arte uma vez e a põe em cada lugar com o giro na matriz
+ * da página (ver "O GIRO É DA PÁGINA, NÃO DOS PIXELS", em
+ * servidor/encaixe-pdf.js). Um sinal trocado ali imprimiria 12 metros de
+ * tecido com as peças de cabeça para baixo — e é por isso que a bancada
+ * (`conferir-cor-e-vetor.mjs`) desenha o PDF e confere onde cada giro caiu.
  *
  * ---------------------------------------------------------------------------
  * COM BANCADA, UM ARQUIVO POR BANCADA — E NÃO UM ARQUIVO COM VÁRIAS PÁGINAS
@@ -3986,15 +4287,16 @@ async function baixarEncaixeEmPdf() {
 
     // Cada arte sobe sozinha, em binário. Mandá-las dentro do JSON em base64
     // engordava tudo em um terço e derrubava o servidor com arte de verdade.
-    // Sobem UMA vez, mesmo que saiam dez arquivos: são as mesmas peças.
+    // Sobem UMA vez por peça, mesmo que ela apareça em quatro giros e saiam dez
+    // arquivos: o giro vai em cada posição (ver `chaveDaArte`).
     const sessao = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
     let enviados = 0;
-    for (const [chave, { arte, giro, peca }] of artes) {
+    for (const [chave, { arte, peca }] of artes) {
       // O original vai como está; o que o servidor não abre (formato que ele
       // não conhece, PDF quebrado) vai desenhado, que é o caminho antigo.
-      if (!(await encaixeApi.mandarArte(sessao, chave, arte, giro))) {
+      if (!(await encaixeApi.mandarArte(sessao, chave, arte))) {
         const desenhada = await arteDesenhadaDaPeca(peca);
-        if (!(await encaixeApi.mandarArte(sessao, chave, desenhada, giro))) {
+        if (!(await encaixeApi.mandarArte(sessao, chave, desenhada))) {
           throw new Error(`o servidor não conseguiu abrir a arte "${peca.nome || chave}".`);
         }
       }
@@ -4006,7 +4308,9 @@ async function baixarEncaixeEmPdf() {
     const visao = visaoDosPedidos(r);
     const indiceDa = new Map(r.posicoes.map((p, i) => [p, i]));
     const daPeca = (p, deslocamento) => ({
-      chave: `${p.item.indice}-${p.rot || (p.girado ? 90 : 0)}`,
+      chave: chaveDaArte(p.item),
+      // O giro total da peça: o servidor o aplica na matriz da página.
+      giro: giroDaPosicao(p),
       x: p.x,
       y: p.y - deslocamento,
       largura: p.largura,
@@ -5286,8 +5590,18 @@ return {
    await mandarMoldeParaOEncaixe(nome, tamanho, pecas, unidades);
  },
 
- async mandarProjeto({ nome, pecas, unidades, ajustes }) {
+ async mandarProjeto({ nome, pecas, unidades, ajustes, novaArea = false }) {
    if (carregamentoAtivo) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
+   // A Reposição pede área própria. Com a área da vez vazia, ela mesma serve
+   // (e ganha o nome); com trabalho nela, abre outra ao lado.
+   if (novaArea) {
+     if (pecasEncaixe.length || ultimoResultado) {
+       if (!abrirAreaNova(nome)) throw new Error("Aguarde o trabalho atual terminar antes de enviar mais peças.");
+     } else {
+       areaDaVez().nome = nome;
+       renderAreas();
+     }
+   }
    // Sem pergunta: numa lista vazia vale o pedido guardado de cada peça (a
    // Reposição traz); numa lista com peças, tudo cai no pedido do último lote
    // — o P1 de um rolo antigo não é o P1 de hoje (`pedidosDaReposicao`).
@@ -5352,9 +5666,17 @@ return {
   * de ajuste não contam: têm valor padrão e se preenchem de novo num
   * segundo.
   */
- temTrabalho() { return pecasEncaixe.length > 0 || !!ultimoResultado; },
+ temTrabalho() {
+   // As outras abas contam: sair do Encaixe não pode jogar fora uma área guardada.
+   return pecasEncaixe.length > 0 || !!ultimoResultado
+     || areas.some((a) => a.estado && (a.estado.pecas.length > 0 || a.estado.resultado));
+ },
 
- destruir() { pararBusca = true; escopo.destruir(); derrubarPool(); derrubarPoolPrepara(); for (const p of pecasEncaixe) p.img?.close?.(); }
+ destruir() {
+   pararBusca = true; escopo.destruir(); derrubarPool(); derrubarPoolPrepara();
+   for (const p of pecasEncaixe) p.img?.close?.();
+   for (const a of areas) for (const p of a.estado?.pecas || []) p.img?.close?.();
+ }
 };
 } catch (erro) { escopo.destruir(); throw erro; }
 }

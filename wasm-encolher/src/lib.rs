@@ -31,6 +31,22 @@
 //! enquanto ela roda, então o botão de parar encerra o worker à força, e o que
 //! já foi relatado é o que fica.
 //!
+//! O QUE MAIS VOLTA: O ANDAMENTO
+//!
+//! Melhora é rara — umas poucas por fase —, e entre uma e outra a tela não
+//! tinha o que mostrar: o contador de tentativas congelava e parecia que a
+//! busca tinha parado. O terminador (`Terminador`, abaixo) é consultado em
+//! cada volta dos laços do sparrow, e é ele que conta as voltas e chama
+//! `andamento(voltas)` umas quatro vezes por segundo.
+//!
+//! O PRAZO É DURO
+//!
+//! O sparrow só arma o relógio de cada fase DEPOIS de montar o encaixe de
+//! partida, e cada fase recebe o seu pedaço inteiro. Somados, passavam do
+//! tempo pedido — medido: 72 s pedidos, 90 s na tela. O terminador também
+//! guarda a hora-limite da chamada inteira, e diz "pare" quando ela chega,
+//! seja qual for a fase.
+//!
 //! UMA THREAD SÓ
 //!
 //! O sparrow reparte o trabalho com o rayon. Em wasm32 sem threads o rayon
@@ -48,7 +64,8 @@ use sparrow::EPOCH;
 use sparrow::config::DEFAULT_SPARROW_CONFIG;
 use sparrow::optimizer::optimize;
 use sparrow::util::listener::{ReportType, SolutionListener};
-use sparrow::util::terminator::BasicTerminator;
+use sparrow::util::terminator::{BasicTerminator, Terminator};
+use std::cell::Cell;
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
 
@@ -85,6 +102,42 @@ impl SolutionListener for RelatarAoJs<'_> {
     }
 }
 
+/// O terminador do sparrow com duas coisas a mais: o prazo da chamada inteira
+/// e a contagem das voltas, avisada ao JavaScript (ver o cabeçalho).
+struct Terminador<'a> {
+    fase: BasicTerminator,
+    prazo: jagua_rs::Instant,
+    voltas: Cell<u64>,
+    ultimo_aviso: Cell<jagua_rs::Instant>,
+    andamento: &'a js_sys::Function,
+}
+
+/// De quanto em quanto tempo o andamento atravessa para o JavaScript.
+const INTERVALO_DO_ANDAMENTO: Duration = Duration::from_millis(250);
+
+impl Terminator for Terminador<'_> {
+    fn kill(&self) -> bool {
+        let voltas = self.voltas.get() + 1;
+        self.voltas.set(voltas);
+        let agora = jagua_rs::Instant::now();
+        if agora.duration_since(self.ultimo_aviso.get()) >= INTERVALO_DO_ANDAMENTO {
+            self.ultimo_aviso.set(agora);
+            // Aviso, e não ordem: erro do lado de lá não para a busca.
+            let _ = self.andamento.call1(&JsValue::NULL, &JsValue::from_f64(voltas as f64));
+        }
+        agora > self.prazo || self.fase.kill()
+    }
+
+    fn new_timeout(&mut self, timeout: Duration) {
+        self.fase.new_timeout(timeout);
+    }
+
+    fn timeout_at(&self) -> Option<jagua_rs::Instant> {
+        // O que chegar primeiro: o fim da fase ou o da chamada.
+        Some(self.fase.timeout_at().map_or(self.prazo, |t| t.min(self.prazo)))
+    }
+}
+
 fn erro(e: impl std::fmt::Display) -> JsValue {
     JsValue::from_str(&e.to_string())
 }
@@ -103,6 +156,8 @@ fn erro(e: impl std::fmt::Display) -> JsValue {
 /// - `trabalhadores`: os "workers" do separador do sparrow. Em wasm32 eles se
 ///   revezam numa thread só.
 /// - `relatar(json, largura)`: chamada a cada encaixe válido mais curto.
+/// - `andamento(voltas)`: quantas voltas o sparrow já deu, umas quatro vezes
+///   por segundo.
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)]
 pub fn encolher(
@@ -114,7 +169,10 @@ pub fn encolher(
     separacao: f64,
     trabalhadores: u32,
     relatar: &js_sys::Function,
+    andamento: &js_sys::Function,
 ) -> Result<String, JsValue> {
+    // O relógio da chamada inteira começa aqui, antes de importar e montar.
+    let inicio = jagua_rs::Instant::now();
     let ext_instancia: ExtSPInstance = serde_json::from_str(instancia).map_err(erro)?;
 
     let mut config = DEFAULT_SPARROW_CONFIG;
@@ -144,7 +202,13 @@ pub fn encolher(
 
     let rng = Xoshiro256PlusPlus::seed_from_u64(semente.max(0.0) as u64);
     let mut ouvinte = RelatarAoJs { relatar, melhor: f32::INFINITY };
-    let mut terminador = BasicTerminator::new();
+    let mut terminador = Terminador {
+        fase: BasicTerminator::new(),
+        prazo: inicio + total,
+        voltas: Cell::new(0),
+        ultimo_aviso: Cell::new(inicio),
+        andamento,
+    };
     let solucao = optimize(
         inst.clone(),
         rng,

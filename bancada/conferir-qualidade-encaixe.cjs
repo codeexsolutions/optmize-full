@@ -2,8 +2,9 @@
  * Confere, num navegador real, o que a tela manda ao servidor para o PDF.
  *
  * Desde 2026-10-19 a tela não gira nem redesenha a arte (ver o cabeçalho de
- * src/motores/exportarEncaixe.js): manda os bytes do original e o giro, e o
- * servidor gira (conferido em bancada/conferir-cor-e-vetor.mjs). O que sobra
+ * src/motores/exportarEncaixe.js): manda os bytes do original, uma arte por
+ * peça, e o giro em cada posição; o PDF gira na página (conferido em
+ * bancada/conferir-cor-e-vetor.mjs). O que sobra
  * de pixel aqui é a remoção de fundo, e ela tem de manter a cor do arquivo,
  * o perfil dele e a borda suave.
  */
@@ -63,19 +64,25 @@ async function main() {
       const vetor = await arteQualidade.arteDaPeca({ ...peca, pdfOriginal: blob(pdf, 'application/pdf') });
       const desenhada = await arteQualidade.arteDesenhadaDaPeca(peca);
 
-      // A peça girada ANTES do encaixe (`rotacaoBase`) vai com o giro total, e
-      // a chave continua sendo a do giro do encaixe — é por ela que o PDF
-      // procura a arte. A arte em si vai sem giro nenhum.
+      // A peça girada ANTES do encaixe (`rotacaoBase`) vai com o giro total NA
+      // POSIÇÃO, e a arte é uma por peça — é pela chave da peça que o PDF a
+      // procura. A arte em si vai sem giro nenhum.
       const comBase = [];
       const combinacoes = [[90, 0], [90, 90], [270, 180], [180, 180], [0, 270]];
-      const artesComBase = await arteQualidade.prepararArtes(combinacoes.map(([base, rot], indice) => ({
+      const posicoesComBase = combinacoes.map(([base, rot], indice) => ({
         item: { ...peca, indice, rotacaoBase: base }, rot,
-      })));
+      }));
+      const artesComBase = await arteQualidade.prepararArtes(posicoesComBase);
       for (let indice = 0; indice < combinacoes.length; indice++) {
         const [base, rot] = combinacoes[indice];
-        const arte = artesComBase.get(`${indice}-${rot}`);
-        comBase.push({ base, rot, giro: arte && arte.giro, bytes: arte ? await base64(arte.arte) : null });
+        const posicao = posicoesComBase[indice];
+        const arte = artesComBase.get(arteQualidade.chaveDaArte(posicao.item));
+        comBase.push({ base, rot, giro: arteQualidade.giroDaPosicao(posicao), bytes: arte ? await base64(arte.arte) : null });
       }
+      // A mesma peça em giros diferentes, em cópias diferentes: UMA arte.
+      const umaPorPeca = (await arteQualidade.prepararArtes([0, 90, 180, 270].map((rot, k) => ({
+        item: { ...peca, indice: 9, copia: k + 1 }, rot,
+      })))).size;
 
       const recortada = await arteQualidade.arteDaPeca({ ...peca,
         arquivoOriginal: blob(fundo, 'image/png'), fundoNaExportacao: 'auto' });
@@ -110,7 +117,7 @@ async function main() {
         direta: await base64(direta.arte), diretaVetor: direta.vetor,
         jpegDireto: await base64(jpegDireto.arte),
         vetor: { vetor: vetor.vetor, bytes: await base64(vetor.arte) },
-        desenhada: await base64(desenhada), comBase,
+        desenhada: await base64(desenhada), comBase, umaPorPeca,
         recortada: await base64(recortada.arte), redonda: await base64(redonda.arte),
         previaValida, recado,
       };
@@ -134,10 +141,11 @@ async function main() {
     assert.deepEqual(desenhada, pixels, 'a arte desenhada (reserva) não perde pixel nenhum');
 
     for (const { base, rot, giro, bytes } of resultado.comBase) {
-      assert.ok(bytes, `a arte da peça girada ${base}° (encaixe ${rot}°) está na chave do giro do encaixe`);
+      assert.ok(bytes, `a arte da peça girada ${base}° (encaixe ${rot}°) está na chave da peça`);
       assert.equal(giro, (base + rot) % 360, `giro base ${base}° + encaixe ${rot}° vai como o total`);
-      assert.deepEqual(Buffer.from(bytes, 'base64'), png, 'a arte vai sem giro: quem gira é o servidor');
+      assert.deepEqual(Buffer.from(bytes, 'base64'), png, 'a arte vai sem giro: quem gira é a página do PDF');
     }
+    assert.equal(resultado.umaPorPeca, 1, 'a mesma peça em quatro giros sobe UMA arte');
 
     const recorte = await sharp(Buffer.from(resultado.recortada, 'base64')).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     assert.equal(recorte.info.width, largura);

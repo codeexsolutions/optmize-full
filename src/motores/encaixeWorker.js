@@ -138,20 +138,22 @@ let ultimoFantasmaEm = 0;
 
 /**
  * Empacota as posições no mínimo que o desenho precisa: x, y, largura, altura,
- * rotação e se a peça está girada. Seis números por peça, num array só.
+ * rotação, se a peça está girada e qual peça é (o índice na lista, para a tela
+ * pôr a arte dela no lugar). Sete números por peça, num array só.
  */
 function quadroDoEncaixe(r) {
   const posicoes = r.posicoes || [];
-  const dados = new Float32Array(posicoes.length * 6);
+  const dados = new Float32Array(posicoes.length * 7);
   for (let i = 0; i < posicoes.length; i++) {
     const p = posicoes[i];
-    const b = i * 6;
+    const b = i * 7;
     dados[b] = p.x;
     dados[b + 1] = p.y;
     dados[b + 2] = p.largura;
     dados[b + 3] = p.altura;
     dados[b + 4] = p.rot || 0;
     dados[b + 5] = p.girado ? 1 : 0;
+    dados[b + 6] = p.item ? p.item.indice : -1;
   }
   return dados;
 }
@@ -257,6 +259,7 @@ self.onmessage = async (evento) => {
         trabalhadores: msg.config.trabalhadores,
         partir: msg.config.partir,
         aoMelhorar: (novo) => self.postMessage({ tipo: "encolhido", k, resultado: resultadoParaEnviar(novo) }),
+        aoAndar: (voltas) => self.postMessage({ tipo: "encolhendo", k, voltas }),
       });
       self.postMessage({
         tipo: "encolheu", k, motivo: saida.motivo,

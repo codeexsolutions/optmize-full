@@ -222,8 +222,9 @@ export function grade(larguraTecido, espaco) {
  *
  *   contorno   `comGiroBase` reindexa as quatro máscaras, que já existem
  *   desenho    `desenharArte` soma o giro base (desenhoDoEncaixe.js)
- *   PDF        `prepararArtes` manda o giro total, e o servidor gira a arte
- *              original (exportarEncaixe.js, servidor/encaixe-pdf.js)
+ *   PDF        `giroDaPosicao` manda o giro total em cada posição, e o
+ *              servidor o aplica na matriz da página, com a arte original
+ *              de pé (exportarEncaixe.js, servidor/encaixe-pdf.js)
  *
  * A largura e a altura da peça são as do lado certo, já trocadas quando o giro
  * é de 90 ou 270. A silhueta é lida da arte como ela chegou, então é lida com

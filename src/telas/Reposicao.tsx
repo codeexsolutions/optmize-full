@@ -168,6 +168,8 @@ export function Reposicao() {
       await ligacao.mandarProjetoParaOEncaixe({
         nome: `Reposição · ${aberto.nome}`,
         unidades: 1,
+        // Área própria no Encaixe: a reposição não se mistura com o que estava na mesa.
+        novaArea: true,
         pecas,
         // O tecido e a folga de quando o trabalho saiu: a peça refeita tem de
         // sair igual à primeira.
