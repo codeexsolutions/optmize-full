@@ -3083,6 +3083,7 @@
    não ser o único ícone cinza da tela. O que a marca como destrutiva continua
    sendo o vermelho na intenção de clicar, não um cinza no repouso. */
 :where(.producao) #encaixe-pecas-body svg,
+:where(.producao) #btn-optmizar-de-novo svg,
 :where(.producao) #btn-limpar-pecas svg {
   color: color-mix(in srgb, var(--accent) 45%, var(--text-dim));
   transition: color 0.12s ease;
@@ -3094,6 +3095,16 @@
 
 :where(.producao) #btn-limpar-pecas:hover svg {
   color: var(--danger);
+}
+
+:where(.producao) #btn-optmizar-de-novo:hover svg {
+  color: var(--accent);
+}
+
+/* Durante a busca o Optmizar fica apagado, e este vai junto. */
+:where(.producao) .flex:has(> #btn-encaixar:disabled) > #btn-optmizar-de-novo {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* O selo da lista vazia é o mesmo desenho do selo da mesa vazia — os dois

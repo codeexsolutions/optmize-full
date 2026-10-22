@@ -256,11 +256,11 @@ function pixelsDe(img) {
   } finally { canvas.width = 0; canvas.height = 0; }
 }
 
+const tetoDoPdf = (cm) => Math.ceil(cm / 2.54 * DPI_PDF);
+
 /** A página do PDF desenhada, para quando o vetor não pode ir (remoção de fundo, reserva). */
 async function pdfDesenhado(peca) {
-  const arte = await lerArteDoPDF(peca.pdfOriginal, {
-    tetoDeLado: cm => Math.ceil(cm / 2.54 * DPI_PDF),
-  });
+  const arte = await lerArteDoPDF(peca.pdfOriginal, { tetoDeLado: tetoDoPdf });
   URL.revokeObjectURL(arte.endereco);
   return arte;
 }
@@ -331,6 +331,28 @@ export async function arteDesenhadaDaPeca(peca) {
   } finally {
     img?.close?.();
   }
+}
+
+/**
+ * A reserva já no giro final, para o PDF que o servidor não abre.
+ *
+ * O PDF é desenhado direto na rotação pedida (`giro`, no sentido do relógio):
+ * sai só o PNG, sem o bitmap e o segundo canvas que girar depois custaria, e
+ * a rasterização é a de 300 dpi de sempre. Devolve `{ arte, giro }`, onde
+ * `giro` é o que o servidor ainda precisa aplicar — 0 quando já foi feito aqui.
+ * Imagem e arte sem fundo seguem como em `arteDesenhadaDaPeca`: sem giro, e
+ * com o giro todo por conta do servidor.
+ */
+export async function desenharPecaGirada(peca, giro) {
+  if (peca.pdfOriginal && !peca.fundoNaExportacao) {
+    const { blob } = await lerArteDoPDF(peca.pdfOriginal, {
+      tetoDeLado: tetoDoPdf,
+      somenteBlob: true,
+      rotacao: giro,
+    });
+    return { arte: blob, giro: 0 };
+  }
+  return { arte: await arteDesenhadaDaPeca(peca), giro };
 }
 
 /**

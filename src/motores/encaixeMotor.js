@@ -3905,7 +3905,9 @@ export const melhorQue = (candidato, atual) => {
   if (candidato.naoEncaixadas.length !== atual.naoEncaixadas.length) {
     return candidato.naoEncaixadas.length < atual.naoEncaixadas.length;
   }
-  return candidato.consumo < atual.consumo;
+  if (candidato.consumo !== atual.consumo) return candidato.consumo < atual.consumo;
+  return candidato.posicoes.some((posicao) => posicao.mascara || posicao.comMascara)
+    && !atual.posicoes.some((posicao) => posicao.mascara || posicao.comMascara);
 };
 
 /**

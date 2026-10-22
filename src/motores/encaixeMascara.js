@@ -1050,6 +1050,13 @@ export function mascarasDeSilhueta(silhueta, cols, rows, passo, raio, medida = n
     const cheia = girarBits(gordo.bits, gordo.cols, gordo.rows, rot);
     const original = girarBits(real.bits, real.cols, real.rows, rot);
     const m = prepararMascara(cheia.bits, original.bits, cheia.cols, cheia.rows, passo);
+    if (m && medida) {
+      const sobraX = Math.max(0, cols * passo - medida.largura);
+      const sobraY = Math.max(0, rows * passo - medida.altura);
+      if (rot === 90) m.offX -= sobraY;
+      if (rot === 180) { m.offX -= sobraX; m.offY -= sobraY; }
+      if (rot === 270) m.offY -= sobraX;
+    }
     // A moldura cresceu `borda` células para o engorde caber, e o rolo da
     // grade cresceu o mesmo tanto de cada lado: as duas coisas se anulam, e o
     // deslocamento fica o do recorte. Ver o cabeçalho desta função.
