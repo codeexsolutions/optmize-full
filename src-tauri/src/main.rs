@@ -735,6 +735,11 @@ const INTERVALO_DA_BUSCA: Duration = Duration::from_secs(5 * 60);
 /// imediata porque a abertura acabou de perguntar.
 const PRIMEIRA_BUSCA: Duration = Duration::from_secs(2 * 60);
 
+/// De quanto em quanto tempo a vigia olha se a conta acabou de entrar. É só
+/// ler um arquivo pequeno do disco (`token_da_maquina`); a pergunta ao
+/// servidor continua no ritmo de `INTERVALO_DA_BUSCA`.
+const PASSO_DA_VIGIA: Duration = Duration::from_secs(5);
+
 /// Com o programa aberto a busca não segura a abertura de ninguém, então pode
 /// esperar mais pelo servidor do que a busca da tela de abertura.
 const ESPERA_EM_SEGUNDO_PLANO: Duration = Duration::from_secs(30);
@@ -778,10 +783,28 @@ fn atualizar_com_o_programa_aberto(
 /// erro na cara de quem está trabalhando.
 fn vigiar_atualizacoes(app: tauri::AppHandle) {
     let mut recusada: Option<String> = None;
-    let mut espera = PRIMEIRA_BUSCA;
+    let mut proxima = Instant::now() + PRIMEIRA_BUSCA;
+    let mut tinha_conta = token_da_maquina(&app).is_some();
     loop {
-        std::thread::sleep(espera);
-        espera = INTERVALO_DA_BUSCA;
+        std::thread::sleep(PASSO_DA_VIGIA);
+
+        /*
+         * QUEM ACABOU DE ENTRAR NA CONTA É ATENDIDO NA HORA.
+         *
+         * A busca da abertura roda antes do login, e sem o token da máquina o
+         * servidor responde "está atualizado" (ver `buscar_versao_nova`). Quem
+         * abria o programa deslogado entrava na conta e ficava na versão
+         * velha até a próxima rodada — ou até fechar e abrir de novo, que é o
+         * que ninguém adivinha. Agora a entrada na conta dispara a busca.
+         */
+        let tem_conta = token_da_maquina(&app).is_some();
+        let entrou_agora = tem_conta && !tinha_conta;
+        tinha_conta = tem_conta;
+        if !entrou_agora && Instant::now() < proxima {
+            continue;
+        }
+        proxima = Instant::now() + INTERVALO_DA_BUSCA;
+
         let Some(janela) = app.get_webview_window("principal") else {
             return;
         };
