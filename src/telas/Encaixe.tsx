@@ -100,6 +100,17 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <div className="flex items-stretch gap-2">
 
+{/* Com encaixe na tela o botão de cima vira Complementar. Quem juntou mais
+    peças à lista e quer refazer o risco inteiro usa este, que só aparece
+    nessa hora (ver `atualizarBotaoPrincipal`, em producao/controlador.js). */}
+<button id="btn-optmizar-de-novo" className="btn secondary hidden shrink-0 px-3!" type="button" title="Optmizar de novo, refazendo o encaixe com todas as peças da lista" aria-label="Optmizar de novo">
+<svg className="size-[15px]" viewBox="0 0 24 24" aria-hidden="true">
+<use href="icones.svg#refresh-cw">
+
+</use>
+</svg>
+</button>
+
 {/* Os três sempre à vista: Optmizar, Arquivos e a lixeira. A lixeira nasce
     desligada e só acende quando há arquivo na lista (ver
     `atualizarPainelDoTrabalho`, em producao/controlador.js). */}

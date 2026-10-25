@@ -80,6 +80,7 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { finished } = require("stream/promises");
 
 // A sigla do pedido sai com esta fonte EMBUTIDA no arquivo, e não com a
 // Helvetica "padrão" do PDF: o RIP da produção já mostrou que não se pode
@@ -145,7 +146,7 @@ function apagarSessao(sessao) {
 function limparAntigas() {
   const agora = Date.now();
   [...artesGuardadas.entries()].forEach(([sessao, dados]) => {
-    if (agora - dados.criadaEm > VALIDADE_MS) apagarSessao(sessao);
+    if (!dados.emUso && agora - dados.criadaEm > VALIDADE_MS) apagarSessao(sessao);
   });
 }
 
@@ -202,6 +203,7 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), async (r
     guardadas.artes.delete(chave);
     return res.status(500).json({ error: `Não deu para guardar a arte: ${erro.message}` });
   }
+  guardadas.criadaEm = Date.now();
   // Reenviar a mesma chave substitui a arte: o que valia da anterior não vale.
   if (pngComAlfa(req.body)) guardadas.comAlfa.add(chave);
   else guardadas.comAlfa.delete(chave);
@@ -1096,17 +1098,23 @@ async function montarPdf({
   const desenhos = new Map();
   const abrir = (chave) => {
     if (!desenhos.has(chave)) {
-      desenhos.set(chave, (async () => {
+      const abertura = (async () => {
         try {
           const bytes = buscar(chave);
           // Ver "O PNG NÃO PASSA PELO LEITOR DO PDFKIT", lá em cima.
-          return bytes ? await abrirArte(doc, bytes) : null;
+          if (!bytes) throw new Error("Arte ausente. Envie as peças novamente.");
+          return await abrirArte(doc, bytes);
         } catch (err) {
-          // arte ilegível: as outras continuam
-          console.warn(`[encaixe-pdf] arte ilegível (${chave}):`, err && err.message);
-          return null;
+          // Arte que não abre derruba o PDF: melhor nenhum arquivo que um rolo
+          // impresso com peça faltando.
+          throw new Error(`Não consegui abrir a arte ${chave}: ${err.message}`);
         }
-      })());
+      })();
+      // A abertura adiantada (a da arte seguinte) pode falhar sem ninguém
+      // esperando por ela ainda; sem isto a falha viraria rejeição não tratada
+      // e derrubaria o servidor. Quem a esperar depois recebe o erro igual.
+      abertura.catch(() => {});
+      desenhos.set(chave, abertura);
     }
     return desenhos.get(chave);
   };
@@ -1117,41 +1125,45 @@ async function montarPdf({
   };
 
   let desenhadas = 0;
-  for (let i = 0; i < paginas.length; i++) {
-    const pagina = paginas[i];
-    if (i > 0) doc.addPage({ size: tamanhoDa(pagina), margin: 0 });
+  try {
+    for (let i = 0; i < paginas.length; i++) {
+      const pagina = paginas[i];
+      if (i > 0) doc.addPage({ size: tamanhoDa(pagina), margin: 0 });
 
-    for (const pos of pagina.posicoes) {
-      const desenho = await desenhoDe(pos.chave);
-      if (!desenho) continue;
-      try {
-        // O `y` da peça é medido no rolo inteiro; na página ele conta a partir
-        // do começo da bancada.
-        const x = pos.x * PT_POR_CM;
-        const y = (pos.y - pagina.topo) * PT_POR_CM;
-        const w = pos.largura * PT_POR_CM;
-        const h = pos.altura * PT_POR_CM;
-        if (desenho.vetor) desenharVetor(doc, desenho, giroDaPeca(pos), x, y, w, h);
-        else desenharImagem(doc, desenho, giroDaPeca(pos), x, y, w, h);
-        desenhadas++;
-      } catch (err) {
-        // uma imagem ruim não pode derrubar o PDF inteiro
-        console.warn(`[encaixe-pdf] não deu para desenhar a peça ${pos.chave}:`, err && err.message);
-      }
-      if (pos.marca) {
+      for (const pos of pagina.posicoes) {
+        const desenho = await desenhoDe(pos.chave);
         try {
-          escreverMarca(doc, pos.marca, pagina.topo);
-          marcas++;
+          // O `y` da peça é medido no rolo inteiro; na página ele conta a partir
+          // do começo da bancada.
+          const x = pos.x * PT_POR_CM;
+          const y = (pos.y - pagina.topo) * PT_POR_CM;
+          const w = pos.largura * PT_POR_CM;
+          const h = pos.altura * PT_POR_CM;
+          if (desenho.vetor) desenharVetor(doc, desenho, giroDaPeca(pos), x, y, w, h);
+          else desenharImagem(doc, desenho, giroDaPeca(pos), x, y, w, h);
+          desenhadas++;
         } catch (err) {
-          console.warn(`[encaixe-pdf] não deu para escrever a sigla ${pos.marca.texto}:`, err && err.message);
+          throw new Error(`Não consegui desenhar a peça ${pos.chave}: ${err.message}`);
         }
+        if (pos.marca) {
+          try {
+            escreverMarca(doc, pos.marca, pagina.topo);
+            marcas++;
+          } catch (err) {
+            throw new Error(`Não consegui escrever a sigla ${pos.marca.texto}: ${err.message}`);
+          }
+        }
+        // Ver `escoar`: é aqui que a fila do cano deixa de crescer sem limite.
+        await escoar();
+        if (destino.destroyed) throw new Error("A gravação do PDF foi interrompida.");
       }
-      // Ver `escoar`: é aqui que a fila do cano deixa de crescer sem limite.
-      await escoar();
     }
-  }
 
-  doc.end();
+    doc.end();
+  } catch (erro) {
+    doc.destroy();
+    throw erro;
+  }
   return {
     unidade,
     desenhadas,
@@ -1222,20 +1234,6 @@ router.post("/pdf", async (req, res) => {
   const razaoCaixa = Number(req.body.razaoCaixa);
   const metrosCaixa = Number.isFinite(razaoCaixa) && razaoCaixa >= 1
     ? (comprimentoCm / 100) * razaoCaixa : null;
-  const cota = await permitirExportacao(comprimentoCm / 100, metrosCaixa);
-  if (!cota.permitido) {
-    return res.status(402).json({
-      error: cota.motivo,
-      codigo: "metragem_do_plano",
-      metros: cota.metros,
-      metrosUsados: cota.metrosUsados,
-      metrosRestantes: cota.metrosRestantes,
-      plano: cota.plano,
-      periodo: cota.periodo,
-      podeComprarAvulso: cota.podeComprarAvulso,
-    });
-  }
-
   const sessao = String(req.body.sessao || "");
   const guardadas = artesGuardadas.get(sessao);
 
@@ -1257,6 +1255,12 @@ router.post("/pdf", async (req, res) => {
   if (daMemoria.size === 0 && doDisco.size === 0) {
     return res.status(400).json({ error: "Nenhuma imagem de peça chegou para o PDF." });
   }
+  const ausentes = [...new Set(posicoes.map((pos) => pos.chave))]
+    .filter((chave) => !daMemoria.has(chave)
+      && (!doDisco.has(chave) || !fs.existsSync(doDisco.get(chave))));
+  if (ausentes.length) {
+    return res.status(400).json({ error: `Faltam artes para o PDF: ${ausentes.join(", ")}. Exporte novamente.` });
+  }
 
   // Lê a arte no instante em que ela vai ser embutida, e não antes: é isto que
   // tira o trabalho inteiro da memória do servidor. Ver `montarPdf`.
@@ -1272,13 +1276,6 @@ router.post("/pdf", async (req, res) => {
     }
   };
 
-  // O nome da pasta escolhido na tela pode ter aspas ou caracteres Unicode.
-  // O Express monta o cabeçalho com o escape e o filename* adequados.
-  res.attachment(`${nome || "encaixe"}.pdf`);
-
-  // `montarPdf` é assíncrona (ela cede a vez para o PDF escoar). O cabeçalho já
-  // foi mandado a esta altura, então não dá para responder um JSON de erro: o
-  // que resta é encerrar a resposta e deixar o registro.
   /*
    * A VERSÃO DO FORMATO PRECISA SER DECIDIDA ANTES DE O DOCUMENTO ABRIR, e
    * quem pode exigir 1.4 é a transparência. Aqui a pergunta é barata: as artes
@@ -1292,30 +1289,51 @@ router.post("/pdf", async (req, res) => {
     ? Math.max(0, ...[...doDisco.keys()].map((chave) => guardadas.versoes.get(chave) || 0))
     : 0;
 
-  montarPdf({ larguraTecido, consumo, posicoes, lerArte, podeTerTransparencia, giroDe, versaoMinima }, res)
-    .catch((erro) => {
+  let pastaPdf;
+  let destino;
+  let concluido;
+  if (guardadas) {
+    guardadas.emUso = (guardadas.emUso || 0) + 1;
+    guardadas.criadaEm = Date.now();
+  }
+  try {
+    pastaPdf = fs.mkdtempSync(path.join(os.tmpdir(), "optmize-pdf-pronto-"));
+    const arquivoPdf = path.join(pastaPdf, "encaixe.pdf");
+    destino = fs.createWriteStream(arquivoPdf);
+    concluido = finished(destino);
+    concluido.catch(() => {});
+    await montarPdf({ larguraTecido, consumo, posicoes, lerArte, podeTerTransparencia, giroDe, versaoMinima }, destino);
+    await concluido;
+    const cota = await permitirExportacao(comprimentoCm / 100, metrosCaixa);
+    if (!cota.permitido) {
+      return res.status(402).json({
+        error: cota.motivo,
+        codigo: "metragem_do_plano",
+        metros: cota.metros,
+        metrosUsados: cota.metrosUsados,
+        metrosRestantes: cota.metrosRestantes,
+        plano: cota.plano,
+        periodo: cota.periodo,
+        podeComprarAvulso: cota.podeComprarAvulso,
+      });
+    }
+    await new Promise((resolve, reject) => {
+      res.download(arquivoPdf, `${nome || "encaixe"}.pdf`, (erro) => erro ? reject(erro) : resolve());
+    });
+    if (guardadas && !req.body.manterSessao && !(guardadas.emUso > 1)) apagarSessao(sessao);
+  } catch (erro) {
     console.error("[encaixe-pdf] falhou ao montar o PDF:", erro);
-    res.destroy(erro);
-  });
-
-  /*
-   * QUANDO AS ARTES PODEM SER APAGADAS.
-   *
-   * Enquanto o rolo saía num arquivo só, este pedido era sempre o último: as
-   * artes já tinham cumprido o que tinham para cumprir. Agora um encaixe com
-   * bancada sai em UM PDF POR BANCADA (ver `baixarEncaixeEmPdf`, na tela), e
-   * as mesmas artes servem todos eles — apagar no primeiro deixaria os outros
-   * nove sem imagem nenhuma.
-   *
-   * Então quem manda é a tela: ela pede `manterSessao` em todos menos no
-   * último. Se ela desistir no meio (fechou o programa, deu erro), o `
-   * limparAntigas` recolhe a sessão dez minutos depois — ninguém fica com
-   * pasta temporária presa para sempre.
-   *
-   * A limpeza espera o fim da resposta porque `montarPdf` ainda está lendo os
-   * arquivos enquanto o PDF sai pelo cano.
-   */
-  if (sessao && !req.body.manterSessao) res.on("close", () => apagarSessao(sessao));
+    if (!res.headersSent) res.status(500).json({ error: `Não consegui gerar o PDF: ${erro.message}` });
+    else res.destroy(erro);
+  } finally {
+    if (destino && !destino.closed) destino.destroy();
+    if (concluido) await concluido.catch(() => {});
+    if (guardadas) {
+      guardadas.emUso--;
+      guardadas.criadaEm = Date.now();
+    }
+    if (pastaPdf) fs.rmSync(pastaPdf, { recursive: true, force: true });
+  }
 });
 
 module.exports = router;

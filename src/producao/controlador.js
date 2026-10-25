@@ -29,7 +29,7 @@ import {
   alcanceDoRascunho, desenharRascunho, prepararMiniaturas, prepararPrevias, previaDaArte,
 } from "../motores/desenhoDoEncaixe";
 import { arteDesenhadaDaPeca, chaveDaArte, giroDaPosicao, prepararArtes } from "../motores/exportarEncaixe";
-import { DPI_PREVIA } from "../motores/resolucaoDaArte";
+import { ladoDaPrevia } from "../motores/resolucaoDaArte";
 import {
   chaveDoTrabalho, encaixeApi, pecasParaGuardar, posicoesParaGuardar, traduzirIndicesDoGuardado,
   posicoesGuardadasValidas,
@@ -287,6 +287,7 @@ const UNIDADE_DO_MOLDE = null;
 const encaixeGuardadoAviso = document.getElementById("encaixe-guardado-aviso");
 const encaixeFilesInput = document.getElementById("encaixe-files");
 const btnLimparPecas = document.getElementById("btn-limpar-pecas");
+const btnOptmizarDeNovo = document.getElementById("btn-optmizar-de-novo");
 // Há leitura de arquivos em curso. Declarado aqui, e não junto do relógio do
 // carregamento lá embaixo, porque `atualizarPainelDoTrabalho` o lê para
 // decidir a lixeira — e ela pode rodar antes de o código chegar lá.
@@ -348,6 +349,9 @@ function atualizarBotaoPrincipal() {
   btnEncaixar.title = complementar
     ? "Pôr peças nos espaços que sobraram, sem mexer no encaixe"
     : "";
+  // Refazer o risco inteiro continua à mão: a pessoa pode ter juntado mais
+  // peças depois do encaixe, e o Complementar só mexe nos vãos.
+  btnOptmizarDeNovo.classList.toggle("hidden", !complementar);
 }
 
 /**
@@ -572,10 +576,8 @@ function limparErroEncaixe() {
  * Só a prévia e o cálculo são reduzidos. O arquivo original fica na peça e
  * é reaberto na exportação, para preservar seus pixels na impressão.
  */
-const FOLGA_DE_RESOLUCAO = 1.3;
-
 function ladoDeTrabalho(cm) {
-  return Math.max(600, Math.round((cm / 2.54) * DPI_PREVIA * FOLGA_DE_RESOLUCAO));
+  return ladoDaPrevia(cm);
 }
 
 // Teto de arquivos abertos ao mesmo tempo. Ver `juntasNaLeitura`.
@@ -2381,6 +2383,7 @@ async function tirarFundoDepois(pecasPorIndice, crus) {
         peca.img = img;
         peca.src = semFundo.src;
         peca.fundoNaExportacao = "auto";
+        delete peca.reforco;
         peca.miniatura = await miniaturaDaArte(peca.img);
         peca._cacheMascaras = null; // a silhueta muda: será refeita no encaixe
         trocadas++;
@@ -2415,6 +2418,7 @@ async function tirarFundoAForca(peca) {
   peca.img = img;
   peca.src = semFundo.src;
   peca.fundoNaExportacao = "forcar";
+  delete peca.reforco;
   peca.miniatura = await miniaturaDaArte(peca.img);
   peca._cacheMascaras = null;
   renderPecasEncaixe();
@@ -5439,6 +5443,14 @@ escopo.ouvir(btnEncaixar, "click", () => {
     abrirComplemento();
     return;
   }
+  abrirAjustes();
+});
+
+// O mesmo caminho do primeiro Optmizar, mesmo com encaixe na tela: abre os
+// ajustes e refaz o risco com tudo o que está na lista.
+escopo.ouvir(btnOptmizarDeNovo, "click", () => {
+  if (btnEncaixar.disabled) return;
+  limparErroEncaixe();
   abrirAjustes();
 });
 

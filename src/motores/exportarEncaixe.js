@@ -256,11 +256,11 @@ function pixelsDe(img) {
   } finally { canvas.width = 0; canvas.height = 0; }
 }
 
+const tetoDoPdf = (cm) => Math.ceil(cm / 2.54 * DPI_PDF);
+
 /** A página do PDF desenhada, para quando o vetor não pode ir (remoção de fundo, reserva). */
 async function pdfDesenhado(peca) {
-  const arte = await lerArteDoPDF(peca.pdfOriginal, {
-    tetoDeLado: cm => Math.ceil(cm / 2.54 * DPI_PDF),
-  });
+  const arte = await lerArteDoPDF(peca.pdfOriginal, { tetoDeLado: tetoDoPdf });
   URL.revokeObjectURL(arte.endereco);
   return arte;
 }

@@ -276,7 +276,7 @@ export function chaveDoTrabalho(
   // O "f4/" é a sombra suave na silhueta (ver `ALFA_PECA`, em
   // motores/encaixeMascara.js): as máscaras engordaram, e um guardado "f3"
   // voltaria com peças sobrepostas pela régua nova.
-  return `f4/${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
+  return `f5/${larguraTecido}/${espaco}/b${comprimentoBancada}/${embaralharTexto(lista)}`;
 }
 
 /** O encaixe do jeito que ele vai para o banco: só o essencial de cada peça. */
