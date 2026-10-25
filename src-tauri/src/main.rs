@@ -476,8 +476,29 @@ fn buscar_versao_nova(
     if let Some(token) = token_da_maquina(app) {
         construtor = construtor.header("Authorization", format!("Bearer {token}"))?;
     }
+    /*
+     * E A MÁQUINA, MESMO SEM CONTA ABERTA. A busca da abertura roda antes do
+     * login; sem isto, quem abria o programa deslogado nunca recebia a versão
+     * nova. O servidor só atende a máquina que já foi vinculada a alguma conta
+     * (`maquinaConhecida`, no backend).
+     */
+    if let Some(maquina) = id_da_maquina(app) {
+        construtor = construtor.header("X-Optmize-Maquina", maquina)?;
+    }
     let updater = construtor.build()?;
     Ok(tauri::async_runtime::block_on(updater.check())?)
+}
+
+/// O identificador desta máquina, como o servidor local o gravou na primeira
+/// execução (`idDaMaquina`, em `servidor/sessao.js`). Fica mesmo depois de
+/// sair da conta.
+fn id_da_maquina(app: &tauri::AppHandle) -> Option<String> {
+    let dados = dunce::simplified(&app.path().app_data_dir().ok()?).to_path_buf();
+    let texto = std::fs::read_to_string(dados.join("sessao").join("maquina.json")).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&texto).ok()?;
+    let id = json.get("deviceId")?.as_str()?;
+    let limpo = id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    (limpo && id.len() >= 16).then(|| id.to_string())
 }
 
 /// O token da máquina, como o servidor local o gravou (`servidor/sessao.js`).
