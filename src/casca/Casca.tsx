@@ -39,8 +39,11 @@ import { ProvedorDeDialogo } from "./Dialogo";
 import { Cabecalho, ProvedorDoEspacoDoCabecalho } from "./Cabecalho";
 import { Icone } from "./Icone";
 import { Producao } from "../producao/Producao";
-import { useTelaAtual, type NomeDeTela } from "../rotas";
+import { TELAS, useTelaAtual, type NomeDeTela } from "../rotas";
 import { ProvedorSemCabecalho } from "./semCabecalho";
+
+/** O painel que a rede local enxerga (ver "VISITA DA REDE LOCAL", abaixo). */
+const TELA_DAS_IMPRESSORAS = TELAS.find((t) => t.nome === "impressoras");
 
 export function Casca() {
   const tela = useTelaAtual();
@@ -147,6 +150,40 @@ export function Casca() {
    * a conta liberada nesta máquina — a tela só acompanha o que ela decide.
    */
   if (sessao.estado === "carregando") return null;
+
+  /*
+    VISITA DA REDE LOCAL: só o painel das impressoras.
+
+    O programa é da máquina em que a conta entrou; de outro computador, o
+    servidor só responde ao painel (ver `servidor/so-nesta-maquina.js`). Sem
+    menu, sem login e sem o resto das telas — elas dariam 403 em tudo. E sem a
+    tela de entrar: entrar daqui mexeria na sessão daquela máquina.
+  */
+  if (sessao.remoto) {
+    if (sessao.estado !== "dentro") {
+      return (
+        <div className="app-react grid h-screen place-items-center bg-fundo p-6 text-center font-texto text-tinta">
+          <p className="m-0 max-w-[440px] text-sm text-tinta-apagada">
+            O Optmize daquele computador não está com a conta aberta. O painel das impressoras
+            volta a aparecer aqui quando alguém entrar nele.
+          </p>
+        </div>
+      );
+    }
+    const Painel = TELA_DAS_IMPRESSORAS?.Componente;
+    return (
+      <ProvedorDeEscopos escopos={sessao.acesso?.escopos ?? null}>
+      <ProvedorDeDialogo>
+        <div className="app-react h-screen overflow-y-auto bg-fundo px-4 py-3 font-texto text-tinta antialiased lg:px-6 lg:py-4">
+          <Suspense fallback={<p className="p-6 text-sm text-tinta-apagada">Abrindo as impressoras…</p>}>
+            {Painel && <Painel />}
+          </Suspense>
+        </div>
+      </ProvedorDeDialogo>
+      </ProvedorDeEscopos>
+    );
+  }
+
   if (sessao.estado === "fora") return <Entrar aoEntrar={sessao.recarregar} aviso={sessao.aviso} />;
 
   /*

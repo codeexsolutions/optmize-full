@@ -799,6 +799,24 @@ fn main() {
     let processo: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
 
     tauri::Builder::default()
+        /*
+         * UMA SESSÃO DO PROGRAMA POR MÁQUINA.
+         *
+         * Tem que ser o PRIMEIRO plugin: é ele que, na segunda abertura, avisa
+         * a primeira e encerra a nova antes de ela subir outro servidor local
+         * com o mesmo token. A primeira só traz a janela para a frente — ou o
+         * lançador, se ainda estiver nele.
+         */
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let janela = app
+                .get_webview_window("principal")
+                .or_else(|| app.get_webview_window("lancador"));
+            if let Some(janela) = janela {
+                let _ = janela.unminimize();
+                let _ = janela.show();
+                let _ = janela.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         /*
          * O PLUGIN DE DIÁLOGO CONTINUA REGISTRADO, e de propósito.

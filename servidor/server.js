@@ -80,6 +80,10 @@ const io = new ServidorDeSocket(servidor);
  */
 const TRAVA_DE_LICENCA_LIGADA = process.env.OPTMIZE_TRAVA_DE_LICENCA === "1";
 
+// Antes de tudo: de outro computador da rede, só o painel das impressoras.
+// Ver `so-nesta-maquina.js`.
+app.use(require("./so-nesta-maquina").soNestaMaquina);
+
 app.use("/api/licenca", express.json(), licencaRouter);
 app.use((req, res, next) => {
   if (!TRAVA_DE_LICENCA_LIGADA) return next();

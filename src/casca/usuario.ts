@@ -104,6 +104,11 @@ export interface Sessao {
   aviso: string | null;
   /** O aviso das últimas 12 horas sem contato com o servidor. */
   tarja: string | null;
+  /**
+   * A tela foi aberta de OUTRO computador da rede, e não na máquina da conta.
+   * Ela só vê o painel das impressoras (ver `servidor/so-nesta-maquina.js`).
+   */
+  remoto: boolean;
 }
 
 /**
@@ -119,6 +124,7 @@ interface RespostaDaSessao {
   acesso: Acesso | null;
   aviso?: string | null;
   tarja?: string | null;
+  remoto?: boolean;
 }
 
 export function useSessao(): Sessao {
@@ -127,12 +133,14 @@ export function useSessao(): Sessao {
   const [acesso, setAcesso] = useState<Acesso | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [tarja, setTarja] = useState<string | null>(null);
+  const [remoto, setRemoto] = useState(false);
 
   const aplicar = useCallback((s: RespostaDaSessao) => {
     setUsuario(s.entrou ? s.perfil : null);
     setAcesso(s.acesso ?? null);
     setAviso(s.aviso ?? null);
     setTarja(s.tarja ?? null);
+    setRemoto(Boolean(s.remoto));
     if (!s.entrou) return setEstado("fora");
     /*
       SEM RESPOSTA SOBRE O ACESSO, O PROGRAMA ABRE.
@@ -175,10 +183,13 @@ export function useSessao(): Sessao {
   /*
     A CONTA PODE SAIR DESTA MÁQUINA COM O PROGRAMA ABERTO — outra máquina
     entrou nela, o acesso foi retirado, as 48 horas passaram. O servidor local
-    renova de hora em hora; a tela relê a cada cinco minutos para acompanhar.
+    confere de minuto em minuto se a máquina ainda é a da conta (ver
+    `conferirMaquina`, em servidor/sessao.js); a tela relê a cada 30 segundos
+    para a máquina derrubada voltar ao login logo. É o servidor LOCAL que
+    responde, então isto não pesa em nada.
   */
   useEffect(() => {
-    const relogio = setInterval(recarregar, 5 * 60 * 1000);
+    const relogio = setInterval(recarregar, 30 * 1000);
     return () => clearInterval(relogio);
   }, [recarregar]);
 
@@ -187,7 +198,7 @@ export function useSessao(): Sessao {
     return () => window.removeEventListener(SESSAO_MUDOU, recarregar);
   }, [recarregar]);
 
-  return { estado, usuario, acesso, recarregar, conferir, aviso, tarja };
+  return { estado, usuario, acesso, recarregar, conferir, aviso, tarja, remoto };
 }
 
 export function iniciais(nome: string): string {

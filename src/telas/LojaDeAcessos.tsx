@@ -27,6 +27,11 @@ interface Loja {
   /** O preço de um acesso: o do plano dividido pelos acessos dele. */
   precoCheioCents: number;
   pixDisponivel: boolean;
+  /**
+   * O plano vende acesso avulso? Só os planos Equipe (ver `vendeAcessoAvulso`,
+   * no backend). Ausente no backend de antes de 2026-10-25: vale como sim.
+   */
+  vendeAcesso?: boolean;
   pedidoPendente: { id: string; criadoEm: string } | null;
 }
 
@@ -127,6 +132,26 @@ export function LojaDeAcessos({ aoLiberar }: { aoLiberar: () => void }) {
 
   if (!loja) {
     return erro ? <p className="m-0 text-[13px] text-[var(--danger)]">{erro}</p> : null;
+  }
+
+  /*
+    PLANO INDIVIDUAL: A LOJA NÃO VENDE. O Mensal e o Anual Individual são de
+    uma pessoa; mais gente é o plano Equipe. Em vez do preço e do Pix, o
+    caminho para quem precisa crescer.
+  */
+  if (loja.vendeAcesso === false) {
+    return (
+      <div className="mt-4 rounded-2xl border border-[var(--accent-line)] bg-[var(--accent-soft)] p-4">
+        <p className="m-0 flex items-center gap-2 text-sm text-tinta">
+          <Icone referencia="icones.svg#user-plus" className="size-4 text-ambar" />
+          Mais gente no Optmize
+        </p>
+        <p className="mt-1 mb-0 text-[12px] leading-relaxed text-tinta-fraca">
+          O seu plano é de um acesso. Acesso extra é só nos planos Equipe — o Mensal Equipe e o
+          Anual Equipe já trazem três. Para mudar de plano, fale com a CodeEx.
+        </p>
+      </div>
+    );
   }
 
   return (

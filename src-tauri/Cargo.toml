@@ -25,6 +25,11 @@ tauri-plugin-updater = "2"
 # comando `responder_atualizacao` (ver src/main.rs).
 tauri-plugin-dialog = "2"
 
+# UM PROGRAMA ABERTO POR MÁQUINA. Abrir o Optmize de novo com ele aberto só
+# traz a janela que já existe para a frente: duas cópias seriam duas sessões
+# da mesma conta, cada uma com o seu servidor local (ver `main`, em main.rs).
+tauri-plugin-single-instance = "2"
+
 # Exigido pelo `generate_context!` desde que o `tauri.conf.json` ganhou o bloco
 # `plugins`: a configuração de cada plugin é embutida no binário como um
 # `serde_json::Value`, e a macro gera código que nomeia o crate. Sem ele aqui, o

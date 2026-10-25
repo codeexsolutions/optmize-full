@@ -52,6 +52,7 @@ const express = require("express");
 const { spawn } = require("node:child_process");
 
 const { pastaDeDados, PASTA_DO_APP } = require("./caminhos");
+const { ehDestaMaquina } = require("./so-nesta-maquina");
 
 /**
  * Onde o backend mora. O mesmo endereço que o atualizador do Tauri já usa
@@ -69,6 +70,12 @@ const ARQUIVO = path.join(pastaDeDados("sessao"), "sessao.json");
 
 /** De quanto em quanto tempo renovar, com o programa aberto. */
 const RENOVAR_A_CADA_MS = 60 * 60 * 1000;
+
+/**
+ * De quanto em quanto tempo perguntar se esta máquina ainda é a da conta.
+ * Ver `conferirMaquina`.
+ */
+const CONFERIR_MAQUINA_A_CADA_MS = 60 * 1000;
 
 /** A tarja aparece quando falta menos que isto e a última renovação falhou. */
 const AVISAR_ANTES_MS = 12 * 60 * 60 * 1000;
@@ -481,6 +488,43 @@ setTimeout(() => void renovar(), 1500).unref();
 setInterval(() => void renovar(), RENOVAR_A_CADA_MS).unref();
 
 /**
+ * UMA SESSÃO ABERTA POR ACESSO — e valendo em um minuto, não em uma hora.
+ *
+ * Entrar noutra máquina já tirava a conta desta (`exchange`, no backend), mas
+ * só a renovação, de hora em hora, ficava sabendo: por até uma hora o mesmo
+ * login trabalhava em dois computadores. Agora, de minuto em minuto, uma
+ * pergunta barata (`/device/conferir`: só "esta máquina ainda é a da conta?")
+ * derruba a antiga, e a tela volta para o login com o motivo.
+ *
+ * Sem rede, ou com o backend antigo que não conhece a rota, nada acontece: a
+ * conferência só tira a conta quando o servidor DIZ que ela saiu. Cair a
+ * internet não pode derrubar a produção.
+ */
+async function conferirMaquina() {
+  const atual = ler();
+  if (!atual || !atual.token || renovando) return;
+  let resposta;
+  try {
+    resposta = await falarComOBackend("/device/conferir", {
+      token: atual.token,
+      deviceId: daMaquina().deviceId,
+    });
+  } catch {
+    return;
+  }
+  if (resposta.status === 401 && FORA_DA_CONTA.has(resposta.dados.code)) {
+    // O token pode ter mudado no meio (entrou de novo nesta máquina): só sai
+    // quem perguntou com o token que ainda está guardado.
+    const agora = ler();
+    if (!agora || agora.token !== atual.token) return;
+    apagar();
+    motivoDaSaida = resposta.dados.message || "Esta conta entrou em outro computador. Entre de novo.";
+  }
+}
+
+setInterval(() => void conferirMaquina(), CONFERIR_MAQUINA_A_CADA_MS).unref();
+
+/**
  * Uma chamada autenticada ao backend, com o token da máquina.
  *
  * Um 401 é o token que venceu sem a renovação ter rodado ainda (a máquina
@@ -513,8 +557,10 @@ const rotas = express.Router();
  * mantém isto em dia, e uma ida ao servidor aqui seria meio segundo de tela
  * vazia a cada abertura.
  */
-rotas.get("/eu", (_req, res) => {
-  res.json(perfilDaTela());
+rotas.get("/eu", (req, res) => {
+  // `remoto`: quem pergunta é outro computador da rede, que só vê o painel
+  // das impressoras (ver `so-nesta-maquina.js`).
+  res.json({ ...perfilDaTela(), remoto: !ehDestaMaquina(req) });
 });
 
 /**
