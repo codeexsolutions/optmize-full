@@ -131,8 +131,15 @@ function resultadoParaEnviar(r) {
  *      problema, porque ele nasceu para esta viagem e morre nela.
  */
 
-/** De quanto em quanto tempo ESTE worker deixa passar um fantasma. */
-const INTERVALO_DO_FANTASMA_MS = 500;
+/**
+ * De quanto em quanto tempo ESTE worker deixa passar um fantasma.
+ *
+ * Era 500 ms, e a mesa montava cada um peça por peça: parecia ilustração, e
+ * não o motor trabalhando. A pessoa pediu ver as tentativas PISCANDO — e a
+ * travessia é barata (o quadro é transferido, ver acima): a 100 ms são dez
+ * por segundo por worker, poucos KB cada.
+ */
+const INTERVALO_DO_FANTASMA_MS = 100;
 
 let ultimoFantasmaEm = 0;
 

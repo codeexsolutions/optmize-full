@@ -32,28 +32,18 @@
  * mesma escolha e explica por quê.
  *
  * ---------------------------------------------------------------------------
- * ELA OCUPA A JANELA, E EXPLICA O QUE FAZ
+ * UMA VITRINE, E NÃO UMA LISTA (2026-10-25)
  * ---------------------------------------------------------------------------
  *
- * Era um cartão com título, um "?" fechado e a lista dentro. Duas coisas
- * mudaram, pelo mesmo motivo que a tela de Vetor virou bancada:
+ * Cada molde é um cartão com o DESENHO das peças de um tamanho (a `previa` que
+ * a estante já traz do servidor), o nome, os tamanhos com a cor deles e uma
+ * ação cheia só: "Encaixar", que é o que se faz quase sempre. Montagem, editar
+ * e excluir ficam como ícones. A tira de explicação fixa saiu: dizia a mesma
+ * coisa toda vez a quem já sabia.
  *
- *   A JANELA INTEIRA, sem cabeçalho de página e sem folga em volta. O
- *   cabeçalho repetia a palavra "Moldes" em cima de um cartão chamado "Moldes
- *   guardados", e a folga transformava a estante num cartão flutuando no
- *   preto. Agora a barra do topo fica parada, a estante rola por dentro, e o
- *   botão de adicionar não sai da vista quando a lista cresce.
- *
- *   E A EXPLICAÇÃO SAIU DE DENTRO DO "?". Quem abre esta tela pela primeira
- *   vez precisa saber três coisas — de onde vem o desenho, o que fica
- *   guardado e o que fazer depois — e nenhuma delas cabia num `<details>`
- *   fechado que ninguém clica. Elas agora estão na tira embaixo da barra (uma
- *   linha, sempre à vista) e, por extenso, na estante vazia, que é onde a
- *   pessoa está quando a dúvida existe de verdade.
- *
- * A BUSCA entrou junto: uma estante de trinta moldes sem campo de procurar é
- * uma lista para rolar procurando com o olho, e o nome do molde é justamente o
- * que quem chega aqui já sabe.
+ * A ESTANTE VAZIA MOSTRA UM EXEMPLO. Quem abre a tela pela primeira vez não
+ * tem DXF à mão; a camiseta de `moldes/exemplo.ts` vai para a estante com um
+ * clique e já abre o envio para o Encaixe — o caminho inteiro, na prática.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -64,6 +54,8 @@ import { EditorDeMolde } from "./moldes/EditorDeMolde";
 import { EnvioParaEncaixe } from "./moldes/EnvioParaEncaixe";
 import { ImportarGraduado } from "./moldes/ImportarGraduado";
 import { useErroEmAlerta } from "../casca/Alerta";
+import { Icone } from "../casca/Icone";
+import { moldeDeExemplo, NOME_DO_EXEMPLO, previaDoExemplo } from "./moldes/exemplo";
 
 /** Qual modal está na frente. `null` = só a estante. */
 type Aberto =
@@ -136,159 +128,77 @@ export function Moldes() {
       .includes(busca.trim().toLowerCase()))
     : moldes;
 
-  return (
-    // Ver o cabeçalho: `producao.css` é escopada em `:where(.producao)`.
-    <div className="producao flex h-full min-h-0 flex-col bg-fundo">
-      {/* ---------------------------------------------------------- A BARRA */}
-      <div className="flex min-h-[43px] shrink-0 flex-wrap items-center gap-3 border-b border-linha bg-painel-suave px-3 py-1.5">
-        <span className="font-titulo text-[10px]   text-ambar ">
-          MOLDES
-        </span>
-        <span className="font-mono text-[10px] text-tinta-apagada">
-          {moldes.length === 0 ? "nenhum guardado"
-            : busca.trim() ? `${filtrados.length} de ${moldes.length}`
-              : `${moldes.length} guardado${moldes.length === 1 ? "" : "s"}`}
-        </span>
+  /** Põe na estante a camiseta de exemplo e já abre o envio dela. */
+  const usarExemplo = async () => {
+    try {
+      const { id } = await moldesApi.criar(moldeDeExemplo());
+      await carregar();
+      void abrirMolde(id, "envio");
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    }
+  };
 
-        <span className="ml-auto flex flex-wrap items-center gap-2">
+  const novoMolde = () => { setAviso(""); trocarAberto({ qual: "editor", molde: null }); };
+
+  return (
+    <div className="producao flex h-full min-h-0 flex-col bg-fundo">
+      {/* ---------------------------------------------------------- O TOPO */}
+      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-linha px-5 py-3.5">
+        <div className="min-w-0">
+          <h1 className="m-0 font-titulo text-[1.25rem] leading-tight text-tinta">Moldes</h1>
+          <p className="m-0 mt-0.5 text-[0.78rem] text-tinta-apagada">
+            {moldes.length === 0 ? "Escolha o molde, diga quantas peças de cada tamanho e mande para o Encaixe."
+              : busca.trim() ? `${filtrados.length} de ${moldes.length} moldes`
+                : `${moldes.length} molde${moldes.length === 1 ? "" : "s"} na estante`}
+          </p>
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {moldes.length > 0 && (
-            <input
-              type="search"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Procurar pelo nome"
-              aria-label="Procurar molde"
-              className="w-48 rounded-[9px] border border-linha bg-painel px-3 py-1.5 text-[0.82rem] text-tinta outline-none placeholder:text-tinta-apagada focus:border-[var(--accent-line)]"
-            />
+            <div className="relative w-56">
+              <Icone referencia="icones.svg#search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-tinta-apagada" />
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Procurar molde"
+                aria-label="Procurar molde"
+                className="m-0! h-9 w-full rounded-full! border border-linha bg-painel py-0! pr-3! pl-9! text-[0.84rem] text-tinta outline-none placeholder:text-tinta-apagada focus:border-[var(--accent-line)]"
+              />
+            </div>
           )}
           <ImportarGraduado />
-          <button
-            type="button"
-            className="btn primary btn-sm"
-            onClick={() => { setAviso(""); trocarAberto({ qual: "editor", molde: null }); }}
-          >
-            <span aria-hidden="true">+</span> Adicionar molde
+          <button type="button" className="btn primary btn-sm" onClick={novoMolde}>
+            <Icone referencia="icones.svg#plus" className="size-4" />
+            Adicionar molde
           </button>
-        </span>
-      </div>
-
-      {/*
-        A TIRA DO QUE ESTA TELA É.
-
-        Uma linha, sempre à vista, com as três coisas que definem o trabalho
-        daqui: de onde vem o desenho, o que fica guardado e para onde ele vai.
-        Estava escondida atrás de um "?" que ninguém abria.
-      */}
-      <p className="m-0 shrink-0 border-b border-linha bg-painel px-3 py-2 text-[0.78rem] leading-relaxed text-tinta-fraca">
-        O desenho vem do seu programa em{" "}
-        <strong className=" text-tinta">DXF, PLT, SVG ou PDF vetorial</strong> — o que
-        fica guardado aqui é o <strong className=" text-tinta">contorno em
-        centímetros</strong>, e não uma figura, então o molde volta sempre na medida certa. De cada
-        molde você manda as peças para o <strong className=" text-tinta">Encaixe</strong>,
-        que as acomoda no tecido.
-      </p>
+        </div>
+      </header>
 
       {/* ---------------------------------------------------------- A ESTANTE */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {aviso && <p className="hint error mt-0!">{aviso}</p>}
 
         {moldes.length === 0 ? (
-          <Vazia />
+          <Vazia aoUsarExemplo={() => void usarExemplo()} aoAdicionar={novoMolde} />
         ) : filtrados.length === 0 ? (
-          <div className="lista-vazia">
-            <strong>Nenhum molde com “{busca.trim()}”</strong>
-            <p>A busca olha o nome e a observação. Apague o texto para ver a estante inteira.</p>
+          <div className="grid place-items-center py-16 text-center">
+            <Icone referencia="icones.svg#search-x" className="size-8 text-tinta-apagada" />
+            <p className="m-0 mt-3 text-[0.95rem] text-tinta">Nenhum molde com “{busca.trim()}”</p>
+            <p className="m-0 mt-1 text-[0.8rem] text-tinta-apagada">A busca olha o nome e a observação.</p>
           </div>
         ) : (
-          <div className="molde-lista">
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(250px,1fr))]">
             {filtrados.map((molde) => (
-              /*
-               * Cada molde é um cartão, não uma linha de tabela: numa tabela o
-               * nome disputava peso com o resto da linha. "Encaixar" é o que se
-               * faz quase sempre, então é o único botão cheio.
-               */
-              <article className="molde-linha" key={molde.id}>
-                <div className="molde-identidade">
-                  <h3 className="molde-nome">{molde.nome}</h3>
-                  {molde.situacao === "rascunho" && (
-                    <span className="etiqueta-tamanho" title="Saiu do Digitalizar e ainda não foi concluído na Montagem">rascunho</span>
-                  )}
-                  {molde.observacoes && <p className="molde-obs">{molde.observacoes}</p>}
-                  <div className="molde-tamanhos">
-                    {molde.tamanhos.length === 0 ? (
-                      <span className="text-[0.74rem] text-tinta-apagada">sem tamanho definido</span>
-                    ) : molde.tamanhos.map((t) => (
-                      <span className="etiqueta-tamanho" key={t} title="Tamanho guardado neste molde">
-                        {/* A cor em que a Audaces desenha o tamanho, quando o molde a guarda. */}
-                        {molde.cores?.[t] && (
-                          <span className="mr-1 inline-block size-2 rounded-full align-middle" style={{ background: molde.cores[t] }} />
-                        )}
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/*
-                  Os dois números respondem perguntas diferentes, e por isso
-                  cada um tem o seu balão: um é o tamanho do desenho, o outro é
-                  quanto vale UMA peça pronta — que é por onde o Encaixe
-                  multiplica a quantidade pedida.
-                */}
-                <dl className="molde-numeros">
-                  <div title="Quantas peças o desenho tem ao todo, somando os tamanhos.">
-                    <dt>Peças no molde</dt><dd>{molde.totalPecas}</dd>
-                  </div>
-                  <div title="Quantas destas peças formam uma unidade acabada. É o número que o Encaixe multiplica pela quantidade que você pedir.">
-                    <dt>Por peça pronta</dt><dd>{molde.pecasPorUnidade}</dd>
-                  </div>
-                </dl>
-
-                <div className="molde-acoes">
-                  {molde.situacao === "rascunho" ? (
-                    <button
-                      type="button" className="btn primary btn-sm"
-                      title="Terminar de identificar as peças e concluir o molde"
-                      onClick={() => navegar(`/montagem?molde=${molde.id}`)}
-                    >
-                      Continuar montagem
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button" className="btn primary btn-sm"
-                        title="Escolher a arte e mandar as peças deste molde para o tecido"
-                        onClick={() => void abrirMolde(molde.id, "envio")}
-                      >
-                        Encaixar
-                      </button>
-                      <button
-                        type="button" className="btn secondary btn-sm"
-                        title="Marcar piques, fio e margem, e baixar o molde em PDF ou SVG"
-                        onClick={() => navegar(`/montagem?molde=${molde.id}`)}
-                      >
-                        Montagem
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className="btn secondary btn-sm"
-                    title="Mexer nas peças, nos tamanhos e nos arquivos deste molde"
-                    onClick={() => void abrirMolde(molde.id, "editor")}
-                  >
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    className="btn ghost-danger btn-sm"
-                    title="Apagar o molde e todas as peças dele"
-                    onClick={() => void excluir(molde)}
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </article>
+              <CartaoDoMolde
+                key={molde.id}
+                molde={molde}
+                aoEncaixar={() => void abrirMolde(molde.id, "envio")}
+                aoMontar={() => navegar(`/montagem?molde=${molde.id}`)}
+                aoEditar={() => void abrirMolde(molde.id, "editor")}
+                aoExcluir={() => void excluir(molde)}
+              />
             ))}
           </div>
         )}
@@ -322,59 +232,186 @@ export function Moldes() {
   );
 }
 
+type Previa = NonNullable<MoldeNaEstante["previa"]>;
+
 /**
- * A ESTANTE VAZIA — onde a explicação importa de verdade.
- *
- * É a primeira coisa que alguém vê ao abrir o programa numa gráfica nova, e a
- * pergunta dessa pessoa não é "como adiciono", é "o que é um molde aqui
- * dentro?". Por isso o caminho inteiro está escrito, em três passos, em vez de
- * uma linha dizendo para mandar um arquivo.
+ * O CARTÃO DO MOLDE — o desenho das peças em cima, o nome e os tamanhos, e
+ * "Encaixar" como a única ação cheia: é o que se faz quase sempre. Montagem,
+ * editar e excluir ficam como ícones, à mão sem disputar com ela.
  */
-function Vazia() {
-  const passos = [
-    {
-      titulo: "Desenhe fora daqui",
-      texto: "No CorelDRAW, Audaces, Illustrator — onde você já trabalha. O molde chega pronto.",
-    },
-    {
-      titulo: "Mande o arquivo",
-      texto: "DXF, PLT, SVG ou PDF vetorial. São os formatos que trazem o contorno de verdade; foto e PNG não servem aqui.",
-    },
-    {
-      titulo: "Encaixe no tecido",
-      texto: "Guardado, o molde volta sempre na medida — e o Encaixe acomoda as peças no rolo com o melhor aproveitamento.",
-    },
-  ];
-
+function CartaoDoMolde({ molde, aoEncaixar, aoMontar, aoEditar, aoExcluir }: {
+  molde: MoldeNaEstante;
+  aoEncaixar: () => void;
+  aoMontar: () => void;
+  aoEditar: () => void;
+  aoExcluir: () => void;
+}) {
+  const rascunho = molde.situacao === "rascunho";
   return (
-    <div className="h-full py-2">
-      <div className="w-full max-w-[640px]">
-        <p className="m-0 font-titulo text-[1.3rem] text-tinta">
-          A estante está vazia
-        </p>
-        <p className="mt-2 mb-6 max-w-[520px] text-[0.85rem] leading-relaxed text-tinta-fraca">
-          Um molde guardado aqui é o contorno das peças em centímetros — não uma imagem. É isso
-          que o faz voltar exato, no tamanho certo, todas as vezes.
+    <article data-molde={molde.id} className="group flex flex-col overflow-hidden rounded-2xl border border-linha bg-painel transition-colors hover:border-[var(--accent-line)]">
+      <button
+        type="button"
+        onClick={rascunho ? aoMontar : aoEncaixar}
+        title={rascunho ? "Continuar a montagem" : "Encaixar este molde"}
+        className="relative block h-36 w-full border-0 border-b border-linha bg-painel-suave p-4"
+      >
+        <MiniaturaDoMolde pecas={molde.previa || []} />
+        {rascunho && (
+          <span className="absolute top-2 left-2 rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[0.68rem] text-ambar">
+            rascunho
+          </span>
+        )}
+      </button>
+
+      <div className="flex flex-1 flex-col gap-2 p-3.5">
+        <div className="min-w-0">
+          <h3 className="m-0 truncate text-[0.95rem] text-tinta" title={molde.nome}>{molde.nome}</h3>
+          {molde.observacoes && (
+            <p className="m-0 mt-0.5 line-clamp-2 text-[0.75rem] leading-snug text-tinta-apagada">{molde.observacoes}</p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1">
+          {molde.tamanhos.length === 0 ? (
+            <span className="text-[0.74rem] text-tinta-apagada">sem tamanho definido</span>
+          ) : molde.tamanhos.map((t) => (
+            <span key={t} className="inline-flex items-center gap-1 rounded-md border border-linha px-1.5 py-0.5 font-mono text-[0.7rem] text-tinta-fraca">
+              {molde.cores?.[t] && <span className="inline-block size-1.5 rounded-full" style={{ background: molde.cores[t] }} />}
+              {t}
+            </span>
+          ))}
+        </div>
+
+        <p className="m-0 text-[0.74rem] text-tinta-apagada"
+          title="Quantas peças de tecido saem de uma peça pronta — é o que o Encaixe multiplica pela quantidade pedida.">
+          {molde.pecasPorUnidade} peça{molde.pecasPorUnidade === 1 ? "" : "s"} por unidade · {molde.totalPecas} no molde
         </p>
 
-        <ol className="m-0 grid list-none gap-2 p-0">
-          {passos.map((passo, i) => (
-            <li
-              key={passo.titulo}
-              className="flex items-start gap-3 rounded-[12px] border border-linha bg-painel-suave px-4 py-3"
-            >
-              <span className="grid size-6 shrink-0 place-items-center rounded-full border border-[var(--accent-line)] bg-[var(--accent-soft)] font-mono text-[0.72rem]  text-ambar">
-                {i + 1}
+        <div className="mt-auto flex items-center gap-1 pt-1">
+          <button type="button" className="btn primary btn-sm mr-auto" onClick={rascunho ? aoMontar : aoEncaixar}>
+            <Icone referencia={rascunho ? "icones.svg#layers" : "icones.svg#scissors"} className="size-4" />
+            {rascunho ? "Continuar montagem" : "Encaixar"}
+          </button>
+          {!rascunho && <BotaoIcone titulo="Montagem: piques, fio, margem e PDF" icone="icones.svg#layers" aoClicar={aoMontar} />}
+          <BotaoIcone titulo="Editar peças e tamanhos" icone="icones.svg#pencil" aoClicar={aoEditar} />
+          <BotaoIcone titulo="Excluir o molde" icone="icones.svg#trash-2" aoClicar={aoExcluir} perigoso />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function BotaoIcone({ titulo, icone, aoClicar, perigoso = false }: {
+  titulo: string; icone: string; aoClicar: () => void; perigoso?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={titulo}
+      aria-label={titulo}
+      onClick={aoClicar}
+      className={[
+        "grid size-8 place-items-center rounded-full border-0 bg-transparent text-tinta-apagada transition-colors",
+        perigoso
+          ? "hover:bg-[color-mix(in_srgb,var(--danger)_18%,transparent)] hover:text-[var(--danger)]"
+          : "hover:bg-[var(--surface-hover)] hover:text-tinta",
+      ].join(" ")}
+    >
+      <Icone referencia={icone} className="size-4" />
+    </button>
+  );
+}
+
+/**
+ * As peças de um tamanho lado a lado, na proporção de verdade entre elas: a
+ * manga sai menor que a frente, como no tecido. Sem prévia (molde sem
+ * contorno), um ícone no lugar.
+ */
+function MiniaturaDoMolde({ pecas }: { pecas: Previa }) {
+  if (pecas.length === 0) {
+    return (
+      <span className="grid size-full place-items-center text-tinta-apagada">
+        <Icone referencia="icones.svg#shapes" className="size-8" />
+      </span>
+    );
+  }
+  const vao = Math.max(...pecas.map((p) => Math.max(p.largura, p.altura))) * 0.08;
+  let x = 0;
+  const postas = pecas.map((p) => {
+    const aqui = x;
+    x += p.largura + vao;
+    return { ...p, x: aqui };
+  });
+  const largura = Math.max(1, x - vao);
+  const altura = Math.max(1, ...pecas.map((p) => p.altura));
+  return (
+    <svg viewBox={`${-vao / 2} ${-vao / 2} ${largura + vao} ${altura + vao}`} className="size-full" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      {postas.map((p, i) => (
+        <path
+          key={i}
+          d={`M${p.contorno.map(([px, py]) => `${(px + p.x).toFixed(1)},${py.toFixed(1)}`).join("L")}Z`}
+          vectorEffect="non-scaling-stroke"
+          className="fill-[var(--accent-soft)] stroke-[var(--accent)] transition-[fill] group-hover:fill-[color-mix(in_srgb,var(--accent)_28%,transparent)]"
+          strokeWidth={1.4}
+          strokeLinejoin="round"
+        />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * A ESTANTE VAZIA — com um molde de exemplo pronto para usar.
+ *
+ * Quem abre a tela pela primeira vez não tem DXF à mão, e uma estante vazia
+ * com três parágrafos não mostra nada. Aqui ela mostra o que um molde É (o
+ * desenho da camiseta de exemplo), e um clique põe o exemplo na estante e
+ * abre o envio para o Encaixe — o caminho inteiro, na prática.
+ */
+function Vazia({ aoUsarExemplo, aoAdicionar }: { aoUsarExemplo: () => void; aoAdicionar: () => void }) {
+  const passos = [
+    { icone: "icones.svg#file-up", titulo: "Mande o arquivo", texto: "DXF, PLT, SVG ou PDF vetorial — do CorelDRAW, Audaces ou Illustrator." },
+    { icone: "icones.svg#ruler", titulo: "Diga as quantidades", texto: "Quantas peças de cada tamanho. O molde volta sempre na medida certa." },
+    { icone: "icones.svg#scissors", titulo: "Encaixe no tecido", texto: "As peças vão para o Encaixe, que acomoda tudo no rolo." },
+  ];
+  return (
+    <div className="mx-auto grid max-w-[880px] gap-6 py-4 md:grid-cols-[1.1fr_1fr] md:items-center">
+      <div className="overflow-hidden rounded-2xl border border-linha bg-painel">
+        <div className="h-48 border-b border-linha bg-painel-suave p-5">
+          <MiniaturaDoMolde pecas={previaDoExemplo()} />
+        </div>
+        <div className="p-4">
+          <p className="m-0 text-[0.95rem] text-tinta">{NOME_DO_EXEMPLO}</p>
+          <p className="m-0 mt-0.5 text-[0.76rem] text-tinta-apagada">Frente, costas, manga e gola · P, M, G e GG</p>
+          <button type="button" className="btn primary btn-sm mt-3" onClick={aoUsarExemplo}>
+            <Icone referencia="icones.svg#sparkles" className="size-4" />
+            Usar este exemplo
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <p className="m-0 font-titulo text-[1.2rem] text-tinta">Sua estante ainda está vazia</p>
+        <p className="m-0 mt-1.5 text-[0.84rem] leading-relaxed text-tinta-fraca">
+          Teste com a camiseta de exemplo ou traga os moldes que você já usa.
+        </p>
+        <ol className="m-0 mt-4 grid list-none gap-3 p-0">
+          {passos.map((p) => (
+            <li key={p.titulo} className="flex items-start gap-3">
+              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] text-ambar">
+                <Icone referencia={p.icone} className="size-4" />
               </span>
               <span className="min-w-0">
-                <strong className="block text-[0.88rem]  text-tinta">{passo.titulo}</strong>
-                <span className="mt-0.5 block text-[0.8rem] leading-relaxed text-tinta-fraca">
-                  {passo.texto}
-                </span>
+                <strong className="block text-[0.86rem] text-tinta">{p.titulo}</strong>
+                <span className="block text-[0.78rem] leading-relaxed text-tinta-apagada">{p.texto}</span>
               </span>
             </li>
           ))}
         </ol>
+        <button type="button" className="btn secondary btn-sm mt-5" onClick={aoAdicionar}>
+          <Icone referencia="icones.svg#plus" className="size-4" />
+          Adicionar meu molde
+        </button>
       </div>
     </div>
   );

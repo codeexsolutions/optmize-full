@@ -176,7 +176,7 @@ async function conferirMoldes() {
     throw new Error('Requisição inesperada: ' + url);
   };
   const root = await montar(elemento(MemoryRouter, null, elemento(ProvedorDeDialogo, null, elemento(Moldes))));
-  const encaixar = indice => [...document.querySelectorAll('.molde-linha')][indice]
+  const encaixar = indice => [...document.querySelectorAll('[data-molde]')][indice]
     .querySelector('button');
   await clicar(encaixar(0));
   await clicar(encaixar(1));

@@ -56,10 +56,35 @@ router.get("/", (req, res) => {
       pecasPorUnidade: pecas
         .filter((p) => p.tamanho === tamanhos[0])
         .reduce((soma, p) => soma + p.quantidade, 0),
+      previa: previaDoMolde(m.id),
     };
   });
   res.json(resumo);
 });
+
+/**
+ * O desenho do cartão na estante: as peças de UM tamanho (o base, ou o
+ * primeiro), com o contorno reduzido a poucos pontos. É só para reconhecer o
+ * molde de relance — o contorno exato continua no `GET /:id`.
+ */
+const PONTOS_NA_PREVIA = 48;
+function previaDoMolde(moldeId) {
+  const pecas = pecasDoMolde(moldeId).filter((p) => Array.isArray(p.contorno) && p.contorno.length > 2);
+  if (pecas.length === 0) return [];
+  const base = tamanhosDoMolde(moldeId).find((t) => t.base);
+  const tamanho = base && pecas.some((p) => p.tamanho === base.nome) ? base.nome : pecas[0].tamanho;
+  return pecas.filter((p) => p.tamanho === tamanho).slice(0, 12).map((p) => {
+    const passo = Math.max(1, Math.ceil(p.contorno.length / PONTOS_NA_PREVIA));
+    return {
+      papel: p.papel,
+      quantidade: p.quantidade,
+      largura: p.largura,
+      altura: p.altura,
+      contorno: p.contorno.filter((_, i) => i % passo === 0)
+        .map((pt) => [Math.round(pt.x * 10) / 10, Math.round(pt.y * 10) / 10]),
+    };
+  });
+}
 
 router.get("/:id", (req, res) => {
   const molde = db.prepare("SELECT * FROM moldes WHERE id = ?").get(req.params.id);

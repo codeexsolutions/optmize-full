@@ -67,7 +67,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { carregarImagem, lerComoDataURL } from "../utils/arquivoDeImagem";
 import { prepararArteParaONavegador } from "../api/arte";
@@ -75,6 +74,7 @@ import { formatarCm } from "../utils/numero";
 import { aliviarContorno, contornosDasManchas } from "../motores/moldes";
 import { achatarCurvas } from "../motores/ajusteDeCurvas";
 import { moldesApi } from "../api/moldes";
+import { previaDoExemplo } from "./moldes/exemplo";
 import { marcacoesPadrao, pecaParaGravar } from "../motores/montagem";
 import {
   CELULAS_NO_LADO_MAIOR, ERRO_DE_CURVA_PADRAO, FORMATOS_DE_IMAGEM, areaDo, caixaDo,
@@ -116,6 +116,61 @@ const PEGA = 16;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 12;
 
+/**
+ * UMA FOTO DE EXEMPLO, desenhada aqui: as peças da camiseta de exemplo
+ * (`moldes/exemplo.ts`, tamanho M) em papel claro sobre mesa escura, cada uma
+ * levemente torta, com um granulado de foto. É para quem abre a tela sem foto
+ * nenhuma ver o caminho inteiro — achar os riscos, informar a medida, mandar
+ * para a Montagem.
+ */
+async function fotoDeExemplo(): Promise<File> {
+  const ESCALA = 9; // pixels por cm
+  // Sem a gola: tira de 4 cm o digitalizador descarta como fina, e o exemplo
+  // começaria com um aviso.
+  const pecas = previaDoExemplo().filter((p) => p.papel !== "gola");
+  const lugares = [
+    { x: 6, y: 6, giro: -3 }, { x: 66, y: 8, giro: 2 },
+    { x: 126, y: 10, giro: -6 }, { x: 128, y: 52, giro: 4 },
+  ];
+  const canvas = document.createElement("canvas");
+  canvas.width = 180 * ESCALA;
+  canvas.height = 92 * ESCALA;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#2b2f33";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  pecas.forEach((p, i) => {
+    const lugar = lugares[i] || { x: 6 + i * 40, y: 50, giro: 0 };
+    ctx.save();
+    ctx.translate((lugar.x + p.largura / 2) * ESCALA, (lugar.y + p.altura / 2) * ESCALA);
+    ctx.rotate((lugar.giro * Math.PI) / 180);
+    ctx.beginPath();
+    p.contorno.forEach(([x, y], k) => {
+      const px = (x - p.largura / 2) * ESCALA;
+      const py = (y - p.altura / 2) * ESCALA;
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.fillStyle = "#ecebe4";
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.restore();
+  });
+  // O granulado: sem ele a "foto" é limpa demais para parecer uma.
+  const dados = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = dados.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const ruido = (Math.random() - 0.5) * 14;
+    px[i] = (px[i] ?? 0) + ruido;
+    px[i + 1] = (px[i + 1] ?? 0) + ruido;
+    px[i + 2] = (px[i + 2] ?? 0) + ruido;
+  }
+  ctx.putImageData(dados, 0, 0);
+  const blob = await new Promise<Blob>((pronto, falhou) =>
+    canvas.toBlob((b) => (b ? pronto(b) : falhou(new Error("não deu para montar a foto de exemplo"))), "image/png"));
+  return new File([blob], "moldes-de-exemplo.png", { type: "image/png" });
+}
+
 export function Digitalizar() {
   const navegar = useNavigate();
   const [nome, setNome] = useState("");
@@ -143,6 +198,29 @@ export function Digitalizar() {
   const entrada = useRef<HTMLInputElement>(null);
   const tela = useRef<HTMLCanvasElement>(null);
   const moldura = useRef<HTMLDivElement>(null);
+
+  /*
+   * A FOTO CABE INTEIRA NA ÁREA, nos dois sentidos, no zoom de 100%: a largura
+   * em que ela cabe sai do tamanho da área (menos a folga de 16 px de cada
+   * lado) e da proporção da foto. O zoom multiplica essa largura. Era sempre a
+   * largura da área inteira, e foto em pé passava da tela por baixo.
+   */
+  const [larguraNaTela, setLarguraNaTela] = useState(0);
+  useEffect(() => {
+    const caixa = moldura.current;
+    if (!caixa || !imagem) return;
+    const proporcao = (imagem.naturalWidth || imagem.width) / Math.max(1, imagem.naturalHeight || imagem.height);
+    const medir = () => {
+      const w = Math.max(50, caixa.clientWidth - 32);
+      const h = Math.max(50, caixa.clientHeight - 32);
+      const cabe = Math.floor(Math.min(w, h * proporcao));
+      setLarguraNaTela((antes) => (Math.abs(antes - cabe) > 1 ? cabe : antes));
+    };
+    medir();
+    const observador = new ResizeObserver(medir);
+    observador.observe(caixa);
+    return () => observador.disconnect();
+  }, [imagem]);
 
   // A caixa e a área saem da curva ACHATADA: mover uma alça muda a barriga da
   // curva sem mexer em nó nenhum, e a medida da peça tem que acompanhar isso.
@@ -439,7 +517,9 @@ export function Digitalizar() {
     };
     caixa.addEventListener("wheel", aoRodar, { passive: false });
     return () => caixa.removeEventListener("wheel", aoRodar);
-  }, []);
+    // `imagem`: a área da foto só existe com uma foto aberta. Ligado só na
+    // montagem da tela, o ouvinte nunca achava a área e a roda não aproximava.
+  }, [imagem]);
 
   /*
    * O teclado: Ctrl+Z desfaz; Delete, setas, +, Ctrl+A e Esc são do editor
@@ -560,26 +640,34 @@ export function Digitalizar() {
     procurar(imagem, erroCurva);
   };
 
-  const nosDaEscolhida = edicao[qual]?.length ?? 0;
 
   return (
-    <>
-      <div
-        {...aoArrastar}
-        className={`rounded-[12px] transition-colors ${
-          arquivoEmCima ? "outline outline-2 outline-offset-2 outline-[var(--accent-line)]" : ""
-        }`}
-      >
-      <Cartao
-        titulo="Digitalizar molde"
-        icone="icones.svg#scan-line"
-        apoio="Mande a foto dos moldes na mesa; eu acho o risco de cada um. A medida você informa depois."
-        acao={
-          <button type="button" className="btn secondary" onClick={() => entrada.current?.click()}>
+    /*
+     * A JANELA INTEIRA, no padrão dos Moldes: a barra própria em cima, parada,
+     * sem o cabeçalho de página da casca (ver `bancada`, em casca/Casca.tsx),
+     * e o trabalho rolando por baixo dela.
+     */
+    <div {...aoArrastar} className="flex h-full min-h-0 flex-col bg-fundo">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-linha px-5 py-3.5">
+        <div className="min-w-0">
+          <h1 className="m-0 font-titulo text-[1.25rem] leading-tight text-tinta">Digitalizar</h1>
+          <p className="m-0 mt-0.5 text-[0.78rem] text-tinta-apagada">
+            Mande a foto dos moldes na mesa; eu acho o risco de cada um. A medida você informa depois.
+          </p>
+        </div>
+        {/* Sem foto, quem escolhe é a área grande de soltar; com foto, troca daqui. */}
+        {imagem && (
+          <button type="button" className="btn secondary btn-sm ml-auto" onClick={() => entrada.current?.click()}>
             <Icone referencia="icones.svg#image-plus" className="size-4" />
-            Escolher imagem
+            Trocar a foto
           </button>
-        }
+        )}
+      </header>
+
+      <div
+        className={`flex min-h-0 flex-1 flex-col px-5 py-4 transition-colors ${imagem ? "overflow-hidden" : "overflow-y-auto"} ${
+          arquivoEmCima ? "outline outline-2 -outline-offset-4 outline-[var(--accent-line)]" : ""
+        }`}
       >
         <input
           ref={entrada}
@@ -591,123 +679,146 @@ export function Digitalizar() {
         />
 
         {!imagem && (
-          <div
-            onClick={() => entrada.current?.click()}
-            className={`cursor-pointer rounded-[10px] border border-dashed p-6 text-center transition-colors ${
-              arquivoEmCima ? "border-ambar bg-[var(--accent-soft)]" : "border-linha"
-            }`}
-          >
-            <Icone referencia="icones.svg#scan-line" className="mx-auto size-8 text-tinta-apagada" />
-            <p className="mt-2 mb-1 text-[0.9rem] ">
-              {arquivoEmCima ? "Solte a foto aqui" : "Arraste a foto para cá, ou clique para escolher"}
-            </p>
-            <p className="m-0 text-[0.82rem] text-tinta-fraca">
-              {FORMATOS_DE_IMAGEM}. Os moldes <strong>recortados</strong>, espalhados na mesa
-              <strong> sem encostar um no outro</strong>, fotografados <strong>de cima</strong>.
-              Tanto faz molde claro em mesa escura ou o contrário — o que importa é contrastar.
-              Foto tirada de lado sai torta: esta tela ainda não corrige perspectiva.
-            </p>
+          <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[1.25fr_1fr] md:items-stretch">
+            <button
+              type="button"
+              onClick={() => entrada.current?.click()}
+              className={`group flex h-full min-h-[260px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
+                arquivoEmCima
+                  ? "border-ambar bg-[var(--accent-soft)]"
+                  : "border-linha bg-painel-suave hover:border-[var(--accent-line)]"
+              }`}
+            >
+              <span className="grid size-14 place-items-center rounded-2xl bg-[var(--accent-soft)] text-ambar transition-transform group-hover:scale-105">
+                <Icone referencia="icones.svg#scan-line" className="size-7" />
+              </span>
+              <span className="text-[1rem] text-tinta">
+                {arquivoEmCima ? "Solte a foto aqui" : "Arraste a foto dos moldes para cá"}
+              </span>
+              <span className="text-[0.8rem] text-tinta-apagada">ou clique para escolher · {FORMATOS_DE_IMAGEM}</span>
+            </button>
+
+            <div className="flex flex-col gap-3 self-start rounded-2xl border border-linha bg-painel p-5">
+              <p className="m-0 text-[0.9rem] text-tinta">Para sair certo</p>
+              {[
+                { icone: "icones.svg#scissors", titulo: "Moldes recortados", texto: "Cada peça solta, de papel ou papelão." },
+                { icone: "icones.svg#layout-grid", titulo: "Sem encostar um no outro", texto: "Espalhados na mesa, com espaço entre eles." },
+                { icone: "icones.svg#camera", titulo: "Foto de cima, com contraste", texto: "Molde claro em mesa escura, ou o contrário. Foto de lado sai torta." },
+              ].map((dica) => (
+                <div key={dica.titulo} className="flex items-start gap-3">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] text-ambar">
+                    <Icone referencia={dica.icone} className="size-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <strong className="block text-[0.84rem] text-tinta">{dica.titulo}</strong>
+                    <span className="block text-[0.77rem] leading-relaxed text-tinta-apagada">{dica.texto}</span>
+                  </span>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn secondary btn-sm mt-2 self-start"
+                onClick={() => void fotoDeExemplo().then((foto) => abrir(foto))}
+              >
+                <Icone referencia="icones.svg#sparkles" className="size-4" />
+                Testar com foto de exemplo
+              </button>
+            </div>
           </div>
         )}
 
         {imagem && (
-          <div className="flex flex-col gap-3">
-            <div
-              ref={moldura}
-              className="max-h-[70vh] overflow-auto rounded-[10px] border border-linha bg-painel-suave"
-            >
-              <canvas
-                ref={tela}
-                id="digitalizar-tela"
-                className="block h-auto max-w-none touch-none select-none"
-                style={{ width: `${zoom * 100}%`, cursor: edicao.length > 0 ? cursor : "default" }}
-                onPointerLeave={() => editor.sair()}
-                onPointerDown={aoApertar}
-                onPointerMove={aoMover}
-                onPointerUp={aoSoltar}
-                onPointerCancel={aoSoltar}
-                onDoubleClick={aoDobrarClique}
-              />
-            </div>
+          /*
+           * A FOTO ABERTA É BANCADA: a foto à esquerda, do tamanho que sobrar da
+           * janela, e um painel estreito à direita com o que se decide. A página
+           * não rola — quem rola é a foto (no zoom) e o painel, cada um por si.
+           */
+          <div className="flex min-h-0 flex-1 gap-4">
+            <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-linha bg-painel-suave">
+              {edicao.length > 0 && achado && (
+                <div className="shrink-0 bg-painel">
+                  <BarraDosNos editor={editor} />
+                  <JanelaDeAtalhos aberto={editor.atalhosAbertos} aoFechar={() => editor.abrirAtalhos(false)} comMontagem={false} />
+                </div>
+              )}
 
-            {ocupado && <p className="m-0 text-[0.85rem] text-tinta-fraca">Procurando os riscos...</p>}
+              <div ref={moldura} className="min-h-0 flex-1 overflow-auto">
+                <div className="grid min-h-full min-w-full w-max place-items-center p-4">
+                  <canvas
+                    ref={tela}
+                    id="digitalizar-tela"
+                    className="block h-auto max-w-none touch-none select-none rounded-lg shadow-[var(--shadow-lift)]"
+                    style={{
+                      width: larguraNaTela ? `${Math.round(larguraNaTela * zoom)}px` : "100%",
+                      cursor: edicao.length > 0 ? cursor : "default",
+                    }}
+                    onPointerLeave={() => editor.sair()}
+                    onPointerDown={aoApertar}
+                    onPointerMove={aoMover}
+                    onPointerUp={aoSoltar}
+                    onPointerCancel={aoSoltar}
+                    onDoubleClick={aoDobrarClique}
+                  />
+                </div>
+              </div>
 
-            {edicao.length > 0 && achado && (
-              <>
-                <p className="m-0 text-[0.85rem]">
-                  Achei <strong className="text-ambar">{edicao.length}</strong>
-                  {edicao.length === 1 ? " peça" : " peças"} na foto.
-                </p>
+              {ocupado && (
+                <div className="absolute inset-0 grid place-items-center bg-[color-mix(in_srgb,var(--bg)_55%,transparent)]">
+                  <span className="flex items-center gap-2 rounded-full bg-painel px-4 py-2 text-[0.85rem] text-tinta shadow-[var(--shadow-lift)]">
+                    <Icone referencia="icones.svg#loader-circle" className="size-4 animate-spin text-ambar" />
+                    Procurando os riscos…
+                  </span>
+                </div>
+              )}
 
-                {achado.avisos.map((a: string) => (
-                  <p key={a} className="m-0 flex items-start gap-2 text-[0.82rem] text-tinta-fraca">
-                    <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-3.5 shrink-0 text-ambar" />
-                    {a}
-                  </p>
-                ))}
-
-                {/* ------------------------------------------------ a edição */}
-                <div className="rounded-[10px] border border-linha bg-painel-suave p-3">
-                  <p className="mt-0 mb-1 text-[0.85rem] ">Ajustar o traço à mão</p>
-                  <p className="mt-0 mb-2 text-[0.8rem] text-tinta-fraca">
-                    A <strong>peça {qual + 1}</strong> tem {nosDaEscolhida} nós. É o editor do Corel:{" "}
-                    <strong>clique</strong> num nó para selecionar, <strong>Shift</strong> para somar,{" "}
-                    <strong>arraste numa área vazia</strong> para selecionar pelo retângulo; arraste os
-                    nós, as <span className="text-[#4d9dff]">alças azuis</span> ou o próprio{" "}
-                    <strong>traço</strong> para dobrar a curva; <strong>setas</strong> empurram (Shift, dez vezes
-                    mais); <strong>Delete</strong> apaga; <strong>dois cliques</strong> no traço põem um nó.
-                    Nó <strong>redondo</strong> é curva, <strong>quadrado</strong> é canto.{" "}
-                    <strong>Roda do mouse</strong> aproxima onde o ponteiro está.
-                  </p>
-                  <div className="mb-2 overflow-hidden rounded-[8px] border border-linha bg-painel">
-                    <BarraDosNos editor={editor} />
-                    <JanelaDeAtalhos aberto={editor.atalhosAbertos} aoFechar={() => editor.abrirAtalhos(false)} comMontagem={false} />
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button" className="btn secondary"
-                      onClick={voltarUmPasso} disabled={desfazer.length === 0}
-                    >
-                      <Icone referencia="icones.svg#rotate-ccw" className="size-4" />
-                      Desfazer {desfazer.length > 0 ? `(${desfazer.length})` : ""}
+              {/* O zoom e o desfazer, flutuando sobre a foto. */}
+              {edicao.length > 0 && achado && (
+                <div className="pointer-events-none absolute right-3 bottom-3 left-3 flex items-end justify-between gap-2">
+                  <button
+                    type="button"
+                    className="btn secondary btn-sm pointer-events-auto border border-linha bg-painel! shadow-[var(--shadow-lift)]"
+                    onClick={voltarUmPasso} disabled={desfazer.length === 0}
+                    title="Desfazer (Ctrl+Z)"
+                  >
+                    <Icone referencia="icones.svg#rotate-ccw" className="size-4" />
+                    Desfazer
+                  </button>
+                  <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-linha bg-painel px-1.5 py-1 shadow-[var(--shadow-lift)]">
+                    <button type="button" className="grid size-7 place-items-center rounded-full text-tinta-fraca hover:bg-[var(--surface-hover)] hover:text-tinta"
+                      onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z / 1.25))} aria-label="Afastar">
+                      <Icone referencia="icones.svg#minus" className="size-4" />
                     </button>
-                    <label className="flex min-w-[180px] flex-1 items-center gap-2 text-[0.82rem] text-tinta-fraca">
-                      <span className="shrink-0">Aproximar</span>
-                      <input
-                        type="range" min={ZOOM_MIN} max={ZOOM_MAX} step="0.25" value={zoom}
-                        onChange={(e) => setZoom(Number(e.target.value))}
-                        className="min-w-0 flex-1"
-                      />
-                      <span className="w-12 shrink-0 text-right font-mono">{zoom.toFixed(1)}x</span>
-                    </label>
+                    <button type="button" className="min-w-12 rounded-full px-1 font-mono text-[0.75rem] text-tinta-fraca hover:text-tinta"
+                      onClick={() => setZoom(1)} title="Ver a foto inteira">
+                      {Math.round(zoom * 100)}%
+                    </button>
+                    <button type="button" className="grid size-7 place-items-center rounded-full text-tinta-fraca hover:bg-[var(--surface-hover)] hover:text-tinta"
+                      onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z * 1.25))} aria-label="Aproximar">
+                      <Icone referencia="icones.svg#plus" className="size-4" />
+                    </button>
                   </div>
                 </div>
+              )}
+            </section>
 
-                {/* Refaz a busca, então mora longe dos botões de edição e avisa
-                    antes de jogar o ajuste fora. */}
-                <label className="flex items-center gap-3 text-[0.82rem] text-tinta-fraca">
-                  <span className="shrink-0">Nós por curva</span>
-                  <input
-                    type="range" min="0.3" max="4" step="0.1" value={erroDeCurva}
-                    onChange={(e) => refazer(Number(e.target.value))}
-                    className="min-w-0 flex-1"
-                  />
-                  <span className="w-20 shrink-0 text-right font-mono">
-                    {erroDeCurva <= 0.8 ? "mais" : erroDeCurva >= 2.5 ? "menos" : "médio"}
-                  </span>
-                </label>
+            {edicao.length > 0 && achado && (
+              <aside className="flex min-h-0 w-[320px] shrink-0 flex-col overflow-hidden rounded-2xl border border-linha bg-painel">
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                  <p className="m-0 text-[0.95rem] text-tinta">
+                    <strong className="text-ambar">{edicao.length}</strong> {edicao.length === 1 ? "peça encontrada" : "peças encontradas"}
+                  </p>
+                  <p className="m-0 mt-0.5 text-[0.76rem] text-tinta-apagada">Clique numa peça na foto para ajustar o traço.</p>
 
-                {/* ------------------------------------------------ as medidas */}
-                <div className="rounded-[10px] border border-linha bg-painel-suave p-3">
-                  <p className="mt-0 mb-1 text-[0.85rem] ">
-                    Meça as peças com a fita e diga quanto deu cada uma
-                  </p>
-                  <p className="mt-0 mb-2 text-[0.8rem] text-tinta-fraca">
-                    Cada peça medida fica com a sua medida. A que ficar sem medida segue a média das
-                    medidas — numa foto tirada reta de cima, medir uma já basta.
-                  </p>
-                  <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[0.82rem]">
+                  {achado.avisos.map((a: string) => (
+                    <p key={a} className="m-0 mt-2 flex items-start gap-2 text-[0.76rem] text-tinta-fraca">
+                      <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-3.5 shrink-0 text-ambar" />
+                      {a}
+                    </p>
+                  ))}
+
+                  <p className="m-0 mt-5 text-[0.84rem] text-tinta">Medidas</p>
+                  <p className="m-0 mt-0.5 text-[0.74rem] text-tinta-apagada">Meça uma peça com a fita; as outras seguem a escala.</p>
+                  <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
                     {edicao.map((_, i) => {
                       const m = medidas[i] ?? MEDIDA_VAZIA;
                       const p = emCm?.pecas[i];
@@ -715,84 +826,87 @@ export function Digitalizar() {
                       return (
                         <li
                           key={i}
-                          className={`flex flex-wrap items-center gap-2 rounded-[8px] px-1.5 py-1 ${i === qual ? "bg-[var(--accent-soft)]" : ""}`}
+                          className={`rounded-xl border px-2.5 py-2 transition-colors ${i === qual ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-linha"}`}
                         >
-                          <button type="button" className="flex items-center gap-2" onClick={escolher} title="Ver esta peça na foto">
+                          <button type="button" className="flex w-full items-center gap-2 text-left" onClick={escolher} title="Ver esta peça na foto">
                             <span className="size-2.5 shrink-0 rounded-full" style={{ background: corDa(i) }} />
-                            <span className={i === qual ? " text-ambar" : ""}>Peça {i + 1}</span>
+                            <span className={`text-[0.82rem] ${i === qual ? "text-ambar" : "text-tinta"}`}>Peça {i + 1}</span>
+                            {p && (
+                              <span className="ml-auto font-mono text-[0.72rem] text-tinta-apagada">
+                                {formatarCm(p.largura)} × {formatarCm(p.altura)}
+                              </span>
+                            )}
                           </button>
-                          <select
-                            value={m.lado}
-                            onChange={(e) => mudarMedida(i, { lado: e.target.value as Lado })}
-                            onFocus={escolher}
-                            className="w-auto!"
-                            aria-label={`Lado medido da peça ${i + 1}`}
-                          >
-                            <option value="altura">altura</option>
-                            <option value="largura">largura</option>
-                          </select>
-                          <input
-                            type="text" inputMode="decimal" value={m.texto} placeholder="0,0"
-                            onChange={(e) => mudarMedida(i, { texto: e.target.value })}
-                            onFocus={escolher}
-                            className="w-20!" aria-label={`Medida da peça ${i + 1} em centímetros`}
-                            aria-invalid={m.texto.trim() !== "" && lerCm(m.texto) === null}
-                          />
-                          <span className="text-tinta-fraca">cm</span>
-                          {p && (
-                            <span className={p.medida ? "" : "text-tinta-fraca"}>
-                              → {formatarCm(p.largura)} × {formatarCm(p.altura)}{p.medida ? "" : " (pela média)"}
-                            </span>
-                          )}
+                          <div className="mt-1.5 flex items-center gap-1.5">
+                            <select
+                              value={m.lado}
+                              onChange={(e) => mudarMedida(i, { lado: e.target.value as Lado })}
+                              onFocus={escolher}
+                              className="m-0! w-auto! py-1! text-[0.78rem]!"
+                              aria-label={`Lado medido da peça ${i + 1}`}
+                            >
+                              <option value="altura">altura</option>
+                              <option value="largura">largura</option>
+                            </select>
+                            <input
+                              type="text" inputMode="decimal" value={m.texto}
+                              placeholder={p && !p.medida ? "pela escala" : "0,0"}
+                              onChange={(e) => mudarMedida(i, { texto: e.target.value })}
+                              onFocus={escolher}
+                              className="m-0! min-w-0 flex-1 py-1! text-[0.8rem]!"
+                              aria-label={`Medida da peça ${i + 1} em centímetros`}
+                              aria-invalid={m.texto.trim() !== "" && lerCm(m.texto) === null}
+                            />
+                            <span className="text-[0.76rem] text-tinta-apagada">cm</span>
+                          </div>
                         </li>
                       );
                     })}
                   </ul>
 
-                  {emCm && emCm.discordantes.length > 0 && (() => {
-                    // Numa foto só, as escalas batem: medida que foge é número
-                    // errado, ou altura no lugar da largura. Ver `riscosEmCm`.
-                    const nums = emCm.discordantes.map((i: number) => i + 1);
-                    const medidasContadas = emCm.pecas.filter((p: any) => p.medida).length;
-                    const quais = nums.length === 1
-                      ? `A medida da peça ${nums[0]} não bate com as outras`
-                      : `As medidas das peças ${nums.slice(0, -1).join(", ")} e ${nums[nums.length - 1]} não batem ${nums.length === medidasContadas ? "entre si" : "com as outras"}`;
-                    return (
-                      <p className="mt-2 mb-0 text-[0.82rem] text-ambar" role="status">
-                        {quais} — mais de 10% de diferença na escala. Confira o número e se é altura ou largura.
-                      </p>
-                    );
-                  })()}
-                  {!emCm && (
-                    <p className="mt-2.5 mb-0 text-[0.82rem] text-tinta-fraca">
-                      Sem medida os riscos não têm tamanho — a foto sozinha não diz se o molde tem 60 cm
-                      ou 6 cm.
+                  {emCm && emCm.discordantes.length > 0 && (
+                    <p className="m-0 mt-2 flex items-start gap-2 text-[0.76rem] text-ambar" role="status">
+                      <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-3.5 shrink-0" />
+                      {emCm.discordantes.length === 1
+                        ? `A medida da peça ${emCm.discordantes[0] + 1} não bate com as outras.`
+                        : `As medidas das peças ${emCm.discordantes.map((i: number) => i + 1).join(", ")} não batem.`}
+                      {" "}Confira o número e se é altura ou largura.
                     </p>
                   )}
+
+                  {/* Refaz a busca, então mora longe dos botões de edição. */}
+                  <label className="mt-5 block">
+                    <span className="flex items-center justify-between text-[0.84rem] text-tinta">
+                      Detalhe do traço
+                      <span className="text-[0.74rem] text-tinta-apagada">
+                        {erroDeCurva <= 0.8 ? "mais nós" : erroDeCurva >= 2.5 ? "menos nós" : "médio"}
+                      </span>
+                    </span>
+                    <input
+                      type="range" min="0.3" max="4" step="0.1" value={erroDeCurva}
+                      onChange={(e) => refazer(Number(e.target.value))}
+                      className="mt-1 w-full"
+                    />
+                  </label>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-2 text-[0.85rem]">
-                    <span className="shrink-0">Nome do molde</span>
-                    <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className="w-[240px]!" />
+                <div className="shrink-0 border-t border-linha p-4">
+                  <label className="block">
+                    <span className="text-[0.78rem] text-tinta-fraca">Nome do molde</span>
+                    <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className="m-0! mt-1 w-full!" />
                   </label>
-                  <button type="button" className="btn primary" onClick={() => void continuar()} disabled={!emCm || criando}>
+                  <button type="button" className="btn primary mt-3 w-full justify-center" onClick={() => void continuar()} disabled={!emCm || criando}
+                    title={emCm ? "O molde vai para a estante como rascunho e abre na Montagem" : "Informe a medida de pelo menos uma peça"}>
                     <Icone referencia="icones.svg#arrow-right" className="size-4" />
                     {criando ? "Criando o molde…" : "Continuar para a montagem"}
                   </button>
+                  {!emCm && <p className="m-0 mt-2 text-center text-[0.74rem] text-tinta-apagada">Falta a medida de uma peça.</p>}
                 </div>
-
-                <p className="m-0 text-[0.8rem] text-tinta-fraca">
-                  O molde vai para a estante como <strong>rascunho</strong>, e a Montagem abre em cima
-                  dele: lá cada peça ganha nome, pique, fio e margem, e de lá saem o PDF, o SVG e o
-                  Encaixe.
-                </p>
-              </>
+              </aside>
             )}
           </div>
         )}
-      </Cartao>
       </div>
-    </>
+    </div>
   );
 }

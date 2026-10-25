@@ -967,9 +967,15 @@ function Visualizador({ arquivo, aoFechar }: { arquivo: ArquivoDaGaleria; aoFech
             <Icone referencia="icones.svg#x" className="size-4" />
           </button>
         </header>
-        <div className="grid min-h-0 flex-1 place-items-center overflow-auto p-4">
+        {/*
+          A imagem fica PRESA à área da janela (absoluta, `object-contain`).
+          Era uma grade com `max-h-full`: a linha da grade cresce com o
+          conteúdo, o 100% não limitava nada e a arte de impressão — milhares
+          de pixels — abria no tamanho real, muito maior que a tela.
+        */}
+        <div className="relative min-h-0 flex-1 p-4">
           {jeito === "imagem" ? (
-            <img src={arquivo.url} alt={arquivo.nome} className="max-h-full max-w-full rounded-xl object-contain shadow-[var(--shadow-lift)]" />
+            <img src={arquivo.url} alt={arquivo.nome} className="absolute inset-4 m-auto size-[calc(100%-2rem)] object-contain" />
           ) : (
             <iframe src={arquivo.url} title={arquivo.nome} className="size-full rounded-xl border-0 bg-white" />
           )}

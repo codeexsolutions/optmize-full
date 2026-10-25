@@ -2779,10 +2779,10 @@ function atualizarTempoDoCarregamento() {
  * ===========================================================================
  *
  * Enquanto o motor procura, a própria mesa mostra o que ele está testando.
- * Cada worker manda o encaixe da vez (o "fantasma", duas vezes por segundo) e
+ * Cada worker manda o encaixe da vez (o "fantasma", dez vezes por segundo) e
  * cada recorde (ver "O DESENHO AO VIVO", em `encaixeWorker.js`), e a mesa
- * MONTA cada um deles: as peças aparecem uma a uma, direto no lugar que o
- * motor deu a elas. Fechado o arranjo, vem o próximo, quase sem pausa.
+ * mostra cada um INTEIRO, trocando pelo seguinte em `TROCA_MS`: ela pisca com
+ * as tentativas de verdade, no lugar que o motor deu a cada peça.
  *
  * A ANIMAÇÃO NUNCA PARA. Há trechos em que o motor não manda quadro nenhum —
  * o "Encolhendo o rolo" roda noutros workers, que não desenham —, e uma mesa
@@ -2805,9 +2805,20 @@ function atualizarTempoDoCarregamento() {
 const RASCUNHO_ATE_CM = 500;
 /** Quantas tentativas ficam guardadas para a mesa remontar quando o motor cala. */
 const QUADROS_GUARDADOS = 12;
-/** Quanto leva para montar um arranjo inteiro, e a pausa com ele pronto. */
-const MONTAGEM_MS = 450;
-const PAUSA_MONTADO_MS = 120;
+/*
+ * O RITMO DA MESA (2026-10-25): cada tentativa aparece INTEIRA, de uma vez, e a
+ * seguinte entra logo — a mesa pisca com o que o motor está testando de
+ * verdade. Montar peça por peça em 450 ms parecia animação ilustrativa.
+ *
+ * Sem tentativa nova (a fase do sparrow só manda recorde), o quadro da vez
+ * fica parado mais tempo antes de a mesa voltar aos guardados: piscar os
+ * mesmos doze em roda, rápido, denunciaria o laço.
+ */
+const MONTAGEM_MS = 0;
+/** Quanto uma tentativa fica na mesa quando já há outra esperando. */
+const TROCA_MS = 90;
+/** Quanto ela fica quando o motor está calado, antes de voltar aos guardados. */
+const SEGURA_MS = 700;
 
 let lacoDaPrevia = 0;
 let previaAberta = false;
@@ -2835,7 +2846,7 @@ function receberTentativa(especieOuQuadro, resultado, larguraTecido) {
   let quadro = especieOuQuadro;
   if (typeof especieOuQuadro === "string") {
     const agora = Date.now();
-    if (especieOuQuadro === "fantasma" && agora - ultimoQuadroDaThreadEm < 500) return;
+    if (especieOuQuadro === "fantasma" && agora - ultimoQuadroDaThreadEm < 100) return;
     ultimoQuadroDaThreadEm = agora;
     const posicoes = resultado.posicoes || [];
     const pecas = new Float32Array(posicoes.length * 7);
@@ -2884,7 +2895,7 @@ function comecarMontagem(agora) {
   const chegada = new Float32Array(total).fill(Infinity);
   const passo = ordem.length > 1 ? MONTAGEM_MS / (ordem.length - 1) : 0;
   ordem.forEach((indice, k) => { chegada[indice] = k * passo; });
-  return { quadro, vista, chegada, inicio: agora, fim: MONTAGEM_MS + PAUSA_MONTADO_MS };
+  return { quadro, vista, chegada, inicio: agora };
 }
 
 /*
@@ -2921,7 +2932,8 @@ function pintarPrevia() {
   // A busca devolveu: daqui em diante a mesa é do resultado de verdade.
   if (resultadoGeradoNesteCarregamento) return;
 
-  if (!montagem || agora - montagem.inicio > montagem.fim) {
+  const naMesa = montagem ? agora - montagem.inicio : Infinity;
+  if (!montagem || naMesa > (quadroNaoMontado ? TROCA_MS : SEGURA_MS)) {
     montagem = comecarMontagem(agora);
     if (!montagem) return;
   }

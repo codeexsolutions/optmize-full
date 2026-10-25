@@ -126,6 +126,8 @@ export interface MoldeNaEstante {
   totalPecas: number;
   /** Quantas peças de tecido saem de UMA peça pronta, num tamanho só. */
   pecasPorUnidade: number;
+  /** As peças de um tamanho, com o contorno enxuto ([x, y] em cm), para o desenho do cartão. */
+  previa?: { papel: string; quantidade: number; largura: number; altura: number; contorno: [number, number][] }[];
 }
 
 /** O molde aberto, com tudo dentro. */
