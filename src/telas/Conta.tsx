@@ -31,8 +31,8 @@ import { Painel } from "./Painel";
 
 /** Como o papel se chama em português, para quem não fala `owner`. */
 const PAPEL: Record<string, string> = {
-  owner: "Dono da empresa",
-  dono: "Dono da empresa",
+  owner: "Usuário master",
+  dono: "Usuário master",
   admin: "Administrador",
   member: "Funcionário",
   operador: "Funcionário",

@@ -69,7 +69,7 @@ interface Props {
 
 /** O que cada papel lê no cartão do pé. */
 const PAPEL: Record<string, string> = {
-  dono: "Dono da empresa",
+  dono: "Usuário master",
   admin: "Administrador",
   operador: "Funcionário",
   leitor: "Consulta",
