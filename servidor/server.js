@@ -149,6 +149,8 @@ app.get("/licenca", (req, res) => {
 // porque quem chega primeiro é quem manda no limite.
 // As artes sobem em binário pela rota /arte (o próprio router cuida do
 // limite); aqui sobra só o desenho do encaixe, que é pequeno.
+// Os ajustes do último Optmizar, guardados para o próximo (ver o arquivo).
+app.use("/api/encaixe", require("./ajustes-encaixe-api"));
 app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixePdfRouter);
 app.use("/api/encaixe", express.json({ limit: "2mb" }), encaixeMemoriaRouter);
 

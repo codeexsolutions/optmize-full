@@ -5458,6 +5458,7 @@ escopo.ouvir(btnOptmizarDeNovo, "click", () => {
 // minutos, e um modal parado por cima dela pareceria travamento.
 escopo.ouvir(btnAjustesOptmizar, "click", () => {
   fecharAjustes();
+  guardarAjustes();
   optmizar();
 });
 
@@ -5512,6 +5513,70 @@ for (const op of giroOpcoes) {
 escopo.ouvir(encaixeGiroTodasSelect, "change", marcarGiro);
 
 marcarGiro();
+
+/*
+ * ===========================================================================
+ * OS AJUSTES DO ÚLTIMO OPTMIZAR VOLTAM NO PRÓXIMO
+ * ===========================================================================
+ *
+ * O que foi confirmado no modal fica guardado na máquina, e é o que o modal
+ * mostra da próxima vez — inclusive depois de fechar o programa. É o que
+ * deixa a produção padronizada: o espaço e a largura de hoje são os de ontem,
+ * a não ser que alguém mude de propósito. O arquivo e o porquê de não ser o
+ * `localStorage` estão em `servidor/ajustes-encaixe-api.js`.
+ *
+ * O TEMPO só é guardado quando a pessoa o mexeu. Sem isso ele é sugerido
+ * pelo tamanho do trabalho (`tempoSugerido`), e guardar a sugestão de um
+ * serviço de duas peças prenderia o de duzentas no mesmo tempo curto.
+ *
+ * O projeto que chega com ajustes próprios (`mandarProjeto`) continua
+ * mandando nos campos: é o ajuste daquele trabalho.
+ */
+function guardarAjustes() {
+  const ajustes = {
+    largura: Number(encaixeLarguraInput.value),
+    espaco: Number(encaixeEspacoInput.value),
+    espacoY: Number(encaixeEspacoYInput.value),
+    giro: encaixeGiroTodasSelect.value,
+    comprimento: Number(encaixeComprimentoInput.value) || 0,
+    tempo: tempoAjustadoPeloUsuario ? Number(encaixeTempoInput.value) : null,
+  };
+  // Sem esperar e sem aviso: falhar em guardar não pode atrasar o encaixe,
+  // só faz o próximo modal abrir como abria antes.
+  fetch("/api/encaixe/ajustes", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(ajustes),
+  }).catch(() => {});
+}
+
+async function lerAjustesGuardados() {
+  let ajustes;
+  try {
+    const resposta = await fetch("/api/encaixe/ajustes");
+    if (!resposta.ok) return;
+    ajustes = await resposta.json();
+  } catch {
+    return;
+  }
+  // Quem já abriu o modal e está digitando não perde o que digitou.
+  if (ajustesAberto()) return;
+  if (ajustes.largura) encaixeLarguraInput.value = ajustes.largura;
+  if (ajustes.espaco !== undefined) encaixeEspacoInput.value = ajustes.espaco;
+  if (ajustes.espacoY !== undefined) encaixeEspacoYInput.value = ajustes.espacoY;
+  if (ajustes.comprimento !== undefined) encaixeComprimentoInput.value = ajustes.comprimento || "";
+  if (ajustes.giro) {
+    encaixeGiroTodasSelect.value = ajustes.giro;
+    marcarGiro();
+  }
+  if (ajustes.tempo) {
+    encaixeTempoInput.value = ajustes.tempo;
+    tempoAjustadoPeloUsuario = true;
+  }
+  atualizarPainelDoTrabalho();
+}
+
+void lerAjustesGuardados();
 
 /*
  * Aqui morava a TELA DE MOLDES, em ~1.400 linhas imperativas: a estante, o
