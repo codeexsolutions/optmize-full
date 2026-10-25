@@ -94,6 +94,30 @@ const QUALIDADE = 92;
 
 /**
  * ===========================================================================
+ * COMO A ARTE É ABERTA — sem os tetos de segurança do libvips
+ * ===========================================================================
+ *
+ * O TIFF salvo pelo Photoshop com as camadas guarda TODAS elas num campo só
+ * do cabeçalho (o 37724), além da imagem achatada que é o que interessa aqui.
+ * Numa arte de 6851 × 12237 esse campo tinha 54 MB, e o libtiff recusa
+ * qualquer campo que passe de 50 MB — um teto contra arquivo malicioso, que o
+ * libvips liga por padrão:
+ *
+ *   tiff2vips: Cumulated memory allocation of 11564251 + 42365344 bytes is
+ *   beyond the 52428800 cumulated byte limit defined in open options
+ *
+ * O sintoma era "Não consegui abrir como imagem" em TODO TIFF com camadas,
+ * um por um — e quem largou vinte de uma vez achou que era a quantidade.
+ *
+ * `unlimited` desliga esse teto; `limitInputPixels: false` desliga o de
+ * pixels, como no `encaixe-pdf.js`. Os dois existem para servidor aberto na
+ * internet: aqui o arquivo vem da própria produção, e recusar arte legítima
+ * é o erro caro.
+ */
+const ABRIR = { unlimited: true, limitInputPixels: false };
+
+/**
+ * ===========================================================================
  * O DPI PRECISA IR NO CABEÇALHO JFIF, E NÃO SÓ NO EXIF
  * ===========================================================================
  *
@@ -189,7 +213,7 @@ function cmykDireto(cmyk, largura, altura) {
  * tela, peça por peça, e nunca é o padrão.
  */
 async function prepararArte(entrada, { direta = false } = {}) {
-  const meta = await sharp(entrada).metadata();
+  const meta = await sharp(entrada, ABRIR).metadata();
   const espaco = meta.space || "";
   const precisa = !ehFormatoDoNavegador(meta.format) || espaco === "cmyk";
 
@@ -199,7 +223,7 @@ async function prepararArte(entrada, { direta = false } = {}) {
    * intacta — quem pediu a direta numa arte dessas não recebe estrago nenhum.
    */
   if (direta && espaco === "cmyk") {
-    const { data, info } = await sharp(entrada, { limitInputPixels: false })
+    const { data, info } = await sharp(entrada, ABRIR)
       .toColourspace("cmyk").raw().toBuffer({ resolveWithObject: true });
     const rgb = cmykDireto(data, info.width, info.height);
     const bytes = comDpiNoJfif(await sharp(rgb, {
@@ -269,11 +293,11 @@ async function prepararArte(entrada, { direta = false } = {}) {
    */
   const assumindo = espaco === "cmyk" && !meta.icc && PERFIL_DE_IMPRESSAO;
   const emSrgb = assumindo
-    ? await sharp(entrada).withIccProfile(PERFIL_DE_IMPRESSAO, { attach: false })
+    ? await sharp(entrada, ABRIR).withIccProfile(PERFIL_DE_IMPRESSAO, { attach: false })
       .toColourspace("srgb").png().toBuffer()
     : entrada;
 
-  const cano = sharp(emSrgb).toColourspace("srgb")
+  const cano = sharp(emSrgb, ABRIR).toColourspace("srgb")
     .withMetadata(meta.density ? { density: meta.density } : {});
 
   // O PNG guarda a resolução no `pHYs`, que o libvips escreve e o programa lê;
