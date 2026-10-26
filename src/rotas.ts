@@ -231,7 +231,8 @@ export const TELAS: readonly Tela[] = [
      * na ARTE — cada logo, texto e estampa separados, em vetor ou PNG grande.
      * Ver docs/superpowers/specs/2026-10-06-extrator-design.md.
      *
-     * Sem escopo, como a Galeria: é ferramenta de arte, e não de molde.
+     * Trancado por `moldes` desde 2026-10-26: o Mensal Encaixe é só o
+     * Encaixe, a Reposição e a Galeria, e todo outro plano tem `moldes`.
      */
     nome: "extrator",
     grupo: "producao",
@@ -239,6 +240,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "A arte separada da foto",
     apoioTopo: "Mande a foto da camisa e receba cada logo, texto e estampa separados, em vetor ou PNG grande.",
     icone: "icones.svg#wand-sparkles",
+    escopo: "moldes",
     Componente: Extrator,
   },
   {
