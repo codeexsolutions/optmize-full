@@ -24,7 +24,7 @@
 
 import { comGiroBase, gradeDaPeca, pecaSemGiro, rotacaoBaseDe } from "./encaixeMascara";
 import {
-  chaveDasMascaras, contornoDaPeca, mascarasDaPeca, pixelsDaArteNaGrade, pixelsDaImagem,
+  chaveDasMascaras, contornoDaPeca, margemDaPeca, mascarasDaPeca, pixelsDaArteNaGrade, pixelsDaImagem,
   removerFundoDaImagem,
 } from "./pecaNaGrade";
 import { respirarNaTela } from "../utils/respirar";
@@ -181,7 +181,7 @@ export async function prepararMascarasEmParalelo(pecas, passo, raio, aoAndar) {
       tarefas.push({
         peca,
         mensagem: { tipo: "mascaras", id: peca.id, pixels, sub: dados ? dados.sub : 1, cols, rows, passo, raio,
-          contorno, fundoSaiNoPdf: !!peca.fundoNaExportacao,
+          contorno, margem: margemDaPeca(peca), fundoSaiNoPdf: !!peca.fundoNaExportacao,
           medida: { largura: crua.largura, altura: crua.altura } },
         transferir: pixels ? [pixels] : [],
       });

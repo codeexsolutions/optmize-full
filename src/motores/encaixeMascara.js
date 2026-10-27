@@ -1041,6 +1041,39 @@ function silhuetaNaGrade(dados, cols, rows) {
 }
 
 /**
+ * A silhueta crescida `celulas` células para fora, sem passar da caixa da arte.
+ *
+ * É o reforço que a conferência pela arte pede quando pega duas peças
+ * encostando (ver `margemDaPeca`, em pecaNaGrade.js). A peça vale a caixa
+ * inteira era o reforço de antes, e jogava a produção nos retângulos; com isto
+ * ela continua pelo contorno, só com uma célula a mais de tecido em volta do
+ * que a leitura achou — o que cobre a ponta fina ou clara que a leitura
+ * deixou de fora. A caixa da arte é o teto: a arte nunca imprime fora dela.
+ */
+export function comMargem(silhueta, cols, rows, celulas) {
+  if (!(celulas > 0) || silhueta.modo === "caixa") return silhueta;
+  let bits = silhueta.bits;
+  for (let volta = 0; volta < celulas; volta++) {
+    const maior = new Uint8Array(bits.length);
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        if (!bits[y * cols + x]) continue;
+        for (let dy = -1; dy <= 1; dy++) {
+          const yy = y + dy;
+          if (yy < 0 || yy >= rows) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx;
+            if (xx >= 0 && xx < cols) maior[yy * cols + xx] = 1;
+          }
+        }
+      }
+    }
+    bits = maior;
+  }
+  return { ...silhueta, bits };
+}
+
+/**
  * Da silhueta às quatro máscaras giradas. É o miolo do `mascarasDaPeca`, sem
  * a parte do cache, que é da tela.
  *

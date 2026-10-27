@@ -35,7 +35,7 @@
  */
 
 import {
-  mascarasDeSilhueta, silhuetaDeDados, tirarFundoDosPixels,
+  comMargem, mascarasDeSilhueta, silhuetaDeDados, tirarFundoDosPixels,
 } from "./encaixeMascara";
 
 // O geometria.js vai junto porque o encaixe-mascara.js usa o `arredondar` dele
@@ -130,7 +130,8 @@ self.onmessage = async (evento) => {
         ? { bits: new Uint8Array(cols * rows).fill(1), modo: "caixa" }
         : silhuetaDeDados(new Uint8ClampedArray(pixels), cols, rows, evento.data.sub || 1,
           { fundoSaiNoPdf: evento.data.fundoSaiNoPdf === true });
-      const mascaras = mascarasDeSilhueta(silhueta, cols, rows, passo, raio, evento.data.medida);
+      const mascaras = mascarasDeSilhueta(comMargem(silhueta, cols, rows, evento.data.margem || 0),
+        cols, rows, passo, raio, evento.data.medida);
       self.postMessage({ tipo: "mascaras", id, mascaras }, buffersDasMascaras(mascaras));
       return;
     }

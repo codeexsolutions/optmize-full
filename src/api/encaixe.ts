@@ -153,7 +153,7 @@ interface PecaNaChave {
   grupo?: string | null;
   /** O giro dado à peça antes do encaixe (0, 90, 180, 270). */
   rotacaoBase?: number;
-  /** "caixa" quando a conferência pela arte mandou a peça valer a caixa inteira. */
+  /** "margem" quando a conferência pela arte mandou a peça levar uma margem a mais no contorno. */
   reforco?: string;
 }
 
@@ -173,13 +173,12 @@ interface PecaNaChave {
  * a resposta a ele.
  */
 function impressaoDaPeca(p: PecaNaChave): string {
-  // O contorno que VALE, e não o escolhido: com o `reforco` a peça vira a
-  // caixa inteira (ver `contornoDaPeca`, em motores/pecaNaGrade.js). Com o
-  // escolhido aqui, o encaixe refeito pela conferência pela arte tinha a mesma
+  // O contorno que VALE, e não o escolhido: com o `reforco` a peça ganha uma
+  // margem em volta do contorno (ver `margemDaPeca`, em motores/pecaNaGrade.js).
+  // Com o escolhido aqui, o encaixe refeito pela conferência pela arte tinha a mesma
   // chave do guardado — e a tela trocava sozinha para ele, remontando posições
-  // feitas para o contorno com máscaras de caixa: centenas de pares de peças
-  // uma em cima da outra.
-  const contorno = p.reforco === "caixa" ? "caixa" : p.contorno;
+  // feitas para uma máscara com outra: pares de peças uma em cima da outra.
+  const contorno = p.reforco === "margem" ? `${p.contorno}+margem` : p.contorno;
   const campos = [p.nome, p.largura, p.altura, p.qtd, p.giro, contorno, p.pxW, p.pxH, p.grupo || ""];
   // O giro dado antes do encaixe muda a peça: girada 180°, ela tem a mesma
   // medida e outra silhueta no rolo. Só entra quando existe, para a peça sem

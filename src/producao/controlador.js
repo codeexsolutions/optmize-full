@@ -2598,6 +2598,11 @@ escopo.ouvir(encaixeGiroTodasSelect, "change", () => {
  * guardado não serve mais e não é oferecido.
  */
 
+/** O encaixe guardado foi o da caixa (`retangulo/...`) que venceu a disputa? */
+function guardadoPelaCaixa(guardado) {
+  return typeof guardado.receita === "string" && guardado.receita.startsWith("retangulo");
+}
+
 /** Espalha os caracteres num número (FNV-1a), só para a chave ficar curta. */
 /**
  * Remonta na tela um encaixe que estava guardado.
@@ -3203,14 +3208,16 @@ function mostrarAndamento(estado, aprendido) {
  * mudou de uma para a outra.
  *
  * `modo` é o jeito de encaixar. A tela não oferece mais a escolha — é sempre
- * "auto", todos os encaixadores disputando —, mas quando a busca quebra no
- * meio o encaixe é refeito sozinho pela caixa ("retangulo"), o caminho mais
- * simples do motor, antes de a janela de erro abrir (ver o `catch`).
+ * "auto", os encaixadores do contorno disputando. `depoisDaFalha` é a rodada
+ * que o `catch` pede quando a busca quebra no meio: refeita do começo, pelo
+ * contorno, com workers novos — e só uma, antes de a janela de erro abrir.
  */
-async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_ENCAIXE } = {}) {
+async function optmizar({
+  refeito = false, avisoDoRefeito = "", modo = MODO_DE_ENCAIXE, depoisDaFalha = false,
+} = {}) {
   limparErroEncaixe();
   let refazer = null;
-  let refazerPelaCaixa = null;
+  let refazerDepoisDaFalha = null;
   // A rodada marcada é esta. Se ela parar antes de carregar (lista vazia,
   // largura em branco), a fila não fica presa esperando por ela.
   rodadaMarcada = false;
@@ -3254,6 +3261,23 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
   }
 
   const modoDeEncaixe = modo;
+
+  /*
+   * O REFORÇO DA CONFERÊNCIA VALE PARA UMA RODADA SÓ.
+   *
+   * Quando a conferência pela arte recusa um encaixe, as peças envolvidas
+   * ganham um reforço (`reforco`) e o encaixe é refeito sozinho (`refeito`).
+   * O reforço era a caixa inteira, e ficava na peça para sempre: cada linha da
+   * tabela é um tamanho inteiro, então uma sobreposição entre duas cópias
+   * punha todas as cópias daquele tamanho no retângulo em todo Optmizar
+   * seguinte — e só fechar o programa trazia o contorno de volta (o caso de
+   * 2026-10-27). Agora o reforço é uma margem no contorno (`margemDaPeca`) e
+   * cada clique começa do contorno lido; se a sobreposição voltar, a
+   * conferência acha de novo e refaz como antes.
+   */
+  if (!refeito) {
+    pecasEncaixe.forEach((peca) => { delete peca.reforco; });
+  }
 
   // O aviso de "procurando" aparece JÁ AQUI, antes da espera do fundo logo
   // abaixo — não depois dela. Quando alguma arte ainda estava com o fundo
@@ -3361,7 +3385,9 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     });
     const recebido = await encaixeApi.guardado(chave);
     const indicesGuardados = recebido && traduzirIndicesDoGuardado(recebido.pecas, pecasEncaixe);
-    const guardadoAntes = indicesGuardados
+    // Um recorde que a caixa venceu, de antes de ela sair da disputa, não
+    // volta: seria a tela trocando o contorno pelos retângulos de novo.
+    const guardadoAntes = indicesGuardados && !guardadoPelaCaixa(recebido)
       && posicoesGuardadasValidas(recebido.posicoes, pecasEncaixe, indicesGuardados) ? recebido : null;
     esconderOfertaDoGuardado();
     atualizarCarregamento({
@@ -3435,7 +3461,13 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     // "vaos" é o do Completar: só os que encaixam pela silhueta. Sem o de
     // retângulo, que empatava na metragem e devolvia as peças em quadrados
     // empilhados em vez de nos vãos umas das outras.
-    const motores = modoDeEncaixe === "auto" ? ["contorno", "retangulo", "vaos", "faixas"]
+    // A CAIXA NÃO DISPUTA. O encaixe sai sempre pelo contorno, para as peças
+    // entrarem nos vãos umas das outras; a caixa fica só na conta de quanto o
+    // trabalho daria por ela (`medirPelaCaixa`, logo abaixo), que não depende
+    // deste motor. Antes ela entrava na disputa e, nos lotes grandes — em que o
+    // contorno roda poucas receitas —, às vezes vencia e a produção inteira
+    // saía em retângulos.
+    const motores = modoDeEncaixe === "auto" ? ["contorno", "vaos", "faixas"]
       : modoDeEncaixe === "vaos" ? ["contorno", "vaos", "faixas"]
       : modoDeEncaixe === "contorno" ? ["contorno"] : ["retangulo"];
 
@@ -3546,9 +3578,9 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     /*
      * A CONFERÊNCIA PELA ARTE ANTES DO RECORDE. Ela começou em
      * `guardarResultado`; um encaixe que ela recusar não pode virar "o melhor
-     * já conseguido". Recusou na primeira rodada: as peças envolvidas passam a
-     * valer a caixa inteira (`reforco`, ver `contornoDaPeca`) e o encaixe é
-     * refeito uma vez, sozinho. Na segunda, trava e diz onde.
+     * já conseguido". Recusou na primeira rodada: as peças envolvidas ganham
+     * uma margem em volta do contorno (`reforco`, ver `margemDaPeca`) e o
+     * encaixe é refeito uma vez, sozinho. Na segunda, trava e diz onde.
      */
     if (ultimoResultado.conferido) {
       atualizarCarregamento({
@@ -3560,12 +3592,12 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
       const conferencia = await ultimoResultado.conferido;
       if (conferencia && !conferencia.ok && !conferencia.parado && !refeito && !pararBusca) {
         const indices = [...pecasDaConferencia(ultimoResultado, conferencia)];
-        indices.forEach((i) => { if (pecasEncaixe[i]) pecasEncaixe[i].reforco = "caixa"; });
+        indices.forEach((i) => { if (pecasEncaixe[i]) pecasEncaixe[i].reforco = "margem"; });
         const nomes = indices.map((i) => pecasEncaixe[i] && pecasEncaixe[i].nome).filter(Boolean);
         refazer = `Refeito sozinho — ${recadoDaConferencia(ultimoResultado, conferencia, espaco)
           .replace(" O Exportar ficou travado.", "")} `
           + `${nomes.length === 1 ? "A peça" : "As peças"} ${nomes.join(", ")} `
-          + `${nomes.length === 1 ? "passou" : "passaram"} a valer a caixa inteira.`;
+          + `${nomes.length === 1 ? "ganhou" : "ganharam"} uma margem a mais em volta do contorno.`;
         finalizarCarregamento("com-erro");
         return;
       }
@@ -3691,11 +3723,15 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     finalizarCarregamento(pararBusca ? "interrompido" : "concluido");
   } catch (err) {
     console.error("Falha ao fazer o encaixe:", err);
-    // Quebrou com todos os encaixadores disputando: antes de incomodar a
-    // pessoa, refaz pela caixa — o caminho mais simples do motor. Gasta um
-    // pouco mais de tecido que o contorno, e por isso o resumo conta.
-    if (!pararBusca && modoDeEncaixe !== "retangulo") {
-      refazerPelaCaixa = "O encaixe pelo contorno falhou e foi refeito pela caixa em volta de cada peça";
+    // Quebrou: antes de incomodar a pessoa, refaz UMA vez, pelo contorno de
+    // novo e com os workers novos. Os velhos saem junto: um que quebrou no meio
+    // da conta continuaria quebrado, e era isso que fazia o encaixe sair pela
+    // caixa até fechar o programa. Pela caixa ele não é refeito: o encaixe sai
+    // pelo contorno ou não sai, e aí a pessoa fica sabendo.
+    if (!pararBusca && !depoisDaFalha) {
+      derrubarPool();
+      derrubarPoolPrepara();
+      refazerDepoisDaFalha = "O encaixe deu erro no meio da conta e foi refeito do começo, pelo contorno";
       finalizarCarregamento("com-erro");
       return;
     }
@@ -3712,9 +3748,11 @@ async function optmizar({ refeito = false, avisoDoRefeito = "", modo = MODO_DE_E
     btnPararBusca.classList.add("hidden");
     // A segunda rodada depois do `finally`, e não dentro do `try`: ela começa
     // com a tela devolvida, como se a pessoa tivesse clicado de novo.
-    rodadaMarcada = !!(refazer || refazerPelaCaixa);
+    rodadaMarcada = !!(refazer || refazerDepoisDaFalha);
     if (refazer) setTimeout(() => optmizar({ refeito: true, avisoDoRefeito: refazer, modo: modoDeEncaixe }), 0);
-    if (refazerPelaCaixa) setTimeout(() => optmizar({ modo: "retangulo", avisoDoRefeito: refazerPelaCaixa }), 0);
+    if (refazerDepoisDaFalha) {
+      setTimeout(() => optmizar({ modo: modoDeEncaixe, avisoDoRefeito: refazerDepoisDaFalha, depoisDaFalha: true }), 0);
+    }
   }
 }
 

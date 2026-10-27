@@ -30,7 +30,7 @@
  */
 
 import {
-  comGiroBase, gradeDaPeca, mascarasDeSilhueta, pecaSemGiro, rotacaoBaseDe, silhuetaDeDados,
+  comGiroBase, comMargem, gradeDaPeca, mascarasDeSilhueta, pecaSemGiro, rotacaoBaseDe, silhuetaDeDados,
   subamostrasDaArte,
   tirarFundoDosPixels,
 } from "./encaixeMascara";
@@ -166,20 +166,30 @@ export function silhuetaDaImagem(peca, cols, rows, passo) {
  * cache evita refazer tudo a cada clique em "Optmizar" quando nada mudou.
  */
 /**
- * Como a silhueta da peça é lida: o `contorno` que a pessoa escolheu, ou a
- * caixa inteira quando a conferência pela arte pegou a peça num encaixe (o
- * `reforco`, ver `conferenciaDaArte.js`). A caixa é o que a arte imprime no
- * pior caso, então com ela não há leitura de silhueta que possa errar.
+ * Como a silhueta da peça é lida: o `contorno` que a pessoa escolheu.
+ *
+ * A conferência pela arte, quando pegava a peça num encaixe, a punha na caixa
+ * inteira — e a produção saía em retângulos. Agora o reforço dela é uma
+ * margem em volta do contorno (`margemDaPeca`), e a escolha é só da pessoa.
  */
 export function contornoDaPeca(peca) {
-  return peca.reforco === "caixa" ? "caixa" : peca.contorno;
+  return peca.contorno;
+}
+
+/**
+ * Quantas células a mais em volta do contorno a peça leva: uma quando a
+ * conferência pela arte a pegou encostando noutra (o `reforco`, ver
+ * `conferenciaDaArte.js` e `comMargem`), nenhuma no resto do tempo.
+ */
+export function margemDaPeca(peca) {
+  return peca.reforco === "margem" ? 1 : 0;
 }
 
 /** A chave do cache de máscaras: muda quando qualquer entrada muda. */
 export function chaveDasMascaras(peca, passo, raio) {
   // O fundo entra porque decide se a leitura pela cor vale (ver "O FUNDO QUE
   // A MÁSCARA IGNORA TEM DE SAIR NO PDF", em encaixeMascara.js).
-  return `${passo}|${raio}|${peca.largura}|${peca.altura}|${contornoDaPeca(peca)}`
+  return `${passo}|${raio}|${peca.largura}|${peca.altura}|${contornoDaPeca(peca)}|m${margemDaPeca(peca)}`
     + `|f${peca.fundoNaExportacao ? 1 : 0}|g${rotacaoBaseDe(peca)}`;
 }
 
@@ -191,7 +201,7 @@ export function mascarasDaPeca(peca, passo, raio) {
   // "O GIRO DA PEÇA ANTES DO ENCAIXE", em encaixeMascara.js).
   const crua = pecaSemGiro(peca);
   const { cols, rows } = gradeDaPeca(crua, passo);
-  const silhueta = silhuetaDaImagem(crua, cols, rows, passo);
+  const silhueta = comMargem(silhuetaDaImagem(crua, cols, rows, passo), cols, rows, margemDaPeca(peca));
   peca._cacheMascaras = {
     chave, ...comGiroBase(mascarasDeSilhueta(silhueta, cols, rows, passo, raio,
       { largura: crua.largura, altura: crua.altura }), rotacaoBaseDe(peca)),
