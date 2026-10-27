@@ -38,6 +38,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 
 import { Botao } from "./Botao";
 import { Icone } from "./Icone";
+import { PlayerDeVideo } from "./PlayerDeVideo";
 import { SESSAO_MUDOU } from "./usuario";
 import type { Tela } from "../rotas";
 
@@ -255,16 +256,12 @@ function ForaDoPlano({ tela }: { tela: Tela }) {
           <>
             {video ? (
               <div className="w-full overflow-hidden rounded-2xl border border-linha bg-painel-suave">
-                <video
+                <PlayerDeVideo
                   key={video.nome}
                   src={`video/${video.nome}.mp4`}
                   poster={`video/${video.nome}.webp`}
-                  className="block aspect-[16/10] w-full bg-black object-cover"
-                  muted
-                  loop
-                  playsInline
-                  autoPlay
-                  aria-label={`Gravação da tela ${video.rotulo}`}
+                  vitrine
+                  rotulo={`Gravação da tela ${video.rotulo}`}
                 />
                 {ordem.length > 1 && (
                   <div className="flex justify-center gap-1 border-t border-linha p-1.5">

@@ -12,6 +12,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { BotaoComoUsar } from "./ComoUsar";
 import { Icone } from "./Icone";
 import type { Tela } from "../rotas";
 
@@ -62,8 +63,11 @@ export function Cabecalho({
           </div>
         </div>
 
-        {/* O espaço das abas e das ações, que a tela preenche com `<NoCabecalho>`. */}
-        <div ref={refDoEspaco} className="flex min-w-0 flex-wrap items-center gap-2 empty:hidden" />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {/* O espaço das abas e das ações, que a tela preenche com `<NoCabecalho>`. */}
+          <div ref={refDoEspaco} className="flex min-w-0 flex-wrap items-center gap-2 empty:hidden" />
+          <BotaoComoUsar tela={tela} />
+        </div>
       </div>
     </header>
   );

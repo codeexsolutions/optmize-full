@@ -925,6 +925,25 @@ async function criarBitmapOuImagem(blob, endereco, tetoDeLado = 0) {
   return carregarImagem(endereco);
 }
 
+/*
+ * A ARTE GUARDADA PODE SER UM PDF (2026-10-27).
+ *
+ * A Reposição guardava, de uma peça que veio de PDF, a PRÉVIA da tela (o
+ * `src`, no máximo 3072 px no lado maior) — o PDF ficava em `pdfOriginal`, e
+ * só `arquivoOriginal` era lido. Na volta a peça era uma imagem pequena, e o
+ * PDF exportado saía sem qualidade: uma manga de 70 cm a ~110 dpi. Agora o
+ * PDF vai guardado (`guardarParaReposicao`) e, aberto aqui, volta a ser PDF:
+ * desenhado para a tela como no arrasto, e exportado como vetor.
+ */
+async function abrirArteGuardada(blob, endereco, nome, teto) {
+  const inicio = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+  const ehPdf = blob.type === "application/pdf" || String.fromCharCode(...inicio).startsWith("%PDF");
+  if (!ehPdf) return { img: await criarBitmapOuImagem(blob, endereco, teto), pdf: null, endereco };
+  const pdf = new File([blob], `${nome || "arte"}.pdf`, { type: "application/pdf" });
+  const arte = await lerArteDoPDF(pdf, { tetoDeLado: ladoDeTrabalho });
+  return { img: arte.bitmap, pdf, endereco: arte.endereco };
+}
+
 /**
  * Uma miniatura pequena da arte, para a tabela.
  *
@@ -1016,6 +1035,7 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
     // decodifica de novo.
     const imagens = [];
     const blobs = [];
+    const abertas = [];
     for (let indice = 0; indice < pecas.length; indice++) {
       atualizarCarregamentoArquivo(indice, pecas.length,
         pecas[indice].nome || `arte ${indice + 1}`);
@@ -1023,7 +1043,9 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
       const blob = await fetch(pecas[indice].url).then((r) => r.blob());
       blobs.push(blob);
       const teto = ladoDeTrabalho(Math.max(pecas[indice].largura, pecas[indice].altura));
-      imagens.push(await criarBitmapOuImagem(blob, pecas[indice].url, teto));
+      const aberta = await abrirArteGuardada(blob, pecas[indice].url, pecas[indice].nome, teto);
+      abertas.push(aberta);
+      imagens.push(aberta.img);
       await respirarNaTela();
     }
 
@@ -1049,7 +1071,10 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
 
     for (let indice = 0; indice < pecas.length; indice++) {
       const p = pecas[indice];
-      const cortada = semFundos[indice];
+      // PDF não passa pelo recorte: a página já vem desenhada com fundo
+      // transparente, como no arrasto (ver `lerArtePDFdoArquivo`).
+      const pdf = abertas[indice].pdf;
+      const cortada = pdf ? null : semFundos[indice];
       // O giro de antes do encaixe: o guardado (a Reposição traz o de quando o
       // trabalho saiu, com a medida de pé), ou, no que foi guardado sem ele, o
       // que a proporção da arte original denuncia (ver `giroPelaProporcao`).
@@ -1068,13 +1093,13 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
       // A miniatura da tabela é um <img>, então precisa de um endereço; o
       // desenho do encaixe usa o bitmap. São a mesma arte por caminhos
       // diferentes: endereço para a tela, pixels prontos para o cálculo.
-      const endereco = cortada ? cortada.src : p.url;
+      const endereco = cortada ? cortada.src : abertas[indice].endereco;
 
       pecasEncaixe.push({
         id: proximoIdPeca++,
         nome: p.nome,
         src: endereco,
-        arquivoOriginal: blobs[indice],
+        ...(pdf ? { pdfOriginal: pdf } : { arquivoOriginal: blobs[indice] }),
         fundoNaExportacao: cortada ? "auto" : null,
         miniatura: await miniaturaDaArte(img),
         img,
@@ -4224,13 +4249,17 @@ async function guardarParaReposicao(r, nomeDoArquivo) {
 
     // As artes, uma por vez: juntas, num pedido só, passariam de centenas de MB.
     // A ORIGINAL quando é imagem (com o fundo que tinha, como a Galeria guarda:
-    // o recorte é refeito na volta); senão, o desenho que o encaixe usou.
+    // o recorte é refeito na volta) ou PDF; senão, o desenho que o encaixe usou.
     for (let i = 0; i < pecas.length; i++) {
       const { peca } = pecas[i];
       const original = peca.arquivoOriginal;
-      const arte = original instanceof Blob && /^image\//.test(original.type)
-        ? original
-        : await fetch(peca.src).then((resp) => resp.blob());
+      // PDF vai o próprio PDF: a prévia (`src`) é do tamanho da tela, e era ela
+      // que voltava da Reposição sem qualidade (ver `abrirArteGuardada`).
+      const arte = peca.pdfOriginal instanceof Blob
+        ? peca.pdfOriginal
+        : original instanceof Blob && /^image\//.test(original.type)
+          ? original
+          : await fetch(peca.src).then((resp) => resp.blob());
       await fetch(`/api/reposicao/pecas/${ids[i]}/arte`, {
         method: "PUT",
         headers: { "Content-Type": arte.type || "application/octet-stream" },
@@ -5058,6 +5087,7 @@ async function pecasDaGaleria(artes) {
   if (faltando.length > 0) {
     const imagens = [];
     const blobs = [];
+    const abertas = [];
     for (let i = 0; i < faltando.length; i++) {
       avisarNoComplemento(`Abrindo as artes da Galeria · ${i + 1} de ${faltando.length}`);
       const blob = await fetch(faltando[i].url).then((r) => {
@@ -5066,7 +5096,9 @@ async function pecasDaGaleria(artes) {
       });
       blobs.push(blob);
       const teto = ladoDeTrabalho(Math.max(faltando[i].largura, faltando[i].altura));
-      imagens.push(await criarBitmapOuImagem(blob, faltando[i].url, teto));
+      const aberta = await abrirArteGuardada(blob, faltando[i].url, faltando[i].nome, teto);
+      abertas.push(aberta);
+      imagens.push(aberta.img);
       await respirarNaTela();
     }
     const semFundos = await tirarFundoEmParalelo(imagens, false, async (i, total) => {
@@ -5075,13 +5107,14 @@ async function pecasDaGaleria(artes) {
     });
     for (let i = 0; i < faltando.length; i++) {
       const arte = faltando[i];
-      const cortada = semFundos[i];
+      const pdf = abertas[i].pdf;
+      const cortada = pdf ? null : semFundos[i];
       const img = cortada ? await criarBitmapOuImagem(cortada.blob, cortada.src) : imagens[i];
       if (cortada) imagens[i].close?.();
       galeriaPreparada.set(arte.id, {
         nome: arte.nome,
-        src: cortada ? cortada.src : arte.url,
-        arquivoOriginal: blobs[i],
+        src: cortada ? cortada.src : abertas[i].endereco,
+        ...(pdf ? { pdfOriginal: pdf } : { arquivoOriginal: blobs[i] }),
         fundoNaExportacao: cortada ? "auto" : null,
         miniatura: arte.miniatura || await miniaturaDaArte(img),
         img,

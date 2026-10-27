@@ -51,6 +51,7 @@ import { NavLink } from "react-router-dom";
 import { Icone } from "./Icone";
 import { iniciais, type Usuario } from "./usuario";
 import { GRUPOS, telasDoGrupo, type Tela } from "../rotas";
+import { abrirComoUsar } from "./ComoUsar";
 import { VENDIDOS_A_PARTE, useEscopos, useForaDoPlano } from "./Escopos";
 import { useTema } from "../estado/tema";
 
@@ -402,7 +403,7 @@ function ItemDoMenu({ tela, aoFechar }: { tela: Tela; aoFechar: () => void }) {
       ? `${tela.rotulo} — não está no seu plano`
       : `${tela.rotulo} — ${tela.apoioMenu}`;
 
-  return (
+  const link = (
     <NavLink
       to={`/${tela.nome}`}
       onClick={aoFechar}
@@ -421,5 +422,28 @@ function ItemDoMenu({ tela, aoFechar }: { tela: Tela; aoFechar: () => void }) {
         </>
       )}
     </NavLink>
+  );
+  // Tela trancada ou sem vídeo: só o link.
+  if (!tela.comoUsar || comCadeado) return link;
+
+  /*
+    O "COMO USAR" DO ITEM: ao lado do link, e não dentro — botão dentro de
+    `<a>` é HTML inválido, e o clique nele navegaria junto. Some com o texto
+    quando a barra recolhe (`menu-some`) e só acende com o mouse em cima do
+    item, para a lista não virar uma coluna de botões.
+  */
+  return (
+    <div className="group/item relative">
+      {link}
+      <button
+        type="button"
+        onClick={() => { abrirComoUsar(tela); aoFechar(); }}
+        title={`Como usar — ${tela.rotulo}`}
+        aria-label={`Como usar ${tela.rotulo}`}
+        className="menu-some absolute top-1/2 right-2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-tinta-apagada opacity-0 transition-[opacity,color,background-color] duration-200 group-hover/item:opacity-100 hover:bg-[var(--surface-hover)] hover:text-ambar focus-visible:opacity-100"
+      >
+        <Icone referencia="icones.svg#circle-help" className="size-4" />
+      </button>
+    </div>
   );
 }

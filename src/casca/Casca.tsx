@@ -37,6 +37,7 @@ import { ProvedorDeEscopos } from "./Escopos";
 import { useSessao } from "./usuario";
 import { ProvedorDeDialogo } from "./Dialogo";
 import { Cabecalho, ProvedorDoEspacoDoCabecalho } from "./Cabecalho";
+import { BotaoComoUsar, JanelaComoUsar } from "./ComoUsar";
 import { Icone } from "./Icone";
 import { Producao } from "../producao/Producao";
 import { TELAS, useTelaAtual, type NomeDeTela } from "../rotas";
@@ -333,6 +334,14 @@ export function Casca() {
             tela: o pedaço baixa em milésimos numa máquina da fábrica, e um
             desenho piscando ali chamaria mais atenção do que a troca de tela.
           */}
+          {/*
+            O "COMO USAR" DAS BANCADAS SEM CABEÇALHO. O Encaixe põe o dele na
+            barra do zoom (`telas/Encaixe.tsx`); Digitalizar, Montagem e
+            Reposição não têm barra fixa no alto, e o botão flutua no canto.
+          */}
+          {bancada && tela.nome !== "encaixe" && tela.comoUsar && (
+            <BotaoComoUsar tela={tela} className="fixed right-4 bottom-4 z-40 h-8 shadow-lg shadow-black/40" />
+          )}
           <Producao pagina={tela.nome} irPara={irPara}>
             <Suspense fallback={<p className="p-6 text-sm text-tinta-apagada">Abrindo {tela.rotulo}…</p>}>
               <Outlet />
@@ -340,6 +349,7 @@ export function Casca() {
           </Producao>
         </div>
       </main>
+      <JanelaComoUsar />
     </div>
     </ProvedorDoEspacoDoCabecalho>
     </ProvedorSemCabecalho>

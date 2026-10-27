@@ -1,5 +1,6 @@
 /** Estrutura React; listas e canvas são controlados pelo módulo de produção. */
 import { memo } from "react";
+import { BotaoComoUsarDa } from "../casca/ComoUsar";
 export const Encaixe = memo(function Encaixe() { return <><div className="page h-full" data-page="encaixe">
 
 
@@ -194,6 +195,8 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 <span className="ml-auto flex shrink-0 items-center gap-0.5">
+
+<BotaoComoUsarDa nome="encaixe" className="mr-2" />
 
 <button id="btn-zoom-menos" className="grid size-7 place-items-center rounded-md text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta" type="button" title="Diminuir zoom">
 

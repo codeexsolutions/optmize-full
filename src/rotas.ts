@@ -121,6 +121,12 @@ export interface Tela {
   /** Referência ao sprite: `icones.svg#nome-do-icone`. */
   icone: string;
   /**
+   * O vídeo de COMO USAR a tela (`casca/ComoUsar.tsx`): o botão no item do
+   * menu e na própria tela só existe quando ele existe. `feminino` é para a
+   * frase — "como usar a Montagem", "como usar o Encaixe".
+   */
+  comoUsar?: { video: string; feminino?: boolean; capitulos?: { titulo: string; inicio: number }[] };
+  /**
    * A tela existe, tem endereço e cabeçalho — mas não aparece no menu.
    *
    * O primeiro caso foi **Máquinas**: ela é uma porta, não um lugar onde se
@@ -179,6 +185,60 @@ export type Escopo = "impressoras" | "moldes" | "extrator" | "relatorios" | "mac
 
 export const TELAS: readonly Tela[] = [
   // ------------------------------------------------------------- Produção
+  /*
+   * ENCAIXE, REPOSIÇÃO E GALERIA PRIMEIRO (pedido do dono, 2026-10-27): é o
+   * que todo plano tem, e o Mensal Encaixe só tem isso. Moldes, Digitalizar,
+   * Montagem e Extrator vêm depois — para quem não comprou, com o cadeado.
+   */
+  {
+    nome: "encaixe",
+    grupo: "producao",
+    rotulo: "Encaixe",
+    apoioMenu: "Aproveitamento do tecido",
+    apoioTopo: "Otimize o uso do tecido e prepare arquivos para impressão.",
+    icone: "icones.svg#blocks",
+    // Os capítulos saem de brag-output-2026-10-27-como-usar/composicoes/*/capitulos.json.
+    comoUsar: {
+      video: "video/como-usar-encaixe.mp4",
+      capitulos: [
+        { titulo: "A produção", inicio: 0 },
+        { titulo: "O nome manda", inicio: 20.262 },
+        { titulo: "A cor não muda", inicio: 37.062 },
+        { titulo: "Optmizar", inicio: 48.25 },
+        { titulo: "O encaixe", inicio: 62.572 },
+        { titulo: "O resultado", inicio: 82.455 },
+      ],
+    },
+    Componente: DoEditor,
+  },
+  {
+    /*
+     * A REPOSIÇÃO: todo encaixe exportado fica guardado aqui, peça por peça,
+     * e as que saírem erradas voltam ao Encaixe com a medida de antes. Ao
+     * lado da Galeria porque as duas guardam trabalho pronto — a Galeria o
+     * que se repete, a Reposição o que se refaz.
+     */
+    nome: "reposicao",
+    grupo: "producao",
+    rotulo: "Reposição",
+    apoioMenu: "Refazer peças de um trabalho",
+    apoioTopo: "Cada encaixe exportado fica guardado aqui: escolha as peças que precisam sair de novo e mande ao Encaixe.",
+    icone: "icones.svg#rotate-ccw",
+    comoUsar: { video: "video/reposicao.mp4", feminino: true },
+    Componente: Reposicao,
+  },
+  {
+    nome: "projetos",
+    grupo: "producao",
+    // A tela se chama Galeria desde que o Encaixe passou a complementar com
+    // as artes guardadas aqui; o nome interno continua `projetos`, que é o
+    // da rota, da API e das tabelas.
+    rotulo: "Galeria",
+    apoioMenu: "Artes guardadas por cliente",
+    apoioTopo: "Guarde por cliente as artes prontas: repita o trabalho ou complete os vãos do encaixe com elas.",
+    icone: "icones.svg#image",
+    Componente: Projetos,
+  },
   {
     nome: "moldes",
     grupo: "producao",
@@ -204,6 +264,7 @@ export const TELAS: readonly Tela[] = [
     icone: "icones.svg#scan-line",
     // Digitalizar é o jeito de CRIAR molde: vai junto da biblioteca.
     escopo: "moldes",
+    comoUsar: { video: "video/digitalizar.mp4" },
     Componente: Digitalizar,
   },
   {
@@ -223,6 +284,7 @@ export const TELAS: readonly Tela[] = [
     icone: "icones.svg#layers",
     // Mexe nos moldes da estante: mesma tranca de Moldes e Digitalizar.
     escopo: "moldes",
+    comoUsar: { video: "video/montagem.mp4", feminino: true },
     Componente: Montagem,
   },
   {
@@ -246,42 +308,6 @@ export const TELAS: readonly Tela[] = [
     icone: "icones.svg#wand-sparkles",
     escopo: "extrator",
     Componente: Extrator,
-  },
-  {
-    nome: "projetos",
-    grupo: "producao",
-    // A tela se chama Galeria desde que o Encaixe passou a complementar com
-    // as artes guardadas aqui; o nome interno continua `projetos`, que é o
-    // da rota, da API e das tabelas.
-    rotulo: "Galeria",
-    apoioMenu: "Artes guardadas por cliente",
-    apoioTopo: "Guarde por cliente as artes prontas: repita o trabalho ou complete os vãos do encaixe com elas.",
-    icone: "icones.svg#image",
-    Componente: Projetos,
-  },
-  {
-    /*
-     * A REPOSIÇÃO: todo encaixe exportado fica guardado aqui, peça por peça,
-     * e as que saírem erradas voltam ao Encaixe com a medida de antes. Ao
-     * lado da Galeria porque as duas guardam trabalho pronto — a Galeria o
-     * que se repete, a Reposição o que se refaz.
-     */
-    nome: "reposicao",
-    grupo: "producao",
-    rotulo: "Reposição",
-    apoioMenu: "Refazer peças de um trabalho",
-    apoioTopo: "Cada encaixe exportado fica guardado aqui: escolha as peças que precisam sair de novo e mande ao Encaixe.",
-    icone: "icones.svg#rotate-ccw",
-    Componente: Reposicao,
-  },
-  {
-    nome: "encaixe",
-    grupo: "producao",
-    rotulo: "Encaixe",
-    apoioMenu: "Aproveitamento do tecido",
-    apoioTopo: "Otimize o uso do tecido e prepare arquivos para impressão.",
-    icone: "icones.svg#blocks",
-    Componente: DoEditor,
   },
   {
     /*
@@ -434,7 +460,11 @@ export function telasDoGrupo(grupo: NomeDeGrupo): Tela[] {
   return TELAS.filter((tela) => tela.grupo === grupo && !tela.foraDoMenu);
 }
 
-export const TELA_PADRAO: NomeDeTela = "moldes";
+/**
+ * A tela que abre o programa: o Encaixe (2026-10-27). Era Moldes, que o Mensal
+ * Encaixe nem tem — quem abria caía direto numa tela trancada.
+ */
+export const TELA_PADRAO: NomeDeTela = "encaixe";
 
 export function acharTela(nome: string | null | undefined): Tela {
   return TELAS.find((tela) => tela.nome === nome) ?? TELAS[0]!;

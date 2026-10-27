@@ -1329,3 +1329,25 @@ html.na-janela #raiz {
 }
 /* O que media a janela inteira (100vh) passa a medir o quadro abaixo da faixa. */
 html.na-janela #raiz .h-screen { height: 100%; }
+
+/* ---------------------------------------------------------------------------
+ * O VOLUME DO PLAYER (`casca/PlayerDeVideo.tsx`): o range nativo é o do Edge,
+ * cinza e alto. Aqui é um trilho fino com a parte cheia em laranja — o
+ * quanto está cheio vem em `--cheio`, que o player escreve.
+ * ------------------------------------------------------------------------- */
+.player-volume {
+  appearance: none;
+  height: 4px;
+  margin: 0 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) var(--cheio, 100%), rgba(255, 255, 255, 0.22) var(--cheio, 100%));
+  cursor: pointer;
+}
+.player-volume::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+}
