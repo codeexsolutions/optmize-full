@@ -200,6 +200,111 @@ fn responder_permissoes(janela: &tauri::WebviewWindow) {
     });
 }
 
+/// Quando o processo da página morre, recarrega a página — e anota o porquê.
+///
+/// O caso (2026-10-26, num notebook): na hora de otimizar a janela inteira
+/// ficou escura, sem barra lateral nem nada. É o processo que desenha a página
+/// do WebView2 que caiu — falta de memória, quase sempre — e o WebView2 não
+/// tenta de novo sozinho: a janela fica vazia até alguém fechar o programa.
+///
+/// Recarregar não salva o encaixe que estava rodando (ele morreu junto com o
+/// processo), mas devolve o programa em vez da tela escura. A anotação vai
+/// para `falhas-da-tela.log`, na pasta de dados: qual processo caiu, o motivo
+/// que o WebView2 deu e o código de saída. É ela que diz, da próxima vez, se
+/// foi memória, a placa de vídeo ou outra coisa.
+///
+/// Só a queda do processo da página recarrega. A placa de vídeo o próprio
+/// Chromium reabre, e a página TRAVADA (`UNRESPONSIVE`) pode ser só o encaixe
+/// fazendo conta pesada: recarregar ali jogaria fora um trabalho que ia
+/// terminar. Esses dois ficam só anotados.
+#[cfg(windows)]
+fn recuperar_queda_da_pagina(janela: &tauri::WebviewWindow) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2ProcessFailedEventArgs2, COREWEBVIEW2_PROCESS_FAILED_KIND,
+        COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED, COREWEBVIEW2_PROCESS_FAILED_REASON,
+    };
+    use webview2_com::ProcessFailedEventHandler;
+    use windows::core::Interface;
+
+    let Ok(dados) = janela.app_handle().path().app_data_dir() else {
+        return;
+    };
+    let registro = dunce::simplified(&dados).join("falhas-da-tela.log");
+
+    let _ = janela.with_webview(move |webview| unsafe {
+        let Ok(nucleo) = webview.controller().CoreWebView2() else {
+            return;
+        };
+        let mut token = 0i64;
+        let _ = nucleo.add_ProcessFailed(
+            &ProcessFailedEventHandler::create(Box::new(move |remetente, argumentos| {
+                let Some(argumentos) = argumentos else {
+                    return Ok(());
+                };
+                let mut tipo = COREWEBVIEW2_PROCESS_FAILED_KIND::default();
+                argumentos.ProcessFailedKind(&mut tipo)?;
+                let mut motivo = COREWEBVIEW2_PROCESS_FAILED_REASON::default();
+                let mut saida = 0i32;
+                if let Ok(mais) = argumentos.cast::<ICoreWebView2ProcessFailedEventArgs2>() {
+                    let _ = mais.Reason(&mut motivo);
+                    let _ = mais.ExitCode(&mut saida);
+                }
+                let quando = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let linha = format!(
+                    "{quando} processo={} motivo={} saida={saida:#x}
+",
+                    nome_do_processo(tipo.0),
+                    nome_do_motivo(motivo.0)
+                );
+                if let Ok(mut arquivo) = std::fs::OpenOptions::new().create(true).append(true).open(&registro) {
+                    use std::io::Write;
+                    let _ = arquivo.write_all(linha.as_bytes());
+                }
+                if tipo == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED {
+                    if let Some(nucleo) = remetente {
+                        let _ = nucleo.Reload();
+                    }
+                }
+                Ok(())
+            })),
+            &mut token,
+        );
+    });
+}
+
+/// O nome de `COREWEBVIEW2_PROCESS_FAILED_KIND`, para o registro ser lido sem tabela.
+#[cfg(windows)]
+fn nome_do_processo(tipo: i32) -> &'static str {
+    match tipo {
+        0 => "navegador",
+        1 => "pagina",
+        2 => "pagina-travada",
+        3 => "quadro",
+        4 => "utilitario",
+        5 => "sandbox",
+        6 => "placa-de-video",
+        _ => "outro",
+    }
+}
+
+/// O nome de `COREWEBVIEW2_PROCESS_FAILED_REASON`.
+#[cfg(windows)]
+fn nome_do_motivo(motivo: i32) -> &'static str {
+    match motivo {
+        0 => "inesperado",
+        1 => "travou",
+        2 => "encerrado",
+        3 => "quebrou",
+        4 => "nao-abriu",
+        5 => "sem-memoria",
+        6 => "perfil-apagado",
+        _ => "outro",
+    }
+}
+
 /// Dá à janela o ícone GRANDE, que é o da barra de tarefas e do Alt+Tab.
 ///
 /// O Windows guarda DOIS ícones por janela: o pequeno (`ICON_SMALL`), que vai
@@ -427,6 +532,7 @@ fn abrir_principal(app: &tauri::AppHandle, url: WebviewUrl, cheia: bool) -> taur
     #[cfg(windows)]
     {
         responder_permissoes(&janela);
+        recuperar_queda_da_pagina(&janela);
         icone_da_barra(&janela);
     }
     #[cfg(not(windows))]

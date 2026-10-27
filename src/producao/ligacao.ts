@@ -33,6 +33,11 @@ export interface PecaParaOEncaixe {
   quantidade: number;
   /** O giro de quando a peça saiu (a Reposição guarda). Sem ele, o padrão da tela. */
   giro?: string | null;
+  /**
+   * O giro dado à arte antes do encaixe (0, 90, 180, 270), com a medida acima
+   * DE PÉ. A Reposição guarda; sem ele, o Encaixe deduz pela proporção da arte.
+   */
+  rotacaoBase?: number | null;
   /** O pedido e a sigla de quando a peça saiu (a Reposição guarda). Com o pedido, o Encaixe não pergunta. */
   pedido?: string;
   sigla?: string;

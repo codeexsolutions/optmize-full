@@ -37,6 +37,7 @@
     "bancada:revisao": "node bancada/conferir-revisao-backend.cjs && node bancada/conferir-revisao-front.cjs && node bancada/conferir-revisao-impressoras.cjs && node bancada/conferir-revisao-producao.cjs",
     "bancada:qualidade": "node bancada/conferir-qualidade-encaixe.cjs",
     "bancada:cor-e-vetor": "node bancada/conferir-cor-e-vetor.mjs",
+    "bancada:giro-reposicao": "node bancada/conferir-giro-da-reposicao.mjs",
     "bancada:encolher": "node bancada/conferir-encolher.js",
     "bancada:arte-cmyk": "node bancada/conferir-arte-cmyk.cjs",
     "bancada:nomes": "node bancada/conferir-nome-de-arquivo.mjs",

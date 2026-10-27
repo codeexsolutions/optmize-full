@@ -16,7 +16,7 @@ import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
 import {
   conferirEncaixePelaArte, pecasDaConferencia, recadoDaConferencia,
 } from "../motores/conferenciaDaArte";
-import { grade, rotacaoBaseDe } from "../motores/encaixeMascara";
+import { giroPelaProporcao, grade, pecaSemGiro, rotacaoBaseDe } from "../motores/encaixeMascara";
 import { mascarasDaPeca } from "../motores/pecaNaGrade";
 import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../motores/encaixePrepara";
 import { formatarNumero, formatarMetros, formatarCm, formatarSegundos, formatarPorcento, formatarM2 } from "../utils/numero";
@@ -1049,6 +1049,15 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
     for (let indice = 0; indice < pecas.length; indice++) {
       const p = pecas[indice];
       const cortada = semFundos[indice];
+      // O giro de antes do encaixe: o guardado (a Reposição traz o de quando o
+      // trabalho saiu, com a medida de pé), ou, no que foi guardado sem ele, o
+      // que a proporção da arte original denuncia (ver `giroPelaProporcao`).
+      // Lido antes do `close`, da arte inteira, que é a que a medida descreve.
+      const giroGuardado = [0, 90, 180, 270].includes(Number(p.rotacaoBase)) ? Number(p.rotacaoBase) : null;
+      const rotacaoBase = giroGuardado ?? giroPelaProporcao(p.largura, p.altura,
+        imagens[indice].naturalWidth || imagens[indice].width,
+        imagens[indice].naturalHeight || imagens[indice].height);
+      const trocaMedida = giroGuardado !== null && giroGuardado % 180 !== 0;
       // `null` quer dizer que não havia fundo em volta para tirar (arte que já
       // vem transparente, ou que sangra até a borda). Aí vale a original.
       const img = cortada
@@ -1072,8 +1081,9 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
         pxH: img.naturalHeight || img.height,
         // A medida vem do projeto, não do arquivo: ela já foi conferida uma vez
         // e corrigida à mão se precisava. Reler o dpi aqui desfaria isso.
-        largura: p.largura,
-        altura: p.altura,
+        largura: trocaMedida ? p.altura : p.largura,
+        altura: trocaMedida ? p.largura : p.altura,
+        ...(rotacaoBase ? { rotacaoBase } : {}),
         qtd: Math.max(1, Math.round(p.quantidade * unidades)),
         qtdDoArquivo: false,
         // O giro guardado (a Reposição traz o de quando foi exportado); sem
@@ -4130,10 +4140,14 @@ async function guardarParaReposicao(r, nomeDoArquivo) {
         aproveitamento: r.larguraTecido > 0 && r.consumo > 0 ? (area / (r.larguraTecido * r.consumo)) * 100 : null,
         folga: r.folgaPedida,
         miniatura,
+        // A medida DE PÉ, como a arte guardada, e o giro à parte: guardar a
+        // medida girada sem o giro fazia a peça voltar achatada no PDF (ver
+        // `giroPelaProporcao`).
         pecas: pecas.map(({ peca }) => ({
           nome: peca.nome,
-          largura: peca.largura,
-          altura: peca.altura,
+          largura: pecaSemGiro(peca).largura,
+          altura: pecaSemGiro(peca).altura,
+          rotacaoBase: rotacaoBaseDe(peca),
           qtd: peca.qtd,
           giro: peca.giro,
           pedido: temVariosPedidos(pecasEncaixe) ? pedidoDe(peca) : null,

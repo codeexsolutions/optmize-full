@@ -241,6 +241,28 @@ export function pecaSemGiro(peca) {
     : { ...peca, largura: peca.altura, altura: peca.largura };
 }
 
+/*
+ * A MEDIDA DEITADA COM A ARTE EM PÉ (2026-10-26).
+ *
+ * A Reposição guardava a largura e a altura da peça JÁ GIRADAS, sem o
+ * `rotacaoBase`. Na volta, a peça chegava deitada com a arte de pé e giro
+ * nenhum, e o PDF esticava a arte dentro da caixa deitada — a manga e o
+ * letreiro saíam achatados no tecido.
+ *
+ * A Reposição passou a guardar o giro. Para o que já foi guardado sem ele, a
+ * peça que chega com a proporção da medida trocada em relação à dos pixels é
+ * tratada como girada 90°: a medida fica, e a arte gira para caber nela. Só
+ * quando a troca é clara — peça quase quadrada, ou arte recortada que mudou de
+ * proporção, não entra.
+ */
+export function giroPelaProporcao(largura, altura, pxW, pxH) {
+  if (!(largura > 0 && altura > 0 && pxW > 0 && pxH > 0)) return 0;
+  const medida = Math.log(largura / altura);
+  const pixels = Math.log(pxW / pxH);
+  const deitada = Math.abs(medida + pixels) < 0.05 && Math.abs(medida - pixels) > 0.3;
+  return deitada ? 90 : 0;
+}
+
 /**
  * As máscaras da peça já no lado certo. Girar a peça `base` e depois o encaixe
  * girar `rot` é o mesmo que girar a arte original `base + rot` — e essa

@@ -47,6 +47,8 @@ interface Peca {
   altura: number;
   qtd: number;
   giro: string | null;
+  /** O giro dado à arte antes do encaixe; `null` no trabalho guardado antes dele. */
+  rotacaoBase: number | null;
   miniatura: string | null;
   pedido: string | null;
   sigla: string | null;
@@ -158,6 +160,7 @@ export function Reposicao() {
         altura: p.altura,
         quantidade: escolhidas.get(p.id)!,
         giro: p.giro,
+        rotacaoBase: p.rotacaoBase,
         pedido: p.pedido ?? undefined,
         sigla: p.sigla ?? undefined,
       }));

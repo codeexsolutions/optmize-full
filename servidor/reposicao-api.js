@@ -68,6 +68,12 @@ for (const coluna of ["pedido", "sigla"]) {
   const existe = db.prepare("PRAGMA table_info(reposicao_pecas)").all().some((c) => c.name === coluna);
   if (!existe) db.exec(`ALTER TABLE reposicao_pecas ADD COLUMN ${coluna} TEXT`);
 }
+// O giro dado à arte antes do encaixe (2026-10-26). A medida é guardada de pé,
+// como a arte; sem o giro à parte, a peça girada voltava achatada no PDF.
+// NULL é o trabalho guardado antes desta coluna: a tela deduz pela proporção.
+if (!db.prepare("PRAGMA table_info(reposicao_pecas)").all().some((c) => c.name === "rotacao_base")) {
+  db.exec("ALTER TABLE reposicao_pecas ADD COLUMN rotacao_base INTEGER");
+}
 const siglaLimpa = (v) => {
   const s = String(v == null ? "" : v).normalize("NFD").replace(/[̀-ͯ]/g, "")
     .toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
@@ -102,6 +108,7 @@ function pecaParaTela(p) {
     altura: p.altura,
     qtd: p.qtd,
     giro: p.giro,
+    rotacaoBase: p.rotacao_base,
     miniatura: p.miniatura,
     pedido: p.pedido || null,
     sigla: p.sigla || null,
@@ -157,8 +164,8 @@ router.post("/trabalhos", (req, res) => {
     ).lastInsertRowid;
 
     const inserir = db.prepare(`
-      INSERT INTO reposicao_pecas (trabalho_id, ordem, nome, largura, altura, qtd, giro, miniatura, pedido, sigla)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO reposicao_pecas (trabalho_id, ordem, nome, largura, altura, qtd, giro, miniatura, pedido, sigla, rotacao_base)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const idsDasPecas = pecas.map((p, i) => inserir.run(
       id, i,
@@ -170,6 +177,7 @@ router.post("/trabalhos", (req, res) => {
       miniaturaValida(p.miniatura),
       siglaLimpa(p.pedido),
       siglaLimpa(p.sigla),
+      [0, 90, 180, 270].includes(Number(p.rotacaoBase)) ? Number(p.rotacaoBase) : null,
     ).lastInsertRowid);
     return { id, pecas: idsDasPecas };
   });
