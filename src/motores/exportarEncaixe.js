@@ -34,8 +34,8 @@
  * conhece, PDF quebrado), ele avisa na hora do envio e a tela manda a arte
  * desenhada, que é `arteDesenhadaDaPeca` — o caminho antigo, só como reserva.
  */
-import { zlibSync, unzlibSync } from "fflate";
 import { suavizarBordaDoFundo, tirarFundoDosPixels } from "./encaixeMascara";
+import { decodificar, pixelsDe, perfilRgbDoArquivo, pngDosPixels, semFundoDoArquivo } from "./semFundo";
 import { lerArteDoPDF } from "./pdfParaArte";
 import { DPI_PDF } from "./resolucaoDaArte";
 
@@ -49,35 +49,6 @@ async function blobDaPeca(peca) {
     blob = await resposta.blob();
   }
   return blob;
-}
-
-function ehPng(bytes) {
-  return [137, 80, 78, 71, 13, 10, 26, 10].every((n, i) => bytes[i] === n);
-}
-
-/*
- * Decodifica SEM gerenciar cor e sem multiplicar pelo alfa: os números que
- * saem são os do arquivo, e o perfil dele vai junto no PNG (ver
- * `perfilRgbDoArquivo`). A orientação do EXIF continua valendo, que é como a
- * prévia da tela mostra a arte.
- */
-async function decodificar(blob) {
-  if (typeof createImageBitmap === "function") {
-    return createImageBitmap(blob, {
-      colorSpaceConversion: "none",
-      premultiplyAlpha: "none",
-      imageOrientation: "from-image",
-    });
-  }
-  const endereco = URL.createObjectURL(blob);
-  try {
-    return await new Promise((pronto, falhou) => {
-      const img = new Image();
-      img.onload = () => pronto(img);
-      img.onerror = () => falhou(new Error("Não consegui abrir a arte original para impressão."));
-      img.src = endereco;
-    });
-  } finally { URL.revokeObjectURL(endereco); }
 }
 
 /*
@@ -121,140 +92,11 @@ async function lerBytes(blob, peca) {
   return new Uint8Array(await blob.arrayBuffer().catch((erro) => { throw arteIlegivel(erro, peca); }));
 }
 
-// ==================== O PERFIL DE COR DO ARQUIVO ====================
-
-/** O perfil é de RGB? Só esse pode acompanhar pixels que saem RGB. */
-function perfilEhRgb(perfil) {
-  return perfil && perfil.length > 20
-    && String.fromCharCode(perfil[16], perfil[17], perfil[18], perfil[19]) === "RGB ";
-}
-
-/**
- * O perfil ICC embutido no PNG (bloco iCCP) ou no JPEG (segmentos APP2), ou
- * `null`. Perfil de CMYK não serve: o navegador entrega esses pixels já em RGB.
- */
-export function perfilRgbDoArquivo(bytes) {
-  try {
-    if (ehPng(bytes)) {
-      let i = 8;
-      while (i + 12 <= bytes.length) {
-        const tamanho = ((bytes[i] << 24) | (bytes[i + 1] << 16) | (bytes[i + 2] << 8) | bytes[i + 3]) >>> 0;
-        const tipo = String.fromCharCode(bytes[i + 4], bytes[i + 5], bytes[i + 6], bytes[i + 7]);
-        if (tipo === "iCCP") {
-          const dados = bytes.subarray(i + 8, i + 8 + tamanho);
-          const fimDoNome = dados.indexOf(0);
-          if (fimDoNome < 0) return null;
-          const perfil = unzlibSync(dados.subarray(fimDoNome + 2));
-          return perfilEhRgb(perfil) ? perfil : null;
-        }
-        if (tipo === "IDAT" || tipo === "IEND") return null;
-        i += 12 + tamanho;
-      }
-      return null;
-    }
-    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
-      const pedacos = [];
-      let i = 2;
-      while (i + 4 <= bytes.length && bytes[i] === 0xff) {
-        const marcador = bytes[i + 1];
-        if (marcador === 0xda || marcador === 0xd9) break;
-        const tamanho = (bytes[i + 2] << 8) | bytes[i + 3];
-        const carga = bytes.subarray(i + 4, i + 2 + tamanho);
-        // "ICC_PROFILE\0", número do pedaço, total de pedaços, e o perfil.
-        if (marcador === 0xe2 && carga.length > 14
-          && String.fromCharCode(...carga.subarray(0, 11)) === "ICC_PROFILE") {
-          pedacos.push({ ordem: carga[12], dados: carga.subarray(14) });
-        }
-        i += 2 + tamanho;
-      }
-      if (pedacos.length === 0) return null;
-      pedacos.sort((a, b) => a.ordem - b.ordem);
-      const perfil = new Uint8Array(pedacos.reduce((n, p) => n + p.dados.length, 0));
-      let onde = 0;
-      for (const p of pedacos) { perfil.set(p.dados, onde); onde += p.dados.length; }
-      return perfilEhRgb(perfil) ? perfil : null;
-    }
-  } catch {
-    // Perfil ilegível: a arte segue sem ele, como sempre seguiu.
-  }
-  return null;
-}
-
-// ==================== O PNG MONTADO À MÃO ====================
-
-const TABELA_CRC = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-
-function crc32(partes) {
-  let c = 0xffffffff;
-  for (const p of partes) for (let i = 0; i < p.length; i++) c = TABELA_CRC[(c ^ p[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function bloco(tipo, dados) {
-  const cabeca = new Uint8Array(8);
-  const vista = new DataView(cabeca.buffer);
-  vista.setUint32(0, dados.length);
-  for (let i = 0; i < 4; i++) cabeca[4 + i] = tipo.charCodeAt(i);
-  const rabo = new Uint8Array(4);
-  new DataView(rabo.buffer).setUint32(0, crc32([cabeca.subarray(4), dados]));
-  return [cabeca, dados, rabo];
-}
-
-/**
- * RGBA sem multiplicar para PNG, sem passar pelo `toBlob` do canvas — que é
- * onde a cor da borda semitransparente se perdia. Filtro "nenhum": quem
- * comprime é o Flate, e o PNG só vive até o servidor.
- */
-export function pngDosPixels(rgba, largura, altura, perfil = null) {
-  const linha = largura * 4 + 1;
-  const cru = new Uint8Array(linha * altura);
-  for (let y = 0; y < altura; y++) {
-    cru.set(rgba.subarray(y * largura * 4, (y + 1) * largura * 4), y * linha + 1);
-  }
-  const ihdr = new Uint8Array(13);
-  const vista = new DataView(ihdr.buffer);
-  vista.setUint32(0, largura);
-  vista.setUint32(4, altura);
-  ihdr[8] = 8; // bits por canal
-  ihdr[9] = 6; // RGBA
-  const partes = [Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]), ...bloco("IHDR", ihdr)];
-  if (perfil) {
-    const nome = Uint8Array.from([105, 99, 99, 0, 0]); // "icc", fim do nome, Flate
-    const comprimido = zlibSync(perfil);
-    const dados = new Uint8Array(nome.length + comprimido.length);
-    dados.set(nome);
-    dados.set(comprimido, nome.length);
-    partes.push(...bloco("iCCP", dados));
-  }
-  partes.push(...bloco("IDAT", zlibSync(cru, { level: 1 })), ...bloco("IEND", new Uint8Array(0)));
-  return new Blob(partes, { type: "image/png" });
-}
-
 // ==================== OS CAMINHOS DA ARTE ====================
 
-/** Os pixels da arte, crus, a partir de uma imagem já decodificada. */
-function pixelsDe(img) {
-  const largura = img.naturalWidth || img.width;
-  const altura = img.naturalHeight || img.height;
-  if (!(largura > 0 && altura > 0)) throw new Error("A arte original está vazia.");
-  const canvas = document.createElement("canvas");
-  canvas.width = largura;
-  canvas.height = altura;
-  try {
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) throw new Error("Não há memória para preparar a arte original.");
-    ctx.drawImage(img, 0, 0);
-    return { dados: ctx.getImageData(0, 0, largura, altura).data, largura, altura };
-  } finally { canvas.width = 0; canvas.height = 0; }
-}
+// Moraram aqui até 2026-10-27; foram para `semFundo.js` para rodar no worker.
+export { perfilRgbDoArquivo, pngDosPixels };
+
 
 const tetoDoPdf = (cm) => Math.ceil(cm / 2.54 * DPI_PDF);
 
@@ -291,6 +133,175 @@ async function arteSemFundo(peca) {
   }
 }
 
+/*
+ * ===========================================================================
+ * O FUNDO É TIRADO UMA VEZ SÓ — QUANDO A ARTE ENTRA (2026-10-27)
+ * ===========================================================================
+ *
+ * Eram duas remoções da mesma arte. Na ENTRADA, a tela tirava o fundo de uma
+ * cópia reduzida, para a mesa e a silhueta do encaixe; no EXPORTAR, tirava de
+ * novo da arte inteira, com a conta fiel do PDF (sem mudar a cor, borda
+ * suavizada, perfil de cor junto) — na linha principal, uma de cada vez.
+ *
+ * Agora é uma só, e é a do PDF: na entrada, em resolução cheia, nos workers
+ * (`semFundoDoArquivo`). O resultado fica guardado aqui, por arquivo, e é o
+ * MESMO que vai para o PDF; a tela o abre reduzido para desenhar e tirar a
+ * silhueta. Exportar não tira fundo nenhum: só pega o que já está pronto.
+ *
+ * A arte de PDF com fundo tirado continua pelo caminho antigo: ela passa pelo
+ * pdf.js, que não roda no worker deste arquivo.
+ */
+const SEM_FUNDO_WORKERS = 4;
+/*
+ * A arte sem fundo de cada ORIGEM (o arquivo da peça) e modo ("auto" ou
+ * "forcar"). A chave é o próprio arquivo, e não a peça: as cópias de uma peça
+ * no risco são objetos diferentes com o mesmo arquivo, e a peça nasce antes de
+ * ter o índice que viraria chave no PDF.
+ */
+const semFundosDoArquivo = new WeakMap(); // Blob -> Map(modo -> promessa)
+const semFundosDoEndereco = new Map(); // endereço -> Map(modo -> promessa)
+let poolSemFundo = null;
+let proximoPedido = 0;
+const esperandoSemFundo = new Map(); // id -> { pronto, falhou }
+
+function guardadasDe(origem) {
+  const lugar = typeof origem === "string" ? semFundosDoEndereco : semFundosDoArquivo;
+  let porModo = lugar.get(origem);
+  if (!porModo) { porModo = new Map(); lugar.set(origem, porModo); }
+  return porModo;
+}
+
+function workersDoSemFundo() {
+  if (poolSemFundo) return poolSemFundo;
+  if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") return null;
+  try {
+    const quantos = Math.max(1, Math.min(SEM_FUNDO_WORKERS, (navigator.hardwareConcurrency || 4) - 1));
+    poolSemFundo = { livres: [], fila: [] };
+    for (let k = 0; k < quantos; k++) {
+      const w = new Worker(new URL("./semFundoWorker.js", import.meta.url), { type: "module" });
+      w.onmessage = ({ data }) => {
+        const pedido = esperandoSemFundo.get(data.id);
+        // A prévia é a primeira de duas mensagens: o worker segue ocupado com o PNG.
+        if (data.previa) {
+          if (pedido && pedido.aoTerPrevia) pedido.aoTerPrevia(data.previa);
+          else data.previa.close();
+          return;
+        }
+        esperandoSemFundo.delete(data.id);
+        if (pedido) {
+          if (data.erro) pedido.falhou(Object.assign(new Error(data.erro.message), { name: data.erro.name }));
+          else pedido.pronto(data.blob);
+        }
+        const seguinte = poolSemFundo.fila.shift();
+        if (seguinte) seguinte(w);
+        else poolSemFundo.livres.push(w);
+      };
+      poolSemFundo.livres.push(w);
+    }
+  } catch (erro) {
+    console.warn("[exportar] sem workers para tirar o fundo, vai na tela:", erro);
+    poolSemFundo = null;
+  }
+  return poolSemFundo;
+}
+
+/**
+ * A conta de `semFundo.js` num worker, ou na tela se não houver worker.
+ * Resolve com o PNG do PDF; `aoTerPrevia`, se vier, recebe antes a prévia da
+ * tela (ver "A PRÉVIA ANTES DO PNG", em semFundo.js).
+ */
+function semFundoDoBlob(blob, forcar, teto = 0, aoTerPrevia = null) {
+  const pool = workersDoSemFundo();
+  if (!pool) return semFundoDoArquivo(blob, forcar, teto, aoTerPrevia);
+  return new Promise((pronto, falhou) => {
+    const id = ++proximoPedido;
+    esperandoSemFundo.set(id, { pronto, falhou, aoTerPrevia });
+    const mandar = (w) => w.postMessage({ id, blob, forcar, teto });
+    const livre = pool.livres.pop();
+    if (livre) mandar(livre);
+    else pool.fila.push(mandar);
+  });
+}
+
+/**
+ * Tira o fundo dos arquivos, na entrada, e guarda o resultado para o PDF.
+ *
+ * Resolve quando as PRÉVIAS estão prontas — não o PNG do PDF, que segue sendo
+ * montado no worker. Para cada arquivo devolve `{ img, png }`: `img` é a arte
+ * sem fundo já reduzida a `tetos[i]` (o bitmap da tela e da silhueta), e `png`
+ * a promessa do PNG do PDF, que fica guardada aqui para o Exportar. Ou `null`,
+ * quando não havia fundo para tirar — ou quando a conta falhou, e aí a arte
+ * entra como veio, como sempre entrou. `aoAndar(i, total)` conta as prontas.
+ */
+export async function tirarFundoDosArquivos(blobs, forcar = false, aoAndar = null, tetos = []) {
+  const modo = forcar ? "forcar" : "auto";
+  let feitas = 0;
+  return Promise.all(blobs.map(async (blob, i) => {
+    let semFundo = null;
+    if (blob) {
+      semFundo = await new Promise((entregar) => {
+        const png = Promise.resolve(semFundoDoBlob(blob, forcar, tetos[i] || 0,
+          (img) => entregar({ img, png })));
+        guardadasDe(blob).set(modo, png);
+        // Sem prévia: não havia fundo (o PNG vem `null`) ou a conta falhou.
+        png.then((arte) => { if (!arte) entregar(null); }, (erro) => {
+          guardadasDe(blob).delete(modo);
+          console.warn("[encaixe] não deu para tirar o fundo:", erro);
+          entregar(null);
+        });
+      });
+    }
+    if (aoAndar) await aoAndar(feitas++, blobs.length);
+    return semFundo;
+  }));
+}
+
+async function calcularSemFundo(peca) {
+  if (peca.pdfOriginal) return arteSemFundo(peca);
+  const blob = await blobDaPeca(peca);
+  // Lido aqui para o recado de "arquivo mudou no disco" dizer qual peça era.
+  await lerBytes(blob.slice(0, 16), peca);
+  const semFundo = await Promise.resolve(semFundoDoBlob(blob, peca.fundoNaExportacao === "forcar"))
+    .catch((erro) => { throw ehFalhaDeLeitura(erro) ? arteIlegivel(erro, peca) : erro; });
+  // Sem fundo para tirar na arte inteira: vai a original, intocada.
+  return semFundo || blob;
+}
+
+/**
+ * A arte sem fundo da peça para o PDF: a que a entrada já deixou pronta, ou —
+ * peça que chegou sem passar por lá, arte de PDF — uma feita agora.
+ */
+function semFundoGuardado(peca) {
+  const origem = peca.pdfOriginal || peca.arquivoOriginal || peca.srcOriginal || peca.src;
+  const modo = peca.fundoNaExportacao;
+  const porModo = guardadasDe(origem);
+  const guardada = porModo.get(modo);
+  if (guardada) return guardada.then((arte) => arte || calcularSemFundo(peca));
+  const promessa = calcularSemFundo(peca);
+  porModo.set(modo, promessa);
+  // Falhou: não fica guardada, para a próxima tentativa refazer.
+  promessa.catch(() => { if (porModo.get(modo) === promessa) porModo.delete(modo); });
+  return promessa;
+}
+
+/**
+ * Garante que as artes sem fundo do risco estejam prontas ou a caminho, sem
+ * esperar. Na maioria das peças já estão (a entrada fez); esta é a rede para
+ * as que não passaram por lá. Erro aqui não aparece: ele volta, com o nome da
+ * peça, quando o Exportar pedir a mesma arte.
+ */
+export function adiantarArtesSemFundo(posicoes) {
+  const vistas = new Set();
+  for (const p of posicoes) {
+    const peca = p.item;
+    if (!peca || !peca.fundoNaExportacao) continue;
+    const chave = chaveDaArte(peca);
+    if (vistas.has(chave)) continue;
+    vistas.add(chave);
+    semFundoGuardado(peca).catch(() => {});
+  }
+}
+
 /**
  * O que vai para o servidor por uma peça, ainda sem giro nenhum.
  *
@@ -298,7 +309,7 @@ async function arteSemFundo(peca) {
  * servidor embute como desenho e não como imagem.
  */
 export async function arteDaPeca(peca) {
-  if (peca.fundoNaExportacao) return { arte: await arteSemFundo(peca), vetor: false };
+  if (peca.fundoNaExportacao) return { arte: await semFundoGuardado(peca), vetor: false };
   if (peca.pdfOriginal) {
     // Lido agora para o recado de arquivo mudado ser o mesmo das imagens.
     await lerBytes(peca.pdfOriginal.slice(0, 5), peca);
@@ -357,12 +368,18 @@ export function giroDaPosicao(p) {
  * Uma arte por peça, do jeito que ela vai para o servidor: sem giro. As cópias
  * da peça (`p.item` é a cópia, e não a peça) leem o arquivo uma vez só.
  */
-export async function prepararArtes(posicoes) {
+export async function prepararArtes(posicoes, aoLer) {
   const artes = new Map();
+  // Quantas artes diferentes existem, para `aoLer` dizer "3 de 17".
+  const total = new Set(posicoes.map((p) => chaveDaArte(p.item))).size;
+  // As sem fundo começam TODAS agora, nos workers, e não uma depois da outra
+  // no laço abaixo — que só espera cada uma na sua vez.
+  adiantarArtesSemFundo(posicoes);
   for (const p of posicoes) {
     const chave = chaveDaArte(p.item);
     if (artes.has(chave)) continue;
     artes.set(chave, { ...(await arteDaPeca(p.item)), peca: p.item });
+    if (aoLer) aoLer(artes.size, total);
   }
   return artes;
 }

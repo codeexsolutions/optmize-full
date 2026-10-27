@@ -39,7 +39,6 @@ on:
       - "estatico/**"
       - "empacotar/**"
       - "src-tauri/**"
-      - "corel/**"
       - "estilo/**"
       - "index.html"
       - "vite.config.mts"

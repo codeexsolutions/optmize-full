@@ -1115,8 +1115,8 @@
  * O véu cobre a tela inteira de propósito. Enquanto calcula, o sistema já
  * avisa que pausou as outras telas; deixar a mesa clicável no meio disso só
  * abriria caminho para mudar a lista de peças debaixo do cálculo que está
- * rodando em cima dela. O único controle que continua de pé é o "Parar e usar
- * este", que mora dentro da caixa.
+ * rodando em cima dela. O único controle que continua de pé é o "Finalizar
+ * agora", que mora dentro da caixa.
  */
 :where(.producao) .encaixe-carregamento {
   position: fixed;
@@ -2914,6 +2914,28 @@ input[data-campo="qtd"],
   color: color-mix(in srgb, var(--accent) 70%, var(--text));
 }
 
+/* ---- o sentido único: o "A" aponta para onde vai o alto da arte ---- */
+:where(.producao) .sentido-rotulo {
+  margin-top: 10px;
+}
+
+:where(.producao) .sentido-a {
+  display: inline-block;
+  width: 17px;
+  height: 17px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 17px;
+  text-align: center;
+  color: color-mix(in srgb, var(--accent) 45%, var(--text-dim));
+  transition: color 0.12s ease;
+}
+
+:where(.producao) .sentido-op:hover .sentido-a,
+:where(.producao) .sentido-op[aria-pressed="true"] .sentido-a {
+  color: var(--accent);
+}
+
 /* ---- o rodapé ---- */
 :where(.producao) .ajustes-rodape {
   display: flex;
@@ -4002,4 +4024,223 @@ input[data-campo="qtd"],
 .producao [data-page="encaixe"] .btn:focus-visible {
   outline: 2px solid var(--accent-bright);
   outline-offset: 2px;
+}
+
+/* ==================== O MODAL DO EXPORTAR ====================
+   O número grande é o que a pessoa olha; as etapas dizem em que pé está; o
+   aviso âmbar é o "espere" escrito, para ninguém fechar no meio. */
+:where(.producao) .modal-exportar {
+  width: min(460px, calc(100vw - 32px));
+}
+
+:where(.producao) .exportar-corpo {
+  gap: 12px;
+}
+
+:where(.producao) .exportar-numero {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  font-family: var(--font-numeros, inherit);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+:where(.producao) .exportar-numero span {
+  font-size: 46px;
+  line-height: 1;
+}
+
+:where(.producao) .exportar-numero small {
+  font-size: 18px;
+  color: var(--text-dim);
+}
+
+:where(.producao) .exportar-barra {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--card-bg-soft);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+:where(.producao) .exportar-barra span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #ffd08a));
+  transition: width 0.3s ease;
+}
+
+/* O brilho que corre pela barra: mesmo parada num número, ela mostra vida. */
+:where(.producao) .exportar-barra span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: exportar-brilho 1.4s linear infinite;
+}
+
+:where(.producao) .modal-exportar[data-fim] .exportar-barra span::after {
+  animation: none;
+  opacity: 0;
+}
+
+@keyframes exportar-brilho {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+:where(.producao) .exportar-detalhe {
+  margin: 0;
+  min-height: 18px;
+  text-align: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+:where(.producao) .exportar-etapas {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+:where(.producao) .exportar-etapas li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+:where(.producao) .exportar-etapas i {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+}
+
+:where(.producao) .exportar-etapas li[data-estado="ativa"] {
+  color: var(--text);
+}
+
+:where(.producao) .exportar-etapas li[data-estado="ativa"] i {
+  border-color: var(--accent);
+  border-top-color: transparent;
+  animation: exportar-gira 0.8s linear infinite;
+}
+
+:where(.producao) .exportar-etapas li[data-estado="feita"] {
+  color: var(--text-dim);
+}
+
+:where(.producao) .exportar-etapas li[data-estado="feita"] i {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+:where(.producao) .exportar-etapas li[data-estado="feita"] i::after {
+  content: "";
+  width: 6px;
+  height: 3px;
+  margin-top: -1px;
+  border-bottom: 1.5px solid var(--bg);
+  border-left: 1.5px solid var(--bg);
+  transform: rotate(-45deg);
+}
+
+@keyframes exportar-gira {
+  to { transform: rotate(360deg); }
+}
+
+:where(.producao) .exportar-aviso {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+:where(.producao) .exportar-aviso b {
+  font-weight: 500;
+  color: var(--accent);
+}
+
+:where(.producao) .exportar-aviso svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--accent);
+}
+
+:where(.producao) .modal-exportar[data-fim="erro"] .exportar-aviso {
+  border-color: color-mix(in srgb, #e5484d 50%, transparent);
+  background: color-mix(in srgb, #e5484d 12%, transparent);
+}
+
+:where(.producao) .modal-exportar[data-fim="erro"] .exportar-aviso b,
+:where(.producao) .modal-exportar[data-fim="erro"] .exportar-aviso svg {
+  color: #ff6b6f;
+}
+
+:where(.producao) .exportar-tempo {
+  margin: 0;
+  text-align: center;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.producao) .exportar-barra span::after,
+  :where(.producao) .exportar-etapas li[data-estado="ativa"] i {
+    animation: none;
+  }
+}
+
+/* Enquanto trabalha não há o que apertar: o rodapé só aparece no fim, com o Fechar. */
+:where(.producao) .modal-exportar:not([data-fim]) .ajustes-rodape {
+  display: none;
+}
+
+/* O "Finalizar agora" da procura: vermelho, porque encerra a busca no meio —
+   e é o único botão de pé enquanto ela roda, então tem de ser achado na hora. */
+:where(.producao) .btn-finalizar {
+  border: 1px solid #e5484d;
+  background: #e5484d;
+  color: #fff;
+}
+
+:where(.producao) .btn-finalizar:hover:not(:disabled) {
+  border-color: #f2555a;
+  background: #f2555a;
+}
+
+:where(.producao) .btn-finalizar:disabled {
+  opacity: 0.7;
+}
+
+/* A porcentagem de cada etapa, encostada à direita da linha dela. */
+:where(.producao) .exportar-etapa-pc {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+:where(.producao) .exportar-etapas li[data-estado="ativa"] .exportar-etapa-pc {
+  color: var(--accent);
 }

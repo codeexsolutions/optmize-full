@@ -17,8 +17,8 @@
  *   redirecionamento, por causa dos links antigos.
  * - `publicDir: "estatico"` — e não o `public/` que o Vite usaria por padrão,
  *   porque durante a migração esse nome já era da tela antiga. O nome ficou:
- *   os arquivos servidos como estão (o sprite de ícones, o `encaixe.wasm`, o
- *   `logo.png` e as redes da IA) moram em `estatico/`.
+ *   os arquivos servidos como estão (o sprite de ícones, o `encaixe.wasm`, as
+ *   fontes e os vídeos) moram em `estatico/`.
  *
  * A extensão é `.mts` e não `.ts` de propósito: o `package.json` declara o
  * projeto como CommonJS, porque o servidor Express é CommonJS e continua
@@ -76,28 +76,33 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    /*
+      O `estatico/` NÃO É COPIADO PARA O `dist/`.
+
+      O `server.js` já serve o `estatico/` direto, antes do `dist/`, e o
+      instalador leva as duas pastas. Com a cópia, cada vídeo do Como usar, o
+      sprite e o wasm iam duas vezes para dentro do instalador. Em
+      desenvolvimento nada muda: o Vite continua servindo o `publicDir`.
+    */
+    copyPublicDir: false,
   },
   server: {
     port: 5173,
-    // O servidor sobe o Chrome do WhatsApp, que fica com `whatsapp-sessao/`
-    // aberta; o observador do Vite tropeça nesses arquivos (EBUSY) e derruba o
-    // dev inteiro. Nada aqui é código da tela: são dados de execução, todos
-    // fora do Git pelo mesmo motivo.
+    // O observador do Vite tropeça nos arquivos que o servidor mantém abertos
+    // (EBUSY) e derruba o dev inteiro. Nada aqui é código da tela: são dados
+    // de execução, todos fora do Git pelo mesmo motivo.
     watch: {
       ignored: [
-        "**/whatsapp-sessao/**",
         "**/uploads/**",
         "**/exportado/**",
         "**/dados.db*",
       ],
     },
     proxy: {
-      "/api": "http://localhost:8000",
-      "/uploads": "http://localhost:8000",
-      // O painel das impressoras é atualizado por evento. `ws: true` é o que
-      // faz o WebSocket atravessar o proxy — sem isso ele cai para polling em
-      // desenvolvimento e o progresso da varredura chega aos trancos.
-      "/socket.io": { target: "http://localhost:8000", ws: true },
+      // 127.0.0.1, e não localhost: o servidor escuta só no IPv4, e o
+      // localhost do Node pode resolver para o ::1 primeiro.
+      "/api": "http://127.0.0.1:8000",
+      "/uploads": "http://127.0.0.1:8000",
     },
   },
 });

@@ -63,6 +63,17 @@ const enviar = <T,>(caminho: string, dados: unknown) =>
     body: JSON.stringify(dados),
   });
 
+/** Onde está o PDF que o servidor monta (ver `encaixeApi.pdf`). */
+export interface AndamentoDoPdf {
+  fase: "montando" | "conferindo" | "gravando";
+  /** Peças já colocadas no PDF, de `total`. */
+  feitas?: number;
+  total?: number;
+  /** Bytes do arquivo já gravados, de `totalBytes`. */
+  bytes?: number;
+  totalBytes?: number;
+}
+
 export const encaixeApi = {
   /** O que a busca aprendeu sobre trabalho parecido com este. */
   memoria: (assinatura: string) =>
@@ -91,12 +102,43 @@ export const encaixeApi = {
    * servidor não consegue abrir o arquivo — aí quem chama manda a arte
    * desenhada no lugar.
    */
-  async mandarArte(sessao: string, chave: string, arte: Blob): Promise<boolean> {
+  /** As chaves das artes que o servidor ainda guarda desta sessão. */
+  async artesDaSessao(sessao: string): Promise<Set<string>> {
+    try {
+      const resposta = await fetch(`/api/encaixe/artes-da-sessao?sessao=${encodeURIComponent(sessao)}`);
+      if (!resposta.ok) return new Set();
+      const { chaves } = await resposta.json();
+      return new Set(Array.isArray(chaves) ? chaves : []);
+    } catch {
+      return new Set();
+    }
+  },
+
+  async mandarArte(
+    sessao: string,
+    chave: string,
+    arte: Blob,
+    /** Os bytes desta arte que já subiram, a cada pedaço. */
+    aoEnviar?: (enviados: number) => void,
+  ): Promise<boolean> {
     const endereco = `/api/encaixe/arte?sessao=${encodeURIComponent(sessao)}`
       + `&chave=${encodeURIComponent(chave)}`;
-    const envio = await fetch(endereco, { method: "POST", body: arte });
-    if (!envio.ok) throw new Error("o servidor não aceitou uma das artes.");
-    const resposta = await envio.json().catch(() => ({}));
+    /*
+     * XHR, e não `fetch`: o `fetch` não conta o envio, e é por esta conta que
+     * o modal do Exportar mostra quantos MB das artes já subiram.
+     */
+    const { status, texto } = await new Promise<{ status: number; texto: string }>((pronto, falhou) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", endereco);
+      xhr.upload.onprogress = (e) => aoEnviar?.(e.loaded);
+      xhr.onload = () => pronto({ status: xhr.status, texto: xhr.responseText });
+      xhr.onerror = () => falhou(new Error("o servidor não aceitou uma das artes."));
+      xhr.send(arte);
+    });
+    if (status < 200 || status >= 300) throw new Error("o servidor não aceitou uma das artes.");
+    aoEnviar?.(arte.size);
+    let resposta: { legivel?: boolean } = {};
+    try { resposta = JSON.parse(texto); } catch { /* sem corpo: vale como legível */ }
     return resposta.legivel !== false;
   },
 
@@ -108,18 +150,57 @@ export const encaixeApi = {
    * tela): o PDF escorre do servidor direto para o disco, sem passar inteiro
    * pela memória do navegador. Um encaixe de 11 metros não é pequeno.
    */
-  async pdf(corpo: unknown): Promise<ReadableStream<Uint8Array>> {
-    const resposta = await fetch("/api/encaixe/pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(corpo),
-    });
+  async pdf(corpo: object, aoAndar?: (andamento: AndamentoDoPdf) => void): Promise<ReadableStream<Uint8Array>> {
+    /*
+     * O ANDAMENTO DA MONTAGEM: enquanto o servidor monta, a resposta não
+     * chega, então a tela pergunta por ele (`/pdf-andamento`) pelo id deste
+     * pedido. Para de perguntar assim que o arquivo começa a vir.
+     */
+    const pedido = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+    let esperando = true;
+    const perguntar = async () => {
+      while (esperando) {
+        try {
+          const estado = await (await fetch(`/api/encaixe/pdf-andamento?pedido=${pedido}`)).json();
+          if (esperando && estado && estado.fase) aoAndar?.(estado);
+        } catch { /* uma pergunta perdida não para o PDF */ }
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    };
+    if (aoAndar) void perguntar();
+
+    let resposta: Response;
+    try {
+      resposta = await fetch("/api/encaixe/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...corpo, pedido }),
+      });
+    } finally {
+      esperando = false;
+    }
     if (!resposta.ok) {
       const erro = await resposta.json().catch(() => ({}));
       throw new Error(erro.error || "O servidor não conseguiu gerar o PDF.");
     }
     if (!resposta.body) throw new Error("O servidor não mandou o PDF.");
-    return resposta.body;
+    if (!aoAndar) return resposta.body;
+
+    /*
+     * A GRAVAÇÃO: o arquivo escorre para o disco, e cada pedaço que passa é
+     * contado contra o tamanho que o servidor declarou. É o número exato do
+     * que já está gravado.
+     */
+    const totalBytes = Number(resposta.headers.get("content-length")) || 0;
+    let bytes = 0;
+    aoAndar({ fase: "gravando", bytes, totalBytes });
+    return resposta.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+      transform(pedaco, saida) {
+        bytes += pedaco.byteLength;
+        aoAndar({ fase: "gravando", bytes, totalBytes });
+        saida.enqueue(pedaco);
+      },
+    }));
   },
 };
 

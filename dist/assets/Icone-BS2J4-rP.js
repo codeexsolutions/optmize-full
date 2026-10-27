@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-D2aABDIb.js";import{t}from"./jsx-runtime-CxfV87AS.js";function n({referencia:e,className:t}){return(0,r.jsx)(`svg`,{viewBox:`0 0 24 24`,"aria-hidden":`true`,className:t,children:(0,r.jsx)(`use`,{href:`/${e}`})})}var r,i=e((()=>{r=t()}));export{i as n,n as t};

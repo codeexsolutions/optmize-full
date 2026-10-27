@@ -287,7 +287,7 @@ async function main() {
    * peça na lista ele fica escondido, e o ajuste sobrevive) não é conferido
    * aqui.
    */
-  await irPara('impressoras');
+  await irPara('projetos');
   assert.ok(!document.getElementById('encaixe-largura'),
     'sem trabalho guardado, o editor de produção sai da página junto com o Encaixe');
   await irPara('encaixe');
@@ -295,19 +295,7 @@ async function main() {
   assert.notEqual(document.getElementById('encaixe-largura').value,'179',
     'sem peça na lista o ajuste digitado não volta: o editor nasce limpo');
 
-  // ---------- O que saiu do menu ----------
-  // Desde 2026-09-21 o menu do dia a dia mostra so onde se trabalha: saiu o
-  // grupo Relatorios inteiro, mais Macros e WhatsApp (ver `foraDoMenu`, em
-  // rotas.ts). As telas continuam de pe — o que sai e a linha do menu, e e
-  // exatamente essa diferenca que as duas asercoes abaixo guardam.
-  // `reposicao` deixou a lista: desde 2026-09-29 o nome é da tela que guarda
-  // cada encaixe exportado para refazer peças, e ela ESTÁ no menu. A que saiu,
-  // o relatório de quanto foi refeito, é a de antes, que agora se chama
-  // `retrabalho` (ver rotas.ts).
-  for (const nome of ['macros','whatsapp','historico','retrabalho']) {
-    assert.ok(!document.querySelector(`a[href="/${nome}"]`),
-      `a ${nome} saiu do menu`);
-  }
+  // ---------- O menu ----------
   assert.ok(document.querySelector('a[href="/encaixe"]'),
     'o menu nao ficou vazio: o Encaixe continua la');
 
@@ -318,16 +306,12 @@ async function main() {
   assert.match(document.body.textContent,/Arraste a foto para cá/,'o Extrator abre esperando a foto');
   assert.match(document.body.textContent,/não está instalada \(bancada\)/,'o Extrator diz que a rede falta');
 
-  // A Macros segue trancada por cima disso: fora do menu E com o endereco
-  // abrindo o aviso, em vez das macros (ver `trancada`, em rotas.ts).
-  await irPara('macros');
-  assert.match(document.body.textContent,/Esta tela está trancada/,
-    'o endereco da Macros abre o aviso, e nao as macros');
-  // Uma das que saiu sem tranca: o endereco tem de abrir a tela inteira, e nao
-  // cair na inicial. Sumir do menu nao pode virar sumir do programa.
-  await irPara('historico');
-  assert.equal(dom.window.location.pathname,'/historico',
-    'o endereco de uma tela fora do menu continua abrindo ela');
+  // As telas que saíram do programa em 2026-10-27 (as impressoras, os
+  // relatórios, o WhatsApp e as Macros) não têm mais linha no menu, e o
+  // endereço delas cai na tela inicial como o de qualquer tela que saiu.
+  for (const nome of ['impressoras','pedidos','maquinas','whatsapp','historico','retrabalho','macros']) {
+    assert.ok(!document.querySelector(`a[href="/${nome}"]`), `a ${nome} saiu do menu`);
+  }
   await irPara('cor');
   assert.equal(dom.window.location.pathname,'/moldes',
     'endereco de tela que saiu cai na tela inicial');
@@ -336,6 +320,6 @@ async function main() {
   assert.equal(dom.window.uiConfirm,undefined);
   assert.equal(dom.window.carregarProjetos,undefined);
   fs.unlinkSync(bundle); dom.window.close();
-  console.log('React: rotas, StrictMode, modais, moldes, clientes, editor de projeto, preservação de ajustes e a Macros trancada passaram.');
+  console.log('React: rotas, StrictMode, modais, moldes, clientes, editor de projeto, preservação de ajustes e o menu passaram.');
 }
 main().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1);});

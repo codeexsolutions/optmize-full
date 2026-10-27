@@ -40,17 +40,12 @@ import { Cabecalho, ProvedorDoEspacoDoCabecalho } from "./Cabecalho";
 import { BotaoComoUsar, JanelaComoUsar } from "./ComoUsar";
 import { Icone } from "./Icone";
 import { Producao } from "../producao/Producao";
-import { TELAS, useTelaAtual, type NomeDeTela } from "../rotas";
-import { ProvedorSemCabecalho } from "./semCabecalho";
-
-/** O painel que a rede local enxerga (ver "VISITA DA REDE LOCAL", abaixo). */
-const TELA_DAS_IMPRESSORAS = TELAS.find((t) => t.nome === "impressoras");
+import { useTelaAtual, type NomeDeTela } from "../rotas";
 
 export function Casca() {
   const tela = useTelaAtual();
   const navegar = useNavigate();
   const [menuAberto, setMenuAberto] = useState(false);
-  const [semCabecalho, setSemCabecalho] = useState(false);
   /** O espaço à direita do cabeçalho, onde as telas põem abas e ações. */
   const [espacoDoCabecalho, setEspacoDoCabecalho] = useState<HTMLElement | null>(null);
 
@@ -139,10 +134,6 @@ export function Casca() {
     || tela.nome === "moldes" || tela.nome === "montagem" || tela.nome === "reposicao"
     || tela.nome === "digitalizar";
 
-  /* Bancada ou tela que pediu (ver `useSemCabecalho`): as duas trocam o
-     cabeçalho pelo botão flutuante da gaveta. */
-  const semTopo = bancada || semCabecalho;
-
   /*
    * ===========================================================================
    * O PORTÃO DA CONTA
@@ -160,39 +151,6 @@ export function Casca() {
    * a conta liberada nesta máquina — a tela só acompanha o que ela decide.
    */
   if (sessao.estado === "carregando") return null;
-
-  /*
-    VISITA DA REDE LOCAL: só o painel das impressoras.
-
-    O programa é da máquina em que a conta entrou; de outro computador, o
-    servidor só responde ao painel (ver `servidor/so-nesta-maquina.js`). Sem
-    menu, sem login e sem o resto das telas — elas dariam 403 em tudo. E sem a
-    tela de entrar: entrar daqui mexeria na sessão daquela máquina.
-  */
-  if (sessao.remoto) {
-    if (sessao.estado !== "dentro") {
-      return (
-        <div className="app-react grid h-screen place-items-center bg-fundo p-6 text-center font-texto text-tinta">
-          <p className="m-0 max-w-[440px] text-sm text-tinta-apagada">
-            O Optmize daquele computador não está com a conta aberta. O painel das impressoras
-            volta a aparecer aqui quando alguém entrar nele.
-          </p>
-        </div>
-      );
-    }
-    const Painel = TELA_DAS_IMPRESSORAS?.Componente;
-    return (
-      <ProvedorDeEscopos escopos={sessao.acesso?.escopos ?? null}>
-      <ProvedorDeDialogo>
-        <div className="app-react h-screen overflow-y-auto bg-fundo px-4 py-3 font-texto text-tinta antialiased lg:px-6 lg:py-4">
-          <Suspense fallback={<p className="p-6 text-sm text-tinta-apagada">Abrindo as impressoras…</p>}>
-            {Painel && <Painel />}
-          </Suspense>
-        </div>
-      </ProvedorDeDialogo>
-      </ProvedorDeEscopos>
-    );
-  }
 
   if (sessao.estado === "fora") return <Entrar aoEntrar={sessao.recarregar} aviso={sessao.aviso} />;
 
@@ -229,7 +187,6 @@ export function Casca() {
     */
     <ProvedorDeEscopos escopos={sessao.acesso?.escopos ?? null}>
     <ProvedorDeDialogo>
-    <ProvedorSemCabecalho value={setSemCabecalho}>
     <ProvedorDoEspacoDoCabecalho value={espacoDoCabecalho}>
     <div data-tela={tela.nome} className="app-react h-screen overflow-hidden bg-fundo font-texto text-tinta antialiased">
       <Menu
@@ -267,7 +224,7 @@ export function Casca() {
       )}
 
       <main className="pagina-aurora flex h-screen flex-col overflow-hidden tela:ml-[72px]">
-        {semTopo ? (
+        {bancada ? (
           /*
            * O BOTÃO FLUTUANTE DA GAVETA.
            *
@@ -317,9 +274,6 @@ export function Casca() {
               ? "overflow-hidden pt-[52px] tela:pt-0"
               // O respiro do corpo das páginas do Flow (`PAGE_PAD`), alinhado à esquerda.
               : "overflow-y-auto px-4 py-3 lg:px-6 lg:py-4",
-            // A tela que escondeu o cabeçalho continua sendo documento: mantém
-            // a folga e a rolagem, e só abre a faixa do botão da gaveta.
-            !bancada && semCabecalho ? "pt-[52px] tela:pt-3" : "",
           ].join(" ")}
         >
           {/*
@@ -352,7 +306,6 @@ export function Casca() {
       <JanelaComoUsar />
     </div>
     </ProvedorDoEspacoDoCabecalho>
-    </ProvedorSemCabecalho>
     </ProvedorDeDialogo>
     </ProvedorDeEscopos>
   );

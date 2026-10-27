@@ -29,10 +29,10 @@ const path = require("path");
 const { carregarDosMotores, RAIZ } = require("./motores");
 
 /*
- * Os módulos do motor: a lista mora em `empacotar/modulos-do-motor.js`, junto
- * com a do servidor, para as duas não divergirem em silêncio — já divergiram.
+ * Os módulos do motor: a lista mora em `bancada/modulos-do-motor.js`, que as
+ * outras conferências também leem.
  */
-const { PARA_A_BANCADA: MODULOS } = require("../empacotar/modulos-do-motor");
+const { PARA_A_BANCADA: MODULOS } = require("./modulos-do-motor");
 
 /**
  * Sobe uma instância do motor.

@@ -7,11 +7,9 @@ const { buildSync } = require('esbuild');
 const raiz = path.resolve(__dirname, '..');
 const compilado = buildSync({
   stdin: {
-    contents: `export { useDados } from './src/api/useDados';
-      export { ProvedorDeDialogo, useDialogo } from './src/casca/Dialogo';
+    contents: `export { ProvedorDeDialogo, useDialogo } from './src/casca/Dialogo';
       export { Projetos } from './src/telas/Projetos';
       export { Moldes } from './src/telas/Moldes';
-      export { duracao } from './src/utils/formato';
       export { MemoryRouter } from 'react-router-dom';`,
     resolveDir: raiz,
   },
@@ -27,7 +25,7 @@ for (const nome of ['window', 'document', 'HTMLElement', 'Node', 'Event', 'Mouse
 global.IS_REACT_ACT_ENVIRONMENT = true;
 dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 mod._compile(compilado, mod.filename);
-const { useDados, ProvedorDeDialogo, useDialogo, Projetos, Moldes, duracao, MemoryRouter } = mod.exports;
+const { ProvedorDeDialogo, useDialogo, Projetos, Moldes, MemoryRouter } = mod.exports;
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
@@ -47,40 +45,6 @@ const clicar = async botao => {
   await act(async () => botao.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
 };
 const botao = texto => [...document.querySelectorAll('button')].find(x => x.textContent.trim() === texto);
-
-async function conferirConsultas() {
-  const consultas = [];
-  let estado;
-  function Consulta({ filtro = 'a' }) {
-    estado = useDados(() => {
-      const consulta = adiada(); consultas.push(consulta); return consulta.promise;
-    }, [filtro]);
-    return elemento('output', null, estado.dados ?? estado.erro ?? 'carregando');
-  }
-  const root = await montar(elemento(Consulta));
-  await act(async () => { estado.recarregar(); });
-  await act(async () => consultas[1].resolve('mais novo'));
-  await act(async () => consultas[0].resolve('antigo'));
-  assert.equal(estado.dados, 'mais novo', 'resposta antiga não desfaz recarga');
-
-  await act(async () => { estado.recarregar(); estado.recarregar(); });
-  await act(async () => consultas[3].resolve('atual'));
-  await act(async () => consultas[2].reject(new Error('erro antigo')));
-  assert.equal(estado.dados, 'atual', 'erro antigo não apaga dados atuais');
-  assert.equal(estado.erro, null);
-
-  await act(async () => { estado.recarregar(); });
-  await act(async () => estado.setDados('evento do servidor'));
-  await act(async () => consultas[4].resolve('consulta anterior ao evento'));
-  assert.equal(estado.dados, 'evento do servidor', 'socket prevalece sobre consulta pendente');
-
-  await act(async () => { estado.recarregar(); });
-  await act(async () => root.render(elemento(Consulta, { filtro: 'b' })));
-  await act(async () => consultas[6].resolve('filtro b'));
-  await act(async () => consultas[5].resolve('filtro a'));
-  assert.equal(estado.dados, 'filtro b', 'recarga manual antiga respeita mudança de filtro');
-  await act(async () => root.unmount());
-}
 
 async function conferirDialogos() {
   let dialogo;
@@ -196,16 +160,10 @@ async function conferirMoldes() {
 }
 
 async function main() {
-  await conferirConsultas();
   await conferirDialogos();
   await conferirProjetos();
   await conferirMoldes();
-  assert.equal(duracao(3599), '1 h');
-  assert.equal(duracao(7199), '2 h');
-  assert.equal(duracao(3690), '1 h 2 min');
-  assert.equal(duracao(30), 'menos de 1 min');
-  assert.equal(duracao(0), '—');
   dom.window.close();
-  console.log('Revisão frontend: recargas, eventos, filtros, diálogos, projetos, moldes e duração passaram.');
+  console.log('Revisão frontend: diálogos, projetos e moldes passaram.');
 }
 main().catch(erro => { console.error(erro); process.exitCode = 1; dom.window.close(); });

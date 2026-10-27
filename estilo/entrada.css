@@ -1351,3 +1351,88 @@ html.na-janela #raiz .h-screen { height: 100%; }
   background: #fff;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
 }
+
+/* ==================== O POST DO CASO (`telas/PostDoCaso.tsx`) ==================== */
+/* Cada quadro entra deslizando, e a barra do Optmize cresce até a medida dela:
+   o olho vê a faixa parar antes do fim, que é onde está a economia. */
+.post-quadro {
+  animation: post-entra 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.post-barra {
+  animation: post-barra 0.9s 0.15s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  transform-origin: left;
+}
+
+/* As setas só aparecem com o mouse em cima, como num carrossel de post. */
+.post-seta {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.post-do-caso:hover .post-seta,
+.post-seta:focus-visible {
+  opacity: 1;
+}
+
+@keyframes post-entra {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes post-barra {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-quadro,
+  .post-barra {
+    animation: none;
+  }
+}
+
+/* O palco e o giro do post: virado para a direita, com a sombra caindo do
+   lado que se afasta. O `will-change` evita o texto tremer durante a transição. */
+.post-palco {
+  perspective: 1400px;
+}
+
+.post-3d {
+  transform: rotateY(16deg) rotateX(5deg) rotateZ(-0.6deg);
+  transform-style: preserve-3d;
+  will-change: transform;
+  box-shadow:
+    1px 0 0 var(--accent-line),
+    -28px 34px 60px -22px rgba(0, 0, 0, 0.85),
+    -10px 12px 24px -12px rgba(0, 0, 0, 0.6);
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.6s ease;
+}
+
+.post-3d:hover {
+  transform: rotateY(4deg) rotateX(1.5deg);
+  box-shadow:
+    1px 0 0 var(--accent-line),
+    -14px 22px 50px -24px rgba(0, 0, 0, 0.8);
+}
+
+/* O desperdício pulsa de leve, para o olho achar o pedaço que sobra. */
+.post-sobra {
+  animation: post-sobra 2.4s ease-in-out infinite;
+}
+
+@keyframes post-sobra {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-3d,
+  .post-3d:hover {
+    transform: none;
+  }
+
+  .post-sobra {
+    animation: none;
+  }
+}

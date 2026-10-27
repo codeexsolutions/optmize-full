@@ -22,25 +22,22 @@
  *
  * CMYK com perfil embutido o navegador já resolve, e bem. Mandá-lo para cá
  * custaria uma ida e volta de dezenas de megabytes para chegar na mesma cor —
- * e, pior, recomprimiria uma arte que hoje vai INTEIRA para o PDF, pelo
- * passa-direto (ver `jpegParaPdf.js`). Quem decide o que mandar é a tela, pelo
+ * e, pior, recomprimiria uma arte que hoje vai INTEIRA para o PDF. Quem decide o que mandar é a tela, pelo
  * diagnóstico que ela já faz (`motores/corDoArquivo.js`); a rota aceita
  * qualquer arquivo e devolve intacto o que não precisa de conversão.
  *
  * ---------------------------------------------------------------------------
- * POR QUE O SHARP, E NÃO O `cor-icc.js` QUE JÁ EXISTE
+ * POR QUE O SHARP
  * ---------------------------------------------------------------------------
  *
- * Porque o `cor-icc.js` recusa exatamente estes dois arquivos: ele caminha a
- * LUT do perfil EMBUTIDO (e por isso é exato quando há um) e só lê JPEG. Sem
- * perfil embutido ele não tem por onde começar, e TIFF ele não abre.
+ * Houve um conversor à mão, o `cor-icc.js`, que caminhava a LUT do perfil
+ * EMBUTIDO e só lia JPEG: sem perfil embutido ele não tinha por onde começar,
+ * e TIFF ele não abria. Saiu em 2026-10-27, sem ninguém que o chamasse desde
+ * que a tela Cor deixou o programa.
  *
  * O sharp resolve os dois, com o libvips assumindo um perfil de impressão
  * quando o arquivo não traz o dele. Medido contra a travessia do perfil de
  * verdade: o palpite cai a menos de 10 por canal, onde o navegador erra 85.
- *
- * Ficam dois conversores no projeto, e isso é dívida conhecida: nada chama o
- * `/api/cor` desde que a tela Cor saiu do programa, em 2026-09-21.
  *
  * ---------------------------------------------------------------------------
  * O DPI NÃO É DETALHE

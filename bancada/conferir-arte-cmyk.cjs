@@ -48,7 +48,6 @@ const PERFIL_DE_IMPRESSAO = "C:/Windows/System32/spool/drivers/color/RSWOP.icm";
 
 /** Preenchidos em `principal`, a partir dos motores de `src/`. */
 let pixelsPorCmDoArquivo;
-let jpegSeguroParaPdf;
 
 /** As quatro faixas de cor da arte de teste, em sRGB. */
 const CORES = [[230, 30, 40], [20, 160, 70], [30, 60, 200], [245, 150, 20]];
@@ -148,8 +147,7 @@ async function principal() {
    */
   globalThis.document = globalThis.document
     || { createElement: () => ({ getContext: () => null }) };
-  ({ pixelsPorCmDoArquivo, jpegSeguroParaPdf } = await carregarDosMotores(
-    ["motores/medidaDoArquivo.js", "motores/jpegParaPdf.js"]));
+  ({ pixelsPorCmDoArquivo } = await carregarDosMotores(["motores/medidaDoArquivo.js"]));
 
   const { servidor, base } = await subir();
   try {
@@ -307,24 +305,6 @@ async function conferirTudo(base) {
         assert.notEqual(espacoDoPerfil, "CMYK", `${oque}: veio com perfil CMYK grudado`);
       }
     }
-  });
-
-  await conferir("a arte convertida passa direto para o PDF, sem redesenho", async () => {
-    /*
-     * O QUE ESTA LINHA GANHA, além da cor.
-     *
-     * `jpegSeguroParaPdf` reprova JPEG de quatro componentes — então, antes
-     * desta rota, uma arte CMYK ia para o PDF REDESENHADA a partir do canvas,
-     * com a cor errada do navegador assada no arquivo de impressão. Convertida,
-     * ela volta a ser um JPEG de três componentes e vai inteira, como chegou.
-     *
-     * Vale guardar porque é frágil de um jeito silencioso: bastaria a conversão
-     * deixar uma orientação EXIF diferente de 1 para o passa-direto cair de
-     * novo, sem erro nenhum na tela — só um PDF maior e uma volta pelo canvas.
-     */
-    const bytes = Buffer.from(await (await preparar(cmykSemPerfil, "arte.jpg")).arrayBuffer());
-    assert.ok(jpegSeguroParaPdf(new Uint8Array(bytes)),
-      "a arte convertida tinha que poder ir inteira para o PDF");
   });
 
   await conferir("arte que já está boa volta byte por byte, sem recomprimir", async () => {

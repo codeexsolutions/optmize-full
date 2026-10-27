@@ -383,8 +383,14 @@ export function desenharEncaixe(canvas, r, {
   const cabendo = (disponivel - REGUA) / r.larguraTecido;
   const px = escala || Math.max(0.6, cabendo * zoom);
 
+  /*
+   * Deitado na tela, o canvas vai até o fim da caixa mesmo quando o risco é
+   * mais curto: a grade continua depois do corte, sumindo, como na mesa vazia.
+   * As coordenadas não mudam — o comprimento sempre começa na esquerda.
+   */
+  const caixaDeComprido = deitar && !escala && pai ? pai.clientWidth - 22 : 0;
   const larguraCanvas = deitar
-    ? Math.round(r.consumo * px)
+    ? Math.max(Math.round(r.consumo * px), caixaDeComprido)
     : Math.round(r.larguraTecido * px) + REGUA;
   const alturaCanvas = deitar
     ? Math.round(r.larguraTecido * px) + REGUA
@@ -435,6 +441,65 @@ export function desenharEncaixe(canvas, r, {
   if (deitar) {
     ctx.translate(0, REGUA + r.larguraTecido * px);
     ctx.rotate(-Math.PI / 2);
+  }
+
+  /*
+   * A MESA COM GRADE, POR BAIXO DAS PEÇAS (pedido do dono, 2026-10-27).
+   *
+   * O canvas sem fundo deixava aparecer o preto da caixa por trás do risco, e
+   * o grid da mesa vazia sumia no instante em que o encaixe ficava pronto. Aqui
+   * vão a mesma superfície e a mesma grade da mesa vazia (`pintarMidia`) — 5 e
+   * 10 cm, no acento do tema —, só que inteiras e sem o degradê: o rolo pronto
+   * tem fim, e a borda dele é a informação. Só na tela: no arquivo (`escala`)
+   * o fundo continua transparente.
+   */
+  if (tema) {
+    const larguraDoTecido = r.larguraTecido * px;
+    const comprimento = r.consumo * px;
+    // Até onde a mesa vai na tela: o risco, ou a caixa inteira se ela for maior.
+    const mesa = deitar ? Math.max(comprimento, larguraCanvas) : comprimento;
+    // Cheia até o corte, e daí sumindo até o fim da caixa.
+    const sumindo = (cor) => {
+      if (mesa <= comprimento + 1) return cor;
+      const g = ctx.createLinearGradient(0, 0, 0, mesa);
+      g.addColorStop(0, cor);
+      g.addColorStop(comprimento / mesa, cor);
+      g.addColorStop(1, comAlfa(cor, 0));
+      return g;
+    };
+    ctx.fillStyle = sumindo(tema.tecido);
+    ctx.fillRect(REGUA, 0, larguraDoTecido, mesa);
+    const malha = (espacamento, comeco, alfa) => {
+      ctx.strokeStyle = sumindo(comAlfa(tema.acento, alfa));
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = comeco; x < larguraDoTecido; x += espacamento) {
+        const ex = Math.round(REGUA + x) + 0.5;
+        ctx.moveTo(ex, 0);
+        ctx.lineTo(ex, mesa);
+      }
+      for (let y = comeco; y < mesa; y += espacamento) {
+        const ey = Math.round(y) + 0.5;
+        ctx.moveTo(REGUA, ey);
+        ctx.lineTo(REGUA + larguraDoTecido, ey);
+      }
+      ctx.stroke();
+    };
+    // Abaixo de uns 3 px as linhas de 5 cm encostam e viram um chapado.
+    if (5 * px > 3) malha(10 * px, 5 * px, 0.06);
+    malha(10 * px, 0, 0.13);
+    // O CORTE: onde o rolo deste encaixe acaba. Depois dele a mesa é só referência.
+    if (mesa > comprimento + 1) {
+      ctx.save();
+      ctx.strokeStyle = comAlfa(tema.acento, 0.7);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(REGUA, Math.round(comprimento) + 0.5);
+      ctx.lineTo(REGUA + larguraDoTecido, Math.round(comprimento) + 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   // Régua do rolo em pé. Deitado, ela é desenhada depois, fora do giro, para o

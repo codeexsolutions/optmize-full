@@ -31,7 +31,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { execFileSync } = require("child_process");
-const { PARA_A_BANCADA } = require("../empacotar/modulos-do-motor");
+const { PARA_A_BANCADA } = require("./modulos-do-motor");
 const { prepararPeca, expandir } = require("./pecas");
 const { TRABALHOS } = require("./trabalhos");
 

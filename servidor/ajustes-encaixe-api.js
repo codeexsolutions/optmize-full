@@ -12,8 +12,8 @@
  * EM ARQUIVO, E NÃO NO `localStorage`: a janela do programa abre em
  * `127.0.0.1` numa porta livre qualquer, diferente a cada abertura (ver
  * `porta_livre`, em main.rs), e o `localStorage` é separado por porta. Lá, o
- * ajuste sumiria ao fechar o programa. O arquivo mora em `config/`, ao lado do
- * `whatsapp.json`, e atravessa aberturas e atualizações.
+ * ajuste sumiria ao fechar o programa. O arquivo mora em `config/`, e
+ * atravessa aberturas e atualizações.
  *
  * É da MÁQUINA, e não da conta: a largura é a da impressora que está ali.
  */
@@ -25,6 +25,8 @@ const { arquivoDeConfig } = require("./caminhos");
 const ARQUIVO = arquivoDeConfig("ajustes-encaixe.json");
 
 const GIROS = new Set(["livre", "180", "fixa"]);
+/** O lado do sentido único: 0 cima, 90 direita, 180 baixo, 270 esquerda. */
+const SENTIDOS = new Set([0, 90, 180, 270]);
 
 /** Número dentro da faixa, ou `null` — nunca um valor que a tela recusaria. */
 function numero(valor, min, max) {
@@ -43,6 +45,7 @@ function limpar(cru) {
     espaco: numero(a.espaco, 0, 10),
     espacoY: numero(a.espacoY, 0, 10),
     giro: GIROS.has(String(a.giro)) ? String(a.giro) : null,
+    sentido: SENTIDOS.has(a.sentido) ? a.sentido : null,
     // 0 é "sem limite", que é o campo vazio na tela.
     comprimento: numero(a.comprimento, 0, 1_000_000),
     // `null` quando a pessoa não mexeu: aí vale a sugestão pelo trabalho.

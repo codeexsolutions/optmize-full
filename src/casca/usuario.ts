@@ -104,11 +104,6 @@ export interface Sessao {
   aviso: string | null;
   /** O aviso das últimas 12 horas sem contato com o servidor. */
   tarja: string | null;
-  /**
-   * A tela foi aberta de OUTRO computador da rede, e não na máquina da conta.
-   * Ela só vê o painel das impressoras (ver `servidor/so-nesta-maquina.js`).
-   */
-  remoto: boolean;
 }
 
 /**
@@ -124,7 +119,6 @@ interface RespostaDaSessao {
   acesso: Acesso | null;
   aviso?: string | null;
   tarja?: string | null;
-  remoto?: boolean;
 }
 
 export function useSessao(): Sessao {
@@ -133,14 +127,12 @@ export function useSessao(): Sessao {
   const [acesso, setAcesso] = useState<Acesso | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [tarja, setTarja] = useState<string | null>(null);
-  const [remoto, setRemoto] = useState(false);
 
   const aplicar = useCallback((s: RespostaDaSessao) => {
     setUsuario(s.entrou ? s.perfil : null);
     setAcesso(s.acesso ?? null);
     setAviso(s.aviso ?? null);
     setTarja(s.tarja ?? null);
-    setRemoto(Boolean(s.remoto));
     if (!s.entrou) return setEstado("fora");
     /*
       SEM RESPOSTA SOBRE O ACESSO, O PROGRAMA ABRE.
@@ -198,7 +190,7 @@ export function useSessao(): Sessao {
     return () => window.removeEventListener(SESSAO_MUDOU, recarregar);
   }, [recarregar]);
 
-  return { estado, usuario, acesso, recarregar, conferir, aviso, tarja, remoto };
+  return { estado, usuario, acesso, recarregar, conferir, aviso, tarja };
 }
 
 export function iniciais(nome: string): string {

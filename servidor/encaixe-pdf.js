@@ -77,6 +77,7 @@
 const express = require("express");
 const { permitirExportacao } = require("./uso");
 const PDFDocument = require("pdfkit");
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -179,6 +180,9 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), async (r
         // ser pelo menos dessa versão.
         giros: new Map(),
         versoes: new Map(),
+        // A arte já aberta para o PDF (cor convertida e comprimida), em disco,
+        // para a próxima exportação não refazer. Ver `cacheDaArte`.
+        preparadas: new Map(),
       };
     } catch (erro) {
       return res.status(500).json({ error: `Não deu para guardar a arte: ${erro.message}` });
@@ -205,6 +209,7 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), async (r
   }
   guardadas.criadaEm = Date.now();
   // Reenviar a mesma chave substitui a arte: o que valia da anterior não vale.
+  esquecerPreparada(guardadas, chave);
   if (pngComAlfa(req.body)) guardadas.comAlfa.add(chave);
   else guardadas.comAlfa.delete(chave);
   const giro = Number(req.query.giro) || 0;
@@ -213,6 +218,83 @@ router.post("/arte", express.raw({ limit: "400mb", type: () => true }), async (r
   else guardadas.versoes.delete(chave);
   res.json({ ok: true, legivel: true, bytes: req.body.length });
 });
+
+/*
+ * ===========================================================================
+ * EXPORTAR DE NOVO NÃO REFAZ O QUE JÁ FOI FEITO (2026-10-27)
+ * ===========================================================================
+ *
+ * A sessão das artes vivia só até o PDF sair: na exportação seguinte do mesmo
+ * trabalho — o teste de impressão, o complemento, a bancada que mudou — todas
+ * as artes subiam de novo, e o servidor as reabria do zero (ler o PNG,
+ * converter a cor, comprimir). Agora a sessão fica enquanto for usada (ela some
+ * `VALIDADE_MS` depois do último uso), a tela pergunta aqui o que já está
+ * guardado e manda só o que mudou, e cada arte aberta para o PDF fica em disco,
+ * pronta, até a arte daquela chave ser trocada.
+ */
+router.get("/artes-da-sessao", (req, res) => {
+  limparAntigas();
+  const guardadas = artesGuardadas.get(String(req.query.sessao || ""));
+  if (!guardadas) return res.json({ chaves: [] });
+  guardadas.criadaEm = Date.now();
+  const chaves = [...guardadas.artes.entries()]
+    .filter(([, arquivo]) => fs.existsSync(arquivo))
+    .map(([chave]) => chave);
+  res.json({ chaves });
+});
+
+function esquecerPreparada(guardadas, chave) {
+  const antes = guardadas.preparadas && guardadas.preparadas.get(chave);
+  if (!antes) return;
+  guardadas.preparadas.delete(chave);
+  for (const arquivo of antes.arquivos) fs.rm(arquivo, { force: true }, () => {});
+}
+
+/**
+ * O lugar da arte já preparada de uma chave, para `abrirImagem`: `ler()`
+ * devolve o que ficou da última vez (ou `null`), `gravar()` guarda o de agora.
+ * Os fluxos comprimidos vão para arquivos na pasta da sessão — a memória
+ * continua com uma arte por vez.
+ */
+function cacheDaArte(guardadas, chave) {
+  return {
+    ler() {
+      const pronta = guardadas.preparadas.get(chave);
+      if (!pronta) return null;
+      try {
+        return {
+          ...pronta.forma,
+          cor: { ...pronta.forma.cor, fluxo: fs.readFileSync(pronta.arquivos[0]) },
+          alfa: pronta.forma.alfa ? { ...pronta.forma.alfa, fluxo: fs.readFileSync(pronta.arquivos[1]) } : null,
+        };
+      } catch {
+        guardadas.preparadas.delete(chave);
+        return null;
+      }
+    },
+    gravar({ cor, alfa }) {
+      const base = path.join(guardadas.pasta, `pronta-${crypto.randomBytes(6).toString("hex")}`);
+      const arquivos = [`${base}.cor`];
+      try {
+        fs.writeFileSync(arquivos[0], cor.fluxo);
+        if (alfa) {
+          arquivos.push(`${base}.alfa`);
+          fs.writeFileSync(arquivos[1], alfa.fluxo);
+        }
+      } catch {
+        return; // sem cache, a próxima exportação só faz o trabalho de novo
+      }
+      esquecerPreparada(guardadas, chave);
+      guardadas.preparadas.set(chave, {
+        arquivos,
+        forma: {
+          cor: { largura: cor.largura, altura: cor.altura, dados: cor.dados },
+          alfa: alfa ? { largura: alfa.largura, altura: alfa.altura, dados: alfa.dados } : null,
+        },
+      });
+    },
+  };
+}
 
 /*
  * ===========================================================================
@@ -560,7 +642,11 @@ function jpegSequencial(bytes) {
  * Sempre de pé, como o arquivo é visto (o EXIF vale); o giro do encaixe é de
  * quem desenha (`desenharImagem`).
  */
-async function abrirImagem(doc, bytes) {
+async function abrirImagem(doc, bytes, cache) {
+  // Já preparada numa exportação anterior desta sessão: só ler do disco.
+  const pronta = cache && cache.ler();
+  if (pronta) return imagemDoPdf(doc, pronta.cor, pronta.alfa);
+
   const meta = await sharp(bytes, { limitInputPixels: false }).metadata();
 
   if (meta.format === "jpeg" && !meta.isProgressive
@@ -580,17 +666,36 @@ async function abrirImagem(doc, bytes) {
     canalCru(px.cor, px.width, px.height, px.cores),
     px.transparente ? canalCru(px.alfa, px.width, px.height, 1) : null,
   ]);
+  if (cache) cache.gravar({ cor, alfa });
+  return imagemDoPdf(doc, cor, alfa);
+}
 
+/** A imagem no formato que `doc.image` aceita, a partir dos canais prontos. */
+function imagemDoPdf(doc, cor, alfa) {
+  let nome = null;
   return {
-    label: `I${++doc._imageCount}`,
+    /*
+     * O NOME SAI NO PRIMEIRO DESENHO, e não na abertura. A abertura corre
+     * adiantada (a arte seguinte abre enquanto a atual escoa), e com o cache da
+     * sessão umas abrem na hora e outras não: dar o nome ali fazia o mesmo
+     * trabalho exportado duas vezes sair com os nomes trocados. O desenho é
+     * sempre na mesma ordem, peça por peça.
+     */
+    get label() {
+      if (!nome) nome = `I${++doc._imageCount}`;
+      return nome;
+    },
     width: cor.largura,
     height: cor.altura,
     obj: null,
     embed(documento) {
       if (this.obj) return;
-      this.obj = documento.ref(cor.dados);
+      // CÓPIAS dos dicionários: o pdfkit escreve neles (o /Length no `end`, a
+      // /SMask logo abaixo), e o original é o que fica no cache da sessão para
+      // a próxima exportação — ele não pode levar a máscara deste documento.
+      this.obj = documento.ref({ ...cor.dados });
       if (alfa) {
-        const mascara = documento.ref(alfa.dados);
+        const mascara = documento.ref({ ...alfa.dados });
         mascara.end(alfa.fluxo);
         this.obj.data.SMask = mascara;
       }
@@ -803,9 +908,9 @@ function desenharImagem(doc, imagem, giro, x, y, w, h) {
 }
 
 /** Abre a arte do jeito que o formato dela pede, sempre de pé. */
-async function abrirArte(doc, bytes) {
+async function abrirArte(doc, bytes, cache) {
   if (ehPdf(bytes)) return abrirVetor(doc, bytes);
-  return abrirImagem(doc, bytes);
+  return abrirImagem(doc, bytes, cache);
 }
 
 /** O giro de uma posição: 0, 90, 180 ou 270, ou `null` quando não veio. */
@@ -969,7 +1074,7 @@ function escreverMarca(doc, marca, topoDaPagina) {
  */
 async function montarPdf({
   larguraTecido, consumo, posicoes, buffers, lerArte, podeTerTransparencia, fonteDaSigla = FONTE_DA_SIGLA,
-  giros, giroDe, versaoMinima,
+  giros, giroDe, versaoMinima, aoAndar, cacheDe,
 }, destino) {
   const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
@@ -1103,7 +1208,7 @@ async function montarPdf({
           const bytes = buscar(chave);
           // Ver "O PNG NÃO PASSA PELO LEITOR DO PDFKIT", lá em cima.
           if (!bytes) throw new Error("Arte ausente. Envie as peças novamente.");
-          return await abrirArte(doc, bytes);
+          return await abrirArte(doc, bytes, cacheDe ? cacheDe(chave) : null);
         } catch (err) {
           // Arte que não abre derruba o PDF: melhor nenhum arquivo que um rolo
           // impresso com peça faltando.
@@ -1142,6 +1247,7 @@ async function montarPdf({
           if (desenho.vetor) desenharVetor(doc, desenho, giroDaPeca(pos), x, y, w, h);
           else desenharImagem(doc, desenho, giroDaPeca(pos), x, y, w, h);
           desenhadas++;
+          if (aoAndar) aoAndar(desenhadas, posicoes.length);
         } catch (err) {
           throw new Error(`Não consegui desenhar a peça ${pos.chave}: ${err.message}`);
         }
@@ -1178,8 +1284,25 @@ async function montarPdf({
   };
 }
 
+/*
+ * O ANDAMENTO DE CADA PDF, para a tela mostrar o número de verdade.
+ *
+ * A montagem é a espera mais longa do Exportar, e do lado da tela ela era um
+ * `fetch` parado: nada chega até o arquivo inteiro estar pronto. Quem pede o
+ * PDF manda um `pedido` (um id qualquer) e pergunta por ele em
+ * `/pdf-andamento` enquanto espera — quantas peças já entraram no arquivo, de
+ * quantas. Vive só enquanto o pedido está em curso.
+ */
+const andamentos = new Map();
+
+router.get("/pdf-andamento", (req, res) => {
+  res.json(andamentos.get(String(req.query.pedido || "")) || {});
+});
+
 router.post("/pdf", async (req, res) => {
   limparAntigas();
+  const pedido = String(req.body && req.body.pedido || "");
+  const andar = (estado) => { if (pedido) andamentos.set(pedido, estado); };
   const { larguraTecido, consumo, imagens, posicoes, nome } = req.body || {};
 
   if (!(larguraTecido > 0) || !(consumo > 0) || !Array.isArray(posicoes) || posicoes.length === 0) {
@@ -1302,8 +1425,14 @@ router.post("/pdf", async (req, res) => {
     destino = fs.createWriteStream(arquivoPdf);
     concluido = finished(destino);
     concluido.catch(() => {});
-    await montarPdf({ larguraTecido, consumo, posicoes, lerArte, podeTerTransparencia, giroDe, versaoMinima }, destino);
+    andar({ fase: "montando", feitas: 0, total: posicoes.length });
+    await montarPdf({
+      larguraTecido, consumo, posicoes, lerArte, podeTerTransparencia, giroDe, versaoMinima,
+      aoAndar: (feitas, total) => andar({ fase: "montando", feitas, total }),
+      cacheDe: guardadas ? (chave) => cacheDaArte(guardadas, chave) : null,
+    }, destino);
     await concluido;
+    andar({ fase: "conferindo" });
     const cota = await permitirExportacao(comprimentoCm / 100, metrosCaixa);
     if (!cota.permitido) {
       return res.status(402).json({
@@ -1326,6 +1455,7 @@ router.post("/pdf", async (req, res) => {
     if (!res.headersSent) res.status(500).json({ error: `Não consegui gerar o PDF: ${erro.message}` });
     else res.destroy(erro);
   } finally {
+    andamentos.delete(pedido);
     if (destino && !destino.closed) destino.destroy();
     if (concluido) await concluido.catch(() => {});
     if (guardadas) {

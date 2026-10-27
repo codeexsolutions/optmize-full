@@ -29,7 +29,7 @@ import {
   bancadasDoResultado, cortesEntreBancadas, desenharEncaixe, desenharMidiaVazia,
   alcanceDoRascunho, desenharRascunho, prepararMiniaturas, prepararPrevias, previaDaArte,
 } from "../motores/desenhoDoEncaixe";
-import { arteDesenhadaDaPeca, chaveDaArte, giroDaPosicao, prepararArtes } from "../motores/exportarEncaixe";
+import { adiantarArtesSemFundo, arteDesenhadaDaPeca, chaveDaArte, giroDaPosicao, prepararArtes, tirarFundoDosArquivos } from "../motores/exportarEncaixe";
 import { ladoDaPrevia } from "../motores/resolucaoDaArte";
 import {
   chaveDoTrabalho, encaixeApi, pecasParaGuardar, posicoesParaGuardar, traduzirIndicesDoGuardado,
@@ -265,6 +265,14 @@ const encaixeEspacoYInput = document.getElementById("encaixe-espaco-y");
 const encaixeComprimentoInput = document.getElementById("encaixe-comprimento");
 const encaixeTempoInput = document.getElementById("encaixe-tempo");
 const encaixeGiroTodasSelect = document.getElementById("encaixe-giro-todas");
+/*
+ * Para onde vai o alto da arte no SENTIDO ÚNICO (o giro "fixa" do seletor
+ * acima): 0 para cima, 90 para a direita, 180 para baixo, 270 para a
+ * esquerda. Só vale com o
+ * seletor em "fixa" — ver `aplicarSentido`.
+ */
+let sentidoUnico = 0;
+const SENTIDOS = [0, 90, 180, 270];
 const encaixeBarraGrupo = document.getElementById("encaixe-barra-grupo");
 const encaixeGrupoConta = document.getElementById("encaixe-grupo-conta");
 const btnEncaixeCriarGrupo = document.getElementById("btn-encaixe-criar-grupo");
@@ -639,7 +647,7 @@ async function lerImagemCrua(file) {
     ? { blob: file, opcoes: opcoesDaReducao(m, teto), largura: img.width, altura: img.height }
     : null;
   return {
-    file, img, endereco, ppcm, ppcmDoArquivo, fonteDoFundo,
+    file, img, endereco, ppcm, ppcmDoArquivo, fonteDoFundo, teto,
     pxOriginal: m || { largura: img.naturalWidth || img.width, altura: img.naturalHeight || img.height },
   };
 }
@@ -1058,7 +1066,8 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
       titulo: "Tirando o fundo",
       detalhe: `${pecas.length} arte${pecas.length === 1 ? "" : "s"} · deixando só a peça`,
     });
-    const semFundos = await tirarFundoEmParalelo(imagens, false, async (i, total) => {
+    // A arte de PDF não passa pelo recorte (ver abaixo): não vai para a conta.
+    const semFundos = await tirarFundoDosArquivos(blobs.map((b, i) => (abertas[i].pdf ? null : b)), false, async (i, total) => {
       atualizarCarregamento({
         etapa: "Preparando as artes",
         titulo: "Tirando o fundo",
@@ -1066,7 +1075,7 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
         progresso: 20 + Math.round((i / Math.max(1, total)) * 60),
       });
       await respirarNaTela();
-    });
+    }, pecas.map((p) => ladoDeTrabalho(Math.max(p.largura, p.altura))));
     await respirarNaTela();
 
     for (let indice = 0; indice < pecas.length; indice++) {
@@ -1086,16 +1095,14 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
       const trocaMedida = giroGuardado !== null && giroGuardado % 180 !== 0;
       // `null` quer dizer que não havia fundo em volta para tirar (arte que já
       // vem transparente, ou que sangra até a borda). Aí vale a original.
-      const img = cortada
-        ? await criarBitmapOuImagem(cortada.blob, cortada.src)
-        : imagens[indice];
+      const img = cortada ? cortada.img : imagens[indice];
       if (cortada) imagens[indice].close?.();
       // A miniatura da tabela é um <img>, então precisa de um endereço; o
       // desenho do encaixe usa o bitmap. São a mesma arte por caminhos
       // diferentes: endereço para a tela, pixels prontos para o cálculo.
-      const endereco = cortada ? cortada.src : abertas[indice].endereco;
+      const endereco = abertas[indice].endereco;
 
-      pecasEncaixe.push({
+      const novaPeca = {
         id: proximoIdPeca++,
         nome: p.nome,
         src: endereco,
@@ -1119,7 +1126,9 @@ async function mandarProjetoParaOEncaixe(nomeDoProjeto, pecas, unidades, pedidos
         origem: `projeto ${nomeDoProjeto}${cortada ? " · fundo removido" : ""}`,
         pedido: pedidos[indice],
         sigla: p.sigla ? normalizarSigla(p.sigla) : undefined,
-      });
+      };
+      pecasEncaixe.push(novaPeca);
+      if (cortada) enderecoQuandoPronto(novaPeca, cortada);
       concluirCarregamentoArquivo(indice, pecas.length);
       await respirarNaTela();
     }
@@ -1437,6 +1446,7 @@ function retratoDaArea() {
       espacoY: encaixeEspacoYInput?.value,
       comprimento: encaixeComprimentoInput?.value,
       giro: encaixeGiroTodasSelect?.value,
+      sentido: sentidoUnico,
     },
   };
 }
@@ -1447,7 +1457,6 @@ function vestirArea(estado) {
   selecionadas.clear();
   if (estado) estado.selecionadas.forEach((id) => selecionadas.add(id));
   selecaoNoRisco.clear();
-  atualizarBarraDaSelecao();
   zoomDoRisco = estado ? estado.zoom : 1;
   mostrarZoom();
 
@@ -1458,6 +1467,8 @@ function vestirArea(estado) {
     voltar(encaixeEspacoYInput, estado.campos.espacoY);
     voltar(encaixeComprimentoInput, estado.campos.comprimento);
     voltar(encaixeGiroTodasSelect, estado.campos.giro);
+    if (SENTIDOS.includes(estado.campos.sentido)) sentidoUnico = estado.campos.sentido;
+    marcarGiro();
   }
 
   limparErroEncaixe();
@@ -2103,9 +2114,9 @@ function renderPecasEncaixe() {
         <div class="mt-1.5 grid grid-cols-2 gap-1.5">
           <label class="${CAMPO_MINI}">Girar
             <select data-campo="girar" data-id="${peca.id}">
-              <option value="180"${peca.giro === "180" ? " selected" : ""}>Vira 180°</option>
-              <option value="fixa"${peca.giro === "fixa" ? " selected" : ""}>Fixa</option>
-              <option value="livre"${peca.giro === "livre" ? " selected" : ""}>Livre (90°)</option>
+              <option value="180"${peca.giro === "180" ? " selected" : ""}>Equilibrada</option>
+              <option value="livre"${peca.giro === "livre" ? " selected" : ""}>Máxima</option>
+              <option value="fixa"${peca.giro === "fixa" ? " selected" : ""}>Sentido único</option>
             </select>
           </label>
           <label class="${CAMPO_MINI}">Contorno
@@ -2307,6 +2318,37 @@ function girarPecaAntesDoEncaixe(id) {
   if (gaveta) gaveta.classList.remove("hidden");
 }
 
+/**
+ * O SENTIDO ÚNICO nas peças: todas apontando para o mesmo lado.
+ *
+ * O motor não ganhou um giro novo para isso. A peça em "fixa" não gira no
+ * encaixe e sai no `rotacaoBase` dela, então o sentido é só esse giro antes do
+ * encaixe, igual ao do botão "Girar a arte 90°" — que a máscara, o desenho e o
+ * PDF já sabem somar.
+ *
+ * O que o sentido pôs fica anotado em `giroDoSentido`, separado do giro que a
+ * pessoa deu à mão: trocar de A para a direita para A para cima tira só os
+ * 90° do sentido, e a arte que chegou deitada (e foi endireitada) continua
+ * endireitada. Peça que não está em "fixa", ou com o seletor geral fora do
+ * sentido único, volta para o giro dela.
+ */
+function aplicarSentido() {
+  const ligado = giroPadrao() === "fixa";
+  let mudou = false;
+  for (const peca of pecasEncaixe) {
+    const alvo = ligado && peca.giro === "fixa" ? sentidoUnico : 0;
+    const antes = Number(peca.giroDoSentido) || 0;
+    const delta = (alvo - antes + 360) % 360;
+    peca.giroDoSentido = alvo;
+    if (!delta) continue;
+    peca.rotacaoBase = (rotacaoBaseDe(peca) + delta) % 360;
+    if (delta % 180) [peca.largura, peca.altura] = [peca.altura, peca.largura];
+    peca.ocupacao = null;
+    mudou = true;
+  }
+  if (mudou) renderPecasEncaixe();
+}
+
 /** Marca ou desmarca uma peça, e acende a linha. */
 function alternarMarca(linha, id) {
   const marcada = selecionadas.has(id);
@@ -2354,7 +2396,10 @@ escopo.ouvir(encaixePecasBody, "change", (e) => {
   if (campo !== "girar" && campo !== "contorno" && campo !== "sigla") return;
   const peca = pecasEncaixe.find((p) => p.id === Number(e.target.dataset.id));
   if (!peca) return;
-  if (campo === "girar") peca.giro = e.target.value;
+  if (campo === "girar") {
+    peca.giro = e.target.value;
+    aplicarSentido();
+  }
   if (campo === "sigla") {
     const escrita = normalizarSigla(e.target.value);
     // Igual à automática, ou vazia: volta a valer a automática.
@@ -2388,6 +2433,14 @@ escopo.ouvir(encaixePecasBody, "change", (e) => {
 let preparoDeFundo = Promise.resolve();
 
 /**
+ * O endereço da arte sem fundo chega depois da prévia: é o PNG do PDF, que o
+ * worker termina de montar sem a tela esperar. Até lá vale o que já estava.
+ */
+function enderecoQuandoPronto(alvo, semFundo) {
+  semFundo.png.then((arte) => { if (arte) alvo.src = URL.createObjectURL(arte); }, () => {});
+}
+
+/**
  * Tira o fundo das artes DEPOIS que elas já estão na tabela.
  *
  * A remoção é metade da espera do preparo, e a linha da tabela não precisa
@@ -2403,8 +2456,11 @@ let preparoDeFundo = Promise.resolve();
 async function tirarFundoDepois(pecasPorIndice, crus) {
   const indices = [...pecasPorIndice.keys()];
   try {
-    const semFundos = await tirarFundoEmParalelo(indices.map((i) => crus[i].img), false, null,
-      indices.map((i) => crus[i].fonteDoFundo));
+    // UMA remoção só, a do PDF, em resolução cheia (ver "O FUNDO É TIRADO UMA
+    // VEZ SÓ", em motores/exportarEncaixe.js). A tela abre o resultado
+    // reduzido, com o mesmo teto da arte original.
+    const semFundos = await tirarFundoDosArquivos(indices.map((i) => crus[i].file), false, null,
+      indices.map((i) => crus[i].teto));
     let trocadas = 0;
     for (let k = 0; k < indices.length; k++) {
       const semFundo = semFundos[k];
@@ -2414,10 +2470,9 @@ async function tirarFundoDepois(pecasPorIndice, crus) {
       // O preparo transfere uma cópia ao worker; a arte original continua
       // válida quando não há fundo para tirar ou o processamento falha.
       if (semFundo) {
-        const img = await criarBitmapOuImagem(semFundo.blob, semFundo.src);
         if (peca.img !== peca.imgOriginal) peca.img.close?.();
-        peca.img = img;
-        peca.src = semFundo.src;
+        peca.img = semFundo.img;
+        enderecoQuandoPronto(peca, semFundo);
         peca.fundoNaExportacao = "auto";
         delete peca.reforco;
         peca.miniatura = await miniaturaDaArte(peca.img);
@@ -2443,16 +2498,24 @@ async function tirarFundoAForca(peca) {
   if (peca.imgOriginal === undefined) peca.imgOriginal = peca.img;
   // Vai pelo worker também: é a mesma leitura de milhões de pixels, e aqui a
   // pessoa está esperando com a tabela na frente.
-  const [semFundo] = await tirarFundoEmParalelo([peca.imgOriginal], true);
+  // Arte de imagem: a mesma remoção da entrada, na arte inteira, que já fica
+  // pronta para o PDF. Arte de PDF: o desenho dela, como antes.
+  const original = peca.pdfOriginal ? null
+    : peca.arquivoOriginal || await fetch(peca.srcOriginal).then((r) => r.blob());
+  const teto = ladoDeTrabalho(Math.max(peca.largura, peca.altura));
+  const [semFundo] = original
+    ? await tirarFundoDosArquivos([original], true, null, [teto])
+    : await tirarFundoEmParalelo([peca.imgOriginal], true);
   if (!semFundo) {
     mostrarErroEncaixe(`"${peca.nome}": não achei uma cor de fundo em volta para tirar. `
       + `A arte deve estar sangrando até a borda.`);
     return;
   }
-  const img = await criarBitmapOuImagem(semFundo.blob, semFundo.src);
+  const img = original ? semFundo.img : await criarBitmapOuImagem(semFundo.blob, semFundo.src);
   if (peca.img !== peca.imgOriginal) peca.img.close?.();
   peca.img = img;
-  peca.src = semFundo.src;
+  if (original) enderecoQuandoPronto(peca, semFundo);
+  else peca.src = semFundo.src;
   peca.fundoNaExportacao = "forcar";
   delete peca.reforco;
   peca.miniatura = await miniaturaDaArte(peca.img);
@@ -2608,6 +2671,7 @@ escopo.ouvir(encaixeGiroTodasSelect, "change", () => {
   const giro = giroPadrao();
   pecasEncaixe.forEach((p) => { p.giro = giro; });
   renderPecasEncaixe();
+  aplicarSentido();
 });
 
 // ==================== O MELHOR ENCAIXE JÁ CONSEGUIDO ====================
@@ -2873,6 +2937,36 @@ let ultimoQuadroDaThreadEm = 0;
 /** O arranjo que a mesa está montando agora. */
 let montagem = null;
 let proximoGuardado = 0;
+
+/**
+ * O RASCUNHO DA ESPERA: as peças da lista em fileiras, pela caixa de cada uma,
+ * da maior para a menor, no formato de quadro que a prévia já desenha (sete
+ * números por peça). É só para a mesa não ficar vazia enquanto o fundo sai —
+ * não economiza tecido nenhum e não vai para lugar nenhum.
+ */
+function rascunhoEmFileiras() {
+  const larguraTecido = Number(encaixeLarguraInput.value) || 0;
+  if (!(larguraTecido > 0)) return null;
+  const folga = Number(encaixeEspacoInput.value) || 0;
+  const caixas = [];
+  pecasEncaixe.forEach((peca, indice) => {
+    if (!(peca.largura > 0) || !(peca.altura > 0)) return;
+    for (let i = 0; i < (Number(peca.qtd) || 0); i++) caixas.push({ w: peca.largura, h: peca.altura, indice });
+  });
+  caixas.sort((a, b) => b.h - a.h);
+  const pecas = new Float32Array(caixas.length * 7);
+  let x = 0;
+  let y = 0;
+  let alturaDaFileira = 0;
+  caixas.forEach((c, i) => {
+    if (x > 0 && x + c.w > larguraTecido) { x = 0; y += alturaDaFileira + folga; alturaDaFileira = 0; }
+    pecas.set([x, y, Math.min(c.w, larguraTecido), c.h, 0, 0, c.indice], i * 7);
+    x += c.w + folga;
+    alturaDaFileira = Math.max(alturaDaFileira, c.h);
+  });
+  const consumo = y + alturaDaFileira;
+  return consumo > 0 ? { especie: "fantasma", consumo, larguraTecido, inteiro: true, pecas } : null;
+}
 
 /**
  * Recebe um quadro do motor, nos dois formatos em que ele chega:
@@ -3205,7 +3299,13 @@ function mostrarAndamento(estado, aprendido) {
   }
   const naFila = filaDeArquivos.reduce((soma, f) => soma + f.files.length, 0);
   if (naFila > 0) partes.push(`${naFila} arquivo(s) na fila`);
-  encaixeAndamento.textContent = partes.join(" · ");
+  /*
+    NA TELA, SÓ AS TENTATIVAS E O MELHOR (pedido do dono, 2026-10-27). Tempo,
+    núcleos, recomeços, memória e fila são números de quem cuida do motor: vão
+    no `title`, para quem passar o mouse, e não na linha que o cliente lê.
+  */
+  encaixeAndamento.textContent = `tentativa ${estado.tentativas} · melhor: ${metros}`;
+  encaixeAndamento.title = partes.join(" · ");
   const titulo = estado.fase === "perseguindo" ? "Buscando alcançar o melhor já conhecido"
     : estado.fase === "encolhendo" ? "Encolhendo o rolo"
     : estado.fase === "base" ? "Montando o primeiro encaixe"
@@ -3215,7 +3315,7 @@ function mostrarAndamento(estado, aprendido) {
   atualizarCarregamento({
     etapa: estado.fase === "base" ? "Primeiro encaixe" : "Otimizando",
     titulo,
-    detalhe: partes.join(" · "),
+    detalhe: encaixeAndamento.textContent,
     progresso: 34 + Math.min(1, estado.decorridoMs / totalMs) * 56,
   });
 }
@@ -3330,7 +3430,29 @@ async function optmizar({
   // fundo já tinha transferido para o worker, e transferir desanexa. O encaixe
   // morria em "The image source is detached", e só às vezes: quando o fundo
   // terminava antes do clique, passava.
-  await preparoDeFundo;
+  //
+  // A ESPERA NÃO É MAIS UM MODAL PARADO (pedido do dono, 2026-10-27). Desde
+  // que o fundo sai da arte inteira (ver "O FUNDO É TIRADO UMA VEZ SÓ", em
+  // motores/exportarEncaixe.js), ela pode levar dezenas de segundos num lote
+  // grande, e o "Preparando o encaixe" ficava sozinho na frente da tela. Agora,
+  // se o fundo não terminou em um instante, a mesa ganha um RASCUNHO — as
+  // peças em fileiras, pela caixa, com a arte que já está na tela — e o cartão
+  // diz o que está acontecendo. Não é o encaixe: é algo na mesa enquanto ele
+  // não começa. O primeiro quadro de verdade da busca toma o lugar dele.
+  const fundoPronto = await Promise.race([
+    preparoDeFundo.then(() => true, () => true),
+    new Promise((pronto) => setTimeout(() => pronto(false), 150)),
+  ]);
+  if (!fundoPronto) {
+    atualizarCarregamento({
+      etapa: "Preparando as artes",
+      titulo: "Tirando o fundo das artes",
+      detalhe: "A mesa mostra um rascunho enquanto isso — o encaixe começa em seguida.",
+      progresso: 6,
+    });
+    receberTentativa(rascunhoEmFileiras());
+    await preparoDeFundo;
+  }
   // As prévias da tela saem agora, enquanto a busca ainda nem começou: sem
   // elas, o primeiro desenho do risco sobe cada arte inteira para a placa de
   // vídeo e trava a tela uns 600 ms (ver "A PRÉVIA DA TELA", em
@@ -3512,7 +3634,7 @@ async function optmizar({
      */
     const midiaCaixa = medirPelaCaixa(itens, larguraTecido, espaco, comprimentoBancada);
 
-    btnPararBusca.textContent = "Parar e usar este";
+    btnPararBusca.textContent = "Finalizar";
     // A busca vai para os workers (encaixe-paralelo.js) e volta com o melhor
     // de todas as fatias. Sem worker disponível, ela mesma cai na busca de uma
     // thread só — daqui não muda nada: mesma chamada, mesmo resultado.
@@ -3781,6 +3903,15 @@ async function optmizar({
     // A segunda rodada depois do `finally`, e não dentro do `try`: ela começa
     // com a tela devolvida, como se a pessoa tivesse clicado de novo.
     rodadaMarcada = !!(refazer || refazerDepoisDaFalha);
+    /*
+     * A busca acabou e o risco está na tela: é a hora de começar a preparar as
+     * artes sem fundo do PDF (ver "O FUNDO É TIRADO UMA VEZ", em
+     * motores/exportarEncaixe.js). Depois, e não durante: os workers dela
+     * disputariam os núcleos com a busca e o Optmizar ficaria mais lento.
+     */
+    if (!refazer && !refazerDepoisDaFalha && ultimoResultado) {
+      adiantarArtesSemFundo(ultimoResultado.posicoes);
+    }
     if (refazer) setTimeout(() => optmizar({ refeito: true, avisoDoRefeito: refazer, modo: modoDeEncaixe }), 0);
     if (refazerDepoisDaFalha) {
       setTimeout(() => optmizar({ modo: modoDeEncaixe, avisoDoRefeito: refazerDepoisDaFalha, depoisDaFalha: true }), 0);
@@ -4235,7 +4366,9 @@ async function guardarParaReposicao(r, nomeDoArquivo) {
           nome: peca.nome,
           largura: pecaSemGiro(peca).largura,
           altura: pecaSemGiro(peca).altura,
-          rotacaoBase: rotacaoBaseDe(peca),
+          // Sem o giro do sentido único: ele é ajuste do Optmizar, e não da
+          // peça. Na volta, quem o põe de novo é o modal (`aplicarSentido`).
+          rotacaoBase: (rotacaoBaseDe(peca) - (Number(peca.giroDoSentido) || 0) + 360) % 360,
           qtd: peca.qtd,
           giro: peca.giro,
           pedido: temVariosPedidos(pecasEncaixe) ? pedidoDe(peca) : null,
@@ -4271,12 +4404,13 @@ async function guardarParaReposicao(r, nomeDoArquivo) {
   }
 }
 
-/** Confirma na barra da bancada que o arquivo saiu, e com que nome. */
+/*
+ * O ARQUIVO SALVO NÃO VAI MAIS PARA A BARRA DA BANCADA: o modal do Exportar já
+ * diz onde ele ficou ("Salvo em …"), e a linha da bancada é das tentativas.
+ * Fica no console, para o diagnóstico.
+ */
 function avisarQueSalvou(nome) {
-  if (!encaixeAndamento) return;
-  encaixeAndamento.textContent = `Salvo: ${nome}`;
-  encaixeAndamento.title = nome;
-  encaixeAndamento.classList.remove("hidden");
+  console.info("[encaixe] salvo:", nome);
 }
 
 /**
@@ -4335,6 +4469,234 @@ async function escolherPastaDeSaida(quantos) {
       };
     },
   };
+}
+
+/*
+ * A SESSÃO DAS ARTES NO SERVIDOR LOCAL, uma por tela aberta: as artes enviadas
+ * numa exportação servem para a seguinte. `enviadasNaSessao` lembra QUAL arte
+ * (o próprio Blob) foi mandada em cada chave — trocou a arte da peça, o Blob é
+ * outro e ela sobe de novo.
+ */
+const sessaoDasArtes = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+const enviadasNaSessao = new Map();
+
+/*
+ * ===========================================================================
+ * O ANDAMENTO DO EXPORTAR
+ * ===========================================================================
+ *
+ * O modal que fica na frente enquanto o PDF sai (pedido do dono, 2026-10-27).
+ * Antes, o único sinal era o rótulo do botão — "Montando PDF…" parado por
+ * minutos num trabalho grande —, e o cliente achava que tinha travado.
+ *
+ * O NÚMERO É DE VERDADE, etapa por etapa:
+ *
+ *   preparar   as artes lidas do disco da tela (rápido);
+ *   enviar     os BYTES das artes que já subiram ao servidor local;
+ *   montar     as PEÇAS que o servidor já pôs no PDF (ver `/pdf-andamento`,
+ *              em servidor/encaixe-pdf.js);
+ *   gravar     os BYTES do arquivo que já chegaram ao disco.
+ *
+ * O total junta as etapas com pesos fixos (`PESO_DA_ETAPA`), medidos pelo que
+ * cada uma costuma tomar do tempo. Com bancada, montar e gravar se repetem por
+ * arquivo, e o total anda por arquivo.
+ */
+const modalExportar = document.getElementById("modal-exportar");
+const exportarCaixa = modalExportar ? modalExportar.querySelector(".modal-exportar") : null;
+const exportarTitulo = document.getElementById("exportar-titulo");
+const exportarSubtitulo = document.getElementById("exportar-subtitulo");
+const exportarPorCento = document.getElementById("exportar-por-cento");
+const exportarBarra = document.getElementById("exportar-barra-cheia");
+const exportarDetalhe = document.getElementById("exportar-detalhe");
+const exportarAviso = document.getElementById("exportar-aviso");
+const exportarTempo = document.getElementById("exportar-tempo");
+const btnExportarFechar = document.getElementById("btn-exportar-fechar");
+
+const ETAPAS = ["preparar", "enviar", "montar", "gravar"];
+const PESO_DA_ETAPA = { preparar: 0.04, enviar: 0.24, montar: 0.57, gravar: 0.15 };
+
+const mb = (bytes) => (bytes / 1048576).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+function criarAndamentoDoExportar(quantosArquivos) {
+  let relogio = null;
+  const comeco = Date.now();
+  const avisoOriginal = exportarAviso ? exportarAviso.innerHTML : "";
+
+  /*
+   * ETAPA POR ETAPA (pedido do dono, 2026-10-27).
+   *
+   * O número de verdade chega aos pulos — num trabalho pequeno, ler, enviar e
+   * montar acontecem no mesmo instante, e o modal saltava de 0 para três
+   * etapas prontas. Agora há duas contas: `alvo`, o que o trabalho JÁ FEZ, e
+   * `mostrado`, o que a tela mostra. A tela anda atrás do alvo, uma etapa de
+   * cada vez — a seguinte só começa a encher quando a anterior chegou a 100% —
+   * e cada etapa leva pelo menos `MINIMO_DA_ETAPA_MS` para encher. Nunca passa
+   * na frente do que foi feito: o 100% da tela é sempre um 100% de verdade.
+   *
+   * Com bancada, montar e gravar contam todos os arquivos juntos.
+   */
+  const MINIMO_DA_ETAPA_MS = 450;
+  const alvo = Object.fromEntries(ETAPAS.map((e) => [e, 0]));
+  const mostrado = Object.fromEntries(ETAPAS.map((e) => [e, 0]));
+  const detalheDa = Object.fromEntries(ETAPAS.map((e) => [e, ""]));
+  let quadro = 0;
+  let antes = 0;
+  let aoTerminar = null;
+
+  const desenhar = () => {
+    const atual = ETAPAS.find((e) => mostrado[e] < 1) || null;
+    const indice = atual ? ETAPAS.indexOf(atual) : ETAPAS.length;
+    for (const li of modalExportar.querySelectorAll("[data-etapa]")) {
+      const i = ETAPAS.indexOf(li.dataset.etapa);
+      li.dataset.estado = i < indice ? "feita" : i === indice ? "ativa" : "pendente";
+      const numero = li.querySelector(".exportar-etapa-pc");
+      if (numero) numero.textContent = i < indice ? "100%" : i === indice ? `${Math.floor(mostrado[li.dataset.etapa] * 100)}%` : "";
+    }
+    const total = ETAPAS.reduce((soma, e) => soma + PESO_DA_ETAPA[e] * mostrado[e], 0) * 100;
+    const inteiro = Math.min(atual ? 99 : 100, Math.floor(total));
+    exportarPorCento.textContent = String(inteiro);
+    exportarBarra.style.width = `${atual ? Math.min(99, total) : 100}%`;
+    exportarBarra.parentElement.setAttribute("aria-valuenow", String(inteiro));
+    if (atual && detalheDa[atual]) exportarDetalhe.textContent = detalheDa[atual];
+    return atual;
+  };
+  const andar = (agora) => {
+    const dt = antes ? Math.min(100, agora - antes) : 16;
+    antes = agora;
+    const atual = ETAPAS.find((e) => mostrado[e] < 1);
+    if (atual && mostrado[atual] < alvo[atual]) {
+      const falta = alvo[atual] - mostrado[atual];
+      // No mínimo o ritmo de uma etapa inteira em MINIMO_DA_ETAPA_MS; com
+      // muita diferença, corre mais para alcançar.
+      const passo = Math.max(dt / MINIMO_DA_ETAPA_MS, falta * dt / 220);
+      mostrado[atual] = Math.min(alvo[atual], mostrado[atual] + passo);
+    }
+    const ainda = desenhar();
+    if (!ainda && aoTerminar) {
+      const fim = aoTerminar;
+      aoTerminar = null;
+      quadro = 0;
+      fim();
+      return;
+    }
+    quadro = requestAnimationFrame(andar);
+  };
+  const passar = (etapa, fracao, detalhe, arquivo = 0) => {
+    const porArquivo = etapa === "montar" || etapa === "gravar";
+    const daEtapa = Math.min(1, Math.max(0, porArquivo ? (arquivo + fracao) / quantosArquivos : fracao));
+    // Chegar numa etapa quer dizer que as de antes acabaram.
+    for (const e of ETAPAS.slice(0, ETAPAS.indexOf(etapa))) alvo[e] = 1;
+    alvo[etapa] = Math.max(alvo[etapa], daEtapa);
+    detalheDa[etapa] = detalhe;
+    if (!quadro) quadro = requestAnimationFrame(andar);
+  };
+  const parar = () => {
+    if (quadro) cancelAnimationFrame(quadro);
+    quadro = 0;
+  };
+  const deArquivo = (arquivo) => (quantosArquivos > 1 ? ` · arquivo ${arquivo + 1} de ${quantosArquivos}` : "");
+
+  return {
+    abrir() {
+      delete exportarCaixa.dataset.fim;
+      exportarTitulo.textContent = "Gerando o PDF";
+      exportarSubtitulo.textContent = quantosArquivos > 1
+        ? `${quantosArquivos} arquivos, um por bancada, em tamanho real`
+        : "Em tamanho real, com as artes originais";
+      if (exportarAviso) {
+        exportarAviso.innerHTML = avisoOriginal;
+        exportarAviso.classList.remove("hidden");
+      }
+      btnExportarFechar.classList.add("hidden");
+      exportarDetalhe.textContent = "Lendo as artes das peças…";
+      passar("preparar", 0, "Lendo as artes das peças…");
+      modalExportar.classList.remove("hidden", "saindo");
+      document.body.classList.add("modal-aberto");
+      const tique = () => {
+        const s = Math.floor((Date.now() - comeco) / 1000);
+        exportarTempo.textContent = `Tempo: ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+      };
+      tique();
+      relogio = setInterval(tique, 1000);
+    },
+    lendo(lidas, total) {
+      passar("preparar", total ? lidas / total : 1, `Lendo a arte ${lidas} de ${total}`);
+    },
+    /** Nenhuma arte precisou subir: já estavam no servidor desde a exportação anterior. */
+    jaEnviadas(quantas) {
+      passar("enviar", 1, `As ${quantas} arte${quantas === 1 ? " já estava" : "s já estavam"} prontas da exportação anterior`);
+    },
+    preparado(quantas) {
+      passar("preparar", 1, `${quantas} arte${quantas === 1 ? "" : "s"} lida${quantas === 1 ? "" : "s"}`);
+    },
+    enviando(arte, artes, bytes, totalBytes) {
+      passar("enviar", totalBytes > 0 ? bytes / totalBytes : arte / artes,
+        `Enviando a arte ${Math.min(arte + 1, artes)} de ${artes} · ${mb(bytes)} de ${mb(totalBytes)} MB`);
+    },
+    pdf(andamento, arquivo) {
+      if (andamento.fase === "montando") {
+        const feitas = andamento.feitas || 0;
+        const total = andamento.total || 1;
+        passar("montar", feitas / total, `Peça ${feitas} de ${total} colocada no PDF${deArquivo(arquivo)}`, arquivo);
+      } else if (andamento.fase === "conferindo") {
+        passar("montar", 1, `Conferindo a metragem do plano${deArquivo(arquivo)}…`, arquivo);
+      } else if (andamento.fase === "gravando") {
+        const fracao = andamento.totalBytes ? andamento.bytes / andamento.totalBytes : 0;
+        passar("gravar", fracao, andamento.totalBytes
+          ? `${mb(andamento.bytes)} de ${mb(andamento.totalBytes)} MB gravados${deArquivo(arquivo)}`
+          : `${mb(andamento.bytes)} MB gravados${deArquivo(arquivo)}`, arquivo);
+      }
+    },
+    pronto(onde) {
+      // O arquivo já está gravado; a tela termina de passar as etapas que
+      // faltam e só então diz que acabou.
+      for (const e of ETAPAS) alvo[e] = 1;
+      detalheDa.gravar = detalheDa.gravar || "Gravando o arquivo…";
+      aoTerminar = () => this.terminou(onde);
+      if (!quadro) quadro = requestAnimationFrame(andar);
+    },
+    terminou(onde) {
+      clearInterval(relogio);
+      exportarCaixa.dataset.fim = "ok";
+      exportarTitulo.textContent = "Exportação";
+      exportarSubtitulo.textContent = "Ripping";
+      exportarDetalhe.textContent = `Salvo em ${onde}`;
+      if (exportarAviso) exportarAviso.classList.add("hidden");
+      btnExportarFechar.classList.remove("hidden");
+      btnExportarFechar.focus();
+    },
+    falhou(mensagem) {
+      parar();
+      aoTerminar = null;
+      clearInterval(relogio);
+      exportarCaixa.dataset.fim = "erro";
+      exportarTitulo.textContent = "O PDF não saiu";
+      exportarSubtitulo.textContent = "Nada foi gravado pela metade de propósito";
+      exportarDetalhe.textContent = mensagem;
+      if (exportarAviso) {
+        exportarAviso.classList.remove("hidden");
+        exportarAviso.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="icones.svg#circle-alert" /></svg>'
+          + "<span><b>Deu errado.</b> Feche e tente exportar de novo. Se repetir, fale com o suporte.</span>";
+      }
+      btnExportarFechar.classList.remove("hidden");
+      btnExportarFechar.focus();
+    },
+    /** Quem desistiu na caixa do sistema nem chegou a ver o modal. */
+    fechar() {
+      parar();
+      clearInterval(relogio);
+      modalExportar.classList.add("hidden");
+      document.body.classList.remove("modal-aberto");
+    },
+  };
+}
+
+if (btnExportarFechar) {
+  escopo.ouvir(btnExportarFechar, "click", () => {
+    modalExportar.classList.add("hidden");
+    document.body.classList.remove("modal-aberto");
+    btnExportar.focus();
+  });
 }
 
 /**
@@ -4398,33 +4760,57 @@ async function baixarEncaixeEmPdf() {
     : await escolherOndeSalvar(`${nome}.pdf`, "PDF em tamanho real", "application/pdf");
   if (!saida) return;
 
-  // O andamento vai no botão que ABRE o menu, e não no item lá dentro: o item
-  // já sumiu da tela junto com o menu, e é para o botão que a pessoa olha.
+  // O andamento vai no modal (ver "O ANDAMENTO DO EXPORTAR"); o botão só
+  // trava, para ninguém pedir um segundo PDF por cima do primeiro.
   btnExportar.disabled = true;
-  btnExportarRotulo.textContent = "Montando PDF…";
+  btnExportarRotulo.textContent = "Exportando…";
+  const andamento = criarAndamentoDoExportar(bancadas.length);
+  andamento.abrir();
   await new Promise((pronto) => setTimeout(pronto, 20));
 
   try {
-    const artes = await prepararArtes(r.posicoes);
+    const artes = await prepararArtes(r.posicoes, (lidas, total) => andamento.lendo(lidas, total));
+    andamento.preparado(artes.size);
 
     // Cada arte sobe sozinha, em binário. Mandá-las dentro do JSON em base64
     // engordava tudo em um terço e derrubava o servidor com arte de verdade.
     // Sobem UMA vez por peça, mesmo que ela apareça em quatro giros e saiam dez
     // arquivos: o giro vai em cada posição (ver `chaveDaArte`).
-    const sessao = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+    //
+    // E sobem UMA vez por sessão: a mesma arte que já está no servidor desde a
+    // exportação anterior não sobe de novo (ver "EXPORTAR DE NOVO NÃO REFAZ",
+    // em servidor/encaixe-pdf.js). A sessão é da tela, e não do clique.
+    const sessao = sessaoDasArtes;
+    const noServidor = await encaixeApi.artesDaSessao(sessao);
     let enviados = 0;
+    let subiram = 0;
+    let bytesProntos = 0;
+    const bytesTotais = [...artes.values()].reduce((soma, { arte }) => soma + (arte.size || 0), 0);
+    andamento.enviando(0, artes.size, 0, bytesTotais);
     for (const [chave, { arte, peca }] of artes) {
+      if (noServidor.has(chave) && enviadasNaSessao.get(chave) === arte) {
+        enviados++;
+        bytesProntos += arte.size || 0;
+        andamento.enviando(enviados, artes.size, Math.min(bytesTotais, bytesProntos), bytesTotais);
+        continue;
+      }
+      const contar = (bytes) => andamento.enviando(enviados, artes.size,
+        Math.min(bytesTotais, bytesProntos + bytes), bytesTotais);
       // O original vai como está; o que o servidor não abre (formato que ele
       // não conhece, PDF quebrado) vai desenhado, que é o caminho antigo.
-      if (!(await encaixeApi.mandarArte(sessao, chave, arte))) {
+      if (!(await encaixeApi.mandarArte(sessao, chave, arte, contar))) {
         const desenhada = await arteDesenhadaDaPeca(peca);
         if (!(await encaixeApi.mandarArte(sessao, chave, desenhada))) {
           throw new Error(`o servidor não conseguiu abrir a arte "${peca.nome || chave}".`);
         }
       }
+      enviadasNaSessao.set(chave, arte);
+      subiram++;
       enviados++;
-      btnExportarRotulo.textContent = `Enviando artes (${enviados}/${artes.size})…`;
+      bytesProntos += arte.size || 0;
+      andamento.enviando(enviados, artes.size, Math.min(bytesTotais, bytesProntos), bytesTotais);
     }
+    if (subiram === 0 && artes.size > 0) andamento.jaEnviadas(artes.size);
 
     const imagens = [...artes.keys()].map((chave) => ({ chave }));
     const visao = visaoDosPedidos(r);
@@ -4444,7 +4830,6 @@ async function baixarEncaixeEmPdf() {
     });
 
     if (!emPedacos) {
-      btnExportarRotulo.textContent = "Montando PDF…";
       // O PDF escorre do servidor direto para o arquivo escolhido: ele não
       // passa inteiro pela memória do navegador em nenhum momento.
       const cano = await encaixeApi.pdf({
@@ -4455,9 +4840,11 @@ async function baixarEncaixeEmPdf() {
         imagens,
         razaoCaixa,
         posicoes: r.posicoes.map((p) => daPeca(p, 0)),
-      });
-      btnExportarRotulo.textContent = "Gravando…";
+        // As artes ficam para a próxima exportação (ver `sessaoDasArtes`).
+        manterSessao: true,
+      }, (a) => andamento.pdf(a, 0));
       await saida.gravar(cano);
+      andamento.pronto(saida.nome);
       avisarQueSalvou(saida.nome);
       avisarSemSigla(visao);
       void guardarParaReposicao(r, saida.nome);
@@ -4466,10 +4853,7 @@ async function baixarEncaixeEmPdf() {
 
     for (let i = 0; i < bancadas.length; i++) {
       const faixa = bancadas[i];
-      const ultimo = i === bancadas.length - 1;
       const arquivo = `${saida.base}-bancada-${String(i + 1).padStart(2, "0")}.pdf`;
-
-      btnExportarRotulo.textContent = `Montando PDF ${i + 1}/${bancadas.length}…`;
 
       /*
        * Cada arquivo recebe só as peças da sua bancada, e o `y` delas passa a
@@ -4488,15 +4872,16 @@ async function baixarEncaixeEmPdf() {
         imagens,
         razaoCaixa,
         posicoes,
-        // As artes ficam no servidor até o último arquivo sair.
-        manterSessao: !ultimo,
-      });
+        // As artes ficam no servidor para os outros arquivos e para a próxima
+        // exportação (ver `sessaoDasArtes`).
+        manterSessao: true,
+      }, (a) => andamento.pdf(a, i));
 
-      btnExportarRotulo.textContent = `Gravando ${i + 1}/${bancadas.length}…`;
       const destino = await saida.criar(arquivo);
       await destino.gravar(cano);
     }
 
+    andamento.pronto(`${bancadas.length} arquivos em ${saida.onde}`);
     avisarQueSalvou(`${bancadas.length} arquivos em ${saida.onde}`);
     avisarSemSigla(visao);
     void guardarParaReposicao(r, saida.base);
@@ -4506,6 +4891,7 @@ async function baixarEncaixeEmPdf() {
     // (função que não existe, resposta fora do formato) sairia disfarçado de
     // "arte ruim" e ninguém acharia.
     console.error("[encaixe] falhou ao gerar o PDF:", err);
+    andamento.falhou(err.message);
     mostrarErroEncaixe(`Não consegui gerar o PDF: ${err.message}`);
   } finally {
     btnExportar.disabled = !!producaoTravada();
@@ -4654,12 +5040,6 @@ function mexerNoZoom(fator) {
   redesenharRisco();
 }
 
-const selecaoBarra = document.getElementById("encaixe-selecao");
-const selecaoContagem = document.getElementById("encaixe-selecao-contagem");
-const selecaoGiro = document.getElementById("encaixe-selecao-giro");
-const btnSelecaoAplicar = document.getElementById("btn-selecao-aplicar");
-const btnSelecaoLimpar = document.getElementById("btn-selecao-limpar");
-
 /**
  * Os pedidos do risco que está na tela, guardados no próprio resultado: a
  * conta do lugar da sigla passa por todas as células de cada peça, e o risco é
@@ -4690,19 +5070,15 @@ function redesenharRisco() {
   }
 }
 
-function atualizarBarraDaSelecao() {
-  if (!selecaoBarra) return;
-  const quantas = selecaoNoRisco.size;
-  selecaoBarra.classList.toggle("hidden", quantas === 0);
-  if (selecaoContagem) {
-    selecaoContagem.textContent = quantas === 1 ? "1 peça" : `${quantas} peças`;
-  }
-}
+/*
+ * AQUI FICAVA A BARRA DA SELEÇÃO: "1 peça", o giro, "Aplicar e encaixar" e
+ * "Limpar", em cima do risco, a cada clique numa peça. Saiu em 2026-10-27, a
+ * pedido — o clique só destaca a peça, e o giro se muda na lista.
+ */
 
 function limparSelecaoDoRisco({ redesenhar = true } = {}) {
   if (selecaoNoRisco.size === 0) return;
   selecaoNoRisco.clear();
-  atualizarBarraDaSelecao();
   if (redesenhar) redesenharRisco();
 }
 
@@ -4789,7 +5165,6 @@ escopo.ouvir(encaixeCanvas, "pointerdown", (evento) => {
       for (const indice of achadas) selecaoNoRisco.add(indice);
     }
 
-    atualizarBarraDaSelecao();
     redesenharRisco();
   };
 
@@ -4835,24 +5210,6 @@ if (btnZoomAjustar) {
   });
 }
 
-if (btnSelecaoLimpar) escopo.ouvir(btnSelecaoLimpar, "click", () => limparSelecaoDoRisco());
-
-if (btnSelecaoAplicar) {
-  escopo.ouvir(btnSelecaoAplicar, "click", () => {
-    if (selecaoNoRisco.size === 0) return;
-    const giro = selecaoGiro ? selecaoGiro.value : "180";
-
-    for (const indice of selecaoNoRisco) {
-      const peca = pecasEncaixe[indice];
-      if (peca) peca.giro = giro;
-    }
-
-    limparSelecaoDoRisco({ redesenhar: false });
-    renderPecasEncaixe(); // a lista da esquerda mostra o giro novo
-    btnEncaixar.click();  // e o encaixe é refeito com ele
-  });
-}
-
 // Trocar de tela larga a seleção junto: voltar depois com peças marcadas de um
 // trabalho que já mudou seria marcação fantasma.
 document.addEventListener("optimize:trocou-de-tela", () => limparSelecaoDoRisco({ redesenhar: false }));
@@ -4881,7 +5238,8 @@ const modalAjustes = document.getElementById("modal-ajustes");
 const btnFecharAjustes = document.getElementById("btn-fechar-ajustes");
 const btnAjustesOptmizar = document.getElementById("btn-ajustes-optmizar");
 const ajustesContagem = document.getElementById("ajustes-contagem");
-const giroOpcoes = [...document.querySelectorAll(".giro-op")];
+const giroOpcoes = [...document.querySelectorAll(".giro-op[data-giro]")];
+const sentidoOpcoes = [...document.querySelectorAll(".sentido-op")];
 
 let saidaDoModalAjustes = null;
 
@@ -5101,19 +5459,19 @@ async function pecasDaGaleria(artes) {
       imagens.push(aberta.img);
       await respirarNaTela();
     }
-    const semFundos = await tirarFundoEmParalelo(imagens, false, async (i, total) => {
+    const semFundos = await tirarFundoDosArquivos(blobs.map((b, i) => (abertas[i].pdf ? null : b)), false, async (i, total) => {
       avisarNoComplemento(`Tirando o fundo das artes da Galeria · ${i + 1} de ${total}`);
       await respirarNaTela();
-    });
+    }, faltando.map((a) => ladoDeTrabalho(Math.max(a.largura, a.altura))));
     for (let i = 0; i < faltando.length; i++) {
       const arte = faltando[i];
       const pdf = abertas[i].pdf;
       const cortada = pdf ? null : semFundos[i];
-      const img = cortada ? await criarBitmapOuImagem(cortada.blob, cortada.src) : imagens[i];
+      const img = cortada ? cortada.img : imagens[i];
       if (cortada) imagens[i].close?.();
       galeriaPreparada.set(arte.id, {
         nome: arte.nome,
-        src: cortada ? cortada.src : abertas[i].endereco,
+        src: abertas[i].endereco,
         ...(pdf ? { pdfOriginal: pdf } : { arquivoOriginal: blobs[i] }),
         fundoNaExportacao: cortada ? "auto" : null,
         miniatura: arte.miniatura || await miniaturaDaArte(img),
@@ -5128,6 +5486,7 @@ async function pecasDaGaleria(artes) {
         contorno: "auto",
         origem: `galeria · ${arte.cliente} / ${arte.projeto}${cortada ? " · fundo removido" : ""}`,
       });
+      if (cortada) enderecoQuandoPronto(galeriaPreparada.get(arte.id), cortada);
     }
   }
   return artes.map((a) => ({ arte: a, peca: galeriaPreparada.get(a.id) }));
@@ -5581,6 +5940,8 @@ escopo.ouvir(btnOptmizarDeNovo, "click", () => {
 escopo.ouvir(btnAjustesOptmizar, "click", () => {
   fecharAjustes();
   guardarAjustes();
+  // A peça que entrou depois da escolha do sentido ainda não o tem.
+  aplicarSentido();
   optmizar();
 });
 
@@ -5597,8 +5958,10 @@ window.addEventListener("keydown", (e) => {
 /*
  * A ESCOLHA DO GIRO
  *
- * Três botões no lugar de um <select>: escolha de três não devia morar num
- * menu que esconde duas delas até você abrir.
+ * Botões no lugar de um <select>: Máxima e Equilibrada em cima, e embaixo o
+ * sentido único, com o "A" apontando para cima, para a direita, para baixo
+ * ou para a esquerda. Os três de baixo são todos o "fixa" do <select>; o lado fica em
+ * `sentidoUnico`.
  *
  * O <select> continua na página, oculto, e continua sendo o DONO do valor:
  * é ele que `giroPadrao()` lê e é nele que o resto da tela já escuta o
@@ -5610,6 +5973,9 @@ function marcarGiro() {
   for (const op of giroOpcoes) {
     op.setAttribute("aria-pressed", String(op.dataset.giro === valor));
   }
+  for (const op of sentidoOpcoes) {
+    op.setAttribute("aria-pressed", String(valor === "fixa" && Number(op.dataset.sentido) === sentidoUnico));
+  }
 }
 
 for (const op of giroOpcoes) {
@@ -5617,6 +5983,19 @@ for (const op of giroOpcoes) {
     if (encaixeGiroTodasSelect.value === op.dataset.giro) return;
     encaixeGiroTodasSelect.value = op.dataset.giro;
     encaixeGiroTodasSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+for (const op of sentidoOpcoes) {
+  escopo.ouvir(op, "click", () => {
+    sentidoUnico = Number(op.dataset.sentido);
+    if (encaixeGiroTodasSelect.value !== "fixa") {
+      encaixeGiroTodasSelect.value = "fixa";
+      encaixeGiroTodasSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
+    aplicarSentido();
+    marcarGiro();
   });
 }
 
@@ -5660,6 +6039,7 @@ function guardarAjustes() {
     espaco: Number(encaixeEspacoInput.value),
     espacoY: Number(encaixeEspacoYInput.value),
     giro: encaixeGiroTodasSelect.value,
+    sentido: sentidoUnico,
     comprimento: Number(encaixeComprimentoInput.value) || 0,
     tempo: tempoAjustadoPeloUsuario ? Number(encaixeTempoInput.value) : null,
   };
@@ -5687,10 +6067,9 @@ async function lerAjustesGuardados() {
   if (ajustes.espaco !== undefined) encaixeEspacoInput.value = ajustes.espaco;
   if (ajustes.espacoY !== undefined) encaixeEspacoYInput.value = ajustes.espacoY;
   if (ajustes.comprimento !== undefined) encaixeComprimentoInput.value = ajustes.comprimento || "";
-  if (ajustes.giro) {
-    encaixeGiroTodasSelect.value = ajustes.giro;
-    marcarGiro();
-  }
+  if (SENTIDOS.includes(ajustes.sentido)) sentidoUnico = ajustes.sentido;
+  if (ajustes.giro) encaixeGiroTodasSelect.value = ajustes.giro;
+  marcarGiro();
   if (ajustes.tempo) {
     encaixeTempoInput.value = ajustes.tempo;
     tempoAjustadoPeloUsuario = true;

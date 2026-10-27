@@ -17,16 +17,12 @@
  * OS GRUPOS
  * ---------------------------------------------------------------------------
  *
- * A lista era plana e cabia: eram quatro telas, todas do mesmo assunto. Com a
- * central das impressoras dentro, viraram dez, e dez itens seguidos sem
- * separação nenhuma obrigam a ler o menu inteiro toda vez para achar um.
- *
- * A divisão é por **momento do trabalho**, e não por parentesco técnico:
- *
- *   - **Produção** — o molde e o trabalho: a biblioteca, o molde tirado da
- *     foto, o projeto do cliente, o encaixe no tecido e as macros do Corel.
- *   - **Impressão** — o que acontece ENQUANTO se imprime, e as máquinas em si.
- *   - **Relatórios** — o que se olha DEPOIS, para conferir e comparar.
+ * Sobrou um grupo que aparece no menu, **Produção**: o molde e o trabalho —
+ * a biblioteca, o molde tirado da foto, o projeto do cliente e o encaixe no
+ * tecido. **Relatórios** guarda só as telas do pé da barra, que ficam fora do
+ * menu. Houve um terceiro, **Impressão** (a central das impressoras, os
+ * Pedidos, as Máquinas e o WhatsApp), que saiu do programa em 2026-10-27 junto
+ * com o Histórico, o Retrabalho e as Macros do Corel.
  *
  * HOUVE UM QUINTO GRUPO, **Design**, para o que se fazia com a ARTE antes de
  * ela virar trabalho: Vetor, Digitalizar, Imagem e Cor. Três dessas telas
@@ -35,12 +31,8 @@
  * Digitalizar passou para Produção, que é onde ele já estava na cabeça de
  * quem usa: o que sai dele é um molde, e molde é Produção.
  *
- * O WhatsApp está em Impressão, e não num grupo de ajustes, porque a única
- * coisa que ele faz é avisar sobre impressão: quem o procura está pensando na
- * máquina, não em configuração.
- *
  * O grupo não entra no endereço. A rota continua sendo só o nome da tela
- * (`/historico`), então mudar uma tela de grupo não quebra link guardado.
+ * (`/moldes`), então mudar uma tela de grupo não quebra link guardado.
  */
 
 import { lazy, type ComponentType } from "react";
@@ -53,9 +45,8 @@ import { useLocation } from "react-router-dom";
  *
  * `lazy` em vez de `import` direto: o navegador baixa e compila o código de
  * uma tela na primeira vez que alguém entra nela, e não todo ele antes de
- * desenhar a primeira. Eram treze telas num pacote só — quem abre o painel
- * para olhar as impressoras esperava o vetorizador e a rede neural da Imagem
- * carregarem junto, e nunca ia usar nenhum dos dois.
+ * desenhar a primeira. Eram treze telas num pacote só — quem abria uma
+ * esperava todas as outras carregarem junto.
  *
  * A troca de tela passa por um `<Suspense>` (ver `casca/Casca.tsx`), e o
  * pedaço fica no cache do navegador: a espera acontece uma vez por tela.
@@ -64,8 +55,6 @@ import { useLocation } from "react-router-dom";
  * quem a desenha é o `<Producao/>`, que carrega o editor sob demanda (ver
  * `producao/editor.ts`). A rota dela leva `DoEditor`, que não desenha nada.
  */
-import { TelaTrancada } from "./casca/TelaTrancada";
-
 /** O lugar da tela do Encaixe na rota: quem a desenha é o `<Producao/>`. */
 const DoEditor = () => null;
 
@@ -74,36 +63,27 @@ const Projetos = lazy(() => import("./telas/Projetos").then((m) => ({ default: m
 const Digitalizar = lazy(() => import("./telas/Digitalizar").then((m) => ({ default: m.Digitalizar })));
 const Montagem = lazy(() => import("./telas/Montagem").then((m) => ({ default: m.Montagem })));
 const Extrator = lazy(() => import("./telas/Extrator").then((m) => ({ default: m.Extrator })));
-const Impressoras = lazy(() => import("./telas/Impressoras").then((m) => ({ default: m.Impressoras })));
-const Pedidos = lazy(() => import("./telas/Pedidos").then((m) => ({ default: m.Pedidos })));
-const Maquinas = lazy(() => import("./telas/Maquinas").then((m) => ({ default: m.Maquinas })));
-const Whatsapp = lazy(() => import("./telas/Whatsapp").then((m) => ({ default: m.Whatsapp })));
-const Historico = lazy(() => import("./telas/Historico").then((m) => ({ default: m.Historico })));
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
-const Retrabalho = lazy(() => import("./telas/Retrabalho").then((m) => ({ default: m.Retrabalho })));
 const Sobre = lazy(() => import("./telas/Sobre").then((m) => ({ default: m.Sobre })));
 const Conta = lazy(() => import("./telas/Conta").then((m) => ({ default: m.Conta })));
 const Painel = lazy(() => import("./telas/Painel").then((m) => ({ default: m.Painel })));
 
 export type NomeDeTela =
-  | "moldes" | "projetos" | "encaixe" | "digitalizar" | "montagem" | "extrator" | "macros"
-  | "impressoras" | "pedidos" | "maquinas" | "whatsapp"
-  | "reposicao" | "historico" | "retrabalho"
+  | "moldes" | "projetos" | "encaixe" | "digitalizar" | "montagem" | "extrator"
+  | "reposicao"
   // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
   // programa falando de si mesmo e da conta, não trabalho de produção.
   | "sobre" | "conta"
   // O painel do dono: abre pelo botão logo acima do pé, e só para ele.
   | "painel";
 
-export type NomeDeGrupo = "producao" | "impressao" | "relatorios";
+export type NomeDeGrupo = "producao" | "relatorios";
 
 /**
- * Os grupos, na ordem em que aparecem no menu — que é a ordem do trabalho:
- * primeiro se prepara o molde, depois se imprime, por último se confere.
+ * Os grupos, na ordem em que aparecem no menu.
  */
 export const GRUPOS: readonly { nome: NomeDeGrupo; rotulo: string }[] = [
   { nome: "producao", rotulo: "Produção" },
-  { nome: "impressao", rotulo: "Impressão" },
   { nome: "relatorios", rotulo: "Relatórios" },
 ];
 
@@ -127,44 +107,14 @@ export interface Tela {
    */
   comoUsar?: { video: string; feminino?: boolean; capitulos?: { titulo: string; inicio: number }[] };
   /**
-   * A tela existe, tem endereço e cabeçalho — mas não aparece no menu.
-   *
-   * O primeiro caso foi **Máquinas**: ela é uma porta, não um lugar onde se
-   * trabalha. Quem precisa dela ou não tem impressora nenhuma (e aí é o painel
-   * de Impressoras que leva para lá sozinho), ou vai trocar o nome de uma
-   * máquina e apagar outra — uma vez por ano. Num menu de treze itens, ela
-   * cobrava uma linha permanente ao lado de "Impressoras" para dizer quase a
-   * mesma palavra, e a dupla obrigava a escolher entre as duas toda vez.
-   *
-   * Desde 2026-09-21 são sete: saíram também **Macros**, **WhatsApp** e o
-   * grupo **Relatórios** inteiro (Histórico, Reposição; o Ponto e os
-   * Funcionários saíram do programa em 2026-10-10).
-   * Aí a razão é outra, e vale dizê-la em voz alta para ninguém "consertar"
-   * isso por engano: foi decisão de desenho, para o menu do dia a dia mostrar
-   * só onde se trabalha. O menu caiu de doze linhas para quatro.
-   *
-   * ATENÇÃO, e é o preço: diferente de Máquinas, essas **não têm outra
-   * porta**. Nada no programa leva a elas depois desta mudança — só o endereço
-   * digitado (`/historico`, `/retrabalho`, …) ou um link guardado. Se alguma voltar
-   * a ser usada no dia a dia, o certo não é devolvê-la ao menu por reflexo: é
-   * decidir de onde ela passa a ser alcançada.
-   *
-   * Em todas elas o endereço continua funcionando inteiro, com o mesmo
-   * cabeçalho. O que sai é só a linha do menu — o código da tela fica de pé.
+   * A tela existe, tem endereço e cabeçalho — mas não aparece no menu: quem
+   * a abre é outro botão (o pé da barra, o botão do painel do dono).
    */
   foraDoMenu?: boolean;
   /**
-   * A tela está TRANCADA: aparece no menu com um cadeado, e o endereço abre o
-   * aviso de tela trancada (`casca/TelaTrancada.tsx`) — que é o `Componente`
-   * da linha enquanto ela estiver assim. É o contrário do `foraDoMenu`: lá a
-   * tela funciona e não aparece; aqui ela aparece e não funciona.
-   */
-  trancada?: boolean;
-  /**
    * A tela só existe para quem tem este escopo no plano.
    *
-   * Diferente de `trancada`, que é decisão nossa e vale para todo mundo: aqui
-   * quem decide é o PLANO da conta, e a mesma tela abre para uns e não para
+   * Quem decide é o PLANO da conta, e a mesma tela abre para uns e não para
    * outros. Sem escopo escrito, a tela é de todos.
    *
    * Quem confere é `casca/Escopos.tsx`, entre a rota e o componente — a tela
@@ -172,8 +122,7 @@ export interface Tela {
    *
    * Desde 2026-09-28 o Mensal é só o Encaixe e a Galeria (que não têm
    * escopo): `moldes` tranca Moldes, Digitalizar e Montagem, `extrator` o
-   * Extrator (desde 2026-10-27), `relatorios` as telas de
-   * Relatórios, `macro` as Macros. Os nomes são os do servidor
+   * Extrator (desde 2026-10-27). Os nomes são os do servidor
    * (`ALL_SCOPES`, em optmize-backend/src/domain/plans.ts).
    */
   escopo?: Escopo;
@@ -181,7 +130,7 @@ export interface Tela {
 }
 
 /** Os escopos que trancam tela — o nome é o do servidor. */
-export type Escopo = "impressoras" | "moldes" | "extrator" | "relatorios" | "macro";
+export type Escopo = "moldes" | "extrator";
 
 export const TELAS: readonly Tela[] = [
   // ------------------------------------------------------------- Produção
@@ -309,102 +258,6 @@ export const TELAS: readonly Tela[] = [
     escopo: "extrator",
     Componente: Extrator,
   },
-  {
-    /*
-     * TRANCADA desde 2026-09-21. Para destrancar: tirar o `trancada`, trocar
-     * o `Componente` por `Macros` e devolver lá em cima a linha
-     *   const Macros = lazy(() => import("./telas/Macros").then((m) => ({ default: m.Macros })));
-     * O arquivo da tela (`telas/Macros.tsx`) continua no repositório.
-     */
-    nome: "macros",
-    grupo: "producao",
-    foraDoMenu: true,
-    rotulo: "Macros",
-    apoioMenu: "Ferramentas no CorelDRAW",
-    apoioTopo: "Baixe e instale as macros que rodam dentro do Corel e falam com este sistema.",
-    icone: "icones.svg#puzzle",
-    escopo: "macro",
-    trancada: true,
-    Componente: TelaTrancada,
-  },
-
-  // ------------------------------------------------------------ Impressão
-  /*
-   * Desde 2026-10-21 o grupo inteiro está fora do menu: Impressoras e Pedidos
-   * saíram também, por decisão de desenho. Os endereços (`/impressoras`,
-   * `/pedidos`) continuam abrindo; para devolvê-las, é só tirar o `foraDoMenu`.
-   */
-  {
-    nome: "impressoras",
-    grupo: "impressao",
-    foraDoMenu: true,
-    rotulo: "Impressoras",
-    apoioMenu: "O que está saindo agora",
-    apoioTopo: "Acompanhe a produção das impressoras em tempo real.",
-    icone: "icones.svg#printer",
-    escopo: "impressoras",
-    Componente: Impressoras,
-  },
-  {
-    nome: "pedidos",
-    grupo: "impressao",
-    foraDoMenu: true,
-    rotulo: "Pedidos",
-    apoioMenu: "A fila da calandra",
-    apoioTopo: "A lista de produção na ordem da calandra, e o que já passou por lá.",
-    icone: "icones.svg#list-checks",
-    escopo: "impressoras",
-    Componente: Pedidos,
-  },
-  {
-    nome: "maquinas",
-    grupo: "impressao",
-    rotulo: "Máquinas",
-    foraDoMenu: true,
-    apoioMenu: "Achar na rede",
-    apoioTopo: "Encontre as impressoras da rede e cadastre-as — os caminhos vêm sozinhos.",
-    icone: "icones.svg#radar",
-    escopo: "impressoras",
-    Componente: Maquinas,
-  },
-  {
-    nome: "whatsapp",
-    grupo: "impressao",
-    foraDoMenu: true,
-    rotulo: "WhatsApp",
-    apoioMenu: "Avisos automáticos",
-    apoioTopo: "Avise num grupo quando uma impressão começa e quando termina.",
-    icone: "icones.svg#message-circle",
-    /* Os avisos são da produção: sem a central, não há o que avisar. */
-    escopo: "impressoras",
-    Componente: Whatsapp,
-  },
-
-  // ----------------------------------------------------------- Relatórios
-  {
-    nome: "historico",
-    grupo: "relatorios",
-    foraDoMenu: true,
-    rotulo: "Histórico",
-    apoioMenu: "Tudo que já foi impresso",
-    apoioTopo: "Consulte, filtre e mande para a folha de produção o que já saiu.",
-    icone: "icones.svg#history",
-    escopo: "relatorios",
-    Componente: Historico,
-  },
-  {
-    // Era "reposicao" até 2026-09-29: o nome foi para a aba nova, que guarda
-    // cada trabalho exportado para refazer peças (ver `Reposicao.tsx`).
-    nome: "retrabalho",
-    grupo: "relatorios",
-    foraDoMenu: true,
-    rotulo: "Retrabalho",
-    apoioMenu: "Quanto foi refeito",
-    apoioTopo: "Acompanhe semana a semana quanto tecido foi gasto refazendo trabalho.",
-    icone: "icones.svg#rotate-ccw",
-    escopo: "relatorios",
-    Componente: Retrabalho,
-  },
 
   /*
     AS DUAS DO PÉ DA BARRA.
@@ -416,7 +269,7 @@ export const TELAS: readonly Tela[] = [
 
     O `grupo` é obrigatório no tipo e não tem efeito nelas — `telasDoGrupo`
     descarta `foraDoMenu` antes de olhar o grupo. Ficam em "relatorios" por ser
-    o grupo que já não aparece no menu, e não por parentesco de assunto.
+    o grupo que não aparece no menu, e não por parentesco de assunto.
   */
   {
     nome: "sobre",

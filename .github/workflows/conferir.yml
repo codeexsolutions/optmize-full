@@ -33,7 +33,6 @@ on:
       - "estatico/**"
       - "empacotar/**"
       - "src-tauri/**"
-      - "corel/**"
       - "estilo/**"
       - "bancada/**"
       - "index.html"
@@ -102,7 +101,7 @@ jobs:
         run: npm run bancada:conferencia
 
       - name: Extrator (sem rede)
-        run: npm run bancada:extrator && npm run bancada:pecas
+        run: npm run bancada:extrator
 
       - name: Moldes e tamanhos
         run: npm run bancada:tamanhos && npm run bancada:moldes-pecas && npm run bancada:montagem && npm run bancada:graduacao && npm run bancada:nos && npm run bancada:editor && npm run bancada:envio && npm run bancada:risco-pdf

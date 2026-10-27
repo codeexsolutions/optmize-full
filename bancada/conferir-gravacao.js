@@ -20,7 +20,7 @@
  *
  * Sobe o servidor em processo, numa pasta de dados descartável e numa porta
  * que o sistema escolhe. Não encosta no `dados.db` de verdade, e não sobe
- * WhatsApp, socket nem Puppeteer: só as três rotas que interessam.
+ * Puppeteer nenhum: só as duas rotas que interessam.
  *
  *   npm run bancada:gravacao
  */
@@ -106,7 +106,6 @@ function pngMinimo() {
 
 function subir() {
   const app = express();
-  app.use("/api/cor", require("../servidor/cor-api"));
   app.use(express.json({ limit: "15mb" }));
   app.use("/api/moldes", require("../servidor/moldes-api"));
   app.use("/api/projetos", require("../servidor/projetos-api"));

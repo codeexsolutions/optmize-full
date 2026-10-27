@@ -47,7 +47,7 @@ const RAIZ = path.join(__dirname, "..");
 /** O que vai para dentro do instalador — igual ao `paths` do lancar.yml. */
 const DO_INSTALADOR = [
   /^src\//, /^dist\//, /^servidor\//, /^estatico\//, /^empacotar\//, /^src-tauri\//,
-  /^corel\//, /^estilo\//, /^index\.html$/, /^vite\.config\.mts$/, /^tsconfig\.json$/,
+  /^estilo\//, /^index\.html$/, /^vite\.config\.mts$/, /^tsconfig\.json$/,
   /^package(-lock)?\.json$/, /^\.node-version$/,
 ];
 

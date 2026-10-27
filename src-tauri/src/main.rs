@@ -135,7 +135,53 @@ fn subir_servidor(pasta: &PathBuf, dados: &PathBuf, porta: u16) -> std::io::Resu
         comando.creation_flags(0x0800_0000);
     }
 
-    comando.spawn()
+    let filho = comando.spawn()?;
+    #[cfg(windows)]
+    amarrar_ao_programa(&filho);
+    Ok(filho)
+}
+
+/// O Node morre junto com este executável, por qualquer caminho que ele saia.
+///
+/// O `RunEvent::Exit` lá embaixo mata o Node quando a janela fecha, mas ele não
+/// roda quando o programa CAI, nem quando o instalador o encerra à força para
+/// trocar os arquivos. O Node ficava órfão segurando `servidor\`, e quem o
+/// matava era o instalador, por um PowerShell com `-ExecutionPolicy Bypass` —
+/// exatamente o tipo de linha que faz antivírus chamar o instalador de vírus.
+///
+/// Um Job Object com `KILL_ON_JOB_CLOSE` passa o serviço ao Windows: o
+/// identificador do job é deste processo, e quando ele termina, de qualquer
+/// jeito, o sistema fecha o identificador e encerra tudo que está no job.
+/// O identificador não é fechado aqui de propósito — fechá-lo mataria o Node.
+///
+/// Falhar não impede de abrir: sem o job, vale o `RunEvent::Exit` de sempre.
+#[cfg(windows)]
+fn amarrar_ao_programa(filho: &Child) {
+    use std::os::windows::io::AsRawHandle;
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    let resultado = unsafe {
+        CreateJobObjectW(None, PCWSTR::null()).and_then(|job| {
+            let mut limites = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+            limites.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &limites as *const _ as *const core::ffi::c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )?;
+            AssignProcessToJobObject(job, HANDLE(filho.as_raw_handle()))
+        })
+    };
+    if let Err(erro) = resultado {
+        eprintln!("[servidor] o Node ficou sem job: {erro}");
+    }
 }
 
 /// Responde sozinho à caixa de permissão que o Chromium levanta no Exportar.

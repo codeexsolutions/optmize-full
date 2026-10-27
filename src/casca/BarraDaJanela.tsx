@@ -24,9 +24,6 @@
 
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 
-/** A altura da barra, em px. O CSS repete o número em `--barra-da-janela`. */
-export const ALTURA_DA_BARRA = 34;
-
 type Tauri = { invoke: (comando: string, argumentos?: Record<string, unknown>) => Promise<unknown> };
 const tauri = (): Tauri | null => (window as unknown as { __TAURI_INTERNALS__?: Tauri }).__TAURI_INTERNALS__ ?? null;
 

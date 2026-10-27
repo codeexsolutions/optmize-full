@@ -22,7 +22,7 @@ const path = require("path");
 
 /**
  * A pasta do programa — a de cima desta, porque o servidor mora em
- * `servidor/` e o resto do app (`dist/`, `estatico/`, `corel/`) é irmão dela.
+ * `servidor/` e o resto do app (`dist/`, `estatico/`) é irmão dela.
  * Vale nos dois lugares: no repositório é a raiz do projeto, e no instalado é
  * a pasta de recursos, porque o `preparar.js` copia a mesma forma para lá.
  */
@@ -40,9 +40,6 @@ const ARQUIVO_DO_BANCO = path.join(RAIZ, "dados.db");
 /** A raiz das imagens enviadas — a que o Express publica em /uploads. */
 const RAIZ_DE_UPLOADS = path.join(RAIZ, "uploads");
 
-/** Estado da licença (código ativado + marca d'água anti-relógio-voltado), cifrado — ver licenca.js. */
-const ARQUIVO_DE_LICENCA = path.join(RAIZ, "licenca.dat");
-
 /** Garante que a pasta existe e devolve o caminho dela. */
 function pastaDeUploads(...partes) {
   const caminho = path.join(RAIZ_DE_UPLOADS, ...partes);
@@ -51,10 +48,9 @@ function pastaDeUploads(...partes) {
 }
 
 /**
- * Uma pasta de dados que não é upload de imagem: a sessão do WhatsApp, as
- * planilhas exportadas antes de desativar uma impressora, o estado da
- * varredura de cancelamento da 02. Mesma regra do resto — pasta do projeto
- * rodando pelo código, pasta do usuário no app instalado.
+ * Uma pasta de dados que não é upload de imagem: a sessão da conta, por
+ * exemplo. Mesma regra do resto — pasta do projeto rodando pelo código, pasta
+ * do usuário no app instalado.
  */
 function pastaDeDados(...partes) {
   const caminho = path.join(RAIZ, ...partes);
@@ -64,10 +60,8 @@ function pastaDeDados(...partes) {
 
 /**
  * Um arquivo de configuração que o programa reescreve em execução (hoje só o
- * `config/whatsapp.json`). Não vem semente nenhuma no pacote: quem não achar
- * o arquivo usa os próprios padrões e grava na primeira alteração. É de
- * propósito — a lista de impressoras nasce da varredura da rede, nunca de um
- * arquivo escrito à mão.
+ * `config/ajustes-encaixe.json`). Não vem semente nenhuma no pacote: quem não
+ * achar o arquivo usa os próprios padrões e grava na primeira alteração.
  */
 function arquivoDeConfig(nome) {
   return path.join(pastaDeDados("config"), nome);
@@ -77,7 +71,6 @@ module.exports = {
   RAIZ,
   PASTA_DO_APP,
   ARQUIVO_DO_BANCO,
-  ARQUIVO_DE_LICENCA,
   RAIZ_DE_UPLOADS,
   pastaDeUploads,
   pastaDeDados,

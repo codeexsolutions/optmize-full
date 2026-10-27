@@ -12,93 +12,30 @@
  * desktop. Tudo fica nesta máquina: o banco é o arquivo `dados.db` e as
  * imagens ficam em `uploads/` (ver `caminhos.js` para onde exatamente).
  *
- * Além do painel, este servidor é a central das impressoras da produção:
- * acha as máquinas na rede sozinho, lê o histórico de cada uma e guarda no
- * mesmo `dados.db` (ver `impressoras-api.js`). Como esse painel é para a
- * fábrica olhar, e não só quem está nesta mesa, a escuta é em `0.0.0.0` — de
- * outra máquina, abre-se pelo IP deste PC.
+ * A escuta é só nesta máquina (`127.0.0.1`): de 2026-09 a 2026-10 ela foi em
+ * `0.0.0.0`, para a fábrica olhar o painel das impressoras pelo IP deste PC.
+ * O painel saiu, e com ele o motivo de abrir a porta para a rede — e o pedido
+ * de liberação do firewall que vinha junto na primeira abertura.
  *
  * Abra http://localhost:8000 depois de rodar `npm start`. Instalado, quem
  * sobe este mesmo arquivo é o app do Tauri, numa porta livre qualquer.
  */
 
-const os = require("os");
 const path = require("path");
 const http = require("http");
 const express = require("express");
-const { Server: ServidorDeSocket } = require("socket.io");
 
 const { RAIZ_DE_UPLOADS, PASTA_DO_APP } = require("./caminhos");
 require("./db"); // garante que o banco SQLite e as tabelas existem antes de tudo
 const encaixePdfRouter = require("./encaixe-pdf");
-const macrosRouter = require("./macros-api");
 const encaixeMemoriaRouter = require("./encaixe-memoria");
-const encaixeResolverRouter = require("./encaixe-resolver");
 const riscoPdfRouter = require("./risco-pdf");
 const moldesRouter = require("./moldes-api");
 const projetosRouter = require("./projetos-api");
 const galeriaArquivosRouter = require("./galeria-arquivos-api");
-const vozRouter = require("./voz-api");
-const corRouter = require("./cor-api");
-const licenca = require("./licenca");
-const licencaRouter = require("./licenca-api");
-const { criarRotasDeImpressoras, iniciarImpressoras } = require("./impressoras-api");
 
 const app = express();
-
-// O socket precisa do servidor HTTP nu, não do Express. É por ele que a tela
-// das impressoras fica sabendo de trabalho novo, do progresso da varredura da
-// rede e do andamento de uma impressão — sem ficar perguntando.
 const servidor = http.createServer(app);
-const io = new ServidorDeSocket(servidor);
-
-/*
- * ===========================================================================
- * A TRAVA DA LICENÇA
- * ===========================================================================
- *
- * Vem antes de QUALQUER rota ou arquivo estático, e é de propósito: sem
- * licença válida não há painel, não há API, não há nada além da própria tela
- * de ativação. Uma trava que mora no meio da fila é uma trava que se contorna
- * pedindo o recurso pela porta que ficou na frente dela.
- *
- * Como a autoridade é a assinatura offline (ver `licenca.js`), isto não
- * depende de rede: a conferência de revogação roda em segundo plano e nunca
- * segura a subida nem o primeiro acesso.
- */
-/*
- * DESLIGADA ATÉ HAVER A CHAVE DE VERDADE.
- *
- * A chave pública em `licenca.js` é de DEMONSTRAÇÃO: ninguém tem a privada
- * que gera códigos para ela. Com a trava ligada, todo cliente cairia na tela
- * de ativação ao atualizar e não teria como sair dela. Então ela só liga com
- * `OPTMIZE_TRAVA_DE_LICENCA=1` no ambiente — e o dia de ligar por padrão é o
- * dia em que a chave pública de produção entrar no `licenca.js`.
- *
- * A tela e a API de ativação continuam no ar: ativar um código funciona, só
- * não é exigido.
- */
-const TRAVA_DE_LICENCA_LIGADA = process.env.OPTMIZE_TRAVA_DE_LICENCA === "1";
-
-// Antes de tudo: de outro computador da rede, só o painel das impressoras.
-// Ver `so-nesta-maquina.js`.
-app.use(require("./so-nesta-maquina").soNestaMaquina);
-
-app.use("/api/licenca", express.json(), licencaRouter);
-app.use((req, res, next) => {
-  if (!TRAVA_DE_LICENCA_LIGADA) return next();
-  if (req.path === "/licenca" || req.path.startsWith("/api/licenca")) return next();
-
-  const estado = licenca.obterEstado();
-  if (estado.liberado) return next();
-
-  if (req.path.startsWith("/api/")) {
-    return res.status(403).json({ erro: "licenca", situacao: estado.situacao });
-  }
-  return res.redirect("/licenca");
-});
-
-if (TRAVA_DE_LICENCA_LIGADA) licenca.conferirRevogacaoOnline().catch(() => {});
 
 /*
  * ===========================================================================
@@ -106,17 +43,16 @@ if (TRAVA_DE_LICENCA_LIGADA) licenca.conferirRevogacaoOnline().catch(() => {});
  * ===========================================================================
  *
  * Sem conta liberada nesta máquina, a API não responde. É ESTA a trava — a
- * tela de entrar só esconde o programa, e `server.js` escuta em `0.0.0.0`:
- * qualquer computador da rede alcança `/api/*` direto, sem passar por tela
- * nenhuma.
+ * tela de entrar só esconde o programa, e qualquer programa desta máquina
+ * alcança `/api/*` direto, sem passar por tela nenhuma.
  *
  * Quem decide é `sessao.liberado()`, que só aceita o atestado assinado pelo
  * servidor (ver o cabeçalho de `sessao.js`). Ficam de fora só as rotas por
- * onde se entra: as da conta e as da licença antiga.
+ * onde se entra: as da conta.
  *
  * Os arquivos da interface continuam sendo servidos — sem eles não haveria
- * tela de entrar. O que se tranca é o que TRABALHA: a API, as imagens
- * enviadas e o canal das impressoras.
+ * tela de entrar. O que se tranca é o que TRABALHA: a API e as imagens
+ * enviadas.
  */
 const sessaoDaConta = require("./sessao");
 
@@ -124,24 +60,13 @@ app.use((req, res, next) => {
   const caminho = req.path;
   const protegido = caminho.startsWith("/api/") || caminho.startsWith("/uploads/");
   if (!protegido) return next();
-  if (caminho.startsWith("/api/sessao/") || caminho.startsWith("/api/licenca")) return next();
+  if (caminho.startsWith("/api/sessao/")) return next();
   if (sessaoDaConta.liberado()) return next();
   return res.status(401).json({
     erro: "conta",
     code: "conta",
     message: "Entre na sua conta do Optmize para usar esta função.",
   });
-});
-
-io.use((_socket, next) => {
-  if (sessaoDaConta.liberado()) return next();
-  return next(new Error("conta"));
-});
-
-// A tela de ativação sai de `estatico/`, que é irmã de `servidor/` — daí o
-// `PASTA_DO_APP` e não o `__dirname`. Ver o cabeçalho de `caminhos.js`.
-app.get("/licenca", (req, res) => {
-  res.sendFile(path.join(PASTA_DO_APP, "estatico", "licenca.html"));
 });
 
 // O PDF do encaixe carrega as artes em tamanho de impressão, então precisa de
@@ -153,19 +78,6 @@ app.get("/licenca", (req, res) => {
 app.use("/api/encaixe", require("./ajustes-encaixe-api"));
 app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixePdfRouter);
 app.use("/api/encaixe", express.json({ limit: "2mb" }), encaixeMemoriaRouter);
-
-// Encaixar do lado de cá, para quem não tem navegador que dê conta — hoje, o
-// CorelDRAW. Ver o cabeçalho de `encaixe-resolver.js` para o porquê.
-//
-// O limite é maior que o da memória porque o que chega aqui é geometria: um
-// molde com contorno detalhado passa fácil dos 2 MB quando vêm vinte peças
-// juntas, e recusar um pedido legítimo por causa do limite daria um 413 sem
-// explicação no meio de uma macro.
-app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixeResolverRouter);
-
-// A conversão de cor recebe a arte crua, e arte de produção passa de 15 MB com
-// frequência. Como o PDF acima, precisa vir antes do express.json geral.
-app.use("/api/cor", corRouter);
 
 // A arte que o navegador não lê — o TIFF e o CMYK sem perfil — entra por aqui
 // antes de chegar ao Encaixe. Recebe o arquivo cru, pelo mesmo motivo das
@@ -223,18 +135,12 @@ app.use("/uploads", express.static(RAIZ_DE_UPLOADS));
  */
 app.use("/api/sessao", sessaoDaConta.rotas);
 
-// A tela de Macros: entrega o .bas da macro do Corel e ajuda a pô-lo lá.
-app.use("/api/macros", macrosRouter);
 app.use("/api/moldes", moldesRouter);
 app.use("/api/projetos", projetosRouter);
 app.use("/api/galeria", galeriaArquivosRouter);
 // A Reposição: cada trabalho exportado, guardado para refazer peças.
 // O JSON leva as miniaturas das peças, por isso o limite maior.
 app.use("/api/reposicao", express.json({ limit: "30mb" }), require("./reposicao-api"));
-app.use("/api/voz", vozRouter);
-// As impressoras da produção: varredura da rede, histórico, ordens de
-// serviço, lista da calandra e os avisos no WhatsApp.
-app.use("/api/impressoras", criarRotasDeImpressoras(io));
 
 /*
  * ===========================================================================
@@ -264,34 +170,11 @@ app.get(/^\/(?!api\/|uploads\/).*/, (req, res) => {
 
 const PORT = process.env.PORT || 8000;
 
-io.on("connection", (socket) => {
-  socket.emit("connected", { ok: true });
-});
-
-// Os leitores das impressoras sobem antes da escuta: o backfill do histórico
-// roda solto e pode levar um minuto, e não há motivo para o painel esperar
-// por ele.
-iniciarImpressoras(io);
-
-/** Os IPs desta máquina na rede local, para dizer por onde os outros entram. */
-function enderecosDaRede() {
-  return Object.values(os.networkInterfaces())
-    .flat()
-    .filter((rede) => rede && rede.family === "IPv4" && !rede.internal)
-    .map((rede) => rede.address);
-}
-
-// "0.0.0.0" e não localhost: o painel das impressoras é para a fábrica inteira
-// olhar. Quem roda o Optimize só para moldes e encaixe não perde nada — o
-// endereço local continua sendo o mesmo de sempre.
-servidor.listen(PORT, "0.0.0.0", () => {
+servidor.listen(PORT, "127.0.0.1", () => {
   // A memória coletiva do encaixe: manda a fila e baixa o que as outras lojas
   // ensinaram, logo depois de subir e de tempo em tempo (ver encaixe-coletivo.js).
   require("./encaixe-coletivo").iniciar();
   console.log("");
   console.log(`Optimize rodando em http://localhost:${PORT}`);
-  for (const endereco of enderecosDaRede()) {
-    console.log(`Na rede:              http://${endereco}:${PORT}`);
-  }
   console.log("");
 });

@@ -395,13 +395,11 @@ function BotaoDoTema() {
  */
 function ItemDoMenu({ tela, aoFechar }: { tela: Tela; aoFechar: () => void }) {
   const foraDoPlano = useForaDoPlano(tela);
-  const comCadeado = Boolean(tela.trancada) || foraDoPlano;
+  const comCadeado = foraDoPlano;
 
-  const balao = tela.trancada
-    ? `${tela.rotulo} — trancada`
-    : foraDoPlano
-      ? `${tela.rotulo} — não está no seu plano`
-      : `${tela.rotulo} — ${tela.apoioMenu}`;
+  const balao = foraDoPlano
+    ? `${tela.rotulo} — não está no seu plano`
+    : `${tela.rotulo} — ${tela.apoioMenu}`;
 
   const link = (
     <NavLink

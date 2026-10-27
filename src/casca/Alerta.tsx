@@ -403,13 +403,6 @@ function mostrar(opcoes: OpcoesDoAlerta): Promise<RespostaDoAlerta> {
   return abrirAgora(opcoes).resposta;
 }
 
-/** A mensagem legível de qualquer coisa que tenha sido lançada. */
-export function mensagemDoErro(erro: unknown, padrao = "Aconteceu um erro inesperado."): string {
-  if (erro instanceof Error && erro.message) return erro.message;
-  if (typeof erro === "string" && erro) return erro;
-  return padrao;
-}
-
 export const alerta = {
   mostrar,
 

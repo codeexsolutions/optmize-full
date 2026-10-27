@@ -3,11 +3,10 @@
  * O QUE O PLANO LIBERA — e as telas que ele não libera
  * ===========================================================================
  *
- * A central das impressoras deixou de valer para todo mundo: ela é dos planos
- * pagos, e quem está no Padrão (assinatura zero, crédito por exportação)
- * encaixa, otimiza e exporta, mas não acompanha a produção. A separação mora
- * no catálogo, no servidor (`domain/plans.ts`, escopo `impressoras`), e chega
- * aqui pronta — esta pasta não decide nada, só obedece.
+ * Os Moldes e o Extrator não valem para todo mundo: são vendidos à parte, e
+ * quem está no Mensal Encaixe encaixa, otimiza e exporta sem eles. A separação
+ * mora no catálogo, no servidor (`domain/plans.ts`), e chega aqui pronta —
+ * esta pasta não decide nada, só obedece.
  *
  * ---------------------------------------------------------------------------
  * POR QUE UM CONTEXTO, E NÃO UMA LEITURA POR TELA
@@ -23,8 +22,8 @@
  * ISTO É TELA, NÃO SEGURANÇA
  * ---------------------------------------------------------------------------
  *
- * Vale o mesmo que está escrito na `TelaTrancada` e no portão da conta: a API
- * local continua respondendo, e `server.js` escuta em `0.0.0.0`. Quem barra de
+ * Vale o mesmo que está escrito no portão da conta: a API local continua
+ * respondendo. Quem barra de
  * verdade é o servidor, em cada operação que depende dele. O que se esconde
  * aqui é o que não foi comprado — para ninguém trabalhar meia hora numa tela
  * que vai recusar o trabalho no fim.
@@ -76,8 +75,8 @@ export function useForaDoPlano(tela: Pick<Tela, "escopo">): boolean {
  * O miolo da tela, ou o aviso de que ela não está no plano.
  *
  * Fica entre a rota e o componente para a tela não precisar saber que existe
- * plano: `Impressoras.tsx` continua sendo uma tela de impressoras, e não uma
- * tela de impressoras que às vezes é um aviso de venda.
+ * plano: `Moldes.tsx` continua sendo uma tela de moldes, e não uma tela de
+ * moldes que às vezes é um aviso de venda.
  */
 export function ComEscopo({ tela, children }: { tela: Tela; children: ReactNode }) {
   const fora = useForaDoPlano(tela);
@@ -93,13 +92,10 @@ export const VENDIDOS_A_PARTE: ReadonlySet<string> = new Set(["moldes", "extrato
 
 /** O que cada escopo é, em uma frase — é o que o aviso diz que falta. */
 const O_QUE_E: Record<NonNullable<Tela["escopo"]>, string> = {
-  impressoras: "A central das impressoras acompanha a produção das máquinas da gráfica.",
   moldes:
     "Os Moldes guardam a modelagem da produção, o Digitalizar tira o molde de uma foto e a Montagem dá nome às peças, piques e tamanhos.",
   extrator:
     "O Extrator separa da foto da camisa cada logo, texto e estampa, em vetor ou PNG grande.",
-  relatorios: "Os relatórios mostram o histórico, o ponto, os funcionários e a reposição.",
-  macro: "As macros ligam o CorelDRAW a este sistema.",
 };
 
 /** O nome da parte no botão de comprar: as três telas dos Moldes são uma compra só. */

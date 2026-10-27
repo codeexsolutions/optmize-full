@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-D2aABDIb.js";function t(e){return new Worker(`/assets/pdf.worker-K4tV72Oz.js`,{name:e?.name})}e((()=>{}))();export{t as default};

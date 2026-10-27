@@ -495,7 +495,11 @@ export function arranjar(desenhos, larguraMaxima = 150, folga = 2) {
 const casas = (n) => Number(n.toFixed(3));
 const escapar = (t) => String(t).replace(/[<&>"]/g, " ").trim();
 
-/** `C` onde é curva e `L` onde é reta — ver o mesmo cuidado em `svgDosRiscos`. */
+/**
+ * `C` onde é curva e `L` onde é reta, e não `C` em tudo: um `C` com as alças
+ * em cima dos nós desenha a mesma reta, mas chega no CorelDRAW como CURVA, com
+ * duas alças que entortam a lateral do molde no primeiro esbarrão.
+ */
 function caminhoDosNos(nos, dx, dy) {
   const em = (q) => `${casas(q.x + dx)} ${casas(q.y + dy)}`;
   const partes = [`M${em(nos[0])}`];

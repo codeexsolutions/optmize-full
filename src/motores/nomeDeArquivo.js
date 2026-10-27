@@ -3,7 +3,8 @@
  * O NOME DO ARQUIVO — quantas peças ele está pedindo
  * ===========================================================================
  *
- * "costas 5x.png" quer dizer cinco costas. É o jeito como esta loja nomeia
+ * "costas 5x.png" quer dizer cinco costas — e a peça continua se chamando
+ * "costas 5x", o nome do arquivo inteiro. É o jeito como esta loja nomeia
  * arquivo desde antes do programa existir, e reconhecê-lo poupa digitar a
  * quantidade peça por peça num marcador de trinta arquivos.
  *
@@ -59,17 +60,13 @@ export function lerQuantidadeDoNome(nomeArquivo) {
     const qtd = Number(achado[2]);
     if (!qtd || qtd < 1) continue;
 
-    const inicio = achado.index + achado[1].length; // achado[1] é a borda, fica no nome
-    const nome = (nomeArquivo.slice(0, inicio) + nomeArquivo.slice(achado.index + achado[0].length))
-      .replace(/\(\s*\)|\[\s*\]/g, "")   // sobrou "()" vazio depois de tirar o "4x"
-      .replace(/[\s._\-]{2,}/g, " ")
-      .replace(/^[\s._\-]+|[\s._\-]+$/g, "")
-      .trim();
-    // "5x (1).jpg" deixaria a peça chamada "(1)", que não diz nada. Quando o
-    // que sobra é só pontuação e número de cópia, o nome do arquivo inteiro
-    // informa mais.
-    const temPalavra = /[a-zA-ZÀ-ÿ]/.test(nome);
-    return { nome: temPalavra ? nome : nomeArquivo, qtd, veioDoArquivo: true };
+    /*
+     * O NOME FICA INTEIRO (pedido do dono, 2026-10-27): "camisa 5x" continua
+     * "camisa 5x" na lista e no PDF. Até aqui o "5x" saía do nome depois de
+     * virar quantidade, e quem procurava o arquivo pelo nome não o achava. A
+     * quantidade continua sendo lida dele do mesmo jeito.
+     */
+    return { nome: nomeArquivo, qtd, veioDoArquivo: true };
   }
   return { nome: nomeArquivo, qtd: 1, veioDoArquivo: false };
 }

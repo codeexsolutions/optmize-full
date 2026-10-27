@@ -40,18 +40,35 @@
 ; não conseguia sobrescrever os arquivos. O Tauri só fecha o `optimize.exe`;
 ; o Node, com outro nome, ele não enxerga.
 ;
-; A versão nova já mata o Node antes de chamar o instalador (ver `main.rs`),
-; mas quem está na versão ANTIGA vai atualizar com o código antigo — e é este
-; gancho, que vem dentro do instalador NOVO, que resolve para essa pessoa.
+; Desde 2026-10-27 o Node nasce num Job Object do `optimize.exe` (ver
+; `amarrar_ao_programa`, em main.rs): o Windows o encerra junto com o programa,
+; seja qual for o jeito de o programa sair. Para quem já está nessa versão,
+; fechar o `optimize.exe` basta.
 ;
-; Só morre o Node que mora em `$INSTDIR\servidor`: um Node que a pessoa use
-; para outra coisa fica em paz. O caminho vai por variável de ambiente, e não
-; colado no comando, para que um apóstrofo no nome do usuário não quebre nada.
-; `Win32_Process` em vez de `Get-Process` porque o instalador é 32 bits, e dali
-; o `Get-Process` não lê o caminho de um processo de 64.
-!macro OPTMIZE_ENCERRA_O_NODE
-  System::Call 'kernel32::SetEnvironmentVariable(t "OPTMIZE_PASTA_DO_NODE", t "$INSTDIR\servidor\node.exe")'
-  nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter 'Name=''node.exe''' | Where-Object { $$_.ExecutablePath -eq $$env:OPTMIZE_PASTA_DO_NODE } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force }"`
+; Este gancho fica para quem instala por cima de uma versão ANTERIOR aberta,
+; em que o Node ainda não tinha job: `taskkill /T` derruba o `optimize.exe` e
+; a árvore dele, e o Node é filho dele. Um Node que a pessoa use para outra
+; coisa fica em paz — não é filho do Optimize.
+;
+; ATÉ 2026-10-27 ISTO ERA UM POWERSHELL, com `-ExecutionPolicy Bypass`, que
+; achava o Node pelo caminho do executável. Funcionava, e era também o retrato
+; falado de um instalador malicioso: antivírus olha com lupa instalador que
+; chama PowerShell escondido furando a política de execução. O `taskkill` é
+; ferramenta do próprio Windows, feita para isto.
+;
+; NA ATUALIZAÇÃO PELO PROGRAMA (`/UPDATE`) ELE NÃO RODA, e é de propósito:
+; ali quem abre o instalador é o próprio `optimize.exe`, e o `/T` derrubaria o
+; instalador junto, como filho dele. Nem precisa — desde a 1.2 o programa
+; encerra o Node antes de chamar o instalador (ver `instalar`, em main.rs).
+;
+; O que se perde: um Node que JÁ estava órfão antes de o instalador abrir (o
+; programa antigo caiu) não é filho de ninguém, e o `/T` não o alcança. É raro,
+; e um reinício do Windows resolve.
+!include "FileFunc.nsh"
+!include "LogicLib.nsh"
+
+!macro OPTMIZE_ENCERRA_O_PROGRAMA
+  nsExec::Exec '"$SYSDIR\taskkill.exe" /F /T /IM "optimize.exe"'
   Pop $0
   ; O Windows solta os arquivos de um processo morto logo depois, não no mesmo
   ; instante.
@@ -59,11 +76,17 @@
 !macroend
 
 !macro NSIS_HOOK_PREINSTALL
-  !insertmacro OPTMIZE_ENCERRA_O_NODE
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/UPDATE" $R1
+  ${If} ${Errors}
+    !insertmacro OPTMIZE_ENCERRA_O_PROGRAMA
+  ${EndIf}
 !macroend
 
+; Quem desinstala nunca é aberto pelo programa: aqui não há `/UPDATE` a olhar.
 !macro NSIS_HOOK_PREUNINSTALL
-  !insertmacro OPTMIZE_ENCERRA_O_NODE
+  !insertmacro OPTMIZE_ENCERRA_O_PROGRAMA
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL

@@ -59,14 +59,18 @@ sha2 = "0.10"
 webview2-com = "0.38"
 
 # O Win32 cru, para dar à janela o ícone GRANDE que o Tauri não dá (ver
-# `icone_da_barra`, em src/main.rs). Mesma regra de versão do webview2-com: é a
-# que o Tauri já usa por dentro, senão o `HWND` que ele devolve não é o `HWND`
-# que estas funções aceitam.
+# `icone_da_barra`, em src/main.rs), e para amarrar o Node ao programa num
+# Job Object (ver `amarrar_ao_programa`). Mesma regra de versão do
+# webview2-com: é a que o Tauri já usa por dentro, senão o `HWND` que ele
+# devolve não é o `HWND` que estas funções aceitam.
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.61"
 features = [
   "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
   "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
   "Win32_UI_WindowsAndMessaging",
 ]
 

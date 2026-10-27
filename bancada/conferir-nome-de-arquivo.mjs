@@ -47,29 +47,29 @@ const { lerQuantidadeDoNome } = await import(
   "data:text/javascript;charset=utf-8," + encodeURIComponent(FONTE)
 );
 
-/** [nome do arquivo, quantidade esperada, nome da peça esperado] */
+/** [nome do arquivo, quantidade esperada, nome da peça esperado — o do arquivo, inteiro] */
 const CASOS = [
   // ── como a loja escreve, com o X depois do número ──────────────────────
-  ["costas 5x", 5, "costas"],
-  ["manga4x", 4, "manga"],
-  ["costas-8x", 8, "costas"],
-  ["frente 12X", 12, "frente"],
-  ["frente(2x)", 2, "frente"],
+  ["costas 5x", 5, "costas 5x"],
+  ["manga4x", 4, "manga4x"],
+  ["costas-8x", 8, "costas-8x"],
+  ["frente 12X", 12, "frente 12X"],
+  ["frente(2x)", 2, "frente(2x)"],
 
   // ── com o X na frente ───────────────────────────────────────────────────
-  ["frente X3", 3, "frente"],
-  ["frente x4", 4, "frente"],
-  ["X3 frente", 3, "frente"],
-  ["frente_X3", 3, "frente"],
-  ["frente X 3", 3, "frente"],
-  ["frente X03", 3, "frente"],
+  ["frente X3", 3, "frente X3"],
+  ["frente x4", 4, "frente x4"],
+  ["X3 frente", 3, "X3 frente"],
+  ["frente_X3", 3, "frente_X3"],
+  ["frente X 3", 3, "frente X 3"],
+  ["frente X03", 3, "frente X03"],
 
   // ── O X REPETIDO: o erro que trouxe este arquivo ────────────────────────
-  ["frente 2XX", 2, "frente"],
-  ["camisa 3XX", 3, "camisa"],
-  ["arte 10XXXX", 10, "arte"],
-  ["frente 2xx", 2, "frente"],
-  ["frente XX3", 3, "frente"],
+  ["frente 2XX", 2, "frente 2XX"],
+  ["camisa 3XX", 3, "camisa 3XX"],
+  ["arte 10XXXX", 10, "arte 10XXXX"],
+  ["frente 2xx", 2, "frente 2xx"],
+  ["frente XX3", 3, "frente XX3"],
 
   // ── O QUE NÃO É QUANTIDADE, e não pode virar uma ────────────────────────
   // Medida: número dos dois lados do x.
@@ -82,7 +82,7 @@ const CASOS = [
   // A palavra que termina em x, e o número que é outra coisa.
   ["max 3", 1, "max 3"],
   // A medida fica no nome, e a quantidade é a do fim.
-  ["frente 30x40 5x", 5, "frente 30x40"],
+  ["frente 30x40 5x", 5, "frente 30x40 5x"],
 ];
 
 let falhas = 0;

@@ -1,1 +1,0 @@
-import{n as e}from"./rolldown-runtime-8BhlS34s.js";function t(){if(i)return i;let e=getComputedStyle(document.documentElement);return i=Array.from({length:r},(t,n)=>e.getPropertyValue(`--peca-${n+1}`).trim()),i}function n(e){let n=t();return n[e%n.length]}var r,i,a=e((()=>{r=10,i=null}));export{t as n,a as r,n as t};

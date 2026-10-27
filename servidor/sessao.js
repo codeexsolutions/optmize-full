@@ -52,7 +52,6 @@ const express = require("express");
 const { spawn } = require("node:child_process");
 
 const { pastaDeDados, PASTA_DO_APP } = require("./caminhos");
-const { ehDestaMaquina } = require("./so-nesta-maquina");
 
 /**
  * Onde o backend mora. O mesmo endereço que o atualizador do Tauri já usa
@@ -421,7 +420,7 @@ function aplicarResposta(dados) {
       liberado: Boolean(a.allowed),
       /*
         O QUE O PLANO LIBERA. A tela usa para trancar o que não foi comprado —
-        hoje, a central das impressoras de quem está no Padrão. Quem decide é o
+        hoje, os Moldes e o Extrator de quem está no Mensal Encaixe. Quem decide é o
         catálogo no servidor; aqui isto só atravessa.
       */
       escopos: Array.isArray(a.scopes) ? a.scopes.map(String) : null,
@@ -557,10 +556,8 @@ const rotas = express.Router();
  * mantém isto em dia, e uma ida ao servidor aqui seria meio segundo de tela
  * vazia a cada abertura.
  */
-rotas.get("/eu", (req, res) => {
-  // `remoto`: quem pergunta é outro computador da rede, que só vê o painel
-  // das impressoras (ver `so-nesta-maquina.js`).
-  res.json({ ...perfilDaTela(), remoto: !ehDestaMaquina(req) });
+rotas.get("/eu", (_req, res) => {
+  res.json(perfilDaTela());
 });
 
 /**
@@ -890,11 +887,14 @@ function abrirPagamento(url) {
   const link = linkDePagamento(url);
   if (!link) return false;
   /*
-    No Windows, `rundll32 url.dll` e não `cmd /c start`: o `start` lê o `&`
-    da URL como separador de comando e abriria o checkout cortado ao meio.
+    No Windows, `explorer` e não `cmd /c start`: o `start` lê o `&` da URL
+    como separador de comando e abriria o checkout cortado ao meio. E não o
+    `rundll32 url.dll`, que fazia o mesmo serviço até 2026-10-27: é um dos
+    atalhos que vírus usam para rodar coisa escondido, e antivírus olha torto
+    para programa que o chama.
   */
   const [programa, argumentos] =
-    process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", link]]
+    process.platform === "win32" ? ["explorer.exe", [link]]
       : process.platform === "darwin" ? ["open", [link]]
         : ["xdg-open", [link]];
   try {

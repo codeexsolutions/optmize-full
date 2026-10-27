@@ -319,34 +319,6 @@ export function bancadaEmCentimetros(config, quantasPecas) {
  */
 
 /**
- * Quantas bancadas o trabalho ocupa. Sem bancada, zero.
- *
- * Conta pelo MAIOR NÚMERO DE BANCADA CARIMBADO nas peças, e não dividindo o
- * consumo pelo comprimento: o número da bancada viaja com a peça desde que ela
- * foi posicionada (ver `criarPacker` e `posicoesDasColocacoes`), enquanto a
- * divisão erra por arredondamento — `1052,7999999999997 / 150,4` dá 6,999… e
- * carimbaria sete mesas onde há oito. Foi esse mesmo erro que já fez a página
- * do PDF sair com 230 cm para uma mesa de 150.
- *
- * A divisão fica só para quem não tem as peças em mãos — um recorde guardado no
- * banco, que traz o consumo e o comprimento da mesa e mais nada. A folga de
- * 1e-9 impede que um `400 / 200` que deu 2,0000000001 vire três mesas.
- */
-export function bancadasOcupadas(posicoes, consumo, comprimentoBancada) {
-  if (!(comprimentoBancada > 0)) return 0;
-  let maior = -1;
-  if (posicoes) {
-    for (let i = 0; i < posicoes.length; i++) {
-      const numero = Number(posicoes[i].bancada) || 0;
-      if (numero > maior) maior = numero;
-    }
-  }
-  if (maior >= 0) return maior + 1;
-  if (!(consumo > 0)) return 0;
-  return Math.max(1, Math.ceil(consumo / comprimentoBancada - 1e-9));
-}
-
-/**
  * A mídia que o trabalho consome, em centímetros. É ela que a tela chama de
  * "Metragem", que divide o aproveitamento e que desconta da metragem do plano:
  * o comprimento do PDF (ver "A REGRA: O COMPRIMENTO DO PDF", acima).

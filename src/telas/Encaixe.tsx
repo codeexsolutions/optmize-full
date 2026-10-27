@@ -160,37 +160,6 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 
-<span id="encaixe-selecao" className="hidden flex shrink-0 items-center gap-2 rounded-[9px] border border-[var(--accent-line)] bg-[var(--accent-soft)] px-2.5 py-1">
-
-<span id="encaixe-selecao-contagem" className="text-[0.76rem]  text-ambar">
-{"0 peças"}
-</span>
-
-<select id="encaixe-selecao-giro" className="w-auto! px-2! py-1! text-[0.78rem]!" aria-label="Giro das peças selecionadas" defaultValue="180">
-
-<option value="180">
-{"Vira 180°"}
-</option>
-
-<option value="livre">
-{"Livre (90°)"}
-</option>
-
-<option value="fixa">
-{"Fixa"}
-</option>
-
-</select>
-
-<button id="btn-selecao-aplicar" className="btn primary btn-sm" type="button">
-{"Aplicar e encaixar"}
-</button>
-
-<button id="btn-selecao-limpar" className="btn secondary btn-sm" type="button">
-{"Limpar"}
-</button>
-
-</span>
 
 
 
@@ -383,8 +352,8 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </div>
 
-<button id="btn-parar-busca" className="btn secondary btn-sm" type="button">
-{"Parar e usar este"}
+<button id="btn-parar-busca" className="btn btn-sm btn-finalizar" type="button" title="Encerra a procura e fica com o melhor encaixe achado até aqui">
+{"Finalizar"}
 </button>
 
 </div>
@@ -437,6 +406,86 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </div>
 
+
+
+{/*
+  O MODAL DO EXPORTAR (pedido do dono, 2026-10-27): o PDF de um trabalho
+  grande leva minutos, e com só o rótulo do botão mudando o cliente achava que
+  tinha travado — clicava de novo, fechava o programa. Aqui cada etapa aparece
+  com o número de verdade (artes enviadas, peças no PDF, MB gravados) e o
+  pedido de esperar. Quem preenche é `producao/controlador.js`
+  ("O ANDAMENTO DO EXPORTAR").
+*/}
+<div id="modal-exportar" className="modal-fundo modal-animado hidden" role="dialog" aria-modal="true" aria-labelledby="exportar-titulo" aria-describedby="exportar-detalhe">
+
+<div className="modal modal-ajustes modal-exportar">
+
+<div className="ajustes-topo">
+<span className="ajustes-selo" aria-hidden="true">
+<svg viewBox="0 0 24 24" id="exportar-selo-icone">
+<use href="icones.svg#file-down">
+</use>
+</svg>
+</span>
+<span className="ajustes-topo-texto">
+<h3 id="exportar-titulo">
+{"Gerando o PDF"}
+</h3>
+<p id="exportar-subtitulo">
+{"Em tamanho real, com as artes originais"}
+</p>
+</span>
+</div>
+
+<div className="ajustes-corpo exportar-corpo">
+
+<div className="exportar-numero" aria-live="polite">
+<span id="exportar-por-cento">{"0"}</span>
+<small >{"%"}</small>
+</div>
+
+<div className="exportar-barra" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-labelledby="exportar-titulo">
+<span id="exportar-barra-cheia" style={{ width: "0%" }}>
+</span>
+</div>
+
+<p id="exportar-detalhe" className="exportar-detalhe">
+{"Começando…"}
+</p>
+
+<ol className="exportar-etapas">
+<li data-etapa="preparar" data-estado="pendente"><i aria-hidden="true"></i>{"Lendo as artes das peças"}<span className="exportar-etapa-pc"></span></li>
+<li data-etapa="enviar" data-estado="pendente"><i aria-hidden="true"></i>{"Enviando as artes"}<span className="exportar-etapa-pc"></span></li>
+<li data-etapa="montar" data-estado="pendente"><i aria-hidden="true"></i>{"Montando o PDF peça por peça"}<span className="exportar-etapa-pc"></span></li>
+<li data-etapa="gravar" data-estado="pendente"><i aria-hidden="true"></i>{"Gravando o arquivo"}<span className="exportar-etapa-pc"></span></li>
+</ol>
+
+<div id="exportar-aviso" className="exportar-aviso">
+<svg viewBox="0 0 24 24" aria-hidden="true">
+<use href="icones.svg#hourglass">
+</use>
+</svg>
+<span >
+<b >{"Aguarde, está andando."}</b>
+{" Não feche o Optmize nem clique em Exportar de novo. Trabalho grande leva alguns minutos — enquanto o número acima subir, está tudo certo."}
+</span>
+</div>
+
+<p id="exportar-tempo" className="exportar-tempo">
+{"Tempo: 0:00"}
+</p>
+
+</div>
+
+<div className="ajustes-rodape">
+<button type="button" id="btn-exportar-fechar" className="btn primary hidden">
+{"Fechar"}
+</button>
+</div>
+
+</div>
+
+</div>
 
 
 <div id="modal-ajustes" className="modal-fundo modal-animado hidden" role="dialog" aria-modal="true" aria-labelledby="modal-ajustes-titulo">
@@ -590,22 +639,46 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </button>
 
-<button type="button" className="giro-op" data-giro="fixa" aria-pressed="false">
+</div>
 
-<svg viewBox="0 0 24 24" aria-hidden="true">
-<use href="icones.svg#lock">
+{/*
+  SENTIDO ÚNICO: a peça não gira no encaixe e sai toda apontando para o mesmo
+  lado. O "A" mostra para onde vai o alto da arte. Por baixo é o giro "fixa"
+  do seletor oculto, mais o giro antes do encaixe de cada peça (ver
+  `aplicarSentido`, em producao/controlador.js).
+*/}
+<span className="campo-rotulo sentido-rotulo">
+{"Sentido único"}
+</span>
 
-</use>
-</svg>
+<div className="giro-escolha" role="group" aria-label="Sentido único">
 
-<b >
-{"Nenhuma"}
-</b>
-
+<button type="button" className="giro-op sentido-op" data-sentido="0" aria-pressed="false" aria-label="Sentido único: A para cima">
+<span className="sentido-a" aria-hidden="true">{"A"}</span>
 <small >
-{"não gira"}
+{"para cima"}
 </small>
+</button>
 
+<button type="button" className="giro-op sentido-op" data-sentido="90" aria-pressed="false" aria-label="Sentido único: A para a direita">
+<span className="sentido-a" aria-hidden="true" style={{ transform: "rotate(90deg)" }}>{"A"}</span>
+<small >
+{"para a direita"}
+</small>
+</button>
+
+<button type="button" className="giro-op sentido-op" data-sentido="180" aria-pressed="false" aria-label="Sentido único: A para baixo">
+<span className="sentido-a" aria-hidden="true" style={{ transform: "rotate(180deg)" }}>{"A"}</span>
+<small >
+{"para baixo"}
+</small>
+</button>
+
+<button type="button" className="giro-op sentido-op" data-sentido="270" aria-pressed="false" aria-label="Sentido único: A para a esquerda">
+<span className="sentido-a" aria-hidden="true" style={{ transform: "rotate(-90deg)" }}>{"A"}</span>
+<small >
+{"para a esquerda"}
+</small>
 </button>
 
 </div>
@@ -621,7 +694,7 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 </option>
 
 <option value="fixa">
-{"Nenhuma"}
+{"Sentido único"}
 </option>
 
 </select>

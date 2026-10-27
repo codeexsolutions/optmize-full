@@ -30,8 +30,8 @@ const DESTINO = path.join(RAIZ, "src-tauri", "servidor");
  * As pastas do projeto que vão para dentro do instalador.
  *
  * A cópia guarda a MESMA FORMA do repositório: `servidor/` continua sendo
- * `servidor/` lá dentro, com `dist/`, `estatico/` e `corel/` ao lado dela.
- * É o que permite ao `caminhos.js` achar as três com um `..` só, sem precisar
+ * `servidor/` lá dentro, com `dist/` e `estatico/` ao lado dela.
+ * É o que permite ao `caminhos.js` achar as duas com um `..` só, sem precisar
  * saber se está rodando do projeto ou do programa instalado.
  *
  * Antes esta lista nomeava arquivo por arquivo do servidor, e ficava para
@@ -40,7 +40,7 @@ const DESTINO = path.join(RAIZ, "src-tauri", "servidor");
  * onde se esquece de acrescentar coisas.
  */
 const LEVAR = [
-  // O backend inteiro: Express, SQLite, as rotas e a central das impressoras.
+  // O backend inteiro: Express, SQLite e as rotas.
   "servidor",
   /*
    * Os motores, e SÓ eles, do lado do front.
@@ -56,14 +56,9 @@ const LEVAR = [
    * no bytecode, então ela não chega ao instalador em texto.
    */
   path.join("src", "motores"),
-  // A pasta das macros do Corel. Vai inteira porque não é só o `.cs` que a
-  // tela entrega: o `instalar-no-corel.ps1` é chamado pelo `macros-api.js` em
-  // tempo de execução, e um `require` não o menciona — o guard de dependências
-  // abaixo não teria como enxergá-lo.
-  "corel",
   "package.json",
   "dist",       // o painel, compilado pelo Vite
-  "estatico",   // o sprite de ícones, o wasm do encaixe e a IA da tela de Imagem
+  "estatico",   // o sprite de ícones, o wasm do encaixe, as fontes e os vídeos
   "node_modules",
 ];
 
@@ -317,7 +312,7 @@ function copiarNode(destino) {
  * `<script>` e `importScripts`, não por `require`), `node_modules` resolve
  * sozinho, e `estatico/` não tem código nenhum.
  */
-const FORA_DA_CONFERENCIA = new Set(["node_modules", "dist", "estatico", "corel"]);
+const FORA_DA_CONFERENCIA = new Set(["node_modules", "dist", "estatico"]);
 
 function conferirRequires(pasta, raiz = pasta) {
   const faltando = [];

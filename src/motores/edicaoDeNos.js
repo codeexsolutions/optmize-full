@@ -656,8 +656,6 @@ function normalizarAngulo(a) {
   return r;
 }
 
-export const ehAutomatico = (no) => !!(no && no.auto);
-
 /** Os números do `auto`, presos aos limites (dado velho ou estragado não vira NaN). */
 function numerosDoAuto(a) {
   const num = (v, padrao) => (Number.isFinite(v) ? v : padrao);

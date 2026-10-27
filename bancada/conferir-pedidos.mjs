@@ -366,7 +366,7 @@ caso("o PDF manda a marca de cada peça (a linha está no daPeca da exportação
 });
 
 // ---------- 4. O motor não enxerga o pedido ----------
-const { PARA_A_BANCADA } = require("../empacotar/modulos-do-motor");
+const { PARA_A_BANCADA } = require("./modulos-do-motor");
 caso("nenhum módulo do motor lê o pedido ou a sigla da peça", () => {
   for (const modulo of PARA_A_BANCADA) {
     const codigo = fs.readFileSync(path.join(RAIZ, "src", modulo), "utf8");
