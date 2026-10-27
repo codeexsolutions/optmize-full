@@ -92,6 +92,9 @@ jobs:
       - name: Giro da Reposição
         run: npm run bancada:giro-reposicao
 
+      - name: Peça mais larga que a mídia
+        run: npm run bancada:largas
+
       - name: Folga real
         run: npm run bancada:folga
 

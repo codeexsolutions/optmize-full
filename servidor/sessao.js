@@ -939,6 +939,63 @@ rotas.post("/pagar", async (_req, res) => {
   res.status(resposta.status).json(dados);
 });
 
+/*
+  A TROCA DE PLANO pela tela trancada (ver `services/troca-de-plano.ts`, no
+  backend): o cliente do Mensal Encaixe clica no Extrator ou nos Moldes e
+  compra ali mesmo. Estas três só atravessam — quem decide preço e para onde se
+  pode subir é o catálogo do servidor.
+*/
+rotas.get("/trocas", (_req, res) => repassar(res, "/billing/trocas"));
+
+/** Abre o checkout do plano novo no navegador e devolve a assinatura para conferir. */
+rotas.post("/trocas", async (req, res) => {
+  let resposta;
+  try {
+    resposta = await pedirComToken("/billing/trocas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planId: String((req.body && req.body.planId) || "") }),
+    });
+  } catch {
+    return res.status(503).json({
+      code: "sem_rede",
+      message: "O Optmize não conseguiu falar com o servidor. Confira a internet.",
+    });
+  }
+  if (!resposta) {
+    return res.status(401).json({ code: "fora", message: "Entre na conta de novo." });
+  }
+  const dados = await resposta.json().catch(() => ({}));
+  if (resposta.ok && dados.checkoutUrl) abrirPagamento(dados.checkoutUrl);
+  res.status(resposta.status).json(dados);
+});
+
+/**
+ * A troca já foi paga? Quando foi, renova o acesso aqui antes de responder: é
+ * o acesso guardado que diz à tela o que destrancar.
+ */
+rotas.post("/trocas/conferir", async (req, res) => {
+  let resposta;
+  try {
+    resposta = await pedirComToken("/billing/trocas/conferir", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assinatura: String((req.body && req.body.assinatura) || "") }),
+    });
+  } catch {
+    return res.status(503).json({
+      code: "sem_rede",
+      message: "O Optmize não conseguiu falar com o servidor. Confira a internet.",
+    });
+  }
+  if (!resposta) {
+    return res.status(401).json({ code: "fora", message: "Entre na conta de novo." });
+  }
+  const dados = await resposta.json().catch(() => ({}));
+  if (resposta.ok && dados.trocado) await renovar();
+  res.status(resposta.status).json(dados);
+});
+
 rotas.post("/sair", (_req, res) => {
   apagar();
   motivoDaSaida = null;

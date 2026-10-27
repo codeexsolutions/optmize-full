@@ -165,7 +165,8 @@ export interface Tela {
    * não precisa saber que existe plano.
    *
    * Desde 2026-09-28 o Mensal é só o Encaixe e a Galeria (que não têm
-   * escopo): `moldes` tranca Moldes, Digitalizar e Montagem, `relatorios` as telas de
+   * escopo): `moldes` tranca Moldes, Digitalizar e Montagem, `extrator` o
+   * Extrator (desde 2026-10-27), `relatorios` as telas de
    * Relatórios, `macro` as Macros. Os nomes são os do servidor
    * (`ALL_SCOPES`, em optmize-backend/src/domain/plans.ts).
    */
@@ -174,7 +175,7 @@ export interface Tela {
 }
 
 /** Os escopos que trancam tela — o nome é o do servidor. */
-export type Escopo = "impressoras" | "moldes" | "relatorios" | "macro";
+export type Escopo = "impressoras" | "moldes" | "extrator" | "relatorios" | "macro";
 
 export const TELAS: readonly Tela[] = [
   // ------------------------------------------------------------- Produção
@@ -231,8 +232,11 @@ export const TELAS: readonly Tela[] = [
      * na ARTE — cada logo, texto e estampa separados, em vetor ou PNG grande.
      * Ver docs/superpowers/specs/2026-10-06-extrator-design.md.
      *
-     * Trancado por `moldes` desde 2026-10-26: o Mensal Encaixe é só o
-     * Encaixe, a Reposição e a Galeria, e todo outro plano tem `moldes`.
+     * Trancado desde 2026-10-26: o Mensal Encaixe é só o Encaixe, a
+     * Reposição e a Galeria. Desde 2026-10-27 pelo escopo próprio,
+     * `extrator`, e não mais por `moldes`: o Extrator e os Moldes são
+     * vendidos à parte (ver `ForaDoPlano`, em casca/Escopos.tsx). Todo plano
+     * que tinha `moldes` ganhou `extrator` no servidor.
      */
     nome: "extrator",
     grupo: "producao",
@@ -240,7 +244,7 @@ export const TELAS: readonly Tela[] = [
     apoioMenu: "A arte separada da foto",
     apoioTopo: "Mande a foto da camisa e receba cada logo, texto e estampa separados, em vetor ou PNG grande.",
     icone: "icones.svg#wand-sparkles",
-    escopo: "moldes",
+    escopo: "extrator",
     Componente: Extrator,
   },
   {

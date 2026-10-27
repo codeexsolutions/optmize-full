@@ -61,6 +61,25 @@ const VANTAGENS = [
   },
 ];
 
+/*
+ * O CASO DE VERDADE, em vez de promessa (pedido do dono, 2026-10-27): uma
+ * produção de 30 m que o Optmize fechou com 8 m a menos. As contas saem destes
+ * números, e não escritas à mão no texto — mudou o caso, muda a frase.
+ *
+ * O metro de tecido sublimado vai de R$ 15 a R$ 20; a média, R$ 17,50, é o que
+ * dá o "no bolso". O gancho é o preço do plano de entrada (o Mensal Encaixe):
+ * quantas produções dessas pagam o mês.
+ */
+const CASO = { producaoM: 30, poupadoM: 8, metroMin: 15, metroMax: 20, plano: 199.9 };
+const METRO_MEDIO = (CASO.metroMin + CASO.metroMax) / 2;
+const POUPADO_REAIS = CASO.poupadoM * METRO_MEDIO;
+const PRODUCOES_QUE_PAGAM = Math.ceil(CASO.plano / POUPADO_REAIS);
+const SOBRA_NAS_QUE_PAGAM = PRODUCOES_QUE_PAGAM * POUPADO_REAIS - CASO.plano;
+
+const reais = (valor: number, casas = 0) =>
+  valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL",
+    minimumFractionDigits: casas, maximumFractionDigits: casas });
+
 export function Porta({
   children,
   rodape,
@@ -136,14 +155,56 @@ export function Porta({
         <div className="min-h-0 flex-1" />
 
         <div className="relative">
-          <h2 className="m-0 font-titulo text-[30px] leading-[1.1]  text-tinta">
-            Menos tecido
+          <p className="m-0 font-mono text-[11px] tracking-[0.14em] text-ambar/80 uppercase">
+            Caso real · produção de {CASO.producaoM} m
+          </p>
+          <h2 className="mt-2 mb-0 font-titulo text-[30px] leading-[1.1] text-tinta">
+            {CASO.poupadoM} metros a menos
             <br />
             <span className="text-ambar">no mesmo pedido.</span>
           </h2>
 
+          {/*
+            AS TRÊS CONTAS DO CASO, lado a lado: o tecido, o dinheiro e o
+            plano. É a leitura que vende — de metro para real, de real para
+            "o plano se paga".
+          */}
+          <div className="mt-5 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-[var(--accent-line)] bg-[var(--accent-line)]">
+            <div className="bg-[var(--card-bg)] px-4 py-3">
+              <span className="block font-titulo text-[24px] leading-none text-tinta">
+                {CASO.producaoM - CASO.poupadoM} m
+              </span>
+              <span className="mt-1.5 block text-[11.5px] leading-snug text-tinta-fraca">
+                em vez de {CASO.producaoM} m — {Math.round((CASO.poupadoM / CASO.producaoM) * 100)}% menos tecido
+              </span>
+            </div>
+            <div className="bg-[var(--card-bg)] px-4 py-3">
+              <span className="block font-titulo text-[24px] leading-none text-ambar">
+                {reais(POUPADO_REAIS)}
+              </span>
+              <span className="mt-1.5 block text-[11.5px] leading-snug text-tinta-fraca">
+                no bolso, com o metro a {reais(CASO.metroMin)}–{reais(CASO.metroMax)}
+              </span>
+            </div>
+            <div className="bg-[var(--card-bg)] px-4 py-3">
+              <span className="block font-titulo text-[24px] leading-none text-tinta">
+                {PRODUCOES_QUE_PAGAM} produções
+              </span>
+              <span className="mt-1.5 block text-[11.5px] leading-snug text-tinta-fraca">
+                assim pagam o plano do mês inteiro
+              </span>
+            </div>
+          </div>
+
+          <p className="mt-4 mb-0 max-w-[520px] text-[13px] leading-relaxed text-tinta-fraca">
+            O plano custa {reais(CASO.plano, 2)} por mês. A primeira produção devolve{" "}
+            {reais(POUPADO_REAIS)}; na segunda, já sobraram{" "}
+            <span className="text-tinta">{reais(SOBRA_NAS_QUE_PAGAM)}</span>. Daí para a frente, todo
+            metro poupado é dinheiro que fica com você.
+          </p>
+
           {/* Em duas colunas, para o rolo ficar com a altura. */}
-          <ul className="mt-6 mb-0 grid list-none grid-cols-2 gap-x-6 gap-y-4 p-0">
+          <ul className="mt-5 mb-0 grid list-none grid-cols-2 gap-x-6 gap-y-3 p-0">
             {VANTAGENS.map((v) => (
               <li key={v.titulo} className="flex items-start gap-3">
                 <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-[var(--accent-line)] bg-[var(--accent-soft)] text-ambar">

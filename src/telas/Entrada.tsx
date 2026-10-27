@@ -87,7 +87,10 @@ export function tocarEntrada(nome: string, sentido: Sentido = "entrada"): Promis
   /* O som do Flow, aqui e não em quem chama: este é o único ponto por onde as
      duas passagens (login e logout) passam — a mesma escolha do Flow, em
      `transicao.store.ts`. Ver `somSessao.ts`. */
-  if (sentido === "entrada") somDeEntrada();
+  if (sentido === "entrada") {
+    somDeEntrada();
+    marcarAbertura();
+  }
   else somDeSaida();
   mudar({ nome, sentido, saindo: false });
   const duracao = reduzido() ? 700 : sentido === "entrada" ? 2200 : 1400;
@@ -97,6 +100,48 @@ export function tocarEntrada(nome: string, sentido: Sentido = "entrada"): Promis
       window.setTimeout(encerrarEntrada, 2500);
     }, duracao);
   });
+}
+
+/*
+ * A ABERTURA DO PROGRAMA TOCA A MESMA ENTRADA (pedido do dono, 2026-10-27).
+ *
+ * Quem já estava logado abria o programa direto na tela de trabalho, sem
+ * passagem nenhuma — o "Bem-vindo" só aparecia para quem digitava a senha. Agora
+ * a primeira vez que a janela abre toca a entrada inteira (`tocarAbertura`, na
+ * casca). "Primeira vez" é por abertura do programa: a marca fica no
+ * `sessionStorage`, que o WebView2 apaga quando a janela fecha — um F5 ou a
+ * página recarregada depois de uma queda (ver `recuperar_queda_da_pagina`, em
+ * src-tauri) não repetem os 2 segundos.
+ */
+const MARCA_DA_ABERTURA = "optmize-abertura-tocada";
+
+function aberturaJaTocou(): boolean {
+  try {
+    return sessionStorage.getItem(MARCA_DA_ABERTURA) === "1";
+  } catch {
+    return true; // sem onde anotar, não toca: repetir a cada recarga seria pior
+  }
+}
+
+/** Anota que esta abertura já teve a sua entrada — o login também chama. */
+export function marcarAbertura() {
+  try {
+    sessionStorage.setItem(MARCA_DA_ABERTURA, "1");
+  } catch {
+    // Sem armazenamento: a abertura só não fica anotada.
+  }
+}
+
+/**
+ * Toca a entrada da abertura, quando ainda não tocou nesta janela e não há
+ * outra passagem no ar. Devolve `true` quando tocou — aí quem chamou não fecha
+ * a camada: ela se fecha sozinha ao fim da animação, com o programa já atrás.
+ */
+export function tocarAbertura(nome: string): boolean {
+  if (estado || aberturaJaTocou()) return false;
+  marcarAbertura();
+  void tocarEntrada(nome).then(() => encerrarEntrada());
+  return true;
 }
 
 /** A mesma camada, para quem está saindo da conta. */

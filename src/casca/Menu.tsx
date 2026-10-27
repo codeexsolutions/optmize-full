@@ -51,7 +51,7 @@ import { NavLink } from "react-router-dom";
 import { Icone } from "./Icone";
 import { iniciais, type Usuario } from "./usuario";
 import { GRUPOS, telasDoGrupo, type Tela } from "../rotas";
-import { useEscopos, useForaDoPlano } from "./Escopos";
+import { VENDIDOS_A_PARTE, useEscopos, useForaDoPlano } from "./Escopos";
 import { useTema } from "../estado/tema";
 
 interface Props {
@@ -105,9 +105,14 @@ export function Menu({ aberto, aoFechar, usuario, aoSair }: Props) {
     O QUE NÃO ESTÁ NO PLANO NEM APARECE, e o grupo que ficar vazio some junto.
     Sem resposta sobre o plano (`null`), tudo aparece — a mesma escolha de
     `casca/Escopos.tsx`: não esconder o programa de quem pagou.
+
+    A exceção são as partes vendidas à parte (`VENDIDOS_A_PARTE`, os Moldes e
+    o Extrator): elas aparecem com o cadeado, porque a tela trancada delas é
+    onde se compra. Escondidas, ninguém chegaria lá.
   */
   const escopos = useEscopos();
-  const noPlano = (tela: Tela) => !tela.escopo || escopos === null || escopos.includes(tela.escopo);
+  const noPlano = (tela: Tela) => !tela.escopo || escopos === null || escopos.includes(tela.escopo)
+    || VENDIDOS_A_PARTE.has(tela.escopo);
 
   /*
     SAIR VAI DIRETO para a tela de saída, sem perguntar (pedido do dono em

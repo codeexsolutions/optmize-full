@@ -18,6 +18,7 @@ import {
 } from "../motores/conferenciaDaArte";
 import { giroPelaProporcao, grade, pecaSemGiro, rotacaoBaseDe } from "../motores/encaixeMascara";
 import { mascarasDaPeca } from "../motores/pecaNaGrade";
+import { assentarAsLargas, cabeNaMidia, resultadoSemBusca } from "../motores/encaixeLargas";
 import { prepararMascarasEmParalelo, tirarFundoEmParalelo, derrubarPoolPrepara } from "../motores/encaixePrepara";
 import { formatarNumero, formatarMetros, formatarCm, formatarSegundos, formatarPorcento, formatarM2 } from "../utils/numero";
 import {
@@ -3490,7 +3491,11 @@ async function optmizar({
     // A busca vai para os workers (encaixe-paralelo.js) e volta com o melhor
     // de todas as fatias. Sem worker disponível, ela mesma cai na busca de uma
     // thread só — daqui não muda nada: mesma chamada, mesmo resultado.
-    guardarResultado(await buscarMelhorEncaixeEmParalelo(itens, {
+    // A peça mais larga que a mídia não entra na busca (o motor a poria de
+    // fora) e é assentada no fim do rolo, com aviso — ver `assentarAsLargas`.
+    const largas = itens.filter((it) => !cabeNaMidia(it, larguraTecido));
+    const itensDaBusca = largas.length > 0 ? itens.filter((it) => cabeNaMidia(it, larguraTecido)) : itens;
+    const doMotor = itensDaBusca.length === 0 ? resultadoSemBusca() : await buscarMelhorEncaixeEmParalelo(itensDaBusca, {
       larguraTecido, espaco, comprimentoBancada, passo, raio, alturaMax, motores,
       memoria: aprendido ? aprendido.memoria : null,
       // O RECORDE VEM DA CHAVE EXATA, NÃO DO BALDE.
@@ -3545,7 +3550,9 @@ async function optmizar({
       deveParar: () => pararBusca,
       aoProgredir: (estado) => mostrarAndamento(estado, aprendido),
       aoDesenhar: (especieOuQuadro, resultado) => receberTentativa(especieOuQuadro, resultado, larguraTecido),
-    }), { semJanela: true });
+    });
+    guardarResultado(assentarAsLargas(doMotor, largas, { larguraTecido, espaco, comprimentoBancada, passo }),
+      { semJanela: true });
     resultadoGeradoNesteCarregamento = true;
 
     ultimoResultado.modoDeEncaixe = modoDeEncaixe;
@@ -4031,6 +4038,24 @@ function renderResultado() {
         + `Aumente a bancada, ou deixe o campo vazio para o rolo correr sem corte.`
       : `${r.naoEncaixadas.length} peça(s) não couberam na largura de ${r.larguraTecido} cm: ${nomes}. `
         + `Reduza a medida dessas peças, libere o giro ou use um tecido mais largo.`;
+    encaixeSobras.classList.remove("hidden");
+  } else if (r.largas && r.largas.length > 0) {
+    // A peça entrou, e o aviso diz quanto dela passa da mídia — ver
+    // `assentarAsLargas`. Uma linha por medida: dez cópias da mesma peça são
+    // um aviso só.
+    const porMedida = new Map();
+    r.largas.forEach(({ nome, largura }) => {
+      const chave = `${nome}|${largura}`;
+      const atual = porMedida.get(chave) || { nome, largura, copias: 0 };
+      atual.copias += 1;
+      porMedida.set(chave, atual);
+    });
+    const linhas = [...porMedida.values()].map(({ nome, largura, copias }) =>
+      `${nome}${copias > 1 ? ` (${copias} cópias)` : ""} tem ${formatarCm(largura)}, `
+      + `${formatarCm(largura - r.larguraTecido)} a mais`);
+    encaixeSobras.textContent = `Atenção: ${linhas.join("; ")} que a mídia de ${formatarCm(r.larguraTecido)}. `
+      + `${r.largas.length === 1 ? "Ela ficou" : "Elas ficaram"} no fim do rolo, centralizada${r.largas.length === 1 ? "" : "s"}: `
+      + `o que passa sai metade de cada lado e a impressora corta. Confira antes de imprimir.`;
     encaixeSobras.classList.remove("hidden");
   } else {
     encaixeSobras.classList.add("hidden");

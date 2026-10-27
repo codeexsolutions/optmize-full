@@ -31,7 +31,7 @@ import { Suspense, useEffect, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Menu } from "./Menu";
 import { Entrar } from "../telas/Entrar";
-import { encerrarEntrada, tocarSaida } from "../telas/Entrada";
+import { encerrarEntrada, tocarAbertura, tocarSaida } from "../telas/Entrada";
 import { Espera } from "../telas/Espera";
 import { ProvedorDeEscopos } from "./Escopos";
 import { useSessao } from "./usuario";
@@ -93,10 +93,18 @@ export function Casca() {
     `telas/Entrada.tsx`.
   */
   const dentro = sessao.estado === "dentro" || sessao.estado === "bloqueado";
+  const nomeDeQuemEntrou = sessao.usuario?.nome ?? "";
   useEffect(() => {
     if (!dentro) return;
+    /*
+      O PROGRAMA ACABOU DE ABRIR, JÁ LOGADO: a mesma entrada do login, por
+      cima da tela que está montando atrás. Ela se fecha sozinha no fim; se a
+      passagem já estava no ar (veio do login), fecha como sempre.
+    */
+    if (tocarAbertura(nomeDeQuemEntrou)) return;
     const quadro = requestAnimationFrame(() => encerrarEntrada());
     return () => cancelAnimationFrame(quadro);
+    // O nome fica de fora de propósito: trocar de nome depois não reabre nada.
   }, [dentro]);
 
   /**

@@ -38,6 +38,7 @@
     "bancada:qualidade": "node bancada/conferir-qualidade-encaixe.cjs",
     "bancada:cor-e-vetor": "node bancada/conferir-cor-e-vetor.mjs",
     "bancada:giro-reposicao": "node bancada/conferir-giro-da-reposicao.mjs",
+    "bancada:largas": "node bancada/conferir-largas.mjs",
     "bancada:encolher": "node bancada/conferir-encolher.js",
     "bancada:arte-cmyk": "node bancada/conferir-arte-cmyk.cjs",
     "bancada:nomes": "node bancada/conferir-nome-de-arquivo.mjs",
