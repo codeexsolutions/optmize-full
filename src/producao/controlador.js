@@ -4787,7 +4787,7 @@ async function baixarEncaixeEmPdf() {
     let bytesProntos = 0;
     const bytesTotais = [...artes.values()].reduce((soma, { arte }) => soma + (arte.size || 0), 0);
     andamento.enviando(0, artes.size, 0, bytesTotais);
-    for (const [chave, { arte, peca }] of artes) {
+    for (const [chave, { arte, recorte, peca }] of artes) {
       if (noServidor.has(chave) && enviadasNaSessao.get(chave) === arte) {
         enviados++;
         bytesProntos += arte.size || 0;
@@ -4798,11 +4798,19 @@ async function baixarEncaixeEmPdf() {
         Math.min(bytesTotais, bytesProntos + bytes), bytesTotais);
       // O original vai como está; o que o servidor não abre (formato que ele
       // não conhece, PDF quebrado) vai desenhado, que é o caminho antigo.
+      let usouReserva = false;
       if (!(await encaixeApi.mandarArte(sessao, chave, arte, contar))) {
         const desenhada = await arteDesenhadaDaPeca(peca);
         if (!(await encaixeApi.mandarArte(sessao, chave, desenhada))) {
           throw new Error(`o servidor não conseguiu abrir a arte "${peca.nome || chave}".`);
         }
+        usouReserva = true;
+      }
+      // O RECORTE (alfa da remoção de fundo) acompanha a arte original, na chave
+      // `<chave>.__recorte` — o servidor o vira /SMask e a cor fica dele. A
+      // reserva desenhada já vem recortada e colorida, então dispensa o recorte.
+      if (recorte && !usouReserva) {
+        await encaixeApi.mandarArte(sessao, `${chave}.__recorte`, recorte);
       }
       enviadasNaSessao.set(chave, arte);
       subiram++;
@@ -4812,7 +4820,10 @@ async function baixarEncaixeEmPdf() {
     }
     if (subiram === 0 && artes.size > 0) andamento.jaEnviadas(artes.size);
 
-    const imagens = [...artes.keys()].map((chave) => ({ chave }));
+    // `recorte` diz ao servidor que esta arte tem fundo removido nESTE export.
+    // Sem a marca, um recorte antigo guardado na sessão seria aplicado de novo
+    // mesmo com a remoção de fundo já desligada.
+    const imagens = [...artes.entries()].map(([chave, dados]) => ({ chave, recorte: !!dados.recorte }));
     const visao = visaoDosPedidos(r);
     const indiceDa = new Map(r.posicoes.map((p, i) => [p, i]));
     const daPeca = (p, deslocamento) => ({

@@ -257,14 +257,16 @@ export async function tirarFundoDosArquivos(blobs, forcar = false, aoAndar = nul
 }
 
 async function calcularSemFundo(peca) {
+  // PDF de arte com fundo removido: rasterizado e COLORIDO aqui (caminho antigo,
+  // pelo pdf.js). O recorte separado é só para imagem.
   if (peca.pdfOriginal) return arteSemFundo(peca);
   const blob = await blobDaPeca(peca);
   // Lido aqui para o recado de "arquivo mudou no disco" dizer qual peça era.
   await lerBytes(blob.slice(0, 16), peca);
-  const semFundo = await Promise.resolve(semFundoDoBlob(blob, peca.fundoNaExportacao === "forcar"))
+  // Devolve o RECORTE (PNG cinza, só o alfa), ou `null` quando não há fundo a
+  // tirar — e aí a arte vai inteira, sem recorte. A cor é do servidor.
+  return Promise.resolve(semFundoDoBlob(blob, peca.fundoNaExportacao === "forcar"))
     .catch((erro) => { throw ehFalhaDeLeitura(erro) ? arteIlegivel(erro, peca) : erro; });
-  // Sem fundo para tirar na arte inteira: vai a original, intocada.
-  return semFundo || blob;
 }
 
 /**
@@ -309,7 +311,16 @@ export function adiantarArtesSemFundo(posicoes) {
  * servidor embute como desenho e não como imagem.
  */
 export async function arteDaPeca(peca) {
-  if (peca.fundoNaExportacao) return { arte: await semFundoGuardado(peca), vetor: false };
+  if (peca.fundoNaExportacao) {
+    const pronto = await semFundoGuardado(peca);
+    // PDF de arte: `pronto` é a página rasterizada e colorida (caminho antigo).
+    if (peca.pdfOriginal) return { arte: pronto, vetor: false };
+    // Imagem: `pronto` é o RECORTE (alfa) ou `null`. A arte vai INTEIRA, e a cor
+    // é do servidor; o recorte vira /SMask lá (ver "O RECORTE VEM DE FORA").
+    const blob = await blobDaPeca(peca);
+    await lerBytes(blob.slice(0, 16), peca);
+    return { arte: blob, vetor: false, recorte: pronto || null };
+  }
   if (peca.pdfOriginal) {
     // Lido agora para o recado de arquivo mudado ser o mesmo das imagens.
     await lerBytes(peca.pdfOriginal.slice(0, 5), peca);

@@ -347,6 +347,27 @@ function cacheDaArte(guardadas, chave) {
 const sharp = require("sharp");
 const zlib = require("zlib");
 
+/*
+ * ===========================================================================
+ * PRESERVAR O CMYK — o Nível 2, DESLIGADO por padrão (2026-10-28)
+ * ===========================================================================
+ *
+ * Por padrão a imagem sai `DeviceRGB` (ver "A COR", mais abaixo): a arte é
+ * convertida para sRGB pelo perfil dela, e o RIP lê DeviceRGB como sRGB. Isso
+ * é uma escolha deliberada, e trocá-la mexe no que a MÁQUINA recebe — o mesmo
+ * tipo de troca que o `/UserUnit` e o `/Predictor` já mostraram que o SAi Flexi
+ * quebra calado.
+ *
+ * Com `OPTMIZE_PDF_CMYK=1`, a arte CMYK vai para o PDF COMO CMYK: o JPEG CMYK
+ * que não precisa de recorte entra byte a byte (DeviceCMYK, DCTDecode), e o que
+ * precisa de recorte é desenhado em CMYK cru com o /SMask do recorte. Os
+ * números do cliente chegam idênticos à impressora, sem travessia de perfil.
+ *
+ * LIGAR SÓ DEPOIS DE UM TESTE DE IMPRESSÃO NO RIP. Enquanto o Flexi não for
+ * confirmado lendo DeviceCMYK como esperado, o padrão (sRGB) é o seguro.
+ */
+const PRESERVAR_CMYK = process.env.OPTMIZE_PDF_CMYK === "1";
+
 const ASSINATURA_PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 
@@ -508,7 +529,10 @@ async function canalCru(pixels, largura, altura, cores) {
       Width: largura,
       Height: altura,
       BitsPerComponent: 8,
-      ColorSpace: cores === 3 ? "DeviceRGB" : "DeviceGray",
+      // 4 canais crus do sharp são CMYK NÃO invertido (0 = sem tinta): o
+      // DeviceCMYK já lê assim, sem `/Decode`. A inversão é só do JPEG CMYK
+      // (Adobe), e de quem cuida dela é o pdfkit, no passa-direto.
+      ColorSpace: cores === 4 ? "DeviceCMYK" : cores === 3 ? "DeviceRGB" : "DeviceGray",
       Filter: "FlateDecode",
     },
     fluxo: await comprimir(pixels),
@@ -636,18 +660,93 @@ function jpegSequencial(bytes) {
   return false;
 }
 
+/*
+ * ===========================================================================
+ * O RECORTE VEM DE FORA, E A COR É SEMPRE DO SERVIDOR (2026-10-28)
+ * ===========================================================================
+ *
+ * A remoção de fundo precisa dos pixels, e a tela a fazia no navegador — que
+ * decodifica CMYK com a fórmula ingênua e JOGA FORA o perfil (ver
+ * `colorSpaceConversion:"none"`, em motores/semFundo.js). O resultado: a peça
+ * com fundo removido saía numa cor, a sem fundo saía noutra, e a mesma ribana
+ * aparecia em dois cianos. Foi o "a gola muda de cor" da produção.
+ *
+ * Agora a tela manda só o RECORTE (o alfa, em PNG cinza) e o ARQUIVO ORIGINAL.
+ * A cor sai daqui, do mesmo caminho da peça sem fundo — o perfil do arquivo,
+ * pelo lcms do sharp —, e o recorte entra como /SMask. Assim TODA peça, com ou
+ * sem fundo, atravessa a mesma conversão: uma cor só para a ribana inteira.
+ *
+ * A borda do recorte foi calculada na cor ingênua do navegador (a desmistura
+ * de `suavizarBordaDoFundo`), mas o que vem de lá é só o ALFA — a cor do miolo,
+ * que é o que o cliente vê, é a do servidor. A desmistura de cor da borda
+ * (1–2 px) fica de fora; o alfa suavizado continua vindo.
+ */
+
+/** A cor da arte, sem alfa: em sRGB (padrão) ou CMYK cru (Nível 2). */
+async function corDaArte(bytes, cmyk) {
+  const cano = sharp(bytes, { limitInputPixels: false }).autoOrient().removeAlpha();
+  const { data, info } = await cano
+    .toColourspace(cmyk ? "cmyk" : "srgb")
+    .raw({ depth: "uchar" })
+    .toBuffer({ resolveWithObject: true });
+  return { cor: data, width: info.width, height: info.height, cores: info.channels };
+}
+
+/** O recorte (PNG cinza) como 1 byte de alfa por pixel, no tamanho da cor. */
+async function recorteCru(bytes, largura, altura) {
+  let cano = sharp(bytes, { limitInputPixels: false }).autoOrient().toColourspace("b-w");
+  const meta = await sharp(bytes, { limitInputPixels: false }).metadata();
+  if (meta.width !== largura || meta.height !== altura) {
+    // Casa com a cor sem pedir que a tela e o servidor meçam igual até o pixel.
+    cano = cano.resize(largura, altura, { fit: "fill", kernel: "nearest" });
+  }
+  const { data } = await cano.raw({ depth: "uchar" }).toBuffer({ resolveWithObject: true });
+  return data;
+}
+
+/** A arte é um JPEG CMYK que dá para passar direto (Nível 2)? */
+function jpegCmykDireto(meta, bytes) {
+  return meta.format === "jpeg" && meta.space === "cmyk" && !meta.isProgressive
+    && (!meta.orientation || meta.orientation === 1) && jpegSequencial(bytes);
+}
+
+/**
+ * A arte com o recorte: a cor sai do servidor (perfil do arquivo), o alfa é o
+ * recorte que a tela mandou, e os dois viram cor + /SMask. Sem cache de sessão:
+ * o resultado depende também do recorte, e correção vem antes de reaproveitar.
+ */
+async function abrirImagemComRecorte(doc, bytes, recorteBytes) {
+  const meta = await sharp(bytes, { limitInputPixels: false }).metadata();
+  const cmyk = PRESERVAR_CMYK && meta.space === "cmyk";
+  const { cor, width, height, cores } = await corDaArte(bytes, cmyk);
+  const alfa = await recorteCru(recorteBytes, width, height);
+  const [canalCor, canalAlfa] = await Promise.all([
+    canalCru(cor, width, height, cores),
+    canalCru(alfa, width, height, 1),
+  ]);
+  return imagemDoPdf(doc, canalCor, canalAlfa);
+}
+
 /**
  * Abre uma arte de pixels como imagem do pdfkit: o objeto que `doc.image`
  * aceita no lugar do que `doc.openImage` devolveria (largura, altura, `embed`).
  * Sempre de pé, como o arquivo é visto (o EXIF vale); o giro do encaixe é de
  * quem desenha (`desenharImagem`).
  */
-async function abrirImagem(doc, bytes, cache) {
+async function abrirImagem(doc, bytes, cache, recorteBytes) {
+  // Com recorte, a cor e o alfa vêm de caminhos separados (ver acima).
+  if (recorteBytes) return abrirImagemComRecorte(doc, bytes, recorteBytes);
+
   // Já preparada numa exportação anterior desta sessão: só ler do disco.
   const pronta = cache && cache.ler();
   if (pronta) return imagemDoPdf(doc, pronta.cor, pronta.alfa);
 
   const meta = await sharp(bytes, { limitInputPixels: false }).metadata();
+
+  // NÍVEL 2: o JPEG CMYK vai byte a byte, como CMYK (ver `PRESERVAR_CMYK`).
+  if (PRESERVAR_CMYK && jpegCmykDireto(meta, bytes)) {
+    return doc.openImage(bytes);
+  }
 
   if (meta.format === "jpeg" && !meta.isProgressive
     && (meta.channels === 3 || meta.channels === 1)
@@ -908,9 +1007,10 @@ function desenharImagem(doc, imagem, giro, x, y, w, h) {
 }
 
 /** Abre a arte do jeito que o formato dela pede, sempre de pé. */
-async function abrirArte(doc, bytes, cache) {
+async function abrirArte(doc, bytes, cache, recorteBytes) {
+  // O recorte é da imagem; o PDF de arte entra como vetor e ignora o recorte.
   if (ehPdf(bytes)) return abrirVetor(doc, bytes);
-  return abrirImagem(doc, bytes, cache);
+  return abrirImagem(doc, bytes, cache, recorteBytes);
 }
 
 /** O giro de uma posição: 0, 90, 180 ou 270, ou `null` quando não veio. */
@@ -1074,7 +1174,7 @@ function escreverMarca(doc, marca, topoDaPagina) {
  */
 async function montarPdf({
   larguraTecido, consumo, posicoes, buffers, lerArte, podeTerTransparencia, fonteDaSigla = FONTE_DA_SIGLA,
-  giros, giroDe, versaoMinima, aoAndar, cacheDe,
+  giros, giroDe, versaoMinima, aoAndar, cacheDe, recorteDe, recortes,
 }, destino) {
   const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
@@ -1178,6 +1278,9 @@ async function montarPdf({
    * da arte — continua certo: a posição sem `giro` usa o da arte.
    */
   const buscar = lerArte || ((chave) => (buffers ? buffers.get(chave) : null));
+  // O recorte (alfa) de uma peça com fundo removido, ou `null`. Ver "O RECORTE
+  // VEM DE FORA". A bancada passa um Map; a rota passa a leitura do disco.
+  const buscarRecorte = recorteDe || ((chave) => (recortes ? recortes.get(chave) : null));
   const giroDaArte = giroDe || ((chave) => (giros ? giros.get(chave) || 0 : 0));
   const giroDaPeca = (pos) => {
     const proprio = giroDaPosicao(pos);
@@ -1208,7 +1311,11 @@ async function montarPdf({
           const bytes = buscar(chave);
           // Ver "O PNG NÃO PASSA PELO LEITOR DO PDFKIT", lá em cima.
           if (!bytes) throw new Error("Arte ausente. Envie as peças novamente.");
-          return await abrirArte(doc, bytes, cacheDe ? cacheDe(chave) : null);
+          const recorte = buscarRecorte(chave) || null;
+          // Peça com recorte não usa o cache de sessão: o resultado depende do
+          // recorte, e misturar os dois daria a cor de um com o alfa de outro.
+          const cache = recorte ? null : (cacheDe ? cacheDe(chave) : null);
+          return await abrirArte(doc, bytes, cache, recorte);
         } catch (err) {
           // Arte que não abre derruba o PDF: melhor nenhum arquivo que um rolo
           // impresso com peça faltando.
@@ -1366,7 +1473,12 @@ router.post("/pdf", async (req, res) => {
   // pequenas.
   const daMemoria = new Map();
   const doDisco = new Map();
+  // As chaves que ESTE pedido diz ter recorte (fundo removido). Um recorte
+  // guardado na sessão só vale se a imagem vier marcada agora — ver a montagem
+  // de `imagens`, em producao/controlador.js.
+  const comRecorte = new Set();
   (imagens || []).forEach((img) => {
+    if (img.recorte) comRecorte.add(img.chave);
     if (img.src) {
       const buffer = bufferDaImagem(img.src);
       if (buffer) daMemoria.set(img.chave, buffer);
@@ -1400,11 +1512,37 @@ router.post("/pdf", async (req, res) => {
   };
 
   /*
+   * O RECORTE de uma peça com fundo removido (ver "O RECORTE VEM DE FORA", em
+   * montarPdf). A tela o manda como uma arte à parte, na chave `<chave>.__recorte`
+   * — fica guardado no mesmo lugar das artes, mas nenhuma posição o aponta, então
+   * ele nunca é desenhado como peça. Lido na hora, como a arte.
+   */
+  const arquivoDoRecorte = (chave) => {
+    if (!comRecorte.has(chave)) return null; // não marcada neste pedido
+    const arq = guardadas && guardadas.artes.get(`${chave}.__recorte`);
+    return arq && fs.existsSync(arq) ? arq : null;
+  };
+  const recorteDe = (chave) => {
+    const arq = arquivoDoRecorte(chave);
+    if (!arq) return null;
+    try {
+      return fs.readFileSync(arq);
+    } catch (erro) {
+      console.warn(`[encaixe-pdf] não deu para ler o recorte ${chave}:`, erro.message);
+      return null;
+    }
+  };
+
+  /*
    * A VERSÃO DO FORMATO PRECISA SER DECIDIDA ANTES DE O DOCUMENTO ABRIR, e
    * quem pode exigir 1.4 é a transparência. Aqui a pergunta é barata: as artes
    * de disco já vieram carimbadas na chegada, e as de memória estão na mão.
    */
-  const podeTerTransparencia = [...daMemoria.values()].some(pngComAlfa)
+  // O recorte é um /SMask, e /SMask é PDF 1.4 (ver a versão do formato, em
+  // montarPdf): uma peça com recorte já obriga a transparência.
+  const temRecorte = [...new Set(posicoes.map((pos) => pos.chave))].some((chave) => !!arquivoDoRecorte(chave));
+  const podeTerTransparencia = temRecorte
+    || [...daMemoria.values()].some(pngComAlfa)
     || (guardadas ? [...doDisco.keys()].some((chave) => guardadas.comAlfa.has(chave)) : false);
 
   const giroDe = (chave) => (guardadas && guardadas.giros.get(chave)) || 0;
@@ -1427,7 +1565,7 @@ router.post("/pdf", async (req, res) => {
     concluido.catch(() => {});
     andar({ fase: "montando", feitas: 0, total: posicoes.length });
     await montarPdf({
-      larguraTecido, consumo, posicoes, lerArte, podeTerTransparencia, giroDe, versaoMinima,
+      larguraTecido, consumo, posicoes, lerArte, recorteDe, podeTerTransparencia, giroDe, versaoMinima,
       aoAndar: (feitas, total) => andar({ fase: "montando", feitas, total }),
       cacheDe: guardadas ? (chave) => cacheDaArte(guardadas, chave) : null,
     }, destino);

@@ -224,14 +224,30 @@ export async function pngDosPixelsRapido(rgba, largura, altura, perfil = null) {
 }
 
 /**
- * A arte de IMAGEM com o fundo tirado, sem giro, num PNG com o perfil de cor
- * do original — ou `null`, quando não há fundo em volta para tirar (a arte já
- * vem transparente, ou sangra até a borda). `forcar` é o "Tirar o fundo"
- * pedido à mão, que tira mesmo fundo escuro. Erro de leitura do arquivo sobe
- * como veio: quem chama sabe dizer qual peça era.
+ * O RECORTE de uma arte de IMAGEM: o fundo tirado vira um PNG CINZA (só o alfa),
+ * sem giro — ou `null`, quando não há fundo em volta para tirar (a arte já vem
+ * transparente, ou sangra até a borda). `forcar` é o "Tirar o fundo" pedido à
+ * mão, que tira mesmo fundo escuro. Erro de leitura do arquivo sobe como veio:
+ * quem chama sabe dizer qual peça era.
+ *
+ * ===========================================================================
+ * SÓ O ALFA, A COR É DO SERVIDOR (2026-10-28)
+ * ===========================================================================
+ *
+ * Isto montava o PNG COLORIDO da peça sem fundo, com os pixels que o navegador
+ * decodificou — e o navegador converte CMYK pela fórmula ingênua e joga fora o
+ * perfil (ver `decodificar`, com `colorSpaceConversion:"none"`). A peça com
+ * fundo saía numa cor; a mesma arte sem remoção de fundo ia inteira ao PDF e o
+ * servidor a convertia pelo perfil (ICC) — e a produção via a mesma ribana em
+ * dois cianos.
+ *
+ * Agora sai só o RECORTE (o alfa). A arte original vai inteira ao PDF, e a cor
+ * de TODA peça — com ou sem fundo — sai do servidor, pelo mesmo perfil, com o
+ * recorte entrando como /SMask (ver "O RECORTE VEM DE FORA", em
+ * servidor/encaixe-pdf.js). A desmistura de cor da borda (1–2 px), que rodava
+ * na cor ingênua, fica de fora; o alfa suavizado continua indo.
  */
 export async function semFundoDoArquivo(blob, forcar, tetoDeLado = 0, aoTerPrevia = null) {
-  const perfil = perfilRgbDoArquivo(new Uint8Array(await blob.arrayBuffer()));
   const img = await decodificar(blob);
   let dados, largura, altura;
   try {
@@ -243,13 +259,46 @@ export async function semFundoDoArquivo(blob, forcar, tetoDeLado = 0, aoTerPrevi
   if (!tirado) return null;
   suavizarBordaDoFundo(dados, largura, altura, tirado.cor);
   /*
-   * A PRÉVIA ANTES DO PNG. A tela e a silhueta do encaixe precisam só da arte
-   * sem fundo, reduzida ao `tetoDeLado` — e não do PNG do PDF, que é a parte
-   * mais cara da conta. Quem pede a prévia a recebe aqui, e o PNG continua
-   * sendo montado depois, sem ninguém esperando por ele.
+   * A PRÉVIA ANTES DO RECORTE. A tela e a silhueta do encaixe precisam da arte
+   * sem fundo, reduzida ao `tetoDeLado`, COLORIDA (para desenhar) — e isso sai
+   * dos mesmos pixels, antes de extrair o alfa. É só prévia de tela: a cor
+   * ingênua aqui não vai para o PDF.
    */
   if (aoTerPrevia) await aoTerPrevia(await previaDosPixels(dados, largura, altura, tetoDeLado));
-  return pngDosPixelsRapido(dados, largura, altura, perfil);
+  const alfa = new Uint8Array(largura * altura);
+  for (let p = 0; p < alfa.length; p++) alfa[p] = dados[p * 4 + 3];
+  return pngCinzaDosPixels(alfa, largura, altura);
+}
+
+/**
+ * Um PNG CINZA de um canal (o recorte), com o IDAT comprimido pelo compressor
+ * nativo do navegador quando houver — como `pngDosPixelsRapido`, mas sem cor e
+ * sem perfil: é só a máscara de transparência que o servidor vira /SMask.
+ */
+export async function pngCinzaDosPixels(cinza, largura, altura) {
+  const linha = largura + 1;
+  const cru = new Uint8Array(linha * altura);
+  for (let y = 0; y < altura; y++) {
+    cru.set(cinza.subarray(y * largura, (y + 1) * largura), y * linha + 1);
+  }
+  const idat = typeof CompressionStream !== "undefined"
+    ? new Uint8Array(await new Response(
+        new Blob([cru]).stream().pipeThrough(new CompressionStream("deflate")),
+      ).arrayBuffer())
+    : zlibSync(cru, { level: 1 });
+  const ihdr = new Uint8Array(13);
+  const vista = new DataView(ihdr.buffer);
+  vista.setUint32(0, largura);
+  vista.setUint32(4, altura);
+  ihdr[8] = 8; // bits por canal
+  ihdr[9] = 0; // cinza, 1 canal
+  const partes = [
+    Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    ...bloco("IHDR", ihdr),
+    ...bloco("IDAT", idat),
+    ...bloco("IEND", new Uint8Array(0)),
+  ];
+  return new Blob(partes, { type: "image/png" });
 }
 
 /**
