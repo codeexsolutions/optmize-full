@@ -75,12 +75,30 @@
   Sleep 700
 !macroend
 
+; ---------------------------------------------------------------------------
+; A PASTA DO SERVIDOR É TROCADA INTEIRA, NÃO SÓ SOBRESCRITA
+; ---------------------------------------------------------------------------
+;
+; O NSIS só acrescenta e sobrescreve: o que uma versão antiga instalou e a nova
+; não leva mais fica para sempre. Numa máquina com o programa desde setembro
+; eram 388 MB de sobra — o WhatsApp, o puppeteer, as macros do Corel com os
+; `.ps1` delas e dezenas de atalhos de PowerShell do `node_modules\.bin`.
+; Nada disso rodava, mas o antivírus varre a pasta e acha script de PowerShell
+; ao lado de um exe sem assinatura.
+;
+; Os dados de quem usa não moram aqui (ficam na pasta de dados do Windows, ver
+; main.rs), então apagar `servidor\` não perde nada: o instalador põe a versão
+; nova logo em seguida. Roda também no `/UPDATE`, quando o programa já
+; encerrou o Node antes de abrir o instalador.
 !macro NSIS_HOOK_PREINSTALL
   ${GetParameters} $R0
   ClearErrors
   ${GetOptions} $R0 "/UPDATE" $R1
   ${If} ${Errors}
     !insertmacro OPTMIZE_ENCERRA_O_PROGRAMA
+  ${EndIf}
+  ${If} "$INSTDIR" != ""
+    RMDir /r "$INSTDIR\servidor"
   ${EndIf}
 !macroend
 

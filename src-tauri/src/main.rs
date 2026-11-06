@@ -1088,6 +1088,7 @@ fn main() {
             // termina — o lançador ficaria branco, sem pintar.
             let app = app.handle().clone();
             let abriu_em = Instant::now();
+            let (pasta_do_node, dados_do_node) = (pasta.clone(), dados.clone());
             std::thread::spawn(move || {
                 let fase = |nome: &str| {
                     let mut e = base.clone();
@@ -1129,7 +1130,32 @@ fn main() {
                     }
                 }
 
-                let pronto = esperar_servidor(porta, &processo);
+                let mut pronto = esperar_servidor(porta, &processo);
+
+                /*
+                 * SEGUNDA CHANCE, SEM INCOMODAR NINGUÉM.
+                 *
+                 * A primeira abertura depois de instalar é a que falha: o
+                 * Windows ainda está lendo e examinando os arquivos novos, e o
+                 * Node cai ou não atende a tempo. Na segunda vez os arquivos
+                 * já estão liberados — era o "feche e abra de novo" que a tela
+                 * de erro pedia. Agora o programa faz isso sozinho.
+                 */
+                if !pronto {
+                    eprintln!("[servidor] não atendeu; subindo de novo");
+                    if let Some(filho) = processo.lock().unwrap().as_mut() {
+                        let _ = filho.kill();
+                        let _ = filho.wait();
+                    }
+                    std::thread::sleep(Duration::from_millis(1500));
+                    match subir_servidor(&pasta_do_node, &dados_do_node, porta) {
+                        Ok(novo) => {
+                            processo.lock().unwrap().replace(novo);
+                            pronto = esperar_servidor(porta, &processo);
+                        }
+                        Err(erro) => eprintln!("[servidor] não subiu de novo: {erro}"),
+                    }
+                }
 
                 if !pronto {
                     let _ = abrir_principal(&app, WebviewUrl::App("erro.html".into()), false);

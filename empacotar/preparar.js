@@ -432,6 +432,34 @@ if (refeito) {
   podarDesenvolvimento(path.join(DESTINO, "node_modules"));
 }
 
+/*
+ * NENHUM SCRIPT DE SHELL DENTRO DO INSTALADOR.
+ *
+ * O `node_modules/.bin` é o atalho que o npm cria para cada comando de pacote:
+ * um `.ps1`, um `.cmd` e um sem extensão por ferramenta. O programa nunca os
+ * usa — o servidor sobe com `node.exe servidor\server.js` — mas eles iam
+ * dentro do instalador às dezenas, `puppeteer.ps1`, `extract-zip.ps1`,
+ * `browsers.ps1` e companhia. Instalador sem assinatura que espalha script de
+ * PowerShell na máquina é o retrato que o antivírus procura.
+ *
+ * Roda sempre, e não só quando o node_modules é recopiado: a cópia antiga em
+ * `src-tauri/servidor` pode ter vindo de antes desta regra.
+ */
+const SCRIPTS = /\.(ps1|psm1|cmd|bat|vbs|vbe|js1|wsf|sh)$/i;
+
+function tirarScripts(pasta) {
+  for (const item of fs.readdirSync(pasta, { withFileTypes: true })) {
+    const caminho = path.join(pasta, item.name);
+    if (item.isDirectory()) {
+      if (item.name === ".bin") fs.rmSync(caminho, { recursive: true, force: true });
+      else tirarScripts(caminho);
+    } else if (SCRIPTS.test(item.name)) {
+      fs.rmSync(caminho, { force: true });
+    }
+  }
+}
+tirarScripts(DESTINO);
+
 // A poda tirou algum pacote que o programa precisa em execução?
 const podados = conferirDependencias(DESTINO);
 if (podados.length > 0) {
