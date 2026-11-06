@@ -136,6 +136,36 @@ function podarOnnx(pasta) {
  * O que está aninhado (`archiver/node_modules/...`) não é olhado: ele vive
  * dentro do pai e vai embora com ele, se o pai for embora.
  */
+/** As dependências de todo pacote aninhado em `pacote/node_modules`, a qualquer fundura. */
+function exigidosPelosAninhados(pacote) {
+  const exigidos = [];
+  const aninhados = path.join(pacote, "node_modules");
+  if (!fs.existsSync(aninhados)) return exigidos;
+
+  const pastas = [];
+  for (const item of fs.readdirSync(aninhados)) {
+    if (item.startsWith(".")) continue;
+    const caminho = path.join(aninhados, item);
+    if (item.startsWith("@")) {
+      for (const dentro of fs.readdirSync(caminho)) pastas.push(path.join(caminho, dentro));
+    } else {
+      pastas.push(caminho);
+    }
+  }
+  for (const pasta of pastas) {
+    try {
+      const manifesto = JSON.parse(fs.readFileSync(path.join(pasta, "package.json"), "utf-8"));
+      for (const grupo of ["dependencies", "optionalDependencies", "peerDependencies"]) {
+        exigidos.push(...Object.keys(manifesto[grupo] || {}));
+      }
+    } catch {
+      // sem package.json: não é pacote
+    }
+    exigidos.push(...exigidosPelosAninhados(pasta));
+  }
+  return exigidos;
+}
+
 function podarOrfaos(pasta) {
   const raizes = Object.keys(
     JSON.parse(fs.readFileSync(path.join(RAIZ, "package.json"), "utf-8")).dependencies || {},
@@ -159,6 +189,10 @@ function podarOrfaos(pasta) {
     for (const grupo of ["dependencies", "optionalDependencies", "peerDependencies"]) {
       fila.push(...Object.keys(manifesto[grupo] || {}));
     }
+    // O aninhado também exige coisas, e o que ele exige pode morar na raiz.
+    // Foi o `safer-buffer`: só o `raw-body/node_modules/iconv-lite` o pede, a
+    // caminhada não olhava ali, e a 1.3.439 saiu sem ele — o servidor não subia.
+    fila.push(...exigidosPelosAninhados(path.join(pasta, nome)));
   }
 
   // A lista do disco: os pacotes soltos e os de dentro de cada escopo.
@@ -471,3 +505,57 @@ if (podados.length > 0) {
 }
 
 console.log(`servidor preparado em src-tauri/servidor (${mb(tamanho(DESTINO))})`);
+
+/*
+ * A PROVA FINAL: O SERVIDOR EMPACOTADO SOBE?
+ *
+ * Tudo acima confere listas; nada aqui ligava o servidor de verdade. A 1.3.439
+ * passou por todas as conferências e saiu sem o `safer-buffer` — o Node caía
+ * na primeira linha, e quem atualizou ficou sem programa. Agora a pasta que
+ * vai para o instalador é ligada, com o Node que vai junto e uma pasta de
+ * dados descartável. Não atendeu: o lançamento para aqui.
+ */
+(async function provarQueSobe() {
+  const os = require("os");
+  const http = require("http");
+  const { spawn } = require("child_process");
+
+  const dados = fs.mkdtempSync(path.join(os.tmpdir(), "optmize-prova-"));
+  // Roda numa CÓPIA fora do projeto. Dentro dele o Node sobe as pastas e acha
+  // o `node_modules` do projeto: o pacote que falta no instalador aparece lá,
+  // e a prova passa mentindo. Foi assim que a 1.3.439 passou.
+  const isolado = fs.mkdtempSync(path.join(os.tmpdir(), "optmize-isolado-"));
+  fs.cpSync(DESTINO, isolado, { recursive: true });
+  const porta = 40000 + Math.floor(Math.random() * 20000);
+  const env = { ...process.env, PORT: String(porta), OPTIMIZE_DADOS: dados };
+  const filho = spawn(path.join(isolado, "node.exe"), [path.join("servidor", "server.js")], {
+    cwd: isolado, env, stdio: ["ignore", "ignore", "pipe"],
+  });
+  let erro = "";
+  filho.stderr.on("data", (parte) => { erro += parte; });
+  let morreu = false;
+  filho.on("exit", () => { morreu = true; });
+
+  const atende = () => new Promise((ok) => {
+    http.get({ host: "127.0.0.1", port: porta, path: "/" }, (r) => { r.resume(); ok(true); })
+      .on("error", () => ok(false));
+  });
+
+  const limite = Date.now() + 60_000;
+  let subiu = false;
+  while (Date.now() < limite && !morreu) {
+    if (await atende()) { subiu = true; break; }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  filho.kill();
+  await new Promise((r) => setTimeout(r, 500));
+  fs.rmSync(dados, { recursive: true, force: true });
+  fs.rmSync(isolado, { recursive: true, force: true });
+
+  if (!subiu) {
+    console.error("preparar: o servidor empacotado NÃO SOBE. Nada de instalador.");
+    console.error(erro.split("\n").slice(0, 12).join("\n"));
+    process.exit(1);
+  }
+  console.log("prova: o servidor empacotado sobe e atende");
+})();
