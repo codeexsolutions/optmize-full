@@ -31,7 +31,7 @@ const { prepararPeca, expandir } = require("./pecas");
 const { TRABALHOS } = require("./trabalhos");
 
 function lerArgumentos(argv) {
-  const o = { vezes: [4, 6], workers: 5, tempo: 90, busca: 20, sementes: 1, json: null };
+  const o = { vezes: [4, 6], workers: 5, tempo: 90, busca: 20, sementes: 1, primeira: 0, json: null };
   for (let i = 2; i < argv.length; i++) {
     const v = argv[i + 1];
     if (argv[i] === "--vezes") { o.vezes = v.split(",").map(Number); i++; }
@@ -39,6 +39,7 @@ function lerArgumentos(argv) {
     else if (argv[i] === "--tempo") { o.tempo = Number(v); i++; }
     else if (argv[i] === "--busca") { o.busca = Number(v); i++; }
     else if (argv[i] === "--sementes") { o.sementes = Number(v); i++; }
+    else if (argv[i] === "--primeira") { o.primeira = Number(v); i++; }
     else if (argv[i] === "--json") { o.json = v; i++; }
     else throw new Error(`argumento desconhecido: ${argv[i]}`);
   }
@@ -76,7 +77,7 @@ async function principal() {
     const t = montar(motor, k);
     const config = { larguraTecido: t.receita.larguraTecido, passo: t.passo, raio: t.raio, comprimentoBancada: 0 };
     for (let s = 0; s < o.sementes; s++) {
-      const semente = 1 + s * 7919;
+      const semente = 1 + (o.primeira + s) * 7919;
       // A partida comum: uma busca com o portfólio da produção.
       const base = await motor.buscarMelhorEncaixe(t.itens, {
         ...config, espaco: t.receita.espaco, alturaMax: t.alturaMax,

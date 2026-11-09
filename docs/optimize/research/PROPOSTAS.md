@@ -18,7 +18,7 @@ hipótese.
 | P4 | Grade com piso físico, não `W/1000` | precisão / material largo | **−1,70% de tecido medido** (320 cm, 4 mm); folga exata | média-alta (1 semente) | baixo no código, médio na medição | médio (tempo por tentativa) | **confirmada**; repetir com 3–5 sementes |
 | P5 | Sparrow com bancada (linhas proibidas) | qualidade / rolo em mesa | **~2,1% medido** (o sparrow que não roda) | média-alta (1 semente; caminho verificado no jagua-rs) | médio | médio | **confirmada**; protótipo a fazer |
 | P6 | Sparrow em rolo longo: precisão f32 | precisão / rolo longo | — | **refutada como rejeição** (0 rejeitados até 130 mil linhas) | — | — | resta um teste de escala de unidade |
-| P11 | Sparrow em trabalho grande: compactação por regiões, em paralelo | qualidade / escala | **medido: −1,24% (700 peças) e −2,44% (1.050) contra o sparrow de hoje** | média-alta (1 semente) | médio | médio | **implementado** acima de 500 peças; repetir com 3 sementes |
+| P11 | Sparrow em trabalho grande: compactação por regiões, em paralelo | qualidade / escala | **medido (média de 3 sementes): −1,57% (700 peças) e −2,28% (1.050) contra o sparrow de hoje** | alta (3 sementes, ganhou nas 6 corridas) | médio | médio | **implementado e aprovado** acima de 500 peças |
 | P7 | Fase exata: contorno de verdade no sparrow e na trava | geometria | ~0,8% medido pela equipe; teto de 1–13% pelo LB_modelo | média | alto | médio | proposta |
 | P8 | Aproveitamento com área verdadeira | honestidade da métrica | número exibido sem viés de 0,3–12% por peça | alta | baixo | baixo (o número cai) | proposta |
 | P9 | Soma do relevo em i64 no WASM | robustez numérica | invariância por translação em qualquer K | alta (achado e localizado) | muito baixo | nenhum | proposta |
@@ -187,8 +187,18 @@ de P5.
   Todo encaixe emendado passou pela trava. A estimativa era ~2% contra ~0,7%; saiu
   melhor que isso no 1.050. **Implementado na produção** acima de 500 peças
   (`REGIOES_MINIMO_PECAS`, em `encaixeParalelo.js`), com regiões de ~175 peças e
-  os workers que sobram reforçando as regiões com outra semente. Falta repetir
-  com 3 sementes e a máquina livre.
+  os workers que sobram reforçando as regiões com outra semente.
+- **3 sementes** (1, 7920, 15839; `--sementes 2 --primeira 1` para as duas
+  últimas), regiões × hoje:
+
+  | peças | sementes | média | desvio | pior |
+  |---|---|---|---|---|
+  | 700 | −1,24 · −1,64 · −1,83% | **−1,57%** | 0,30 | −1,24% |
+  | 1.050 | −2,44 · −2,31 · −2,09% | **−2,28%** | 0,18 | −2,09% |
+
+  Ganhou nas 6 corridas, sempre com a trava limpa; a média fica 9× (700) e 22×
+  (1.050) acima do erro padrão. **Aprovada.** A máquina não estava exclusiva
+  (os dois braços de cada semente rodaram em seguida, sob a mesma carga).
 
 ## P7 — Fase exata
 

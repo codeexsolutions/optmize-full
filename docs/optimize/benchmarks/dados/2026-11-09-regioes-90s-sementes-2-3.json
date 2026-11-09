@@ -1,0 +1,61 @@
+{
+  "quando": "2026-11-09T18:59:34.758Z",
+  "opcoes": {
+    "vezes": [
+      4,
+      6
+    ],
+    "workers": 5,
+    "tempo": 90,
+    "busca": 20,
+    "sementes": 2,
+    "primeira": 1,
+    "json": "docs/optimize/benchmarks/dados/2026-11-09-regioes-90s-sementes-2-3.json"
+  },
+  "corridas": [
+    {
+      "vezes": 4,
+      "pecas": 700,
+      "semente": 7920,
+      "busca": 12927,
+      "hoje": 12855,
+      "regioes": 12643.6,
+      "regioesValido": true,
+      "regioesQueEncurtaram": 5,
+      "nRegioes": 5
+    },
+    {
+      "vezes": 4,
+      "pecas": 700,
+      "semente": 15839,
+      "busca": 13008,
+      "hoje": 12907.800000000001,
+      "regioes": 12671.6,
+      "regioesValido": true,
+      "regioesQueEncurtaram": 5,
+      "nRegioes": 5
+    },
+    {
+      "vezes": 6,
+      "pecas": 1050,
+      "semente": 7920,
+      "busca": 19542,
+      "hoje": 19495.4,
+      "regioes": 19045,
+      "regioesValido": true,
+      "regioesQueEncurtaram": 5,
+      "nRegioes": 5
+    },
+    {
+      "vezes": 6,
+      "pecas": 1050,
+      "semente": 15839,
+      "busca": 19542,
+      "hoje": 19467.600000000002,
+      "regioes": 19060.2,
+      "regioesValido": true,
+      "regioesQueEncurtaram": 5,
+      "nRegioes": 5
+    }
+  ]
+}
