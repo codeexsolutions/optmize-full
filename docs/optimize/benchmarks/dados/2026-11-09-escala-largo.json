@@ -1,0 +1,79 @@
+{
+  "quando": "2026-11-09T16:20:15.212Z",
+  "opcoes": {
+    "teste": "largo",
+    "tempo": 60,
+    "fatias": 3,
+    "sementes": 1,
+    "json": "docs/optimize/benchmarks/dados/2026-11-09-escala-largo.json",
+    "vezes": [
+      1,
+      2,
+      4,
+      6,
+      8
+    ]
+  },
+  "corridas": [
+    {
+      "teste": "largo",
+      "grade": "grade atual",
+      "semente": 1,
+      "pecas": 350,
+      "larguraTecido": 320,
+      "espaco": 0.4,
+      "comprimentoBancada": 0,
+      "passo": 0.32,
+      "raio": 1,
+      "folgaReal": 0.64,
+      "consumo": 3540.64,
+      "midia": 3540.64,
+      "aproveitamento": 0.8284366668173001,
+      "sobraram": 0,
+      "linhasDoRolo": 11065,
+      "encolhimento": {
+        "antes": 3581.6,
+        "depois": 3540.64,
+        "relatos": 54,
+        "rejeitados": 0,
+        "partiu": true,
+        "motivos": []
+      },
+      "paredeMs": 183175,
+      "guarda": {
+        "pares": 0,
+        "conferidas": 350
+      }
+    },
+    {
+      "teste": "largo",
+      "grade": "grade da folga pedida",
+      "semente": 1,
+      "pecas": 350,
+      "larguraTecido": 320,
+      "espaco": 0.4,
+      "comprimentoBancada": 0,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "consumo": 3480.4,
+      "midia": 3480.4,
+      "aproveitamento": 0.8410240202275611,
+      "sobraram": 0,
+      "linhasDoRolo": 17402,
+      "encolhimento": {
+        "antes": 3519.4,
+        "depois": 3480.4,
+        "relatos": 58,
+        "rejeitados": 0,
+        "partiu": true,
+        "motivos": []
+      },
+      "paredeMs": 188685,
+      "guarda": {
+        "pares": 0,
+        "conferidas": 350
+      }
+    }
+  ]
+}

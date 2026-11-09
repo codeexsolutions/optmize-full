@@ -1,0 +1,79 @@
+{
+  "quando": "2026-11-09T16:16:36.197Z",
+  "opcoes": {
+    "teste": "bancada",
+    "tempo": 60,
+    "fatias": 3,
+    "sementes": 1,
+    "json": "docs/optimize/benchmarks/dados/2026-11-09-escala-bancada.json",
+    "vezes": [
+      1,
+      2,
+      4,
+      6,
+      8
+    ]
+  },
+  "corridas": [
+    {
+      "teste": "bancada",
+      "semente": 1,
+      "pecas": 175,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "comprimentoBancada": 0,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "consumo": 3174.8,
+      "midia": 3174.8,
+      "aproveitamento": 0.8241156087428718,
+      "sobraram": 0,
+      "linhasDoRolo": 15874,
+      "encolhimento": {
+        "antes": 3242.4,
+        "depois": 3174.8,
+        "relatos": 84,
+        "rejeitados": 0,
+        "partiu": true,
+        "motivos": []
+      },
+      "paredeMs": 187450,
+      "guarda": {
+        "pares": 0,
+        "conferidas": 175
+      }
+    },
+    {
+      "teste": "bancada",
+      "semente": 1,
+      "pecas": 175,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "comprimentoBancada": 300,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "consumo": 3329,
+      "midia": 3294.2000000000003,
+      "aproveitamento": 0.7942451079584962,
+      "sobraram": 0,
+      "linhasDoRolo": 16645,
+      "encolhimento": {
+        "antes": 3329,
+        "depois": 3329,
+        "relatos": 0,
+        "rejeitados": 0,
+        "partiu": false,
+        "motivos": [
+          "bancada ligada"
+        ]
+      },
+      "paredeMs": 29756,
+      "guarda": {
+        "pares": 0,
+        "conferidas": 175
+      }
+    }
+  ]
+}

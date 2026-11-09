@@ -1,0 +1,211 @@
+{
+  "quando": "2026-11-09T15:53:30.998Z",
+  "opcoes": {
+    "tempo": 3,
+    "sementes": 3,
+    "fatias": 5,
+    "trabalhos": [
+      "camiseta+manga+gola",
+      "so-camiseta",
+      "calca-bolso",
+      "misturado-pequeno",
+      "giro-livre",
+      "tamanhos-extremos"
+    ],
+    "json": "docs/optimize/benchmarks/dados/2026-11-09-padrao-busca-3s.json",
+    "contra": null,
+    "meta": 0,
+    "wasm": true,
+    "rodadas": 1,
+    "espalharSemente": true,
+    "extra": {}
+  },
+  "trabalhos": {
+    "camiseta+manga+gola": {
+      "nome": "camiseta+manga+gola",
+      "consumo": 357.1666666666667,
+      "mediana": 357.5,
+      "melhor": 356.5,
+      "pior": 357.5,
+      "desvio": 0.4714045207910317,
+      "aproveitamento": 0.7362821984000104,
+      "tentativas": 270599,
+      "tentPorSegundo": 17988,
+      "sobraram": 0,
+      "receita": "contorno/solta/area/fundo/",
+      "pecas": 32,
+      "corridas": [
+        {
+          "consumo": 356.5,
+          "receita": "contorno/solta/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 357.5,
+          "receita": "contorno/solta/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 357.5,
+          "receita": "contorno/solta/area/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "so-camiseta": {
+      "nome": "so-camiseta",
+      "consumo": 279,
+      "mediana": 279,
+      "melhor": 279,
+      "pior": 279,
+      "desvio": 0,
+      "aproveitamento": 0.6961768219832735,
+      "tentativas": 589052,
+      "tentPorSegundo": 39253,
+      "sobraram": 0,
+      "receita": "contorno/solta/lado/fundo/",
+      "pecas": 12,
+      "corridas": [
+        {
+          "consumo": 279,
+          "receita": "contorno/solta/lado/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 279,
+          "receita": "contorno/solta/lado/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 279,
+          "receita": "contorno/solta/lado/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "calca-bolso": {
+      "nome": "calca-bolso",
+      "consumo": 228,
+      "mediana": 228,
+      "melhor": 228,
+      "pior": 228,
+      "desvio": 0,
+      "aproveitamento": 0.7737390350877194,
+      "tentativas": 232375,
+      "tentPorSegundo": 15483,
+      "sobraram": 0,
+      "receita": "contorno/dupla/area/fundo/",
+      "pecas": 24,
+      "corridas": [
+        {
+          "consumo": 228,
+          "receita": "contorno/dupla/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 228,
+          "receita": "contorno/dupla/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 228,
+          "receita": "contorno/dupla/area/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "misturado-pequeno": {
+      "nome": "misturado-pequeno",
+      "consumo": 218,
+      "mediana": 218.5,
+      "melhor": 217,
+      "pior": 218.5,
+      "desvio": 0.7071067811865476,
+      "aproveitamento": 0.7460934946060803,
+      "tentativas": 327945,
+      "tentPorSegundo": 21803,
+      "sobraram": 0,
+      "receita": "contorno/solta/altura/fundo/",
+      "pecas": 25,
+      "corridas": [
+        {
+          "consumo": 218.5,
+          "receita": "contorno/solta/altura/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 218.5,
+          "receita": "contorno/solta/altura/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 217,
+          "receita": "contorno/solta/lado/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "giro-livre": {
+      "nome": "giro-livre",
+      "consumo": 347.6666666666667,
+      "mediana": 348.5,
+      "melhor": 344.5,
+      "pior": 350,
+      "desvio": 2.321398046197353,
+      "aproveitamento": 0.7564336442141726,
+      "tentativas": 190370,
+      "tentPorSegundo": 12647,
+      "sobraram": 0,
+      "receita": "contorno/solta/area/fundo/",
+      "pecas": 32,
+      "corridas": [
+        {
+          "consumo": 348.5,
+          "receita": "contorno/solta/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 350,
+          "receita": "contorno/solta/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 344.5,
+          "receita": "contorno/solta/area/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "tamanhos-extremos": {
+      "nome": "tamanhos-extremos",
+      "consumo": 209,
+      "mediana": 209,
+      "melhor": 209,
+      "pior": 209,
+      "desvio": 0,
+      "aproveitamento": 0.805308014354067,
+      "tentativas": 149476,
+      "tentPorSegundo": 9957,
+      "sobraram": 0,
+      "receita": "contorno/dupla/area/fundo/",
+      "pecas": 48,
+      "corridas": [
+        {
+          "consumo": 209,
+          "receita": "contorno/dupla/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 209,
+          "receita": "contorno/dupla/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 209,
+          "receita": "contorno/dupla/area/fundo/",
+          "encolhimento": null
+        }
+      ]
+    }
+  }
+}
