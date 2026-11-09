@@ -37,6 +37,23 @@ import {
 import {
   ENCOLHER_MINIMO_MS, ENCOLHER_RESERVA_MS, motivoDoTrabalho, motivoParaNaoEncolher, tempoDaBusca,
 } from "./encaixeEncolher";
+import { consumoDoFundo } from "./encaixeMotor";
+import { acharSobreposicao } from "./encaixeSobreposicao";
+import { emendarRegioes, encaixeDaRegiao, partirEmRegioes } from "./encaixeRegioes";
+
+/*
+ * O SPARROW POR REGIÕES (P11, docs/optimize/research/PROPOSTAS.md).
+ *
+ * Em trabalho grande, em vez de todos os workers compactarem o rolo inteiro
+ * com sementes diferentes, cada worker compacta uma REGIÃO do rolo, e as
+ * regiões são emendadas no fim. Medido (bancada/conferir-regioes.js, 5
+ * workers × 90 s, mesma partida): 700 peças, −2,42% contra −1,19% do jeito de
+ * antes. Abaixo do limiar fica o jeito de antes, que não foi medido contra
+ * este em trabalho pequeno. `config.encolherPorRegioes === false` desliga.
+ */
+export const REGIOES_MINIMO_PECAS = 500;
+/** Quantas peças por região, de alvo (a bancada mediu 140 e 210, os dois rendendo). */
+export const REGIOES_PECAS_POR_REGIAO = 175;
 
 // Um núcleo fica de fora para a tela continuar respondendo (é ela que desenha
 // a barra de progresso e escuta o botão de parar). O teto de 8 é para não
@@ -414,9 +431,20 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
   let parouNaMao = false;
   let matouAlguem = false;
   let falhaGeral = null;
+  // Por regiões: o pedaço de partida de cada região e qual worker cuida dela.
+  let regioes = null;
+  /** O rolo inteiro de agora: cada região com o melhor que o worker dela mandou. */
+  const emendado = () => emendarRegioes(regioes.pedacos.map((pedaco, r) => {
+    // O melhor que algum dos workers desta região mandou.
+    let melhor = pedaco;
+    regioes.doWorker.forEach((regiao, k) => {
+      if (regiao === r && ultimos[k] && ultimos[k].consumo < melhor.consumo) melhor = ultimos[k];
+    });
+    return melhor;
+  }), config.passo, config, consumoDoFundo);
 
-  const melhorAgora = () => ultimos.reduce(
-    (menor, r) => (r && r.consumo < menor ? r.consumo : menor), base.consumo);
+  const melhorAgora = () => (regioes ? Math.min(base.consumo, emendado().consumo) : ultimos.reduce(
+    (menor, r) => (r && r.consumo < menor ? r.consumo : menor), base.consumo));
   const relatar = () => {
     if (!config.aoProgredir) return;
     config.aoProgredir({
@@ -489,7 +517,26 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
       falhaGeral = "encolhedor indisponível";
     }
 
-    // 2) Cada worker encolhe com a sua semente.
+    // Por regiões (ver REGIOES_MINIMO_PECAS): uma região por worker apto.
+    const quantosAptos = aptos.filter(Boolean).length;
+    if (config.encolherPorRegioes !== false && itens.length >= REGIOES_MINIMO_PECAS && quantosAptos >= 2) {
+      // Regiões de ~175 peças (o tamanho em que o sparrow rendeu na bancada);
+      // região pequena demais perde na emenda. Os workers que sobram reforçam
+      // as regiões com outra semente, e fica o melhor de cada uma.
+      const quantas = Math.max(2, Math.min(quantosAptos, Math.round(itens.length / REGIOES_PECAS_POR_REGIAO)));
+      const pedacos = partirEmRegioes(base, quantas);
+      regioes = {
+        pedacos: pedacos.map((p) => encaixeDaRegiao(p, config.passo, config, consumoDoFundo)),
+        doWorker: new Array(workers.length).fill(-1),
+      };
+      let proximo = 0;
+      workers.forEach((_, k) => {
+        if (!aptos[k]) return;
+        regioes.doWorker[k] = proximo % regioes.pedacos.length;
+        proximo++;
+      });
+    }
+    // 2) Cada worker encolhe com a sua semente (ou a sua região).
     const partida = partidaParaWorker(base);
     const configDoSparrow = {
       larguraTecido: config.larguraTecido,
@@ -504,7 +551,8 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
     };
     const rodadas = workers.map((w, k) => new Promise((pronto) => {
       encerrar[k] = pronto;
-      if (parouNaMao || falhaGeral || !aptos[k]) { respondeu[k] = true; pronto(); return; }
+      const regiao = regioes ? regioes.doWorker[k] : -1;
+      if (parouNaMao || falhaGeral || !aptos[k] || (regioes && regiao < 0)) { respondeu[k] = true; pronto(); return; }
       const aoResponder = (evento) => {
         const msg = evento.data;
         if (!msg) return;
@@ -514,6 +562,14 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
           return;
         }
         if (msg.tipo === "encolhido") {
+          if (regioes) {
+            // Uma região encurtou: a mesa recebe o rolo inteiro, emendado.
+            devolverAsPecas(msg.resultado, itens);
+            ultimos[k] = msg.resultado;
+            relatar();
+            if (config.aoDesenhar) config.aoDesenhar("recorde", emendado());
+            return;
+          }
           ultimos[k] = msg.resultado;
           relatar();
           // O rolo mais curto vai para a mesa como recorde: nesta fase não há
@@ -537,7 +593,10 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
         pronto();
       }, { once: true });
       w.postMessage({
-        tipo: "encolher", k, partida, config: configDoSparrow,
+        tipo: "encolher", k,
+        partida: regioes ? partidaParaWorker(regioes.pedacos[regiao]) : partida,
+        soDaPartida: Boolean(regioes),
+        config: configDoSparrow,
         semente: sementeDaFatia(config.semente, k),
       });
     }));
@@ -561,7 +620,22 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
   };
 
   let campeao = null;
-  ultimos.forEach((r) => { if (r && (!campeao || r.consumo < campeao.consumo)) campeao = r; });
+  if (regioes) {
+    // As regiões emendadas só valem inteiras e conferidas: todas as peças, uma
+    // vez cada, e a trava da produção sem par nenhum.
+    info.regioes = regioes.pedacos.length;
+    const junto = emendado();
+    const guarda = acharSobreposicao(junto.posicoes);
+    const todas = new Set(junto.posicoes.map((p) => `${p.item.indice}#${p.item.copia}`));
+    if (guarda.pares === 0 && guarda.conferidas === junto.posicoes.length
+        && junto.posicoes.length === base.posicoes.length && todas.size === base.posicoes.length) {
+      campeao = junto;
+    } else {
+      console.warn("[encaixe] as regiões emendadas não passaram na trava; fica o encaixe da busca.");
+    }
+  } else {
+    ultimos.forEach((r) => { if (r && (!campeao || r.consumo < campeao.consumo)) campeao = r; });
+  }
   if (!campeao || !(campeao.consumo < base.consumo - 1e-9)) {
     const motivoDeUm = estados.find((e) => e && e.motivo);
     base.encolhimento = {

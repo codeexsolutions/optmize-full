@@ -260,7 +260,10 @@ self.onmessage = async (evento) => {
         return { ...p, item, mascara: item && item.mascaras ? item.mascaras.rotacoes[p.rot] : null };
       });
       const partida = { posicoes, naoEncaixadas: [], consumo: msg.partida.consumo };
-      const saida = encolherEncaixe(itens, partida, msg.config, {
+      // Por regiões (ver encaixeRegioes.js), este worker compacta só um pedaço
+      // do rolo: as peças dele são as da partida, e não o trabalho inteiro.
+      const doTrabalho = msg.soDaPartida ? posicoes.map((p) => p.item) : itens;
+      const saida = encolherEncaixe(doTrabalho, partida, msg.config, {
         tempoMs: msg.config.tempoMs,
         semente: msg.semente,
         trabalhadores: msg.config.trabalhadores,
