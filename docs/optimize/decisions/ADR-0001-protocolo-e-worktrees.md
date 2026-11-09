@@ -17,7 +17,7 @@ repositório é público.
 2. A troca entre os agentes é por **documento versionado** em
    `docs/optimize/handoffs/` e por commits nas branches. Nada de supor que o
    outro leu a conversa.
-3. Toda mudança no motor segue o protocolo do `docs/optimize/README.md`:
+3. Toda mudança no motor segue o protocolo do `docs/optimize/README-CLAUDE.md`:
    hipótese → teste que refuta → protótipo atrás de ajuste → bancada contra a
    referência → revisão do outro agente → decisão registrada.
 4. Nenhum agente faz merge na `main` nem push sem o dono pedir.

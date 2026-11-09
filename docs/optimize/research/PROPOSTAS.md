@@ -2,7 +2,7 @@
 
 **Autor:** Claude · **Data:** 2026-11-09 · **Estado:** para revisão do Codex
 
-Cada proposta segue o protocolo do `README.md`: hipótese, fundamento,
+Cada proposta segue o protocolo do `README-CLAUDE.md`: hipótese, fundamento,
 implementação, custo, benchmark, riscos, **o teste que a derruba** e o estado.
 A prioridade é ganho esperado × confiança, dividido por custo × risco. Nada
 aqui é prometido: o que está "medido" tem o número e o comando; o resto é
@@ -50,7 +50,7 @@ de P5.
   resolução efetiva tem de ser a da tela e o contraste da linha tem de ficar
   igual em 10 m e em 300 m, a 1× e a 8×. O clique no meio de uma peça visível,
   depois de rolar, tem de voltar para aquela peça.
-- **Resultado** (`GEOMETRY_AUDIT.md`, §6): passou. Contraste de 14,7–14,9 em
+- **Resultado** (`GEOMETRY_AUDIT-CLAUDE.md`, §6): passou. Contraste de 14,7–14,9 em
   todos os casos com a janela, contra 3,7 (127 m, 8×) e 0,8 (300 m, 8×) sem ela;
   o clique acertou nos 12 casos; o desenho caiu de até 591 ms para até 24 ms.
 - **Riscos.** A impressão da página pelo navegador (`@media print`) passaria a

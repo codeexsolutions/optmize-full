@@ -61,14 +61,22 @@ decisão ADR-0003 ser tomada, toda medição que queira falar da loja passa
 | `node bancada/medir.js --tempo 3 --sementes 3 --extra motores=contorno+vaos+faixas` | consumo final por trabalho (protocolo histórico da bancada) |
 | `node bancada/curva-no-tempo.js --trabalhos producao-avulsa --tempo 120 --extra motores=contorno+vaos+faixas` | a curva no tempo: primeira solução, fim da busca, melhor solução, consumo em cada marco |
 | `node bancada/auditar-geometria.js` | o que a grade faz com cada peça, a folga real por largura de tecido e os limites inferiores de consumo |
-| `node bancada/conferir-escala.js --teste rolo\|bancada\|largo` | as hipóteses de material grande (ver `research/GEOMETRY_AUDIT.md`) |
+| `node bancada/conferir-escala.js --teste rolo\|bancada\|largo` | as hipóteses de material grande (ver `research/GEOMETRY_AUDIT-CLAUDE.md`) |
+| `node bancada/conferir-invariancia.js` | o encaixe começando longe no rolo sai igual, só deslocado (JS e WASM) |
+| `bancada/janela-do-risco.html` (pelo Vite) | o desenho do risco medido no navegador: resolução, contraste da linha, clique |
 
-## Os documentos
+## Os documentos (os do Claude levam o sufixo `-CLAUDE`)
 
-- `research/ARCHITECTURE_AUDIT.md` — o que o motor é, de verdade, hoje.
-- `research/GEOMETRY_AUDIT.md` — representação, precisão e o diagnóstico dos materiais grandes.
+O Codex escreveu, em paralelo e no checkout principal, documentos com os
+mesmos nomes da missão (`README.md`, `ARCHITECTURE_AUDIT.md`…). Para os dois
+conjuntos conviverem sem um apagar o outro no merge, os do Claude levam
+`-CLAUDE` no nome.
+
+- `research/ARCHITECTURE_AUDIT-CLAUDE.md` — o que o motor é, de verdade, hoje.
+- `research/GEOMETRY_AUDIT-CLAUDE.md` — representação, precisão e o diagnóstico dos materiais grandes.
 - `research/FORMALIZACAO.md` — o problema escrito em matemática, e o que o motor resolve de fato.
 - `research/PROPOSTAS.md` — a matriz de decisão e as hipóteses priorizadas, cada uma com o teste que a derruba.
-- `benchmarks/PERFORMANCE_BASELINE.md` — a referência medida, com comandos para repetir.
-- `decisions/` — os registros de decisão (ADR).
-- `handoffs/` — as passagens de bastão entre os agentes.
+- `benchmarks/PERFORMANCE_BASELINE-CLAUDE.md` — a referência medida, com comandos para repetir.
+- `decisions/` — os registros de decisão (ADR-0001 a 0003; os do Codex são `001-…`).
+- `handoffs/2026-11-09-claude-para-codex.md` — o que o Codex precisa saber do trabalho do Claude.
+- `handoffs/2026-11-09-revisao-claude-do-codex.md` — a revisão do Claude sobre o trabalho do Codex.

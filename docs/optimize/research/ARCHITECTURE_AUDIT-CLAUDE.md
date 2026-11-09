@@ -67,7 +67,7 @@ silhueta desligam o sparrow**.
 - **Grade.** `grade(larguraTecido, espaco)` (`encaixeMascara.js:185`) escolhe
   o passo para metade da folga caber num número inteiro de células, com teto
   `clamp(W/300, 0,2, 1)` e **piso `W/1000`**. Abaixo do piso, a folga sai maior
-  que a pedida. O efeito disso em tecido largo está no `GEOMETRY_AUDIT.md`, §4.1.
+  que a pedida. O efeito disso em tecido largo está no `GEOMETRY_AUDIT-CLAUDE.md`, §4.1.
 - **Silhueta.** Arte: pixel com alfa ≥ 8 (`ALFA_PECA`). Vetor (Corel e bancada):
   `rasterizarPoligono` marca **toda célula que o contorno toca**, ou seja, uma
   aproximação por fora (`encaixeMascara.js:593`).
@@ -208,7 +208,7 @@ com peça faltando, o sparrow conta as peças), mas não um verificador único.
   **inteiro** num canvas só, deitado. Quando o canvas passa do teto do Chrome
   (64.000 px de lado, 16.000² de área), `resolucaoQueCabe` (`:304`) **baixa a
   resolução do desenho inteiro**. O rascunho ao vivo da busca já desenha só a
-  janela visível. O efeito em rolo longo está no `GEOMETRY_AUDIT.md`, §4.2.
+  janela visível. O efeito em rolo longo está no `GEOMETRY_AUDIT-CLAUDE.md`, §4.2.
 - **PDF:** página no tamanho real, sem `/UserUnit`, mesmo acima de 200
   polegadas. É uma decisão consciente, porque o RIP da produção ignora o
   campo (`encaixe-pdf.js:36`). Com bancada, sai uma página por bancada.
@@ -241,11 +241,11 @@ com peça faltando, o sparrow conta as peças), mas não um verificador único.
    outra coisa. Proposta: ADR-0003.
 2. **Pegada coluna-convexa.** A cava e qualquer vão vertical dentro de uma
    coluna viram área cheia, nas duas fases. Medido: +8,6% na camiseta, +7,9% na
-   regata (`GEOMETRY_AUDIT.md`, §2).
+   regata (`GEOMETRY_AUDIT-CLAUDE.md`, §2).
 3. **Precisão presa à largura do tecido.** O piso `W/1000` faz a folga real
    crescer com a largura: 4 mm viram 6,4 mm em 320 cm.
 4. **Escala no comprimento:** o sparrow em f32, o sparrow desligado com
-   bancada e o desenho da tela (ver o diagnóstico no `GEOMETRY_AUDIT.md`).
+   bancada e o desenho da tela (ver o diagnóstico no `GEOMETRY_AUDIT-CLAUDE.md`).
 5. **Aproveitamento exibido com área de grade.** Em vetor, a área da máscara
    passa a área verdadeira em 0,3% a 12% por peça. O número mostrado sai otimista.
 6. **Memória coletiva sem consentimento visível.** Só números saem, mas não há

@@ -5,12 +5,16 @@ a partir de `7017c91` (`Pedro`). Nada foi mergeado nem enviado.
 
 ## Leia nesta ordem
 
-1. `docs/optimize/README.md` — protocolo, papéis e **a regra do portfólio**
+1. `docs/optimize/README-CLAUDE.md` — protocolo, papéis e **a regra do portfólio**
    (meça com `--extra motores=contorno+vaos+faixas`).
-2. `research/ARCHITECTURE_AUDIT.md` — o motor como ele é.
-3. `research/GEOMETRY_AUDIT.md` — representação, precisão e materiais grandes.
+2. `research/ARCHITECTURE_AUDIT-CLAUDE.md` — o motor como ele é.
+3. `research/GEOMETRY_AUDIT-CLAUDE.md` — representação, precisão e materiais grandes.
 4. `research/PROPOSTAS.md` — o que eu proponho, com o teste que derruba cada item.
-5. `benchmarks/PERFORMANCE_BASELINE.md` — a referência medida.
+5. `benchmarks/PERFORMANCE_BASELINE-CLAUDE.md` — a referência medida.
+6. `handoffs/2026-11-09-revisao-claude-do-codex.md` — **a minha revisão do seu
+   trabalho** (área e colisão aprovadas; o polimento que deixou de rodar; a cota
+   de i32 que não cobre o WASM; o validador que falha fechado), e a resposta à
+   sua pendência da fixture de material grande.
 
 ## O que eu fiz
 
@@ -61,7 +65,7 @@ a partir de `7017c91` (`Pedro`). Nada foi mergeado nem enviado.
    com 3 a 5, com a máquina livre, antes de qualquer decisão.
 4. **P1** — revise a janela do risco no código (o `sticky` dentro da célula da
    grade e a conta da `origem`). O teste no navegador está descrito no
-   `GEOMETRY_AUDIT.md`.
+   `GEOMETRY_AUDIT-CLAUDE.md`.
 5. **A divisão do tempo entre busca e sparrow** (15%, de 3 s a 20 s): a curva
    no tempo mostra onde cada fase rende. Vale medir por tamanho de trabalho.
 

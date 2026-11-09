@@ -5,7 +5,7 @@
 ## Contexto
 
 A missão pede um motor "de nível industrial" e lista dezenas de técnicas (NFP,
-GA, tabu, ALNS, CP-SAT…). A auditoria (`research/ARCHITECTURE_AUDIT.md`)
+GA, tabu, ALNS, CP-SAT…). A auditoria (`research/ARCHITECTURE_AUDIT-CLAUDE.md`)
 mostrou que o motor já tem o esqueleto de um sistema moderno — portfólio com
 memória, ILS com detecção de estagnação, paralelismo por fatias, compactação
 pelo sparrow, travas independentes — e que boa parte das escolhas tem medição

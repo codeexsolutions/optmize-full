@@ -6,12 +6,23 @@
 
 - **Máquina:** AMD Ryzen 5 5600X (6 núcleos / 12 threads), 17 GB, Windows 11,
   Node v24.18.0, WASM ligado.
-- **Concorrência:** as corridas rodaram em fila, uma de cada vez. A máquina não
-  ficou exclusiva: em momentos curtos rodaram também tarefas leves minhas (a
-  auditoria de geometria, ~1 s; o teste de invariância, ~10 s; `tsc` e esbuild,
-  ~30 s ao todo). O efeito esperado é pequeno perto do ruído documentado da
-  bancada (0,23% de soma entre corridas iguais), mas a Codex deve repetir com a
-  máquina livre antes de usar estes números para decidir alguma coisa.
+- **Concorrência — A MÁQUINA NÃO ESTAVA LIVRE.** As minhas corridas rodaram em
+  fila, uma de cada vez, mas:
+  - **o Codex trabalhou no checkout principal no mesmo período** (arquivos dele
+    com horário entre 13:07 e 13:35, inclusive bancadas, build e testes da
+    API). Isso se sobrepõe aos testes de escala (`rolo`, 13:05–13:16),
+    `bancada` (13:16–13:20), `largo` (13:20–13:26) e ao começo da curva de
+    300 s (13:26–13:51). No `largo`, as duas grades rodaram uma depois da outra,
+    então a disputa pode ter pesado mais num braço que no outro;
+  - havia servidores de desenvolvimento de outros projetos abertos (Next com
+    turbopack, Vite, `tsx watch`) e o Optimize instalado rodando;
+  - rodaram também tarefas curtas minhas (auditoria de geometria, ~1 s; teste de
+    invariância, ~10 s; `tsc` e esbuild, ~30 s).
+  
+  Os sinais grandes (o portfólio, o sparrow que zera, a bancada, a linha do
+  desenho) ficam muito acima disso. **Os de 1 semente (−1,70% do rolo largo,
+  +3,76% da bancada) precisam ser repetidos com a máquina livre e 3 a 5
+  sementes antes de qualquer decisão.**
 - **Dados brutos:** `docs/optimize/benchmarks/dados/2026-11-09-*.json`. (O log
   da fila, `2026-11-09-corrida.log`, fica só na máquina: o `.gitignore` ignora
   `*.log`. Tudo o que ele mostra está nos JSON.)

@@ -2,7 +2,7 @@
 /**
  * ===========================================================================
  * O MOTOR NOS MATERIAIS GRANDES — três hipóteses, cada uma com o teste que
- * pode derrubá-la (docs/optimize/research/GEOMETRY_AUDIT.md)
+ * pode derrubá-la (docs/optimize/research/GEOMETRY_AUDIT-CLAUDE.md)
  * ===========================================================================
  *
  *   rolo     H-ESC-1: o sparrow perde efeito quando o rolo fica longo. Ele

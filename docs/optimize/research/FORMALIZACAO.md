@@ -62,7 +62,7 @@ $$\eta = \frac{\sum_{i} q_i\,A(P_i)}{W \cdot M}$$
 
 com $A(P_i)$ a área **verdadeira** da silhueta. O código usa a área da máscara
 na grade (`areaReal`), que em vetor passa a verdadeira em 0,3% a 12% por peça
-(ver o `GEOMETRY_AUDIT.md`, §2). Proposta: relatar $\eta$ com a área
+(ver o `GEOMETRY_AUDIT-CLAUDE.md`, §2). Proposta: relatar $\eta$ com a área
 verdadeira, a da arte em resolução cheia (cobertura de alfa) ou a do polígono.
 
 ## 2. As três famílias de problema
