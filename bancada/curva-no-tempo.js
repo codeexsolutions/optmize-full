@@ -101,10 +101,14 @@ async function medirUmaVez(motor, trabalho, semente, o) {
   const tempoMs = o.tempo * 1000;
   const tempoBusca = o.encolher ? Math.min(tempoMs, motor.tempoDaBusca(tempoMs)) : tempoMs;
 
+  // Onde a busca acabou de fato: a fatia mais lenta (na produção elas rodam
+  // juntas, e o sparrow começa quando a última termina).
+  let fimDaBusca = 0;
   motor.buscarMelhorEncaixe = async (itens, config) => {
     const t0 = Date.now();
     const curva = [];
     curvasDaBusca.push(curva);
+    const fim = () => { fimDaBusca = Math.max(fimDaBusca, Date.now() - t0); };
     return original.busca(itens, {
       ...config,
       aoDesenhar: (tipo, r) => {
@@ -114,7 +118,7 @@ async function medirUmaVez(motor, trabalho, semente, o) {
           curva.push({ t: Date.now() - t0, consumo: r.consumo, fase: "busca" });
         }
       },
-    });
+    }).then((r) => { fim(); return r; });
   };
   motor.encolherEncaixe = (itens, base, config, opcoes = {}) => {
     const t0 = Date.now();
@@ -123,7 +127,8 @@ async function medirUmaVez(motor, trabalho, semente, o) {
     return original.encolher(itens, base, config, {
       ...opcoes,
       aoMelhorar: (novo) => {
-        curva.push({ t: tempoBusca + (Date.now() - t0), consumo: novo.consumo, fase: "sparrow" });
+        // O sparrow começa quando a busca acabou de fato (ver `fimDaBusca`).
+        curva.push({ t: Math.min(tempoBusca, fimDaBusca) + (Date.now() - t0), consumo: novo.consumo, fase: "sparrow" });
         if (opcoes.aoMelhorar) opcoes.aoMelhorar(novo);
       },
     });
@@ -159,7 +164,7 @@ async function medirUmaVez(motor, trabalho, semente, o) {
     sobraram: r.sobraram,
     receita: r.receita,
     tentativas: r.tentativas,
-    tempoBuscaMs: tempoBusca,
+    tempoBuscaMs: Math.min(tempoBusca, fimDaBusca),
     primeira: primeira && { t: primeira.t, consumo: primeira.consumo },
     melhor: ultima && { t: ultima.t, consumo: ultima.consumo, fase: ultima.fase },
     fimDaBusca: noInstante(curva, tempoBusca),

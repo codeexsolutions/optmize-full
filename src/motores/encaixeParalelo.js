@@ -327,6 +327,22 @@ export async function buscarMelhorEncaixeEmParalelo(itens, config) {
     tempoMaximoMs: tempoBusca,
     // O "desistir por empacar" acompanha o tempo desta fase, e não o total.
     msSemGanho: Math.max(800, tempoBusca * 0.25),
+    /*
+     * A BUSCA PARA QUANDO EMPACA (2026-11-09), e o sparrow fica com o resto.
+     *
+     * Medido na curva do `producao-avulsa` (bancada/curva-no-tempo.js): a
+     * busca chega ao melhor dela em 1,5 s e fica parada até os 20 s da fase,
+     * enquanto o sparrow, que é quem ainda compra tecido, espera. Parando no
+     * empacar, o sparrow começa mais cedo e o mesmo tecido sai antes. O tempo
+     * que sobra vai inteiro para ele (`resto`, logo abaixo).
+     *
+     * MEDIDO E DESLIGADO POR PADRÃO (1 semente, 60 s): no camiseta+manga+gola
+     * o mesmo tecido saiu 5 s antes; no producao-avulsa a curva ficou ora na
+     * frente, ora atrás, e o final empatou (31,768 contra 31,760 m). Não basta
+     * para trocar o padrão. Liga com `config.buscaParaNoEmpacar` (na bancada,
+     * `--extra buscaParaNoEmpacar=true`) para remedir com mais sementes.
+     */
+    pararAoEmpacar: config.buscaParaNoEmpacar === true,
   });
   if (!base) return base;
 
