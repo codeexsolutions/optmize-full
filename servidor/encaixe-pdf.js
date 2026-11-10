@@ -258,9 +258,10 @@ function esquecerPreparada(guardadas, chave) {
  */
 function cacheDaArte(guardadas, chave) {
   return {
-    ler() {
+    ler(lado = null) {
       const pronta = guardadas.preparadas.get(chave);
-      if (!pronta) return null;
+      // Preparada para outro tamanho (ver "O PDF LEVA ATÉ 200 DPI"): refaz.
+      if (!pronta || (pronta.lado ?? null) !== (lado ?? null)) return null;
       try {
         return {
           ...pronta.forma,
@@ -272,7 +273,7 @@ function cacheDaArte(guardadas, chave) {
         return null;
       }
     },
-    gravar({ cor, alfa }) {
+    gravar({ cor, alfa, lado = null }) {
       const base = path.join(guardadas.pasta, `pronta-${crypto.randomBytes(6).toString("hex")}`);
       const arquivos = [`${base}.cor`];
       try {
@@ -286,6 +287,7 @@ function cacheDaArte(guardadas, chave) {
       }
       esquecerPreparada(guardadas, chave);
       guardadas.preparadas.set(chave, {
+        lado,
         arquivos,
         forma: {
           cor: { largura: cor.largura, altura: cor.altura, dados: cor.dados },
@@ -367,6 +369,53 @@ const zlib = require("zlib");
  * confirmado lendo DeviceCMYK como esperado, o padrão (sRGB) é o seguro.
  */
 const PRESERVAR_CMYK = process.env.OPTMIZE_PDF_CMYK === "1";
+
+/*
+ * ===========================================================================
+ * O PDF LEVA ATÉ 200 DPI NO TAMANHO IMPRESSO (2026-11-09)
+ * ===========================================================================
+ *
+ * "Os PDFs estão tão pesados que está demorando na ripagem." A arte da
+ * produção chega a 300 dpi no tamanho real (uma costa: 6499x8742, 57 MP) e o
+ * PDF levava cada pixel. Em bytes isso nem pesa tanto, porque Flate em arte
+ * chapada comprime bem, mas o RIP tem de abrir ~170 MB de pixels por arte, e
+ * o tempo da ripagem cresce com os PIXELS, não com o tamanho do arquivo.
+ *
+ * Agora a arte que passa de 200 dpi no tamanho em que foi posta no rolo desce
+ * para 200 dpi (2,25x menos pixels), com Lanczos3, o filtro de maior
+ * qualidade do sharp. No tecido não se vê a diferença. O dono pediu que a
+ * qualidade não mudasse, por isso o limite é 200 e não 150.
+ *
+ *   - Arte que já está abaixo do limite NUNCA aumenta e vai intocada.
+ *   - Até 10% acima do limite (`FOLGA_DO_DPI`) também vai intocada: reduzir
+ *     220 dpi para 200 não ganha nada e mexe na imagem.
+ *   - O vetor (PDF de arte) não tem pixel e não é tocado.
+ *   - A cor não muda: a redução acontece na mesma leitura que converte o
+ *     perfil (ver "A ARTE CHEGA COMO VEIO").
+ *
+ * `OPTMIZE_PDF_DPI` troca o limite (ex.: 150, ou 300). Com 0, o PDF leva a
+ * arte inteira, como era antes.
+ */
+const DPI_MAXIMO = (() => {
+  const valor = Number(process.env.OPTMIZE_PDF_DPI);
+  return process.env.OPTMIZE_PDF_DPI !== undefined && Number.isFinite(valor) && valor >= 0 ? valor : 200;
+})();
+const FOLGA_DO_DPI = 1.1;
+
+/**
+ * O maior lado, em pixels, para o qual a arte deve descer, ou `null` quando
+ * ela já cabe (ou quando não há limite). O giro de EXIF não importa aqui: o
+ * maior lado é o mesmo de pé ou deitado.
+ */
+function ladoParaReduzir(meta, lado) {
+  if (!lado || !(meta.width > 0) || !(meta.height > 0)) return null;
+  return Math.max(meta.width, meta.height) > lado * FOLGA_DO_DPI ? lado : null;
+}
+
+/** Põe a redução no cano do sharp, se houver uma. Nunca aumenta. */
+function reduzir(cano, lado) {
+  return lado ? cano.resize(lado, lado, { fit: "inside", withoutEnlargement: true, kernel: "lanczos3" }) : cano;
+}
 
 const ASSINATURA_PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
@@ -564,9 +613,11 @@ async function canalCru(pixels, largura, altura, cores) {
  * `transparente` diz se algum pixel tem alfa abaixo de 255 — se a máscara
  * esconde alguma coisa.
  */
-async function pixelsDaArte(bytes, meta) {
+async function pixelsDaArte(bytes, meta, lado = null) {
   const cinza = meta.space === "b-w" || meta.space === "grey16";
-  const abrir = () => sharp(bytes, { limitInputPixels: false }).autoOrient();
+  // A redução (ver "O PDF LEVA ATÉ 200 DPI") entra na mesma leitura: a cor e o
+  // alfa saem do mesmo tamanho nos dois caminhos.
+  const abrir = () => reduzir(sharp(bytes, { limitInputPixels: false }).autoOrient(), lado);
   const cru = (s) => s.raw({ depth: "uchar" }).toBuffer({ resolveWithObject: true });
 
   if (!meta.hasAlpha) {
@@ -683,8 +734,8 @@ function jpegSequencial(bytes) {
  */
 
 /** A cor da arte, sem alfa: em sRGB (padrão) ou CMYK cru (Nível 2). */
-async function corDaArte(bytes, cmyk) {
-  const cano = sharp(bytes, { limitInputPixels: false }).autoOrient().removeAlpha();
+async function corDaArte(bytes, cmyk, lado = null) {
+  const cano = reduzir(sharp(bytes, { limitInputPixels: false }).autoOrient().removeAlpha(), lado);
   const { data, info } = await cano
     .toColourspace(cmyk ? "cmyk" : "srgb")
     .raw({ depth: "uchar" })
@@ -715,10 +766,11 @@ function jpegCmykDireto(meta, bytes) {
  * recorte que a tela mandou, e os dois viram cor + /SMask. Sem cache de sessão:
  * o resultado depende também do recorte, e correção vem antes de reaproveitar.
  */
-async function abrirImagemComRecorte(doc, bytes, recorteBytes) {
+async function abrirImagemComRecorte(doc, bytes, recorteBytes, ladoMaximo = null) {
   const meta = await sharp(bytes, { limitInputPixels: false }).metadata();
   const cmyk = PRESERVAR_CMYK && meta.space === "cmyk";
-  const { cor, width, height, cores } = await corDaArte(bytes, cmyk);
+  // O recorte acompanha o tamanho da cor sozinho (`recorteCru` redimensiona).
+  const { cor, width, height, cores } = await corDaArte(bytes, cmyk, ladoParaReduzir(meta, ladoMaximo));
   const alfa = await recorteCru(recorteBytes, width, height);
   const [canalCor, canalAlfa] = await Promise.all([
     canalCru(cor, width, height, cores),
@@ -733,29 +785,32 @@ async function abrirImagemComRecorte(doc, bytes, recorteBytes) {
  * Sempre de pé, como o arquivo é visto (o EXIF vale); o giro do encaixe é de
  * quem desenha (`desenharImagem`).
  */
-async function abrirImagem(doc, bytes, cache, recorteBytes) {
+async function abrirImagem(doc, bytes, cache, recorteBytes, ladoMaximo = null) {
   // Com recorte, a cor e o alfa vêm de caminhos separados (ver acima).
-  if (recorteBytes) return abrirImagemComRecorte(doc, bytes, recorteBytes);
+  if (recorteBytes) return abrirImagemComRecorte(doc, bytes, recorteBytes, ladoMaximo);
 
-  // Já preparada numa exportação anterior desta sessão: só ler do disco.
-  const pronta = cache && cache.ler();
+  // Já preparada numa exportação anterior desta sessão, NO MESMO TAMANHO: só
+  // ler do disco. A mesma arte posta maior pede outra redução.
+  const pronta = cache && cache.ler(ladoMaximo);
   if (pronta) return imagemDoPdf(doc, pronta.cor, pronta.alfa);
 
   const meta = await sharp(bytes, { limitInputPixels: false }).metadata();
+  // Ver "O PDF LEVA ATÉ 200 DPI": a arte grande demais não passa direto, desce.
+  const lado = ladoParaReduzir(meta, ladoMaximo);
 
   // NÍVEL 2: o JPEG CMYK vai byte a byte, como CMYK (ver `PRESERVAR_CMYK`).
-  if (PRESERVAR_CMYK && jpegCmykDireto(meta, bytes)) {
+  if (PRESERVAR_CMYK && !lado && jpegCmykDireto(meta, bytes)) {
     return doc.openImage(bytes);
   }
 
-  if (meta.format === "jpeg" && !meta.isProgressive
+  if (!lado && meta.format === "jpeg" && !meta.isProgressive
     && (meta.channels === 3 || meta.channels === 1)
     && (!meta.orientation || meta.orientation === 1)
     && perfilJaESrgb(meta.icc) && jpegSequencial(bytes)) {
     return doc.openImage(bytes);
   }
 
-  const px = await pixelsDaArte(bytes, meta);
+  const px = await pixelsDaArte(bytes, meta, lado);
   if (px.cores !== 1 && px.cores !== 3) {
     throw new Error(`a arte saiu com ${px.cores} canais de cor`);
   }
@@ -765,7 +820,7 @@ async function abrirImagem(doc, bytes, cache, recorteBytes) {
     canalCru(px.cor, px.width, px.height, px.cores),
     px.transparente ? canalCru(px.alfa, px.width, px.height, 1) : null,
   ]);
-  if (cache) cache.gravar({ cor, alfa });
+  if (cache) cache.gravar({ cor, alfa, lado: ladoMaximo });
   return imagemDoPdf(doc, cor, alfa);
 }
 
@@ -1007,10 +1062,11 @@ function desenharImagem(doc, imagem, giro, x, y, w, h) {
 }
 
 /** Abre a arte do jeito que o formato dela pede, sempre de pé. */
-async function abrirArte(doc, bytes, cache, recorteBytes) {
-  // O recorte é da imagem; o PDF de arte entra como vetor e ignora o recorte.
+async function abrirArte(doc, bytes, cache, recorteBytes, ladoMaximo = null) {
+  // O recorte é da imagem; o PDF de arte entra como vetor e ignora o recorte
+  // (e o limite de dpi: vetor não tem pixel).
   if (ehPdf(bytes)) return abrirVetor(doc, bytes);
-  return abrirImagem(doc, bytes, cache, recorteBytes);
+  return abrirImagem(doc, bytes, cache, recorteBytes, ladoMaximo);
 }
 
 /** O giro de uma posição: 0, 90, 180 ou 270, ou `null` quando não veio. */
@@ -1174,7 +1230,7 @@ function escreverMarca(doc, marca, topoDaPagina) {
  */
 async function montarPdf({
   larguraTecido, consumo, posicoes, buffers, lerArte, podeTerTransparencia, fonteDaSigla = FONTE_DA_SIGLA,
-  giros, giroDe, versaoMinima, aoAndar, cacheDe, recorteDe, recortes,
+  giros, giroDe, versaoMinima, aoAndar, cacheDe, recorteDe, recortes, dpiMaximo = DPI_MAXIMO,
 }, destino) {
   const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
@@ -1303,6 +1359,22 @@ async function montarPdf({
   paginas.forEach((pagina) => pagina.posicoes.forEach((pos) => {
     if (!naOrdem.has(pos.chave)) { naOrdem.set(pos.chave, ordem.length); ordem.push(pos.chave); }
   }));
+  /*
+   * O MAIOR LADO QUE CADA ARTE PRECISA TER (ver "O PDF LEVA ATÉ 200 DPI"): o
+   * maior lado em que ela foi posta no rolo, em qualquer posição e giro, a
+   * `dpiMaximo`. Pelo maior lado, e não por largura e altura, porque o giro
+   * troca os dois e a proporção é a da própria arte.
+   */
+  const maiorLadoCm = new Map();
+  for (const pos of posicoes) {
+    const lado = Math.max(Number(pos.largura) || 0, Number(pos.altura) || 0);
+    if (lado > (maiorLadoCm.get(pos.chave) || 0)) maiorLadoCm.set(pos.chave, lado);
+  }
+  const ladoMaximoDe = (chave) => {
+    const cm = maiorLadoCm.get(chave);
+    return dpiMaximo > 0 && cm > 0 ? Math.ceil(cm / 2.54 * dpiMaximo) : null;
+  };
+
   const desenhos = new Map();
   const abrir = (chave) => {
     if (!desenhos.has(chave)) {
@@ -1315,7 +1387,7 @@ async function montarPdf({
           // Peça com recorte não usa o cache de sessão: o resultado depende do
           // recorte, e misturar os dois daria a cor de um com o alfa de outro.
           const cache = recorte ? null : (cacheDe ? cacheDe(chave) : null);
-          return await abrirArte(doc, bytes, cache, recorte);
+          return await abrirArte(doc, bytes, cache, recorte, ladoMaximoDe(chave));
         } catch (err) {
           // Arte que não abre derruba o PDF: melhor nenhum arquivo que um rolo
           // impresso com peça faltando.

@@ -20,9 +20,10 @@
  * aqui (`instalacao`), que só serve para o backend não contar duas vezes o
  * mesmo encaixe.
  *
- * É O SEGREDO DO MOTOR, E FICA EM SILÊNCIO: nenhuma tela mostra, liga ou
- * desliga isto. Todo encaixe vai, e a rede global volta — o programa cuida
- * sozinho, e para quem usa o Encaixe só fica melhor.
+ * Compartilhamento é opcional. Só uma instalação configurada explicitamente
+ * com OPTIMIZE_COLETIVO_AUTORIZADO=1 troca estatísticas com outras lojas.
+ * Sem essa autorização, todo aprendizado e histórico permanecem locais.
+ * A configuração deve refletir o consentimento do responsável pela instalação.
  *
  * NADA AQUI É CAMINHO CRÍTICO: sem internet, sem login, ou com o backend fora,
  * a busca segue com a memória local, como sempre foi. A espera pela internet
@@ -53,6 +54,7 @@ const LOTE = 50;
 const LOTES_POR_VEZ = 20;
 
 const agora = () => new Date().toISOString();
+const autorizado = () => process.env.OPTIMIZE_COLETIVO_AUTORIZADO === "1";
 
 // ==================== O ESTADO GUARDADO ====================
 
@@ -90,6 +92,7 @@ function instalacao() {
  * o teto, a resposta é `null`, e o que ainda estiver correndo termina sozinho.
  */
 async function pedir(rota, opcoes = {}, teto = 15000) {
+  if (!autorizado()) return null;
   const controle = new AbortController();
   let relogio;
   const estourou = new Promise((pronto) => {
@@ -190,6 +193,7 @@ let sincronizando = null;
 
 /** Uma rodada: manda o que falta e baixa o aprendido. */
 function sincronizar() {
+  if (!autorizado()) return Promise.resolve({ enviados: 0, baixou: false });
   if (sincronizando) return sincronizando;
   sincronizando = (async () => {
     try {
@@ -210,6 +214,7 @@ function sincronizar() {
 let agendada = null;
 /** Sincroniza daqui a pouco, juntando pedidos seguidos num só. */
 function agendar(ms = 15000) {
+  if (!autorizado()) return;
   if (agendada) return;
   agendada = setTimeout(() => { agendada = null; void sincronizar(); }, ms);
   agendada.unref?.();
@@ -218,6 +223,7 @@ function agendar(ms = 15000) {
 let relogio = null;
 /** Liga a sincronização sozinha: logo depois de subir, e depois de tempo em tempo. */
 function iniciar() {
+  if (!autorizado()) return;
   if (relogio) return;
   agendar(20000);
   relogio = setInterval(() => void sincronizar(), INTERVALO_MS);
@@ -239,6 +245,7 @@ function iniciar() {
 let semRedeAte = 0;
 
 async function placarDe(assinatura) {
+  if (!autorizado()) return null;
   if (!assinatura) return null;
   const guardado = db.prepare("SELECT * FROM encaixe_coletivo_cache WHERE assinatura = ?").get(assinatura);
   const fresco = guardado && Date.now() - Date.parse(guardado.lido_em) < CACHE_PLACAR_MS;
@@ -261,11 +268,13 @@ async function placarDe(assinatura) {
 
 /** A rede global baixada, com o quanto ela já viu. `null` se não há. */
 function redeGlobal() {
+  if (!autorizado()) return null;
   const r = lerEstado("rede");
   return r && r.rede ? r : null;
 }
 
 function placarGeral() {
+  if (!autorizado()) return [];
   const g = lerEstado("geral");
   return Array.isArray(g) ? g : [];
 }

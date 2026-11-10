@@ -1,0 +1,44 @@
+{
+  "data": "2026-11-09T16:35:05.071Z",
+  "node": "v24.18.0",
+  "resultados": [
+    {
+      "nome": "área preservada por translação, escala e inversão",
+      "ok": true
+    },
+    {
+      "nome": "uma peça não conferível bloqueia o resultado inteiro",
+      "ok": true
+    },
+    {
+      "nome": "dimensão infinita não é conferível",
+      "ok": true
+    },
+    {
+      "nome": "máscara corrompida não cai silenciosamente na caixa",
+      "ok": true
+    },
+    {
+      "nome": "sobreposição menor que meia célula não some por arredondamento",
+      "ok": true
+    },
+    {
+      "nome": "grades diferentes com caixas cruzadas mas silhuetas separadas",
+      "ok": true
+    },
+    {
+      "nome": "encostar na borda continua permitido em rolos longos",
+      "ok": true
+    },
+    {
+      "nome": "500 pares contra oráculo de retângulos de células",
+      "ok": true
+    },
+    {
+      "nome": "candidato não finito nunca substitui o melhor",
+      "ok": true
+    }
+  ],
+  "aprovados": 9,
+  "total": 9
+}

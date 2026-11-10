@@ -1,0 +1,39 @@
+{
+  "criadoEm": "2026-11-09T16:35:43.176Z",
+  "commitBase": "7017c91c50f1b7c2caf5f7055b1933a39c989d77",
+  "node": "v24.18.0",
+  "cpu": "AMD Ryzen 5 5600X 6-Core Processor             ",
+  "nucleosLogicos": 12,
+  "plataforma": "win32",
+  "memoriaTotalBytes": 17088585728,
+  "fontes": [
+    {
+      "arquivo": "src/motores/encaixeMotor.js",
+      "sha256": "cd28c130806e4b2a893276a1c68a26a467c4d4c88141d3fbfcbfc9da9761fedd"
+    },
+    {
+      "arquivo": "src/motores/encaixeWasm.js",
+      "sha256": "81ddefad45d488c98d15dc8c7b4894c376bbe87776aab9bb91a51da9f1e9935c"
+    },
+    {
+      "arquivo": "src/motores/encaixeSobreposicao.js",
+      "sha256": "723b3d542271feefcdce7547281cc5c6aac393dc1daece203ccece6250ea8536"
+    },
+    {
+      "arquivo": "src/motores/validarEncaixe.js",
+      "sha256": "2aef1704b4bd4c648a378145e9ee4ffdb0414cdf53b7f525d8ef19c4db587118"
+    },
+    {
+      "arquivo": "src/motores/limitesDaGrade.js",
+      "sha256": "f1cdcbcd42bd90ec1780f10278bf0ba7143ab042e64503119de0fcb084025756"
+    },
+    {
+      "arquivo": "src/utils/geometria.ts",
+      "sha256": "84424c7a73ddadc804aa3a105e05d7e3ef45ea66a79d1152cd1d86ab35a69082"
+    },
+    {
+      "arquivo": "estatico/encaixe.wasm",
+      "sha256": "b42c7bf114680931662d8d018306b22fabbd8202cc75cc431b41443a93423d06"
+    }
+  ]
+}

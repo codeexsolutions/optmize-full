@@ -8,6 +8,7 @@ import { ehArquivoPDF, lerArteDoPDF } from "../motores/pdfParaArte";
 import { COR_CMYK, diagnosticoDeCorDoArquivo } from "../motores/corDoArquivo";
 import { prepararArteParaONavegador } from "../api/arte";
 import { REDE_VERSAO_FEATURES, vetorDoTrabalho } from "../motores/encaixeRede";
+import { consumoNoQuadrado, quadradoParaComparar } from "../motores/consumoNoQuadrado";
 import { assinaturaDoTrabalho,
   midiaConsumida, aproveitamentoDaMidia, metragemPelaCaixa,
   prepararComplemento, analisarComplemento, complementarNosVaos } from "../motores/encaixeMotor";
@@ -264,6 +265,8 @@ const encaixeEspacoInput = document.getElementById("encaixe-espaco");
 const encaixeEspacoYInput = document.getElementById("encaixe-espaco-y");
 const encaixeComprimentoInput = document.getElementById("encaixe-comprimento");
 const encaixeTempoInput = document.getElementById("encaixe-tempo");
+const COMPRIMENTO_DO_BLOCO_CM = 500;
+const META_DE_APROVEITAMENTO_DO_BLOCO = 0.95;
 const encaixeGiroTodasSelect = document.getElementById("encaixe-giro-todas");
 /*
  * Para onde vai o alto da arte no SENTIDO ÚNICO (o giro "fixa" do seletor
@@ -279,6 +282,7 @@ const btnEncaixeCriarGrupo = document.getElementById("btn-encaixe-criar-grupo");
 const btnEncaixeTirarGrupo = document.getElementById("btn-encaixe-tirar-grupo");
 const btnEncaixeLimparSelecao = document.getElementById("btn-encaixe-limpar-selecao");
 const btnEncaixeMarcarTodas = document.getElementById("btn-encaixe-marcar-todas");
+const encaixeGiroLote = document.getElementById("encaixe-giro-lote");
 const encaixeQtdLote = document.getElementById("encaixe-qtd-lote");
 const encaixeQtdTodas = document.getElementById("encaixe-qtd-todas");
 const btnEncaixeQtdTodas = document.getElementById("btn-encaixe-qtd-todas");
@@ -1465,7 +1469,7 @@ function vestirArea(estado) {
     voltar(encaixeLarguraInput, estado.campos.largura);
     voltar(encaixeEspacoInput, estado.campos.espaco);
     voltar(encaixeEspacoYInput, estado.campos.espacoY);
-    voltar(encaixeComprimentoInput, estado.campos.comprimento);
+    voltar(encaixeComprimentoInput, bancadaGuardada(estado.campos.comprimento));
     voltar(encaixeGiroTodasSelect, estado.campos.giro);
     if (SENTIDOS.includes(estado.campos.sentido)) sentidoUnico = estado.campos.sentido;
     marcarGiro();
@@ -1809,9 +1813,19 @@ function atualizarBarraDeGrupo() {
   const quantas = selecionadas.size;
   encaixeBarraGrupo.classList.toggle("hidden", quantas === 0);
   encaixeBarraGrupo.classList.toggle("flex", quantas > 0);
+  if (encaixeGiroLote) {
+    encaixeGiroLote.classList.toggle("hidden", quantas === 0);
+    encaixeGiroLote.classList.toggle("flex", quantas > 0);
+  }
   if (quantas === 0) return;
 
   const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id));
+  // Acende o botão só quando TODAS as marcadas estão nele; misturadas, nenhum.
+  const giroDa = (p) => (p.giroProprio ? p.giro : "padrao");
+  const giroComum = marcadas.every((p) => giroDa(p) === giroDa(marcadas[0])) ? giroDa(marcadas[0]) : null;
+  encaixeGiroLote?.querySelectorAll("[data-giro-lote]").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.giroLote === giroComum));
+  });
   const comGrupo = marcadas.filter((p) => p.grupo).length;
   const grupos = [...new Set(marcadas.map((p) => p.grupo).filter(Boolean))];
 
@@ -1864,6 +1878,60 @@ escopo.ouvir(btnEncaixeLimparSelecao, "click", () => {
   selecionadas.clear();
   renderPecasEncaixe();
 });
+
+/*
+ * ===========================================================================
+ * O GIRO PRÓPRIO DA PEÇA (2026-11-09)
+ * ===========================================================================
+ *
+ * "Aquela peça pode girar 90° e as outras não, porque têm que seguir o
+ * sentido do tecido." O giro por peça já existia, mas só dentro da gaveta de
+ * cada linha. Agora marca-se as peças na lista e escolhe-se na linha "Giro":
+ * Gira 90° (livre), Só 180° ou Não gira (fixa) valem para todas as marcadas.
+ *
+ * A escolha fica anotada em `giroProprio`, e o seletor geral do Optmizar NÃO
+ * passa por cima dela: sem isso, liberar três peças e depois clicar em
+ * "Sentido único" apagaria as três sem aviso. A peça com giro próprio ganha
+ * um selo na lista, para a exceção ficar à vista. "Padrão" tira a anotação e
+ * a peça volta a seguir o Optmizar.
+ *
+ * Não refaz o encaixe da tela, igual a mexer na gaveta: vale no próximo.
+ */
+function giroNoLote(valor) {
+  const marcadas = pecasEncaixe.filter((p) => selecionadas.has(p.id));
+  if (marcadas.length === 0) return;
+  for (const p of marcadas) {
+    if (valor === "padrao") {
+      p.giroProprio = false;
+      p.giro = giroPadrao();
+    } else {
+      p.giroProprio = true;
+      p.giro = valor;
+    }
+  }
+  selecionadas.clear();
+  renderPecasEncaixe();
+  // O sentido único só põe o "A" no lugar de peça em "fixa": quem saiu dele
+  // volta ao giro dela, quem entrou ganha o sentido.
+  aplicarSentido();
+}
+
+encaixeGiroLote?.querySelectorAll("[data-giro-lote]").forEach((b) => {
+  escopo.ouvir(b, "click", () => giroNoLote(b.dataset.giroLote));
+});
+
+/** O selo da peça com giro próprio, ou nada quando ela segue o Optmizar. */
+const SELO_DO_GIRO = {
+  livre: { texto: "90°", dica: "Giro próprio: pode girar 90°" },
+  180: { texto: "180°", dica: "Giro próprio: só vira 180°" },
+  fixa: { texto: "fixa", dica: "Giro próprio: não gira, segue o sentido do tecido" },
+};
+function seloDoGiro(peca) {
+  const selo = peca.giroProprio && SELO_DO_GIRO[peca.giro];
+  if (!selo) return "";
+  return `<span class="shrink-0 rounded border border-ambar px-1 font-mono text-[8px] font-semibold uppercase leading-[1.4] text-ambar"
+               title="${selo.dica}. Para voltar ao do Optmizar, marque a peça e use Giro → Padrão.">${selo.texto}</span>`;
+}
 
 const CAMPO_MINI =
   "mt-0! text-[0.62rem] uppercase tracking-wide text-tinta-apagada " +
@@ -2059,6 +2127,7 @@ function renderPecasEncaixe() {
         <span class="min-w-0 flex-1">
           <span class="flex items-start gap-1">
             <span data-nome-peca="${peca.id}" class="nome-da-peca text-[11px] font-medium text-tinta">${escapeHtml(peca.nome)}</span>
+            ${seloDoGiro(peca)}
             ${peca.grupo ? `<span class="shrink-0 rounded px-1 font-mono text-[8px] font-semibold uppercase leading-[1.4]"
                    style="background: ${corDoGrupo(peca.grupo)}22; color: ${corDoGrupo(peca.grupo)}; border: 1px solid ${corDoGrupo(peca.grupo)}66;"
                    title="Grupo ${escapeHtml(peca.grupo)}: estas peças saem perto umas das outras no rolo">${escapeHtml(peca.grupo)}</span>` : ""}
@@ -2398,7 +2467,10 @@ escopo.ouvir(encaixePecasBody, "change", (e) => {
   if (!peca) return;
   if (campo === "girar") {
     peca.giro = e.target.value;
+    // Escolhido na gaveta também é giro próprio (ver "O GIRO PRÓPRIO DA PEÇA").
+    peca.giroProprio = true;
     aplicarSentido();
+    renderPecasEncaixe();
   }
   if (campo === "sigla") {
     const escrita = normalizarSigla(e.target.value);
@@ -2668,8 +2740,11 @@ escopo.ouvir(encaixeGiroTodasSelect, "change", () => {
   // Aplica no lote inteiro, inclusive no que já estava em "livre": quem mexe
   // aqui está dizendo como a produção toda vai girar, e uma peça sobrando com
   // o valor antigo seria justamente a surpresa que este controle evita.
+  //
+  // A exceção é a peça com giro próprio (ver "O GIRO PRÓPRIO DA PEÇA"): ela
+  // foi escolhida uma a uma, de propósito, e tem selo na lista.
   const giro = giroPadrao();
-  pecasEncaixe.forEach((p) => { p.giro = giro; });
+  pecasEncaixe.forEach((p) => { if (!p.giroProprio) p.giro = giro; });
   renderPecasEncaixe();
   aplicarSentido();
 });
@@ -3250,6 +3325,20 @@ function tempoDeProcuraMs() {
   return Math.min(300, Math.max(1, segundos || 5)) * 1000;
 }
 
+/**
+ * A bancada que veio guardada — menos os 500 cm que a 1.3.441 gravou à força.
+ *
+ * A 1.3.441 encaixava sempre em blocos fixos de 5 m e escrevia 500 no campo da
+ * bancada, nos ajustes e nas áreas de trabalho, de quem quer que a tenha
+ * aberto. Sem isto, depois de voltar ao rolo contínuo essas lojas seguiriam
+ * com uma mesa de 5 m que ninguém pediu (e, com bancada, sem a compactação
+ * final). Quem usa mesa de 5 m de propósito digita de novo.
+ */
+function bancadaGuardada(valor) {
+  const cm = Number(valor) || 0;
+  return cm === 500 ? "" : (cm > 0 ? cm : "");
+}
+
 /** O comprimento de mesa que está no campo agora. Zero = rolo sem corte. */
 function bancadaDaTela() {
   return Math.max(0, Number(encaixeComprimentoInput && encaixeComprimentoInput.value) || 0);
@@ -3318,6 +3407,100 @@ function mostrarAndamento(estado, aprendido) {
     detalhe: encaixeAndamento.textContent,
     progresso: 34 + Math.min(1, estado.decorridoMs / totalMs) * 56,
   });
+}
+
+/*
+ * Cada rodada recebe TODAS as peças ainda pendentes, mas só pode ocupar uma
+ * bancada de 5 m. Assim uma peça de um arquivo posterior pode fechar o vão de
+ * outra, sem misturar o corte físico seguinte na mesma busca.
+ */
+async function encaixarEmBlocosDeCincoMetros(itens, config) {
+  let pendentes = [...itens];
+  const posicoes = [];
+  const blocos = [];
+  let tentativas = 0;
+  let rejeitadas = 0;
+  let validacaoMs = 0;
+  let paredes = 0;
+  const inicio = Date.now();
+
+  while (pendentes.length > 0 && !(config.deveParar && config.deveParar())) {
+    const numeroDoBloco = blocos.length;
+    const deslocamento = numeroDoBloco * (COMPRIMENTO_DO_BLOCO_CM + config.espaco);
+    const resultado = await buscarMelhorEncaixeEmParalelo(pendentes, {
+      ...config,
+      comprimentoBancada: COMPRIMENTO_DO_BLOCO_CM,
+      maxBancadas: 1,
+      priorizarAproveitamentoDoBloco: true,
+      metaDoBloco: true,
+      metaAproveitamento: META_DE_APROVEITAMENTO_DO_BLOCO,
+      // Um recorde do trabalho inteiro não é uma meta válida para uma fração
+      // dele. Cada bloco decide pelo aproveitamento próprio.
+      alvo: null,
+      encolher: false,
+      polir: false,
+      // A poda normal compara metragem de encaixes completos; num bloco
+      // parcial ela descartaria justamente a receita que deixou mais área útil.
+      podar: false,
+      aoDesenhar: null,
+      aoProgredir: (estado) => {
+        if (config.aoProgredir) config.aoProgredir({ ...estado, bloco: numeroDoBloco + 1 });
+        atualizarCarregamento({
+          etapa: `Bloco ${numeroDoBloco + 1}`,
+          titulo: "Aproveitando o bloco de 5 m",
+          detalhe: estado.alcancouMeta
+            ? "95% de aproveitamento atingidos; preparando o próximo bloco."
+            : `${pendentes.length} peça(s) disponíveis para completar este bloco.`,
+          progresso: 32 + Math.min(1, estado.decorridoMs / Math.max(1, config.tempoMaximoMs)) * 56,
+        });
+      },
+    });
+
+    const colocadas = resultado && Array.isArray(resultado.posicoes) ? resultado.posicoes : [];
+    if (colocadas.length === 0) break;
+
+    const areaReal = Number.isFinite(resultado.areaReal) ? resultado.areaReal
+      : colocadas.reduce((soma, posicao) => soma + posicao.item.mascaras.areaReal, 0);
+    const aproveitamento = aproveitamentoDaMidia(
+      areaReal, config.larguraTecido, COMPRIMENTO_DO_BLOCO_CM,
+    );
+    posicoes.push(...colocadas.map((posicao) => ({
+      ...posicao,
+      y: posicao.y + deslocamento,
+      bancada: numeroDoBloco,
+    })));
+    blocos.push({
+      numero: numeroDoBloco,
+      pecas: colocadas.length,
+      areaReal,
+      aproveitamento,
+      alcancouMeta: aproveitamento >= META_DE_APROVEITAMENTO_DO_BLOCO,
+    });
+    tentativas += resultado.tentativas || 0;
+    rejeitadas += resultado.rejeitadas || 0;
+    validacaoMs += resultado.validacaoMs || 0;
+    paredes += resultado.paredes || 0;
+    pendentes = Array.isArray(resultado.naoEncaixadas) ? resultado.naoEncaixadas : [];
+  }
+
+  return {
+    posicoes,
+    naoEncaixadas: pendentes,
+    consumo: posicoes.reduce((fundo, posicao) => Math.max(fundo, posicao.y + posicao.altura), 0),
+    areaReal: posicoes.reduce((soma, posicao) => soma + posicao.item.mascaras.areaReal, 0),
+    receita: "blocos/5m",
+    tentativas,
+    rejeitadas,
+    validacaoMs,
+    paredes,
+    decorridoMs: Date.now() - inicio,
+    metaAproveitamento: META_DE_APROVEITAMENTO_DO_BLOCO,
+    alcancouMeta: blocos.length > 0 && blocos.every((bloco) => bloco.alcancouMeta),
+    blocosDeCincoMetros: blocos,
+    placar: [],
+    melhorPorMotor: {},
+    encolhimento: { motivo: "blocos de 5 m", antes: 0, depois: 0 },
+  };
 }
 
 /**
@@ -3806,6 +3989,12 @@ async function optmizar({
 
     const anotado = await encaixeApi.anotarNaMemoria({
       assinatura,
+      // As medidas das peças e a folga, para o servidor gravar quanto o mesmo
+      // trabalho gastaria PELO QUADRADO (ver servidor/encaixe-relatorio.js).
+      medidas: pecasEncaixe
+        .filter((peca) => peca.largura > 0 && peca.altura > 0 && peca.qtd > 0)
+        .map((peca) => [peca.largura, peca.altura, peca.qtd]),
+      espaco: folgaPedida(),
       receita: ultimoResultado.receita,
       placar: ultimoResultado.placar,
       larguraTecido,
@@ -3978,6 +4167,10 @@ function mostrarResumoDaBusca(resultado, aprendido, anotado, guardadoAntes) {
  * outro teria gasto. É o número que decide se vale trocar o modo na mão.
  */
 function comoFoiEncaixado(r) {
+  if (r.blocosDeCincoMetros) {
+    return `Encaixe dividido em ${r.blocosDeCincoMetros.length} bloco(s) de 5 m; `
+      + "cada bloco foi preenchido usando todas as peças pendentes.";
+  }
   // O placar por motor vem em `consumo`; quem lê a frase está lendo metragem.
   // Ver `metrosNaTela`.
   const metros = (consumo) => metrosNaTela(consumo);
@@ -4091,6 +4284,22 @@ function renderResultado() {
   // nem deve: é tecido que foi pago. Este NÃO substitui o de cima; separa o
   // que é culpa do encaixe do que é culpa da largura do rolo.
   const areaFaixaUsada = (medidasLaterais.larguraOcupada * midia) / 10000;
+
+  /*
+   * QUANTO O CONTORNO POUPOU (pedido do dono, 2026-11-10): o mesmo trabalho
+   * PELO QUADRADO — cada peça no retângulo inteiro dela, em fileiras, sempre
+   * arredondado para cima — contra a metragem que a pessoa leu acima. A conta
+   * é a mesma do relatório (ver motores/consumoNoQuadrado.mjs). Não mexe no
+   * aproveitamento: é um segundo número, e verdadeiro.
+   */
+  const quadrado = quadradoParaComparar(consumoNoQuadrado(
+    pecasEncaixe
+      .filter((peca) => peca.largura > 0 && peca.altura > 0 && peca.qtd > 0)
+      .map((peca) => [peca.largura, peca.altura, peca.qtd]),
+    r.larguraTecido, r.folgaPedida), midia);
+  const economia = quadrado != null && quadrado > midia && r.naoEncaixadas.length === 0
+    ? { cm: quadrado - midia, porcento: ((quadrado - midia) / quadrado) * 100 }
+    : null;
   const aproveitamentoNaFaixa = areaFaixaUsada > 0 ? (areaPecas / areaFaixaUsada) * 100 : 0;
 
   /*
@@ -4114,7 +4323,9 @@ function renderResultado() {
       <div class="stat stat-faixa"><span class="stat-valor">${formatarPorcento(aproveitamentoNaFaixa)}</span><span class="stat-label">Na faixa usada</span></div>
       <div class="stat"><span class="stat-valor">${formatarM2(areaPecas)}</span><span class="stat-label">Área das peças</span></div>
       <div class="stat"><span class="stat-valor">${formatarM2(areaTecido - areaPecas)}</span><span class="stat-label">Sobra de tecido</span></div>
-      <div class="stat"><span class="stat-valor">${r.naoEncaixadas.length}</span><span class="stat-label">Fora do tecido</span></div>
+      <div class="stat"><span class="stat-valor">${r.naoEncaixadas.length}</span><span class="stat-label">Fora do tecido</span></div>${
+      economia ? `
+      <div class="stat stat-economia"><span class="stat-valor">${formatarMetros(economia.cm)}</span><span class="stat-label">Economia × quadrado</span></div>` : ""}
     `;
   }
 
@@ -4132,7 +4343,12 @@ function renderResultado() {
         <span class="text-[11px] text-tinta-apagada">em ${r.larguraTecido} cm</span>
       </div>${
       bancadas.length > 1 ? `
-      <p class="mt-1.5 mb-0 text-[11px] text-tinta-fraca">${bancadas.length} bancadas</p>` : ""}
+      <p class="mt-1.5 mb-0 text-[11px] text-tinta-fraca">${bancadas.length} bancadas</p>` : ""}${
+      economia ? `
+      <p class="mt-2 mb-0 border-t border-linha pt-2 text-[12px] leading-snug text-tinta-fraca" title="O mesmo trabalho com cada peça no retângulo inteiro dela, em fileiras, arredondado para cima: ${formatarMetros(quadrado)}">
+        Economizou <b class="font-semibold text-ambar">${formatarMetros(economia.cm)} (${formatarPorcento(economia.porcento)})</b>
+        contra o encaixe no quadrado
+      </p>` : ""}
     `;
   }
 
@@ -4156,6 +4372,8 @@ function renderResultado() {
    * conta de `midiaConsumida`. Dita aqui para que "3,40 m" na faixa bata com o
    * arquivo que a pessoa abre.
    */
+  const porBlocos = r.blocosDeCincoMetros && r.blocosDeCincoMetros.length > 0
+    ? `${r.blocosDeCincoMetros.length} bloco(s) de 5 m, com meta de 95% por bloco. ` : "";
   const porBancada = bancadas.length > 1
     ? `O rolo sai em ${bancadas.length} bancadas, cortadas em `
       + `${cortesEntreBancadas(bancadas).map((c) => formatarCm(c)).join(", ")} — `
@@ -4170,7 +4388,7 @@ function renderResultado() {
    * aqui, e o elemento pode não existir: quem lê o número é a faixa de baixo,
    * e quem quiser a conta inteira tem a conferência da bancada.
    */
-  if (encaixeResumo) encaixeResumo.textContent = porBancada +
+  if (encaixeResumo) encaixeResumo.textContent = porBlocos + porBancada +
     `Na largura, as peças ocupam ${formatarCm(medidasLaterais.larguraOcupada)} ` +
     `dos ${formatarCm(medidasLaterais.larguraTecido)} do tecido; sobram ` +
     `${formatarCm(medidasLaterais.sobraEsquerda)} à esquerda e ` +
@@ -4553,7 +4771,9 @@ function criarAndamentoDoExportar(quantosArquivos) {
       if (numero) numero.textContent = i < indice ? "100%" : i === indice ? `${Math.floor(mostrado[li.dataset.etapa] * 100)}%` : "";
     }
     const total = ETAPAS.reduce((soma, e) => soma + PESO_DA_ETAPA[e] * mostrado[e], 0) * 100;
-    const inteiro = Math.min(atual ? 99 : 100, Math.floor(total));
+    // Com tudo pronto é 100, e não a soma: 0,04 + 0,24 + 0,57 + 0,15 dá
+    // 0,9999999999999999 em ponto flutuante, e o floor parava a tela em 99.
+    const inteiro = atual ? Math.min(99, Math.floor(total)) : 100;
     exportarPorCento.textContent = String(inteiro);
     exportarBarra.style.width = `${atual ? Math.min(99, total) : 100}%`;
     exportarBarra.parentElement.setAttribute("aria-valuenow", String(inteiro));
@@ -4652,7 +4872,9 @@ function criarAndamentoDoExportar(quantosArquivos) {
       // faltam e só então diz que acabou.
       for (const e of ETAPAS) alvo[e] = 1;
       detalheDa.gravar = detalheDa.gravar || "Gravando o arquivo…";
-      aoTerminar = () => this.terminou(onde);
+      // A barra tem `transition: width 0.3s`: espera ela chegar ao fim antes
+      // de trocar o título, senão o "pronto" aparece com a barra ainda enchendo.
+      aoTerminar = () => setTimeout(() => this.terminou(onde), 350);
       if (!quadro) quadro = requestAnimationFrame(andar);
     },
     terminou(onde) {
@@ -6077,7 +6299,7 @@ async function lerAjustesGuardados() {
   if (ajustes.largura) encaixeLarguraInput.value = ajustes.largura;
   if (ajustes.espaco !== undefined) encaixeEspacoInput.value = ajustes.espaco;
   if (ajustes.espacoY !== undefined) encaixeEspacoYInput.value = ajustes.espacoY;
-  if (ajustes.comprimento !== undefined) encaixeComprimentoInput.value = ajustes.comprimento || "";
+  if (ajustes.comprimento !== undefined) encaixeComprimentoInput.value = bancadaGuardada(ajustes.comprimento) || "";
   if (SENTIDOS.includes(ajustes.sentido)) sentidoUnico = ajustes.sentido;
   if (ajustes.giro) encaixeGiroTodasSelect.value = ajustes.giro;
   marcarGiro();

@@ -23,7 +23,9 @@ const PARA_A_BANCADA = [
   "motores/encaixeWasm.js",
   "utils/geometria.ts",
   "motores/encaixeSobreposicao.js",
+  "motores/validarEncaixe.js",
   "motores/encaixeEncolher.js",
+  "motores/encaixeRegioes.js",
   "motores/conferenciaDaArte.js",
 ];
 

@@ -1,6 +1,7 @@
 /** Estrutura React; listas e canvas são controlados pelo módulo de produção. */
 import { memo } from "react";
 import { BotaoComoUsarDa } from "../casca/ComoUsar";
+import { BotaoRelatorioDoEncaixe } from "./RelatorioDoEncaixe";
 export const Encaixe = memo(function Encaixe() { return <><div className="page h-full" data-page="encaixe">
 
 
@@ -72,6 +73,35 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 <button type="button" id="btn-encaixe-limpar-selecao" className="btn-x" title="Limpar a seleção">
 {"×"}
+</button>
+
+</div>
+
+{/*
+  O GIRO DAS PEÇAS MARCADAS: a peça que pode girar 90° no meio das que seguem
+  o sentido do tecido. Aparece junto com a barra de cima (ver `giroNoLote`,
+  em producao/controlador.js).
+*/}
+<div id="encaixe-giro-lote" className="hidden shrink-0 items-center gap-1 border-b border-linha bg-painel-suave px-3 py-1.5" role="group" aria-label="Giro das peças marcadas">
+
+<span className="shrink-0 text-[10px] text-tinta-apagada">
+{"Giro"}
+</span>
+
+<button type="button" data-giro-lote="livre" aria-pressed="false" className="btn secondary btn-sm flex-1 whitespace-nowrap px-1! text-[10px]!" title="Pode girar 90°: deita e levanta para caber melhor">
+{"Gira 90°"}
+</button>
+
+<button type="button" data-giro-lote="180" aria-pressed="false" className="btn secondary btn-sm flex-1 whitespace-nowrap px-1! text-[10px]!" title="Só vira de cabeça para baixo: continua no mesmo eixo do tecido">
+{"Só 180°"}
+</button>
+
+<button type="button" data-giro-lote="fixa" aria-pressed="false" className="btn secondary btn-sm flex-1 whitespace-nowrap px-1! text-[10px]!" title="Não gira: segue o sentido do tecido">
+{"Não gira"}
+</button>
+
+<button type="button" data-giro-lote="padrao" aria-pressed="false" className="btn secondary btn-sm flex-1 whitespace-nowrap px-1! text-[10px]!" title="Volta a seguir o giro escolhido no Optmizar">
+{"Padrão"}
 </button>
 
 </div>
@@ -164,6 +194,8 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 <span className="ml-auto flex shrink-0 items-center gap-0.5">
+
+<BotaoRelatorioDoEncaixe />
 
 <BotaoComoUsarDa nome="encaixe" className="mr-2" />
 

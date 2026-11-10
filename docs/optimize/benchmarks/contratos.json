@@ -1,0 +1,69 @@
+{
+  "data": "2026-11-09T16:34:16.757Z",
+  "resultados": [
+    {
+      "nome": "retângulo válido e persistência JSON sem deriva",
+      "ok": true
+    },
+    {
+      "nome": "peça perdida",
+      "ok": true
+    },
+    {
+      "nome": "cópia duplicada",
+      "ok": true
+    },
+    {
+      "nome": "rotação proibida",
+      "ok": true
+    },
+    {
+      "nome": "peça deformada",
+      "ok": true
+    },
+    {
+      "nome": "limite do material",
+      "ok": true
+    },
+    {
+      "nome": "folga física violada sem sobreposição da arte",
+      "ok": true
+    },
+    {
+      "nome": "métrica de área falsificada",
+      "ok": true
+    },
+    {
+      "nome": "pedido impossível permanece parcial e explícito",
+      "ok": true
+    },
+    {
+      "nome": "rolo de 20 km com 2000 peças, ótimo por limite de área",
+      "ok": true
+    },
+    {
+      "nome": "overflow i32 bloqueado antes de JS e WASM",
+      "ok": true
+    },
+    {
+      "nome": "bancada forçada igual no JS e WASM",
+      "ok": true
+    },
+    {
+      "nome": "escala, halo e origem da máscara não podem ser trocados",
+      "ok": true
+    },
+    {
+      "nome": "mesma seed e mesmo número de avaliações dão a mesma solução",
+      "ok": true
+    },
+    {
+      "nome": "cancelamento observado dentro do lote",
+      "ok": true
+    },
+    {
+      "nome": "recordes publicados são viáveis e não aumentam consumo",
+      "ok": true
+    }
+  ]
+}
