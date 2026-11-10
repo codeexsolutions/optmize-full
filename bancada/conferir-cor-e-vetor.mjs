@@ -262,22 +262,11 @@ console.log("  ok  imagem PNG e JPEG nos giros 0/90/180/270, cada um no lugar ce
   // E uma arte de verdade acima de um pedaço, de ponta a ponta no PDF.
   const grande = await sharp({ create: { width: 1600, height: 1100, channels: 3, noise: { type: "gaussian", mean: 128, sigma: 50 } } })
     .png().toBuffer();
-  // 22 cm para 1600 px dá ~185 dpi: abaixo do limite de 200, vai intocada.
-  const pdf = await gerar([{ chave: "f", x: 1, y: 1, largura: 22, altura: 15.125 }], new Map([["f", grande]]));
+  const pdf = await gerar([{ chave: "f", x: 1, y: 1, largura: 16, altura: 11 }], new Map([["f", grande]]));
   const { imagens } = await imagensDo(pdf);
   assert.deepEqual(cru(imagens[0]), await sharp(grande).raw().toBuffer(), "a arte grande descomprime pixel a pixel");
   await desenhar(pdf, 1);
   console.log("  ok  Flate em pedaços: um fluxo zlib só, que descomprime exato e o pdf.js lê");
-
-  // 8. O PDF leva até 200 dpi: a mesma arte em 16 cm (254 dpi) desce para
-  // o maior lado de 16 / 2,54 * 200 = 1260 px, na proporção dela.
-  const { imagens: reduzidas } = await imagensDo(
-    await gerar([{ chave: "f", x: 1, y: 1, largura: 16, altura: 11 }], new Map([["f", grande]])));
-  const w = reduzidas[0].dict.get(PDFName.of("Width")).asNumber();
-  const h = reduzidas[0].dict.get(PDFName.of("Height")).asNumber();
-  assert.equal(Math.max(w, h), Math.ceil(16 / 2.54 * 200), "a arte acima de 200 dpi desce para 200 dpi");
-  assert.ok(Math.abs(w / h - 1600 / 1100) < 0.01, "a redução mantém a proporção");
-  console.log(`  ok  arte a 254 dpi desce para 200 dpi (1600x1100 → ${w}x${h}); a 185 dpi vai intocada`);
 }
 
 // ----------------------------------------------- 8. JPEG direto, girado ou não

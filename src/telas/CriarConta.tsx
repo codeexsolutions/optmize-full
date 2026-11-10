@@ -123,7 +123,7 @@ function precoDoPlano(plano: Plano): { valor: string; periodo: string } {
   }
   return {
     valor: emReais(plano.precoCentavos, plano.moeda),
-    periodo: plano.cobranca === "anual" ? "por ano" : plano.cobranca === "vitalicio" ? "pagamento único" : "por mês",
+    periodo: plano.cobranca === "anual" ? "por ano" : "por mês",
   };
 }
 

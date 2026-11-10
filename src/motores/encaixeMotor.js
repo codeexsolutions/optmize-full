@@ -55,8 +55,6 @@
 import { podeDeitar, rotacoesDe } from "./encaixeGiro";
 import { pontuarReceitas } from "./encaixeRede";
 import { encaixarContornoWasm } from "./encaixeWasm";
-import { validarEncaixe } from "./validarEncaixe";
-import { conferirLimitesDaGrade } from "./limitesDaGrade";
 
 // `rotacoesDe` e `podeDeitar` moram em encaixe-giro.js. Ver o cabeçalho de lá.
 
@@ -262,11 +260,7 @@ export function consumoDoFundo(fundo, passo, config, posicoes = null) {
 export function bancadaEmCentimetros(config, quantasPecas) {
   if (!(config.comprimentoBancada > 0)) return null;
   const periodo = config.comprimentoBancada + config.espaco;
-  const pelasPecas = Math.max(1, quantasPecas);
-  // O fluxo de blocos de produção pede uma só bancada por vez. Os outros
-  // encaixes continuam podendo abrir tantas quanto precisarem.
-  const pedido = Math.floor(Number(config.maxBancadas) || 0);
-  return { altura: periodo, periodo, maximo: pedido > 0 ? Math.min(pelasPecas, pedido) : pelasPecas };
+  return { altura: periodo, periodo, maximo: Math.max(1, quantasPecas) };
 }
 
 /*
@@ -1732,7 +1726,7 @@ export function sondasDaForma(forma) {
  * (`fundo`), que são as duas medidas usadas para comparar posições.
  */
 export function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, salto = 1,
-  linhasBancada = 0, limiteDeLinhas = Infinity) {
+  linhasBancada = 0) {
   let melhor = null;
   const usaVazio = heuristica === "vazio";
   const pulo = Math.max(1, Math.round(salto));
@@ -1837,10 +1831,6 @@ export function melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, 
 
       const vazio = y * nCols + somaTopo - somaPerfil; // buraco morto que fica acima
       const fundo = y + maxBase + 1;
-      // Uma bancada limitada não pode abrir a próxima em silêncio. A unidade
-      // fica pendente para a rodada seguinte, que vai procurá-la com todas as
-      // outras peças que também sobraram.
-      if (fundo > limiteDeLinhas) return;
 
       // "fundo" empurra tudo para o começo do rolo; "vazio" prefere o lugar
       // que deixa menos buraco morto. Cada um vence em casos diferentes, por
@@ -2561,10 +2551,7 @@ export function encaixarContorno(unidades, config) {
   // módulo carregado, tecido largo demais para o plano de memória — e aí segue
   // o caminho de sempre, logo abaixo, que continua sendo a referência de
   // correção. Existe um teste que compara os dois posição por posição.
-  // O WASM conhece as divisões entre bancadas, mas não um teto de bancadas.
-  // Neste modo o caminho JS é necessário para impedir que a busca escape do
-  // bloco físico de 5 m.
-  if (!(config.maxBancadas > 0) && typeof encaixarContornoWasm === "function") {
+  if (typeof encaixarContornoWasm === "function") {
     const pelaViaRapida = encaixarContornoWasm(unidades, config);
     if (pelaViaRapida) {
       // A repescagem trabalha nas colocações, que o WASM também devolve. Num
@@ -2597,9 +2584,6 @@ export function encaixarContorno(unidades, config) {
   // (ver `encaixarPorBlocos`).
   const linhasBancada = config.linhasBancadaForcado != null ? config.linhasBancadaForcado
     : bancadaEmCelulas(config, reservaDaArte(unidades, passo));
-  const maximoDeLinhas = linhasBancada && config.maxBancadas > 0
-    ? linhasBancada * Math.max(1, Math.floor(config.maxBancadas)) : Infinity;
-  conferirLimitesDaGrade(unidades, config, colsTecido, linhasBancada || 0);
 
   /*
    * `config.perfilInicial` é o relevo que sobrou de um pedaço já encaixado, e
@@ -2630,7 +2614,7 @@ export function encaixarContorno(unidades, config) {
 
   unidades.forEach((unidade) => {
     const escolha = melhorPosicaoDaUnidade(perfil, colsTecido, unidade, heuristica, config.saltoX,
-      linhasBancada, maximoDeLinhas);
+      linhasBancada);
     if (!escolha) {
       unidade.itens.forEach((item) => naoEncaixadas.push(item));
       return;
@@ -2704,14 +2688,12 @@ export function encaixarContorno(unidades, config) {
  * comporta como sempre.
  */
 export function melhorVagaPorVaos(tecido, colsTecido, unidade, salto, linhasBancada,
-  tetoFundo = Infinity, limiteDeLinhas = Infinity) {
+  tetoFundo = Infinity) {
   const { colunas, perfil, topoLivre, maiorVao } = tecido;
   let melhor = null;
   // O fundo que uma posição precisa bater para valer alguma coisa. Começa no
   // teto de quem chamou e desce a cada posição aceita.
-  // As comparações abaixo são estritas (`fundo < limite`); somar um permite
-  // exatamente a última linha do bloco e proíbe a bancada seguinte.
-  let limite = Math.min(tetoFundo, Number.isFinite(limiteDeLinhas) ? limiteDeLinhas + 1 : Infinity);
+  let limite = tetoFundo;
   const pulo = Math.max(1, Math.round(salto || 1));
 
   unidade.formas.forEach((forma) => {
@@ -2896,9 +2878,6 @@ export function encaixarPorVaos(unidades, config) {
   const { passo } = config;
   const colsTecido = config.colsForcado || colunasDoTecido(config);
   const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
-  const maximoDeLinhas = linhasBancada && config.maxBancadas > 0
-    ? linhasBancada * Math.max(1, Math.floor(config.maxBancadas)) : Infinity;
-  conferirLimitesDaGrade(unidades, config, colsTecido, linhasBancada || 0);
 
   // O tecido dos vãos, e os resumos que fazem a poda: ver "O TECIDO VISTO PELOS
   // VÃOS", acima. Era montado aqui dentro, à mão; a repescagem tinha a própria
@@ -2911,9 +2890,7 @@ export function encaixarPorVaos(unidades, config) {
   let piorUnidade = null, piorVazio = -Infinity;
 
   unidades.forEach((unidade) => {
-    const escolha = melhorVagaPorVaos(
-      tecido, colsTecido, unidade, config.saltoX, linhasBancada, Infinity, maximoDeLinhas,
-    );
+    const escolha = melhorVagaPorVaos(tecido, colsTecido, unidade, config.saltoX, linhasBancada);
     if (!escolha) {
       unidade.itens.forEach((item) => naoEncaixadas.push(item));
       return;
@@ -3161,7 +3138,6 @@ export function encaixarPorBlocos(unidades, config) {
   // promessa de que nenhuma peça cruza a linha valeria por bloco, não pelo
   // rolo.
   const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
-  conferirLimitesDaGrade(unidades, config, colsTecido, linhasBancada || 0);
 
   const tamanho = Math.max(1, Math.round(config.blocoUnidades || BLOCO_UNIDADES));
   const largura = Math.max(1, Math.round(config.blocoJanela || BLOCO_JANELA));
@@ -3896,22 +3872,8 @@ export function repararPior(lista, alvo, sortear) {
   return saida;
 }
 
-const areaDoResultado = (resultado) => Number.isFinite(resultado && resultado.areaReal)
-  ? resultado.areaReal
-  : (resultado && resultado.posicoes ? resultado.posicoes.reduce(
-    (soma, posicao) => soma + (posicao.item && posicao.item.mascaras ? posicao.item.mascaras.areaReal : 0), 0) : 0);
-
-export const melhorQue = (candidato, atual, config = {}) => {
-  if (!candidato || !Number.isFinite(candidato.consumo) || candidato.consumo < 0
-      || !Array.isArray(candidato.posicoes) || !Array.isArray(candidato.naoEncaixadas)) return false;
+export const melhorQue = (candidato, atual) => {
   if (!atual) return true;
-  // Dentro de uma bancada física, o objetivo é ocupar a maior área possível.
-  // Contar apenas as peças favoreceria várias pequenas e deixaria uma grande,
-  // que fecha um vão importante, para trás.
-  if (config.priorizarAproveitamentoDoBloco) {
-    const diferencaDeArea = areaDoResultado(candidato) - areaDoResultado(atual);
-    if (Math.abs(diferencaDeArea) > 1e-6) return diferencaDeArea > 0;
-  }
   if (candidato.naoEncaixadas.length !== atual.naoEncaixadas.length) {
     return candidato.naoEncaixadas.length < atual.naoEncaixadas.length;
   }
@@ -3954,10 +3916,7 @@ export async function buscarMelhorEncaixe(itens, config) {
   const areaTotalItens = metaFracao
     ? itens.reduce((soma, it) => soma + (it.mascaras ? it.mascaras.areaReal : 0), 0)
     : 0;
-  const metaDaAreaDoBloco = config.metaDoBloco && metaFracao && config.larguraTecido > 0
-    && config.comprimentoBancada > 0
-    ? config.larguraTecido * config.comprimentoBancada * metaFracao : null;
-  const metaConsumo = !metaDaAreaDoBloco && metaFracao && config.larguraTecido > 0
+  const metaConsumo = metaFracao && config.larguraTecido > 0
     ? areaTotalItens / (config.larguraTecido * metaFracao)
     : null;
   // Só conta como "bateu a meta" um encaixe que coube inteiro — do contrário a
@@ -3971,11 +3930,8 @@ export async function buscarMelhorEncaixe(itens, config) {
   // só é chamada depois que `alvoDaPersistencia` já foi calculada (a
   // primeira chamada é lá na passada base), então a referência aqui em cima,
   // apesar de vir antes no arquivo, resolve certa quando é usada de verdade.
-  const bateuAMeta = () => {
-    if (metaDaAreaDoBloco != null) return !!melhor && areaDoResultado(melhor) >= metaDaAreaDoBloco;
-    return metaConsumo != null && melhor && melhor.naoEncaixadas.length === 0
-      && melhor.consumo <= alvoDaPersistencia * 1.0001;
-  };
+  const bateuAMeta = () => metaConsumo != null && melhor && melhor.naoEncaixadas.length === 0 &&
+    melhor.consumo <= alvoDaPersistencia * 1.0001;
 
   // Preparo pesado feito uma vez só e reaproveitado em toda tentativa.
   //
@@ -4316,12 +4272,6 @@ export async function buscarMelhorEncaixe(itens, config) {
   // A poda por motor só vale depois que toda receita teve a chance dela.
   let passadaBaseTerminou = false;
   let tentativas = 0;
-  const maxTentativas = Number.isSafeInteger(config.maxTentativas) && config.maxTentativas > 0
-    ? config.maxTentativas : Infinity;
-  let rejeitadas = 0;
-  let validacaoMs = 0;
-  let primeiraSolucaoMs = null;
-  let melhorSolucaoMs = null;
   let semGanho = 0;
   let perseguindo = false;
   // Quantas vezes a busca empacou e teve de mudar de caminho, e em que modo
@@ -4352,51 +4302,29 @@ export async function buscarMelhorEncaixe(itens, config) {
     : alvo != null ? alvo : metaConsumo;
   const historicoDeGanhos = [];
 
-  const conferirCandidato = (resultado) => {
-    const desde = performance.now();
-    const validacao = validarEncaixe(resultado, itens, config);
-    validacaoMs += performance.now() - desde;
-    if (!validacao.valido) { rejeitadas++; return false; }
-    resultado.validacao = validacao;
-    return true;
-  };
-
   // O melhor de cada motor, para a tela poder dizer quanto o outro teria
   // gasto. Sem isso, "usei o retângulo" fica sendo só uma afirmação.
   const melhorDeCadaMotor = new Map();
 
   /**
    * Guarda a ordem de peças deste resultado, se ela for a melhor já vista para
-   * o tipo de lista dela. No encaixe usual, só resultado completo serve de
-   * ponto de partida; no bloco limitado, a régua passa a ser a maior área que
-   * coube na bancada única.
+   * o tipo de lista dela.
+   *
+   * Só entra encaixe que coube inteiro: uma ordem que deixou peça de fora
+   * gasta menos tecido por não ter encaixado tudo, e virar ponto de partida
+   * seria ancorar a busca num lugar ruim disfarçado de bom.
    */
   const guardarOrdem = (resultado) => {
-    if (!resultado.chaveDaLista
-        || (!config.priorizarAproveitamentoDoBloco && resultado.naoEncaixadas.length > 0)) return;
+    if (!resultado.chaveDaLista || resultado.naoEncaixadas.length > 0) return;
     const antes = melhoresOrdens.get(resultado.chaveDaLista);
-    const melhorouNoBloco = config.priorizarAproveitamentoDoBloco && (!antes
-      || areaDoResultado(resultado) > (antes.areaReal || 0) + 1e-6
-      || (Math.abs(areaDoResultado(resultado) - (antes.areaReal || 0)) <= 1e-6
-        && resultado.consumo < antes.consumo));
-    if (melhorouNoBloco || (!config.priorizarAproveitamentoDoBloco
-        && (!antes || resultado.consumo < antes.consumo))) {
+    if (!antes || resultado.consumo < antes.consumo) {
       melhoresOrdens.set(resultado.chaveDaLista,
-        {
-          lista: resultado.ordemUsada, consumo: resultado.consumo,
-          areaReal: areaDoResultado(resultado), piorUnidade: resultado.piorUnidade,
-        });
+        { lista: resultado.ordemUsada, consumo: resultado.consumo, piorUnidade: resultado.piorUnidade });
     }
   };
 
   const considerar = (resultado, chave) => {
     tentativas++;
-    // Só uma solução conferida pode virar recorde, ser publicada ou servir de
-    // melhor resultado. A verificação fina roda nos candidatos que melhoram
-    // o objetivo; os demais não são incumbentes e não pagam esse custo.
-    if (!melhorQue(resultado, null, config)) { rejeitadas++; return false; }
-    const podeVencer = melhorQue(resultado, melhor, config);
-    if (podeVencer && !conferirCandidato(resultado)) return false;
     guardarOrdem(resultado);
     /*
       O DESENHO AO VIVO.
@@ -4437,7 +4365,7 @@ export async function buscarMelhorEncaixe(itens, config) {
       const antes = melhorDeCadaMotor.get(motor);
       if (antes == null || resultado.consumo < antes) melhorDeCadaMotor.set(motor, resultado.consumo);
     }
-    if (podeVencer) {
+    if (melhorQue(resultado, melhor)) {
       const anterior = melhor ? melhor.consumo : null;
       // O recorde NUNCA é estrangulado do outro lado: são poucos, e é o quadro
       // que a pessoa está esperando ver.
@@ -4448,8 +4376,6 @@ export async function buscarMelhorEncaixe(itens, config) {
       if (linha) linha.vitorias++;
       semGanho = 0;
       ultimoGanhoEm = Date.now();
-      melhorSolucaoMs = ultimoGanhoEm - inicio;
-      if (primeiraSolucaoMs === null && resultado.naoEncaixadas.length === 0) primeiraSolucaoMs = melhorSolucaoMs;
       if (anterior != null) historicoDeGanhos.push({ tentativa: tentativas, consumo: resultado.consumo });
       return true;
     }
@@ -4491,262 +4417,248 @@ export async function buscarMelhorEncaixe(itens, config) {
   // saíam — ficavam presos exatamente nisto.
   const fecharCanal = () => { canal.port1.close(); canal.port2.close(); };
 
-  try {
-    // 1) Passada base: toda receita uma vez, começando pelas que a memória
-    // aponta como boas — assim, parar cedo já entrega algo decente.
-    let ordenadasPorMemoria = base.slice().sort(
-      (a, b) => pesoDe(placar.get(chaveDaReceita(b))) - pesoDe(placar.get(chaveDaReceita(a))));
-    if (config.maxReceitasBase > 0) {
-      ordenadasPorMemoria = ordenadasPorMemoria.slice(0, config.maxReceitasBase);
-    }
+  // 1) Passada base: toda receita uma vez, começando pelas que a memória
+  // aponta como boas — assim, parar cedo já entrega algo decente.
+  let ordenadasPorMemoria = base.slice().sort(
+    (a, b) => pesoDe(placar.get(chaveDaReceita(b))) - pesoDe(placar.get(chaveDaReceita(a))));
+  if (config.maxReceitasBase > 0) {
+    ordenadasPorMemoria = ordenadasPorMemoria.slice(0, config.maxReceitasBase);
+  }
 
-    for (let i = 0; i < ordenadasPorMemoria.length; i++) {
-      if (tentativas >= maxTentativas || (melhor && config.deveParar && config.deveParar())) break;
-      const receita = ordenadasPorMemoria[i];
-      considerar(rodar(receita, null), chaveDaReceita(receita));
-      // Bateu a meta já na passada base: não tem por que rodar as receitas que
-      // faltam. Ver `bateuAMeta` para o que conta como bater.
-      if (bateuAMeta()) break;
+  for (let i = 0; i < ordenadasPorMemoria.length; i++) {
+    const receita = ordenadasPorMemoria[i];
+    considerar(rodar(receita, null), chaveDaReceita(receita));
+    // Bateu a meta já na passada base: não tem por que rodar as receitas que
+    // faltam. Ver `bateuAMeta` para o que conta como bater.
+    if (bateuAMeta()) break;
 
-      // O tempo pedido também vale aqui. Em lote grande cada receita custa caro,
-      // e sem esta parada a passada base sozinha estouraria o tempo — o campo da
-      // tela estaria mentindo. Sempre sobra pelo menos uma receita rodada, então
-      // nunca fica sem resultado.
-      if (Date.now() - inicio >= tetoMs) break;
+    // O tempo pedido também vale aqui. Em lote grande cada receita custa caro,
+    // e sem esta parada a passada base sozinha estouraria o tempo — o campo da
+    // tela estaria mentindo. Sempre sobra pelo menos uma receita rodada, então
+    // nunca fica sem resultado.
+    if (Date.now() - inicio >= tetoMs) break;
 
-      if (i % 6 === 5) {
-        avisar("base");
-        await respirar();
-        if (config.deveParar && config.deveParar()) break;
-      }
-    }
-    avisar("base");
-    passadaBaseTerminou = true;
-
-    // 2) Melhoria: sorteia receitas com peso e embaralha a ordem das peças.
-    // Continua enquanto estiver rendendo.
-    const sortear = geradorDeSorteio(config.semente || 20260824);
-    // Desistir por número de tentativas trata mal encaixe grande: quando cada
-    // tentativa custa 80 ms, 80 tentativas viram quase sete segundos de espera.
-    // Contar o tempo desde a última melhora se ajusta sozinho ao tamanho do
-    // trabalho — encaixe pequeno ganha centenas de tentativas, encaixe grande
-    // para assim que empaca.
-    const msSemGanho = config.msSemGanho || 1200;
-
-    // Enquanto a poda estiver suspensa por causa de uma parede, todas as
-    // receitas voltam para a roda. Ver "bater na parede" logo abaixo.
-    let podaSuspensaAte = 0;
-
-    while (Date.now() - inicio < tetoMs && tentativas < maxTentativas) {
-      if (config.deveParar && config.deveParar()) break;
-      if (bateuAMeta()) break;
-
-      // O recorde é do *tipo* de trabalho, não deste trabalho exato: pode ter
-      // vindo de um pedido parecido que simplesmente encaixa melhor, e aí ele é
-      // inalcançável. Perseguindo até o fim do tempo, a busca sacode forte a
-      // rodada inteira em vez de refinar o que já achou — medido, isso custou
-      // 1,55% de tecido. Depois de gastar boa parte do tempo sem alcançar, ela
-      // desiste do recorde e volta a refinar.
-      const PRAZO_DE_PERSEGUIR = 0.6;   // parte do tempo dedicada à perseguição
-      const faltaAlcancar = alvoDaPersistencia != null && melhor && melhor.consumo > alvoDaPersistencia * 1.0001;
-      const aindaVale = Date.now() - inicio < tetoMs * PRAZO_DE_PERSEGUIR;
-      perseguindo = faltaAlcancar && aindaVale;
-
-      // ---------- BATER NA PAREDE ----------
-      //
-      // Passar `msSemGanho` sem melhorar nada quer dizer que este caminho deu no
-      // que tinha de dar. Antes isso **encerrava a busca**, e o tempo que
-      // sobrava do que a pessoa pediu era devolvido sem uso: pedir 30 segundos
-      // rendia igual a pedir 5.
-      //
-      // Agora a parede não encerra, ela desvia. Três coisas mudam de uma vez:
-      //
-      //   1. o modo alterna entre refinar e explorar (explicado abaixo);
-      //   2. a poda é suspensa por meio tempo de parede, devolvendo à roda as
-      //      receitas que tinham sido cortadas — a que escapa do beco costuma
-      //      ser justamente uma que ia mal antes de o beco aparecer;
-      //   3. o relógio do ganho zera, dando ao caminho novo a mesma chance que o
-      //      anterior teve.
-      //
-      // Quem encerra a busca passa a ser só o tempo pedido ou o botão de parar.
-      // Para voltar ao antigo, `config.pararAoEmpacar` faz a parede encerrar de
-      // novo, como antes.
-      const paradoHa = Date.now() - ultimoGanhoEm;
-      if (paradoHa > msSemGanho && !perseguindo) {
-        if (config.pararAoEmpacar) break;
-        paredes++;
-        modo = modo === "refinar" ? "explorar" : "refinar";
-        podaSuspensaAte = Date.now() + msSemGanho * 0.5;
-        ultimoGanhoEm = Date.now();
-      }
-
-      const todas = [...placar.values()];
-      // A poda vale também enquanto persegue um recorde. Deixá-la de lado ali
-      // parecia certo — a receita capaz de alcançar podia ser uma das que foram
-      // mal na passada base —, mas medindo saiu pior: perseguindo um recorde
-      // inalcançável, a busca gastava o tempo todo em receita que este trabalho
-      // já tinha reprovado. Quem cuida da variedade é a fresta do sorteio.
-      const naRoda = Date.now() < podaSuspensaAte ? todas : receitasNaRoda();
-      const tentativasNesteLote = Math.max(1, Number(config.tentativasPorLote) || 8);
-
-      // ---------- OS DOIS MODOS ----------
-      //
-      // "refinar" volta para a melhor ordem de peças já encontrada e mexe pouco
-      // nela: é procurar em volta de um lugar que já se provou bom.
-      //
-      // "explorar" larga isso e recomeça da lista ordenada, sacudindo forte: é
-      // procurar em outro canto do mapa, porque em volta do melhor já se olhou.
-      //
-      // Um sozinho não serve. Só refinando, a busca fica girando dentro do
-      // mesmo beco; só explorando, ela nunca chega a lapidar o que achou. Por
-      // isso eles se revezam a cada parede.
-      // A bagunça cresce sozinha com o tempo parado: mexer pouco refina, mexer
-      // muito escapa de um beco sem saída. Perseguindo um recorde a conta é a
-      // mesma — sacudir forte o tempo todo foi medido e sai pior, porque a busca
-      // nunca chega a lapidar o que achou.
-      //
-      // Explorando, a escala é a de sempre. Refinando ela é bem menor: partindo
-      // de uma ordem que já se provou boa, o que se quer é cutucar, não sacudir
-      // — sacudir forte a partir do melhor dá no mesmo que recomeçar do zero, e
-      // aí o modo não serviria para nada.
-      const refinando = modo === "refinar";
-      const teimosia = (Date.now() - ultimoGanhoEm) / msSemGanho;
-      const forca = refinando
-        ? (teimosia < 0.5 ? 0.05 : 0.15)
-        : (teimosia < 0.34 ? 0.08 : teimosia < 0.67 ? 0.2 : 0.4);
-
-      const mutar = (l, guardada, ordem) => {
-        // Receita por família sacode blocos inteiros, e mais nada: o reparo
-        // guiado e a reinserção mexem em UMA unidade, que é justamente o que
-        // desmancharia o bloco.
-        if (ordem && ordem.porFamilia) return baguncarFamilias(l, sortear, forca);
-        if (refinando && guardada && guardada.piorUnidade && sortear() < REPARO_CHANCE) {
-          return repararPior(l, guardada.piorUnidade, sortear);
-        }
-        if (sortear() < REINSERCAO_CHANCE) return reinserir(l, sortear, forca);
-        return baguncar(l, sortear, forca);
-      };
-
-      for (let lote = 0; lote < tentativasNesteLote; lote++) {
-        if (Date.now() - inicio >= tetoMs || tentativas >= maxTentativas
-            || (config.deveParar && config.deveParar())) break;
-        const lista = sortear() < PODA_FRESTA ? todas : naRoda;
-        const escolhida = lista[Math.floor(sortear() * lista.length)] || todas[0];
-        considerar(rodar(escolhida.receita, mutar, refinando), chaveDaReceita(escolhida.receita));
-        // Não espera o lote inteiro para parar: a meta pode bater na primeira
-        // tentativa dele, e as outras sete não comprariam nada.
-        if (bateuAMeta()) break;
-      }
-
-      avisar("melhorando");
+    if (i % 6 === 5) {
+      avisar("base");
       await respirar();
+      if (config.deveParar && config.deveParar()) break;
+    }
+  }
+  avisar("base");
+  passadaBaseTerminou = true;
+
+  // 2) Melhoria: sorteia receitas com peso e embaralha a ordem das peças.
+  // Continua enquanto estiver rendendo.
+  const sortear = geradorDeSorteio(config.semente || 20260824);
+  // Desistir por número de tentativas trata mal encaixe grande: quando cada
+  // tentativa custa 80 ms, 80 tentativas viram quase sete segundos de espera.
+  // Contar o tempo desde a última melhora se ajusta sozinho ao tamanho do
+  // trabalho — encaixe pequeno ganha centenas de tentativas, encaixe grande
+  // para assim que empaca.
+  const msSemGanho = config.msSemGanho || 1200;
+
+  // Enquanto a poda estiver suspensa por causa de uma parede, todas as
+  // receitas voltam para a roda. Ver "bater na parede" logo abaixo.
+  let podaSuspensaAte = 0;
+
+  while (Date.now() - inicio < tetoMs) {
+    if (config.deveParar && config.deveParar()) break;
+    if (bateuAMeta()) break;
+
+    // O recorde é do *tipo* de trabalho, não deste trabalho exato: pode ter
+    // vindo de um pedido parecido que simplesmente encaixa melhor, e aí ele é
+    // inalcançável. Perseguindo até o fim do tempo, a busca sacode forte a
+    // rodada inteira em vez de refinar o que já achou — medido, isso custou
+    // 1,55% de tecido. Depois de gastar boa parte do tempo sem alcançar, ela
+    // desiste do recorde e volta a refinar.
+    const PRAZO_DE_PERSEGUIR = 0.6;   // parte do tempo dedicada à perseguição
+    const faltaAlcancar = alvoDaPersistencia != null && melhor && melhor.consumo > alvoDaPersistencia * 1.0001;
+    const aindaVale = Date.now() - inicio < tetoMs * PRAZO_DE_PERSEGUIR;
+    perseguindo = faltaAlcancar && aindaVale;
+
+    // ---------- BATER NA PAREDE ----------
+    //
+    // Passar `msSemGanho` sem melhorar nada quer dizer que este caminho deu no
+    // que tinha de dar. Antes isso **encerrava a busca**, e o tempo que
+    // sobrava do que a pessoa pediu era devolvido sem uso: pedir 30 segundos
+    // rendia igual a pedir 5.
+    //
+    // Agora a parede não encerra, ela desvia. Três coisas mudam de uma vez:
+    //
+    //   1. o modo alterna entre refinar e explorar (explicado abaixo);
+    //   2. a poda é suspensa por meio tempo de parede, devolvendo à roda as
+    //      receitas que tinham sido cortadas — a que escapa do beco costuma
+    //      ser justamente uma que ia mal antes de o beco aparecer;
+    //   3. o relógio do ganho zera, dando ao caminho novo a mesma chance que o
+    //      anterior teve.
+    //
+    // Quem encerra a busca passa a ser só o tempo pedido ou o botão de parar.
+    // Para voltar ao antigo, `config.pararAoEmpacar` faz a parede encerrar de
+    // novo, como antes.
+    const paradoHa = Date.now() - ultimoGanhoEm;
+    if (paradoHa > msSemGanho && !perseguindo) {
+      if (config.pararAoEmpacar) break;
+      paredes++;
+      modo = modo === "refinar" ? "explorar" : "refinar";
+      podaSuspensaAte = Date.now() + msSemGanho * 0.5;
+      ultimoGanhoEm = Date.now();
     }
 
-    /*
-     * O POLIMENTO: uma última passada do vencedor, agora com a repescagem nos
-     * vãos ligada (ver `repescarNosVaos`).
-     *
-     * Por que só no fim, e não em toda tentativa: a repescagem troca o relevo por
-     * coluna pela lista de intervalos ocupados, e isso custa de 2 a 40 ms por
-     * passada, contra o menos de um milissegundo de uma tentativa normal. Ligada
-     * sempre, ela trocaria mil tentativas por vinte — e o que compra tecido neste
-     * motor é caber mais tentativas no tempo. Rodando uma vez, no encaixe que já
-     * venceu, ela custa o que custa uma tentativa e meia.
-     *
-     * Só entra se melhorar: `melhorQue` é o mesmo critério da busca inteira.
-     * Medida numa passada gulosa, sem busca, ela tirou 6,88% do misturado pequeno
-     * e 2,58% do lote grande — os dois trabalhos com mais formatos diferentes,
-     * que é onde o vão preso se acumula.
-     *
-     * POLIR MAIS DE UM CANDIDATO FOI MEDIDO, E NÃO PAGA.
-     *
-     * A ideia era boa no papel: a repescagem rende onde ficou vão preso, e isso
-     * depende do desenho e não do consumo, então a segunda colocada podia passar
-     * a primeira depois de polida. Foi implementado — o melhor encaixe de cada
-     * receita virava candidato, com um troco de tempo reservado para isso — e
-     * medido três vezes: 0,00% nos seis lotes pequenos, 0,00% nos três lotes
-     * grandes, 0,00% na varredura de ajustes. Nunca uma vez a segunda colocada
-     * passou a primeira.
-     *
-     * O motivo aparece na coluna da receita vencedora do pedido grande: quem
-     * ganha ali é o encaixe por vãos, e para ele a repescagem quase não muda
-     * nada — ele já desce em buraco fechado desde a primeira peça. Onde a
-     * repescagem rende de verdade (o contorno), a campeã já era a melhor antes e
-     * continua depois.
-     *
-     * Saiu, com a reserva de tempo junto: neutro que custa 4% do orçamento da
-     * busca não se justifica. Ficam as VOLTAS da repescagem, que não custam nada
-     * — param sozinhas quando o rolo não encurta mais.
-     */
-    const polirOrdem = (receita, ordem) => {
-      const comRepesca = {
-        ...config, heuristica: receita.heuristica,
-        // O encaixe por vãos só entra na repescagem no polimento amplo: sem ela
-        // ele devolve o mesmo encaixe que já tinha, e é assim que o polimento de
-        // antes se comporta (ver POLIMENTO_AMPLO).
-        repescar: POLIMENTO_AMPLO || receita.motor !== "vaos",
-        repescaVoltas: REPESCA_VOLTAS,
-      };
-      if (receita.motor === "faixas") {
-        return encaixarPorFaixas(ordem, { ...comRepesca, corteCols: receita.corte });
+    const todas = [...placar.values()];
+    // A poda vale também enquanto persegue um recorde. Deixá-la de lado ali
+    // parecia certo — a receita capaz de alcançar podia ser uma das que foram
+    // mal na passada base —, mas medindo saiu pior: perseguindo um recorde
+    // inalcançável, a busca gastava o tempo todo em receita que este trabalho
+    // já tinha reprovado. Quem cuida da variedade é a fresta do sorteio.
+    const naRoda = Date.now() < podaSuspensaAte ? todas : receitasNaRoda();
+    const tentativasNesteLote = Math.max(1, Number(config.tentativasPorLote) || 8);
+
+    // ---------- OS DOIS MODOS ----------
+    //
+    // "refinar" volta para a melhor ordem de peças já encontrada e mexe pouco
+    // nela: é procurar em volta de um lugar que já se provou bom.
+    //
+    // "explorar" larga isso e recomeça da lista ordenada, sacudindo forte: é
+    // procurar em outro canto do mapa, porque em volta do melhor já se olhou.
+    //
+    // Um sozinho não serve. Só refinando, a busca fica girando dentro do
+    // mesmo beco; só explorando, ela nunca chega a lapidar o que achou. Por
+    // isso eles se revezam a cada parede.
+    // A bagunça cresce sozinha com o tempo parado: mexer pouco refina, mexer
+    // muito escapa de um beco sem saída. Perseguindo um recorde a conta é a
+    // mesma — sacudir forte o tempo todo foi medido e sai pior, porque a busca
+    // nunca chega a lapidar o que achou.
+    //
+    // Explorando, a escala é a de sempre. Refinando ela é bem menor: partindo
+    // de uma ordem que já se provou boa, o que se quer é cutucar, não sacudir
+    // — sacudir forte a partir do melhor dá no mesmo que recomeçar do zero, e
+    // aí o modo não serviria para nada.
+    const refinando = modo === "refinar";
+    const teimosia = (Date.now() - ultimoGanhoEm) / msSemGanho;
+    const forca = refinando
+      ? (teimosia < 0.5 ? 0.05 : 0.15)
+      : (teimosia < 0.34 ? 0.08 : teimosia < 0.67 ? 0.2 : 0.4);
+
+    const mutar = (l, guardada, ordem) => {
+      // Receita por família sacode blocos inteiros, e mais nada: o reparo
+      // guiado e a reinserção mexem em UMA unidade, que é justamente o que
+      // desmancharia o bloco.
+      if (ordem && ordem.porFamilia) return baguncarFamilias(l, sortear, forca);
+      if (refinando && guardada && guardada.piorUnidade && sortear() < REPARO_CHANCE) {
+        return repararPior(l, guardada.piorUnidade, sortear);
       }
-      if (receita.motor === "vaos") return encaixarPorVaos(ordem, comRepesca);
-      if (receita.motor === "blocos") return encaixarPorBlocos(ordem, comRepesca);
-      return encaixarContorno(ordem, comRepesca);
+      if (sortear() < REINSERCAO_CHANCE) return reinserir(l, sortear, forca);
+      return baguncar(l, sortear, forca);
     };
 
-    if (melhor && receitaVencedora && melhor.ordemUsada
-        && aceitaRepescagem(receitaVencedora.motor) && config.polir !== false
-        && Date.now() - inicio < tetoMs && !(config.deveParar && config.deveParar())) {
-      const polido = polirOrdem(receitaVencedora, melhor.ordemUsada);
-      if (melhorQue(polido, melhor, config) && conferirCandidato(polido)) {
-        polido.ordemUsada = melhor.ordemUsada;
-        polido.chaveDaLista = melhor.chaveDaLista;
-        polido.repescou = true;
-        melhor = polido;
-        melhorSolucaoMs = Date.now() - inicio;
-      }
+    for (let lote = 0; lote < tentativasNesteLote; lote++) {
+      const lista = sortear() < PODA_FRESTA ? todas : naRoda;
+      const escolhida = lista[Math.floor(sortear() * lista.length)] || todas[0];
+      considerar(rodar(escolhida.receita, mutar, refinando), chaveDaReceita(escolhida.receita));
+      // Não espera o lote inteiro para parar: a meta pode bater na primeira
+      // tentativa dele, e as outras sete não comprariam nada.
+      if (bateuAMeta()) break;
     }
 
-    avisar("pronto");
-
-    if (!melhor) throw new Error("Nenhum encaixe válido foi encontrado para este trabalho.");
-
-    melhor.receita = melhorChave;
-    melhor.alvo = alvo;
-    melhor.alcancouRecorde = alvo == null ? null : melhor.consumo <= alvo * 1.0001;
-    melhor.metaAproveitamento = metaFracao;
-    melhor.metaConsumo = metaConsumo;
-    melhor.alcancouMeta = metaConsumo == null ? null : bateuAMeta();
-    melhor.usouRede = pontosDaRede != null;
-    melhor.tentativas = tentativas;
-    melhor.rejeitadas = rejeitadas;
-    melhor.validacaoMs = validacaoMs;
-    melhor.primeiraSolucaoMs = primeiraSolucaoMs;
-    melhor.melhorSolucaoMs = melhorSolucaoMs;
-    melhor.paredes = paredes;
-    melhor.decorridoMs = Date.now() - inicio;
-    // Qual motor venceu. O nome importa: antes isso se chamava `porContorno` e
-    // era sobrescrito lá na tela pelo que a pessoa tinha *pedido*, então o
-    // resultado dizia "usei o retângulo" mesmo quando o contorno tinha vencido.
-    melhor.venceuContorno = melhorChave
-      ? (melhorChave.startsWith("contorno") || melhorChave.startsWith("faixas")
-        || melhorChave.startsWith("vaos") || melhorChave.startsWith("blocos")) : false;
-    melhor.venceuFaixas = melhorChave ? melhorChave.startsWith("faixas") : false;
-    melhor.melhorPorMotor = Object.fromEntries(melhorDeCadaMotor);
-    melhor.ganhos = historicoDeGanhos;
-    // `melhorConsumo` vai junto porque é dele que sai o rótulo de treino da rede:
-    // "quanto esta receita chegou perto da campeã" diz muito mais do que "ela
-    // melhorou o incumbente em algum momento". Ver `montarExemplosDeTreino`, em
-    // encaixe-memoria.js.
-    melhor.placar = [...placar.entries()]
-      .filter(([, l]) => l.tentativas > 0)
-      .map(([chave, l]) => ({
-        receita: chave, tentativas: l.tentativas, vitorias: l.vitorias,
-        melhorConsumo: Number.isFinite(l.melhorConsumo) ? l.melhorConsumo : null,
-      }));
-    return melhor;
-  } finally {
-    fecharCanal();
+    avisar("melhorando");
+    await respirar();
   }
+
+  /*
+   * O POLIMENTO: uma última passada do vencedor, agora com a repescagem nos
+   * vãos ligada (ver `repescarNosVaos`).
+   *
+   * Por que só no fim, e não em toda tentativa: a repescagem troca o relevo por
+   * coluna pela lista de intervalos ocupados, e isso custa de 2 a 40 ms por
+   * passada, contra o menos de um milissegundo de uma tentativa normal. Ligada
+   * sempre, ela trocaria mil tentativas por vinte — e o que compra tecido neste
+   * motor é caber mais tentativas no tempo. Rodando uma vez, no encaixe que já
+   * venceu, ela custa o que custa uma tentativa e meia.
+   *
+   * Só entra se melhorar: `melhorQue` é o mesmo critério da busca inteira.
+   * Medida numa passada gulosa, sem busca, ela tirou 6,88% do misturado pequeno
+   * e 2,58% do lote grande — os dois trabalhos com mais formatos diferentes,
+   * que é onde o vão preso se acumula.
+   *
+   * POLIR MAIS DE UM CANDIDATO FOI MEDIDO, E NÃO PAGA.
+   *
+   * A ideia era boa no papel: a repescagem rende onde ficou vão preso, e isso
+   * depende do desenho e não do consumo, então a segunda colocada podia passar
+   * a primeira depois de polida. Foi implementado — o melhor encaixe de cada
+   * receita virava candidato, com um troco de tempo reservado para isso — e
+   * medido três vezes: 0,00% nos seis lotes pequenos, 0,00% nos três lotes
+   * grandes, 0,00% na varredura de ajustes. Nunca uma vez a segunda colocada
+   * passou a primeira.
+   *
+   * O motivo aparece na coluna da receita vencedora do pedido grande: quem
+   * ganha ali é o encaixe por vãos, e para ele a repescagem quase não muda
+   * nada — ele já desce em buraco fechado desde a primeira peça. Onde a
+   * repescagem rende de verdade (o contorno), a campeã já era a melhor antes e
+   * continua depois.
+   *
+   * Saiu, com a reserva de tempo junto: neutro que custa 4% do orçamento da
+   * busca não se justifica. Ficam as VOLTAS da repescagem, que não custam nada
+   * — param sozinhas quando o rolo não encurta mais.
+   */
+  const polirOrdem = (receita, ordem) => {
+    const comRepesca = {
+      ...config, heuristica: receita.heuristica,
+      // O encaixe por vãos só entra na repescagem no polimento amplo: sem ela
+      // ele devolve o mesmo encaixe que já tinha, e é assim que o polimento de
+      // antes se comporta (ver POLIMENTO_AMPLO).
+      repescar: POLIMENTO_AMPLO || receita.motor !== "vaos",
+      repescaVoltas: REPESCA_VOLTAS,
+    };
+    if (receita.motor === "faixas") {
+      return encaixarPorFaixas(ordem, { ...comRepesca, corteCols: receita.corte });
+    }
+    if (receita.motor === "vaos") return encaixarPorVaos(ordem, comRepesca);
+    if (receita.motor === "blocos") return encaixarPorBlocos(ordem, comRepesca);
+    return encaixarContorno(ordem, comRepesca);
+  };
+
+  if (melhor && receitaVencedora && melhor.ordemUsada
+      && aceitaRepescagem(receitaVencedora.motor)) {
+    const polido = polirOrdem(receitaVencedora, melhor.ordemUsada);
+    if (melhorQue(polido, melhor)) {
+      polido.ordemUsada = melhor.ordemUsada;
+      polido.chaveDaLista = melhor.chaveDaLista;
+      polido.repescou = true;
+      melhor = polido;
+    }
+  }
+
+  avisar("pronto");
+  fecharCanal();
+
+  melhor.receita = melhorChave;
+  melhor.alvo = alvo;
+  melhor.alcancouRecorde = alvo == null ? null : melhor.consumo <= alvo * 1.0001;
+  melhor.metaAproveitamento = metaFracao;
+  melhor.metaConsumo = metaConsumo;
+  melhor.alcancouMeta = metaConsumo == null ? null : bateuAMeta();
+  melhor.usouRede = pontosDaRede != null;
+  melhor.tentativas = tentativas;
+  melhor.paredes = paredes;
+  melhor.decorridoMs = Date.now() - inicio;
+  // Qual motor venceu. O nome importa: antes isso se chamava `porContorno` e
+  // era sobrescrito lá na tela pelo que a pessoa tinha *pedido*, então o
+  // resultado dizia "usei o retângulo" mesmo quando o contorno tinha vencido.
+  melhor.venceuContorno = melhorChave
+    ? (melhorChave.startsWith("contorno") || melhorChave.startsWith("faixas")
+      || melhorChave.startsWith("vaos") || melhorChave.startsWith("blocos")) : false;
+  melhor.venceuFaixas = melhorChave ? melhorChave.startsWith("faixas") : false;
+  melhor.melhorPorMotor = Object.fromEntries(melhorDeCadaMotor);
+  melhor.ganhos = historicoDeGanhos;
+  // `melhorConsumo` vai junto porque é dele que sai o rótulo de treino da rede:
+  // "quanto esta receita chegou perto da campeã" diz muito mais do que "ela
+  // melhorou o incumbente em algum momento". Ver `montarExemplosDeTreino`, em
+  // encaixe-memoria.js.
+  melhor.placar = [...placar.entries()]
+    .filter(([, l]) => l.tentativas > 0)
+    .map(([chave, l]) => ({
+      receita: chave, tentativas: l.tentativas, vitorias: l.vitorias,
+      melhorConsumo: Number.isFinite(l.melhorConsumo) ? l.melhorConsumo : null,
+    }));
+  return melhor;
 }

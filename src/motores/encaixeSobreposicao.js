@@ -83,21 +83,9 @@ function medirPosicao(pos) {
 
   const m = pos.mascara;
   const passo = Number(pos.passo);
-  if (m) {
-    // Máscara presente mas corrompida não vira um retângulo "válido".
-    if (!Number.isFinite(passo) || passo <= 0 || !Number.isSafeInteger(m.cols) || m.cols <= 0
-        || !Number.isSafeInteger(m.rows) || m.rows <= 0
-        || !m.topo || !m.base || m.topo.length !== m.cols || m.base.length !== m.cols
-        || !Number.isFinite(m.offX ?? 0) || !Number.isFinite(m.offY ?? 0)) return null;
-    for (let c = 0; c < m.cols; c++) {
-      const t = m.topo[c], b = m.base[c];
-      if (t === -1 && b === -1) continue;
-      if (!Number.isSafeInteger(t) || !Number.isSafeInteger(b) || t < 0 || b < t || b >= m.rows) return null;
-    }
+  if (m && m.topo && m.base && passo > 0) {
     const x0 = x + (m.offX || 0);
     const y0 = y + (m.offY || 0);
-    const caixa = caixaDaMascara(m, x0, y0, passo);
-    if (![x0, y0, caixa.esq, caixa.dir, caixa.topo, caixa.base].every(Number.isFinite)) return null;
     return {
       tipo: "mascara",
       passo,
@@ -106,16 +94,14 @@ function medirPosicao(pos) {
       // A caixa envolvente sai das colunas que têm material, e não de
       // `cols`/`rows`: máscara com coluna vazia na ponta daria uma caixa maior
       // que a peça, e a fase grossa perderia poder de descarte.
-      ...caixa,
+      ...caixaDaMascara(m, x0, y0, passo),
       m,
     };
   }
 
   const largura = Number(pos.largura);
   const altura = Number(pos.altura);
-  if (!Number.isFinite(largura) || !Number.isFinite(altura) || !(largura > 0) || !(altura > 0)
-      || !Number.isFinite(x + largura) || !Number.isFinite(y + altura)
-      || x + largura === x || y + altura === y) return null;
+  if (!(largura > 0) || !(altura > 0)) return null;
   return {
     tipo: "caixa",
     esq: x, dir: x + largura,
@@ -146,10 +132,7 @@ function caixaDaMascara(m, x0, y0, passo) {
 
 /** As caixas se cruzam? Encostar não é cruzar: borda comum é folga zero, não sobreposição. */
 function caixasCruzam(a, b) {
-  const epsX = 32 * Number.EPSILON * Math.max(1, Math.abs(a.esq), Math.abs(a.dir), Math.abs(b.esq), Math.abs(b.dir));
-  const epsY = 32 * Number.EPSILON * Math.max(1, Math.abs(a.topo), Math.abs(a.base), Math.abs(b.topo), Math.abs(b.base));
-  return Math.min(a.dir, b.dir) - Math.max(a.esq, b.esq) > epsX
-    && Math.min(a.base, b.base) - Math.max(a.topo, b.topo) > epsY;
+  return a.esq < b.dir && b.esq < a.dir && a.topo < b.base && b.topo < a.base;
 }
 
 /**
@@ -168,53 +151,33 @@ function cruzamentoFino(a, b) {
   if (a.tipo === "mascara" && b.tipo === "caixa") return mascaraContraCaixa(a, b);
   if (a.tipo === "caixa" && b.tipo === "mascara") return mascaraContraCaixa(b, a);
 
-  // Comparação contínua na origem local de A. Posições restauradas e o
-  // compactador podem sair da grade; arredondar o deslocamento ocultava uma
-  // sobreposição de até meia célula. Dois cursores também atendem passos
-  // diferentes, em O(colsA + colsB), sem confundir caixa com silhueta.
-  const dx = b.x0 - a.x0, dy = b.y0 - a.y0;
-  // Só absorve erro de representação IEEE-754, nunca uma folga de fabricação.
-  const epsX = 32 * Number.EPSILON * Math.max(1, Math.abs(a.x0), Math.abs(b.x0), a.m.cols * a.passo, b.m.cols * b.passo);
-  const epsY = 32 * Number.EPSILON * Math.max(1, Math.abs(a.y0), Math.abs(b.y0), a.m.rows * a.passo, b.m.rows * b.passo);
-  let ca = 0, cb = 0;
-  while (ca < a.m.cols && cb < b.m.cols) {
-    const aEsq = ca * a.passo, aDir = (ca + 1) * a.passo;
-    const bEsq = dx + cb * b.passo, bDir = dx + (cb + 1) * b.passo;
-    if (Math.min(aDir, bDir) - Math.max(aEsq, bEsq) > epsX
-        && a.m.topo[ca] >= 0 && b.m.topo[cb] >= 0) {
-      const topo = Math.max(a.m.topo[ca] * a.passo, dy + b.m.topo[cb] * b.passo);
-      const base = Math.min((a.m.base[ca] + 1) * a.passo, dy + (b.m.base[cb] + 1) * b.passo);
-      if (base - topo > epsY) {
-        // Os cascos se cruzam. Sem trechos guardados o casco É a peça, e isto
-        // é sobreposição. Com trechos (peça com cava — ver `faixasDaColuna`,
-        // em encaixeMascara.js), confere trecho a trecho: uma peça pode morar
-        // no vazio da coluna da outra (P7, 2026-11-10).
-        if (!a.m.faixas && !b.m.faixas) return [a.x0 + Math.max(aEsq, bEsq), a.y0 + topo];
-        for (const [aDe, aAte] of trechos(a.m, ca)) {
-          for (const [bDe, bAte] of trechos(b.m, cb)) {
-            const t = Math.max(aDe * a.passo, dy + bDe * b.passo);
-            const f = Math.min((aAte + 1) * a.passo, dy + (bAte + 1) * b.passo);
-            if (f - t > epsY) return [a.x0 + Math.max(aEsq, bEsq), a.y0 + t];
-          }
-        }
-      }
-    }
-    if (aDir <= bDir) ca++;
-    else cb++;
+  // Máscara contra máscara: as duas em célula. Passos diferentes não acontecem
+  // num mesmo encaixe (o passo é da grade do trabalho), mas se acontecerem a
+  // comparação em célula não valeria — cai na caixa, que é sempre verdadeira.
+  if (a.passo !== b.passo) {
+    return [Math.max(a.esq, b.esq), Math.max(a.topo, b.topo)];
+  }
+
+  const passo = a.passo;
+  // O deslocamento de uma em relação à outra, em colunas e linhas inteiras. As
+  // duas nascem da mesma grade, então a diferença é múltipla do passo; o
+  // arredondamento desfaz o erro de ponto flutuante, não uma diferença real.
+  const dCol = Math.round((b.x0 - a.x0) / passo);
+  const dLin = Math.round((b.y0 - a.y0) / passo);
+
+  for (let c = 0; c < a.m.cols; c++) {
+    if (a.m.topo[c] < 0) continue;
+    const cb = c - dCol;
+    if (cb < 0 || cb >= b.m.cols || b.m.topo[cb] < 0) continue;
+    const aDe = a.m.topo[c];
+    const aAte = a.m.base[c];
+    const bDe = b.m.topo[cb] + dLin;
+    const bAte = b.m.base[cb] + dLin;
+    if (aDe > bAte || bDe > aAte) continue;
+    const linha = Math.max(aDe, bDe);
+    return [a.x0 + c * passo, a.y0 + linha * passo];
   }
   return null;
-}
-
-/**
- * Os trechos da coluna `c` de uma máscara: os de `faixas` quando há, ou o
- * único do topo/base. A mesma regra de `trechosDaColuna`, em encaixeMascara.js
- * — repetida aqui para a trava não depender do módulo da silhueta.
- */
-function trechos(m, c) {
-  if (!m.faixas) return m.topo[c] < 0 ? [] : [[m.topo[c], m.base[c]]];
-  const lista = [];
-  for (let k = m.faixas.ini[c]; k < m.faixas.ini[c + 1]; k++) lista.push([m.faixas.de[k], m.faixas.ate[k]]);
-  return lista;
 }
 
 function mascaraContraCaixa(mask, caixa) {
@@ -226,12 +189,10 @@ function mascaraContraCaixa(mask, caixa) {
     const esq = mask.x0 + c * passo;
     const dir = esq + passo;
     if (dir <= caixa.esq || esq >= caixa.dir) continue;
-    for (const [de, ate] of trechos(mask.m, c)) {
-      const topo = mask.y0 + de * passo;
-      const base = mask.y0 + (ate + 1) * passo;
-      if (base <= caixa.topo || topo >= caixa.base) continue;
-      return [Math.max(esq, caixa.esq), Math.max(topo, caixa.topo)];
-    }
+    const topo = mask.y0 + mask.m.topo[c] * passo;
+    const base = mask.y0 + (mask.m.base[c] + 1) * passo;
+    if (base <= caixa.topo || topo >= caixa.base) continue;
+    return [Math.max(esq, caixa.esq), Math.max(topo, caixa.topo)];
   }
   return null;
 }
@@ -316,8 +277,8 @@ export function recusarPorSobreposicao(resultado) {
 
   // Nada conferível não é "limpo": é um encaixe sobre o qual não se pode
   // afirmar nada, e afirmar "limpo" ali seria o guarda mentindo.
-  if (conferidas !== resultado.posicoes.length) {
-    return "Não deu para conferir todas as peças — este encaixe não"
+  if (conferidas === 0) {
+    return "Não deu para conferir se as peças estão sobrepostas — este encaixe não"
       + " pode ir para a produção. Refaça a procura.";
   }
   if (pares === 0) return null;

@@ -52,8 +52,6 @@ import {
   reservaDaArte, sondasDaForma,
 } from "./encaixeMotor";
 
-import { conferirLimitesDaGrade } from "./limitesDaGrade";
-
 // Os campos do cabeçalho, na mesma ordem do lib.rs.
 export const WASM_CAB = {
   formaCols: 0, formaNCols: 1, formaSomaTopo: 2, formaMaxBase: 3, formaNSondas: 4,
@@ -346,9 +344,7 @@ export function encaixarContornoWasm(unidades, config) {
 
   const { passo, heuristica } = config;
   const colsTecido = config.colsForcado || colunasDoTecido(config);
-  const linhasBancada = config.linhasBancadaForcado != null ? config.linhasBancadaForcado
-    : bancadaEmCelulas(config, reservaDaArte(unidades, passo));
-  conferirLimitesDaGrade(unidades, config, colsTecido, linhasBancada || 0);
+  const linhasBancada = bancadaEmCelulas(config, reservaDaArte(unidades, passo));
 
   /*
    * `config.conjunto` é o conjunto INTEIRO de unidades desta busca, quando o

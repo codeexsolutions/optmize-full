@@ -184,13 +184,7 @@ function fundoVazouNaPeca(px, ehFundo, cor, total) {
  */
 export function grade(larguraTecido, espaco) {
   const maisGrossa = Math.min(1, Math.max(0.2, arredondar(larguraTecido / 300)));
-  // O piso da célula. Até 200 cm é largura/1000, como sempre foi. Acima
-  // disso ele para em 0,2 cm, para a folga de 4 mm sair exata em rolo largo:
-  // com largura/1000, 320 cm e 4 mm davam 6,4 mm de folga real. Medido em
-  // 2026-11-10 (bancada/conferir-escala.js --teste largo, 350 peças, 320 cm,
-  // 3 sementes): −1,72% de tecido, sem rejeição nem sobreposição. Acima de
-  // 320 cm a grade fica em 1600 colunas, o máximo que a medição cobriu.
-  const maisFina = Math.min(larguraTecido / 1000, Math.max(0.2, larguraTecido / 1600));
+  const maisFina = larguraTecido / 1000;
   if (!(espaco > 0)) return { passo: maisGrossa, raio: 0, folgaReal: 0 };
 
   // Metade da folga tem que caber num número inteiro de células. Divide-se
@@ -567,70 +561,9 @@ function prepararMascara(engordados, reais, cols, rows, passo) {
 
   return {
     cols: largura, rows: altura, topo, base, desenho,
-    faixas: faixasDaColuna(engordados, cols, minCol, minRow, largura, altura),
     alturaUtil: altura,
     offX: minCol * passo, offY: minRow * passo,
   };
-}
-
-/**
- * A PEÇA EXATA, COLUNA POR COLUNA — os trechos que o topo/base esconde.
- *
- * `topo`/`base` guardam UM trecho por coluna: do primeiro ao último pedaço de
- * peça. Na coluna que atravessa a cava de uma camiseta (manga, vazio, corpo),
- * isso enche o vazio. É o casco que a busca usa, e continua sendo.
- *
- * A fase do sparrow e a trava de sobreposição passaram a querer a peça exata
- * (P7, 2026-11-10): o sparrow encaixa o contorno de verdade, e a volta é
- * conferida contra a mesma coisa. Aqui ficam os trechos de cada coluna:
- * `ini[c]..ini[c+1]` indexam `de`/`ate` (linhas, inclusive).
- *
- * `null` quando toda coluna tem um trecho só — aí `topo`/`base` JÁ SÃO a peça
- * exata, e não há o que guardar. É o caso de manga, gola, punho e retângulo,
- * e não custa memória nenhuma.
- */
-function faixasDaColuna(bits, cols, minCol, minRow, largura, altura) {
-  let algumaComVazio = false;
-  let total = 0;
-  for (let x = 0; x < largura && !algumaComVazio; x++) {
-    let trechos = 0;
-    let dentro = false;
-    for (let y = 0; y < altura; y++) {
-      const v = bits[(y + minRow) * cols + (x + minCol)];
-      if (v && !dentro) trechos++;
-      dentro = !!v;
-    }
-    if (trechos > 1) algumaComVazio = true;
-  }
-  if (!algumaComVazio) return null;
-
-  const ini = new Int32Array(largura + 1);
-  const de = [];
-  const ate = [];
-  for (let x = 0; x < largura; x++) {
-    ini[x] = total;
-    let comeco = -1;
-    for (let y = 0; y <= altura; y++) {
-      const v = y < altura && bits[(y + minRow) * cols + (x + minCol)];
-      if (v && comeco < 0) comeco = y;
-      if (!v && comeco >= 0) { de.push(comeco); ate.push(y - 1); total++; comeco = -1; }
-    }
-  }
-  ini[largura] = total;
-  return { ini, de: Int32Array.from(de), ate: Int32Array.from(ate) };
-}
-
-/**
- * Os trechos da coluna `c` de uma máscara, como pares [de, ate] — da `faixas`
- * quando há, ou o único trecho do topo/base. Coluna vazia: lista vazia.
- */
-export function trechosDaColuna(m, c) {
-  if (m.faixas) {
-    const lista = [];
-    for (let k = m.faixas.ini[c]; k < m.faixas.ini[c + 1]; k++) lista.push([m.faixas.de[k], m.faixas.ate[k]]);
-    return lista;
-  }
-  return m.topo[c] < 0 ? [] : [[m.topo[c], m.base[c]]];
 }
 
 

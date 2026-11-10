@@ -31,8 +31,6 @@ const rede = require("../src/motores/encaixeRede.mjs");
 // A memória de TODAS as lojas (ver o cabeçalho de lá). Ela soma, nunca manda:
 // sem internet, tudo aqui segue igual ao que era.
 const coletivo = require("./encaixe-coletivo");
-// A conta do quadrado do relatório, gravada junto com cada encaixe.
-const { consumoNoQuadrado } = require("./encaixe-relatorio");
 
 const router = express.Router();
 
@@ -337,7 +335,7 @@ router.get("/memoria", async (req, res) => {
 /** Registra como foi um encaixe: quem ganhou, quem tentou e o resultado. */
 router.post("/memoria", (req, res) => {
   const { assinatura, receita, placar, larguraTecido, pecas, consumo, aproveitamento, tentativas,
-    features, featuresVersao, medidas, espaco, espacoY } = req.body || {};
+    features, featuresVersao } = req.body || {};
   if (!assinatura || !receita) {
     return res.status(400).json({ error: "Faltou a assinatura ou a receita vencedora." });
   }
@@ -367,23 +365,17 @@ router.post("/memoria", (req, res) => {
     // cache no navegador, e uma aba aberta desde antes da atualização mandaria
     // vetor velho com carimbo novo. Sem o campo, é a 1.
     const versao = Number(featuresVersao) > 0 ? Number(featuresVersao) : 1;
-    // O mesmo trabalho pelo quadrado, para o relatório (ver encaixe-relatorio.js).
-    // Tela antiga, sem as medidas: fica nulo, e o relatório tenta pelo guardado.
-    const quadrado = Array.isArray(medidas)
-      ? consumoNoQuadrado(medidas, larguraTecido, espaco, espacoY == null ? espaco : espacoY)
-      : null;
     db.prepare(`
       INSERT INTO encaixe_historico
         (assinatura, largura_tecido, pecas, consumo, aproveitamento, receita, tentativas, criado_em,
-         features, placar, features_versao, consumo_quadrado, espaco)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         features, placar, features_versao)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(assinatura, Number(larguraTecido) || null, Number(pecas) || null,
       Number(consumo) || null, Number(aproveitamento) || null, String(receita),
       Number(tentativas) || null, agora(),
       Array.isArray(features) ? JSON.stringify(features) : null,
       Array.isArray(placar) && placar.length > 0 ? JSON.stringify(placar) : null,
-      Array.isArray(features) ? versao : null,
-      quadrado, Number(espaco) >= 0 ? Number(espaco) : null);
+      Array.isArray(features) ? versao : null);
   });
 
   anotar();

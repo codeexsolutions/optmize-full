@@ -37,23 +37,6 @@ import {
 import {
   ENCOLHER_MINIMO_MS, ENCOLHER_RESERVA_MS, motivoDoTrabalho, motivoParaNaoEncolher, tempoDaBusca,
 } from "./encaixeEncolher";
-import { consumoDoFundo } from "./encaixeMotor";
-import { acharSobreposicao } from "./encaixeSobreposicao";
-import { emendarRegioes, encaixeDaRegiao, partirEmRegioes } from "./encaixeRegioes";
-
-/*
- * O SPARROW POR REGIÕES (P11, docs/optimize/research/PROPOSTAS.md).
- *
- * Em trabalho grande, em vez de todos os workers compactarem o rolo inteiro
- * com sementes diferentes, cada worker compacta uma REGIÃO do rolo, e as
- * regiões são emendadas no fim. Medido (bancada/conferir-regioes.js, 5
- * workers × 90 s, mesma partida): 700 peças, −2,42% contra −1,19% do jeito de
- * antes. Abaixo do limiar fica o jeito de antes, que não foi medido contra
- * este em trabalho pequeno. `config.encolherPorRegioes === false` desliga.
- */
-export const REGIOES_MINIMO_PECAS = 500;
-/** Quantas peças por região, de alvo (a bancada mediu 140 e 210, os dois rendendo). */
-export const REGIOES_PECAS_POR_REGIAO = 175;
 
 // Um núcleo fica de fora para a tela continuar respondendo (é ela que desenha
 // a barra de progresso e escuta o botão de parar). O teto de 8 é para não
@@ -227,9 +210,6 @@ export function mascarasParaBusca(mascaras) {
   Object.entries(mascaras.rotacoes).forEach(([rot, m]) => {
     rotacoes[rot] = m ? {
       cols: m.cols, rows: m.rows, topo: m.topo, base: m.base,
-      // Os trechos da peça exata (ver `faixasDaColuna`): o sparrow e a trava
-      // da volta usam. Nulos na peça sem cava, e pequenos na que tem.
-      faixas: m.faixas || null,
       alturaUtil: m.alturaUtil, offX: m.offX, offY: m.offY, recuo: m.recuo,
     } : m;
   });
@@ -261,20 +241,13 @@ export function configParaWorker(config) {
  * "tentativas" é o total de todas as fatias, e o melhor de cada motor é o
  * melhor entre as fatias que rodaram aquele motor.
  */
-export function juntarResultados(resultados, config = {}) {
+export function juntarResultados(resultados) {
   let campeao = null;
-  for (const r of resultados) if (melhorQue(r, campeao, config)) campeao = r;
+  for (const r of resultados) if (melhorQue(r, campeao)) campeao = r;
   if (!campeao) return null;
 
   const juntado = { ...campeao };
   juntado.tentativas = resultados.reduce((soma, r) => soma + (r.tentativas || 0), 0);
-  juntado.rejeitadas = resultados.reduce((soma, r) => soma + (r.rejeitadas || 0), 0);
-  // Soma de trabalho dos workers, não tempo de parede do orquestrador.
-  juntado.validacaoMs = resultados.reduce((soma, r) => soma + (r.validacaoMs || 0), 0);
-  juntado.diagnosticoPorWorker = resultados.map((r) => ({
-    primeiraSolucaoMs: r.primeiraSolucaoMs, melhorSolucaoMs: r.melhorSolucaoMs,
-    tentativas: r.tentativas, rejeitadas: r.rejeitadas, validacaoMs: r.validacaoMs,
-  }));
   // Cada fatia empaca e muda de caminho por conta própria; o total é a soma.
   juntado.paredes = resultados.reduce((soma, r) => soma + (r.paredes || 0), 0);
   juntado.placar = resultados.flatMap((r) => r.placar || []);
@@ -354,24 +327,6 @@ export async function buscarMelhorEncaixeEmParalelo(itens, config) {
     tempoMaximoMs: tempoBusca,
     // O "desistir por empacar" acompanha o tempo desta fase, e não o total.
     msSemGanho: Math.max(800, tempoBusca * 0.25),
-    /*
-     * A BUSCA PARA QUANDO EMPACA (2026-11-09), e o sparrow fica com o resto.
-     *
-     * Medido na curva do `producao-avulsa` (bancada/curva-no-tempo.js): a
-     * busca chega ao melhor dela em 1,5 s e fica parada até os 20 s da fase,
-     * enquanto o sparrow, que é quem ainda compra tecido, espera. Parando no
-     * empacar, o sparrow começa mais cedo e o mesmo tecido sai antes. O tempo
-     * que sobra vai inteiro para ele (`resto`, logo abaixo).
-     *
-     * MEDIDO E DESLIGADO POR PADRÃO (1 semente, 60 s): no camiseta+manga+gola
-     * o mesmo tecido saiu 5 s antes; no producao-avulsa a curva ficou ora na
-     * frente, ora atrás, e o final empatou (31,768 contra 31,760 m). Não basta
-     * para trocar o padrão. Liga com `config.buscaParaNoEmpacar` (na bancada,
-     * `--extra buscaParaNoEmpacar=true`) para remedir com mais sementes.
-     */
-    // LIGADO desde 2026-11-10: o mesmo tecido sai antes, e o final empata.
-    // `buscaParaNoEmpacar: false` volta ao antigo.
-    pararAoEmpacar: config.buscaParaNoEmpacar !== false,
   });
   if (!base) return base;
 
@@ -443,20 +398,9 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
   let parouNaMao = false;
   let matouAlguem = false;
   let falhaGeral = null;
-  // Por regiões: o pedaço de partida de cada região e qual worker cuida dela.
-  let regioes = null;
-  /** O rolo inteiro de agora: cada região com o melhor que o worker dela mandou. */
-  const emendado = () => emendarRegioes(regioes.pedacos.map((pedaco, r) => {
-    // O melhor que algum dos workers desta região mandou.
-    let melhor = pedaco;
-    regioes.doWorker.forEach((regiao, k) => {
-      if (regiao === r && ultimos[k] && ultimos[k].consumo < melhor.consumo) melhor = ultimos[k];
-    });
-    return melhor;
-  }), config.passo, config, consumoDoFundo);
 
-  const melhorAgora = () => (regioes ? Math.min(base.consumo, emendado().consumo) : ultimos.reduce(
-    (menor, r) => (r && r.consumo < menor ? r.consumo : menor), base.consumo));
+  const melhorAgora = () => ultimos.reduce(
+    (menor, r) => (r && r.consumo < menor ? r.consumo : menor), base.consumo);
   const relatar = () => {
     if (!config.aoProgredir) return;
     config.aoProgredir({
@@ -529,26 +473,7 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
       falhaGeral = "encolhedor indisponível";
     }
 
-    // Por regiões (ver REGIOES_MINIMO_PECAS): uma região por worker apto.
-    const quantosAptos = aptos.filter(Boolean).length;
-    if (config.encolherPorRegioes !== false && itens.length >= REGIOES_MINIMO_PECAS && quantosAptos >= 2) {
-      // Regiões de ~175 peças (o tamanho em que o sparrow rendeu na bancada);
-      // região pequena demais perde na emenda. Os workers que sobram reforçam
-      // as regiões com outra semente, e fica o melhor de cada uma.
-      const quantas = Math.max(2, Math.min(quantosAptos, Math.round(itens.length / REGIOES_PECAS_POR_REGIAO)));
-      const pedacos = partirEmRegioes(base, quantas);
-      regioes = {
-        pedacos: pedacos.map((p) => encaixeDaRegiao(p, config.passo, config, consumoDoFundo)),
-        doWorker: new Array(workers.length).fill(-1),
-      };
-      let proximo = 0;
-      workers.forEach((_, k) => {
-        if (!aptos[k]) return;
-        regioes.doWorker[k] = proximo % regioes.pedacos.length;
-        proximo++;
-      });
-    }
-    // 2) Cada worker encolhe com a sua semente (ou a sua região).
+    // 2) Cada worker encolhe com a sua semente.
     const partida = partidaParaWorker(base);
     const configDoSparrow = {
       larguraTecido: config.larguraTecido,
@@ -563,8 +488,7 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
     };
     const rodadas = workers.map((w, k) => new Promise((pronto) => {
       encerrar[k] = pronto;
-      const regiao = regioes ? regioes.doWorker[k] : -1;
-      if (parouNaMao || falhaGeral || !aptos[k] || (regioes && regiao < 0)) { respondeu[k] = true; pronto(); return; }
+      if (parouNaMao || falhaGeral || !aptos[k]) { respondeu[k] = true; pronto(); return; }
       const aoResponder = (evento) => {
         const msg = evento.data;
         if (!msg) return;
@@ -574,14 +498,6 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
           return;
         }
         if (msg.tipo === "encolhido") {
-          if (regioes) {
-            // Uma região encurtou: a mesa recebe o rolo inteiro, emendado.
-            devolverAsPecas(msg.resultado, itens);
-            ultimos[k] = msg.resultado;
-            relatar();
-            if (config.aoDesenhar) config.aoDesenhar("recorde", emendado());
-            return;
-          }
           ultimos[k] = msg.resultado;
           relatar();
           // O rolo mais curto vai para a mesa como recorde: nesta fase não há
@@ -605,10 +521,7 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
         pronto();
       }, { once: true });
       w.postMessage({
-        tipo: "encolher", k,
-        partida: regioes ? partidaParaWorker(regioes.pedacos[regiao]) : partida,
-        soDaPartida: Boolean(regioes),
-        config: configDoSparrow,
+        tipo: "encolher", k, partida, config: configDoSparrow,
         semente: sementeDaFatia(config.semente, k),
       });
     }));
@@ -632,22 +545,7 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
   };
 
   let campeao = null;
-  if (regioes) {
-    // As regiões emendadas só valem inteiras e conferidas: todas as peças, uma
-    // vez cada, e a trava da produção sem par nenhum.
-    info.regioes = regioes.pedacos.length;
-    const junto = emendado();
-    const guarda = acharSobreposicao(junto.posicoes);
-    const todas = new Set(junto.posicoes.map((p) => `${p.item.indice}#${p.item.copia}`));
-    if (guarda.pares === 0 && guarda.conferidas === junto.posicoes.length
-        && junto.posicoes.length === base.posicoes.length && todas.size === base.posicoes.length) {
-      campeao = junto;
-    } else {
-      console.warn("[encaixe] as regiões emendadas não passaram na trava; fica o encaixe da busca.");
-    }
-  } else {
-    ultimos.forEach((r) => { if (r && (!campeao || r.consumo < campeao.consumo)) campeao = r; });
-  }
+  ultimos.forEach((r) => { if (r && (!campeao || r.consumo < campeao.consumo)) campeao = r; });
   if (!campeao || !(campeao.consumo < base.consumo - 1e-9)) {
     const motivoDeUm = estados.find((e) => e && e.motivo);
     base.encolhimento = {
@@ -904,7 +802,7 @@ export async function buscarPorFatias(itens, config) {
   // de circulação, e a próxima busca sobe workers novos.
   if (quebrou || matouAlguem) derrubarPool();
 
-  const juntado = juntarResultados(resultados, config);
+  const juntado = juntarResultados(resultados);
   if (!juntado) {
     // Nenhuma fatia entregou. Em thread única não há worker para travar, então
     // este caminho sempre responde — mais devagar, e respondendo.

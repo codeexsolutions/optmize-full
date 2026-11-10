@@ -220,190 +220,6 @@ export function contornoEmEscada(m) {
   return t;
 }
 
-// ==================== O CONTORNO EXATO (P7) ====================
-
-/**
- * Quantos vértices o contorno exato pode ter antes de ser engrossado. O
- * sparrow paga por vértice em cada teste de colisão; o contorno em escada de
- * uma peça grande em grade fina passa de milhares.
- */
-export const CONTORNO_VERTICES_MAXIMO = 300;
-/** Os blocos tentados para engrossar, em células: o menor que cabe no limite vence. */
-const CONTORNO_BLOCOS = [1, 2, 3, 4, 6, 8, 12, 16];
-
-/**
- * O CONTORNO EXATO DA PEÇA — a forma que o sparrow encaixa desde a P7.
- *
- * O `contornoEmEscada` dá ao sparrow o casco coluna por coluna: a cava de uma
- * camiseta vira área cheia (+8,6% de área na camiseta, +7,9% na regata). Aqui
- * vai a peça de verdade — a silhueta engordada pela folga, célula por célula
- * (`trechos` de cada coluna) —, e a volta é conferida contra a mesma coisa
- * (`acharSobreposicao` lê os trechos). Medido em 2026-09-21: o sparrow no
- * contorno exato rendia 0,8% a mais que nas máscaras.
- *
- * E OS GIROS DEITADOS VOLTAM. O casco de 90° não é o casco de 0° girado (ver
- * `giroConsistente`), mas a peça exata é: a máscara de cada giro sai de girar
- * a MESMA silhueta. Então o contorno de 0°, girado pelo sparrow, cobre a peça
- * exata de qualquer giro, e a peça com cava pode deitar na segunda fase.
- *
- * O polígono só pode ser MAIOR que a peça, nunca menor (peça mais gorda no
- * sparrow nunca vira sobreposição na trava):
- *
- *   - engrossado em blocos de `k` células quando passa do limite de vértices
- *     (bloco com qualquer pedaço de peça é peça);
- *   - os buracos de dentro são preenchidos (ninguém encaixa dentro deles);
- *   - dois blocos que só se tocam pela quina ganham os outros dois — senão o
- *     contorno passaria duas vezes pelo mesmo ponto e não seria um polígono
- *     simples.
- *
- * Devolve `null` quando a peça tem partes soltas (letras de uma arte, por
- * exemplo): um polígono só não as descreve, e fica o contorno em escada.
- */
-export function contornoExato(m) {
-  const C = m.cols;
-  const R = m.rows;
-  const fino = new Uint8Array(C * R);
-  for (let c = 0; c < C; c++) {
-    for (const [de, ate] of trechosDe(m, c)) {
-      for (let y = de; y <= ate; y++) fino[y * C + c] = 1;
-    }
-  }
-  for (const k of CONTORNO_BLOCOS) {
-    const pontos = contornoEmBlocos(fino, C, R, k);
-    if (pontos === null) return null;
-    if (pontos.length <= CONTORNO_VERTICES_MAXIMO || k === CONTORNO_BLOCOS[CONTORNO_BLOCOS.length - 1]) {
-      return noQuadroDoSparrow(pontos);
-    }
-  }
-  return null;
-}
-
-/** Os trechos [de, ate] da coluna `c`: os guardados, ou o do topo/base. */
-function trechosDe(m, c) {
-  if (!m.faixas) return m.topo[c] < 0 ? [] : [[m.topo[c], m.base[c]]];
-  const lista = [];
-  for (let k = m.faixas.ini[c]; k < m.faixas.ini[c + 1]; k++) lista.push([m.faixas.de[k], m.faixas.ate[k]]);
-  return lista;
-}
-
-/** O contorno da peça em blocos de `k` células, em células do quadro do motor, ou `null`. */
-function contornoEmBlocos(fino, C, R, k) {
-  const W = Math.ceil(C / k);
-  const H = Math.ceil(R / k);
-  const g = new Uint8Array(W * H);
-  for (let y = 0; y < R; y++) {
-    for (let x = 0; x < C; x++) if (fino[y * C + x]) g[Math.floor(y / k) * W + Math.floor(x / k)] = 1;
-  }
-  const em = (x, y) => x >= 0 && y >= 0 && x < W && y < H && g[y * W + x] === 1;
-
-  // Preencher os buracos e fechar as quinas, até nada mudar.
-  for (let volta = 0; volta < W * H + 2; volta++) {
-    preencherBuracos(g, W, H);
-    let mudou = false;
-    for (let y = 0; y + 1 < H; y++) {
-      for (let x = 0; x + 1 < W; x++) {
-        const a = g[y * W + x], b = g[y * W + x + 1], c = g[(y + 1) * W + x], d = g[(y + 1) * W + x + 1];
-        if ((a && d && !b && !c) || (b && c && !a && !d)) {
-          g[y * W + x] = 1; g[y * W + x + 1] = 1; g[(y + 1) * W + x] = 1; g[(y + 1) * W + x + 1] = 1;
-          mudou = true;
-        }
-      }
-    }
-    if (!mudou) break;
-  }
-
-  // Uma peça só? (vizinhança de 4)
-  let inicio = -1;
-  let cheios = 0;
-  for (let i = 0; i < g.length; i++) if (g[i]) { cheios++; if (inicio < 0) inicio = i; }
-  if (inicio < 0) return null;
-  const visto = new Uint8Array(g.length);
-  const pilha = [inicio];
-  visto[inicio] = 1;
-  let alcancados = 0;
-  while (pilha.length) {
-    const i = pilha.pop();
-    alcancados++;
-    const x = i % W, y = (i - x) / W;
-    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-      if (!em(nx, ny)) continue;
-      const j = ny * W + nx;
-      if (!visto[j]) { visto[j] = 1; pilha.push(j); }
-    }
-  }
-  if (alcancados !== cheios) return null;
-
-  // As arestas da borda, todas no mesmo sentido; sem buraco e sem quina, cada
-  // vértice tem exatamente uma aresta saindo, e elas formam um ciclo só.
-  const saida = new Map();
-  const chave = (x, y) => y * (W + 1) + x;
-  const ligar = (x1, y1, x2, y2) => saida.set(chave(x1, y1), [x2, y2]);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (!g[y * W + x]) continue;
-      if (!em(x, y - 1)) ligar(x, y, x + 1, y);
-      if (!em(x + 1, y)) ligar(x + 1, y, x + 1, y + 1);
-      if (!em(x, y + 1)) ligar(x + 1, y + 1, x, y + 1);
-      if (!em(x - 1, y)) ligar(x, y + 1, x, y);
-    }
-  }
-  const x0 = inicio % W;
-  const y0 = (inicio - x0) / W;
-  const ciclo = [];
-  let atual = [x0, y0];
-  for (let passos = 0; passos <= saida.size; passos++) {
-    ciclo.push(atual);
-    const prox = saida.get(chave(atual[0], atual[1]));
-    if (!prox) return null;
-    atual = prox;
-    if (atual[0] === x0 && atual[1] === y0) break;
-  }
-  if (ciclo.length !== saida.size) return null;
-
-  // Dos blocos para as células, sem passar da caixa da máscara, e sem ponto no
-  // meio de reta.
-  const pontos = ciclo.map(([x, y]) => [Math.min(x * k, C), Math.min(y * k, R)]);
-  return pontos.filter((b, i) => {
-    const a = pontos[(i - 1 + pontos.length) % pontos.length];
-    const c = pontos[(i + 1) % pontos.length];
-    return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) !== 0;
-  });
-}
-
-/** Marca como peça todo vazio que a borda não alcança. */
-function preencherBuracos(g, W, H) {
-  const fora = new Uint8Array(W * H);
-  const pilha = [];
-  const tentar = (x, y) => {
-    const i = y * W + x;
-    if (!g[i] && !fora[i]) { fora[i] = 1; pilha.push(i); }
-  };
-  for (let x = 0; x < W; x++) { tentar(x, 0); tentar(x, H - 1); }
-  for (let y = 0; y < H; y++) { tentar(0, y); tentar(W - 1, y); }
-  while (pilha.length) {
-    const i = pilha.pop();
-    const x = i % W, y = (i - x) / W;
-    if (x > 0) tentar(x - 1, y);
-    if (x + 1 < W) tentar(x + 1, y);
-    if (y > 0) tentar(x, y - 1);
-    if (y + 1 < H) tentar(x, y + 1);
-  }
-  for (let i = 0; i < g.length; i++) if (!g[i] && !fora[i]) g[i] = 1;
-}
-
-/** Do quadro do motor (coluna, linha) para o do sparrow (linha, coluna), anti-horário. */
-function noQuadroDoSparrow(pontos) {
-  let t = pontos.map(([x, y]) => [y, x]);
-  let area = 0;
-  for (let i = 0; i < t.length; i++) {
-    const [x1, y1] = t[i];
-    const [x2, y2] = t[(i + 1) % t.length];
-    area += x1 * y2 - x2 * y1;
-  }
-  if (area < 0) t = t.reverse();
-  return t;
-}
-
 // ==================== O GIRO QUE O SPARROW PODE USAR ====================
 
 /**
@@ -473,41 +289,19 @@ export function giroConsistente(m0, m, rot) {
  * menos os deitados que o sparrow não tem como representar — ver
  * `giroConsistente`.
  */
-export function tiposDoEncaixe(itens, exato = true) {
+export function tiposDoEncaixe(itens) {
   const tipos = [];
   agruparPorSilhueta(itens).forEach((balde) => {
     const primeira = balde.itens[0];
     const rotacoes = primeira.mascaras.rotacoes;
     const m0 = rotacoes[0];
-    // P7: o contorno exato, que vale para os quatro giros (ver `contornoExato`).
-    // Sem ele (peça com partes soltas, ou desligado), o casco em escada e só
-    // os giros em que ele é consistente — o caminho de antes.
-    //
-    // Peça sem cava (nenhuma coluna com dois trechos) cujo casco gira junto em
-    // todos os giros permitidos: o casco em escada JÁ É a peça exata, e não
-    // passa pelo engrosso de vértices. Fica com ele.
-    //
-    // E SÓ QUANDO LIBERA GIRO (medido em 2026-11-10, bancada/conferir-exato.js,
-    // 60 s, 3 sementes, portfólio da produção): no giro livre o contorno exato
-    // deixa a peça com cava deitar e rendeu −2,9%, −1,3% e −2,2%; na malha
-    // (só 180°) ficou no ruído (+0,49%, −0,22%, +0,26%), porque o polígono
-    // com mais vértices dá menos voltas ao sparrow no mesmo relógio. Então,
-    // quando o casco já pode todos os giros pedidos, fica o casco — e o motor
-    // faz exatamente o de antes. Contorno com menos vértices (simplificar por
-    // fora) é o próximo passo para a cava render também na malha.
-    const permitidos = rotacoesDe(primeira).filter((rot) => !!rotacoes[rot]);
-    const cascoBasta = permitidos.every((rot) => giroConsistente(m0, rotacoes[rot], rot));
-    const forma = exato && !cascoBasta ? contornoExato(m0) : null;
     tipos.push({
       id: tipos.length,
       itens: balde.itens,
-      rotacoes: forma
-        ? permitidos
-        : rotacoesDe(primeira).filter((rot) => giroConsistente(m0, rotacoes[rot], rot)),
+      rotacoes: rotacoesDe(primeira).filter((rot) => giroConsistente(m0, rotacoes[rot], rot)),
       R: m0.rows,
       C: m0.cols,
-      forma: forma || contornoEmEscada(m0),
-      exato: !!forma,
+      forma: contornoEmEscada(m0),
     });
   });
   return tipos;
@@ -706,8 +500,7 @@ export function encolherEncaixe(itens, resultado, config, opcoes = {}) {
 
   const passo = config.passo;
   const colsTecido = colunasDoTecido(config);
-  // `sparrowExato: false` volta ao casco em escada (para medir os dois lados).
-  const tipos = tiposDoEncaixe(itens, config.sparrowExato !== false && opcoes.exato !== false);
+  const tipos = tiposDoEncaixe(itens);
   const instancia = JSON.stringify(instanciaDoSparrow(tipos, colsTecido));
   const partir = opcoes.partir !== false;
   const partida = partir ? partidaDoSparrow(resultado, tipos, passo, colsTecido) : null;

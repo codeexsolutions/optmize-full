@@ -24,7 +24,7 @@ export interface Plano {
   descricao: string;
   precoCentavos: number;
   moeda: string;
-  cobranca: "mensal" | "anual" | "creditos" | "vitalicio";
+  cobranca: "mensal" | "anual" | "creditos";
   vantagens: string[];
   acessos: number;
   /** A metragem do plano, em metros por período. `null` = sem teto. */

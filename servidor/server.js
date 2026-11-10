@@ -78,8 +78,6 @@ app.use((req, res, next) => {
 app.use("/api/encaixe", require("./ajustes-encaixe-api"));
 app.use("/api/encaixe", express.json({ limit: "20mb" }), encaixePdfRouter);
 app.use("/api/encaixe", express.json({ limit: "2mb" }), encaixeMemoriaRouter);
-// O relatório da aba de Encaixe: contorno contra quadrado, num período.
-app.use("/api/encaixe", require("./encaixe-relatorio"));
 
 // A arte que o navegador não lê — o TIFF e o CMYK sem perfil — entra por aqui
 // antes de chegar ao Encaixe. Recebe o arquivo cru, pelo mesmo motivo das

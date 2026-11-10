@@ -56,7 +56,6 @@ function buffersDasMascaras(mascaras) {
   Object.values(mascaras.rotacoes).forEach((m) => {
     if (!m) return;
     [m.topo, m.base, m.desenho].forEach((a) => { if (a) lista.push(a.buffer); });
-    if (m.faixas) [m.faixas.ini, m.faixas.de, m.faixas.ate].forEach((a) => lista.push(a.buffer));
   });
   return lista;
 }
