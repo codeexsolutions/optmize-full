@@ -1,0 +1,408 @@
+{
+  "versao": 1,
+  "criadoEm": "2026-11-09T16:35:06.198Z",
+  "node": "v24.18.0",
+  "plataforma": "win32",
+  "cpu": "AMD Ryzen 5 5600X 6-Core Processor             ",
+  "nucleosLogicos": 12,
+  "memoriaPicoProcessoKiB": 87216,
+  "wasm": true,
+  "execucoes": [
+    {
+      "nome": "camiseta+manga+gola",
+      "semente": 11,
+      "avaliacoes": 256,
+      "consumoCm": 361.5,
+      "totalMs": 107.73940000000002,
+      "primeiraSolucaoMs": 9,
+      "melhorSolucaoMs": 35,
+      "validacaoMs": 6.971299999999985,
+      "rejeitadas": 0,
+      "historico": [
+        {
+          "ms": 24.01649999999998,
+          "consumoCm": 523,
+          "faltantes": 0
+        },
+        {
+          "ms": 49.85240000000002,
+          "consumoCm": 361.5,
+          "faltantes": 0
+        }
+      ],
+      "sha256": "a7da663da372e4ca8d98f0f5b2213df5de9ab794e1521da56b019ae3c9122325"
+    },
+    {
+      "nome": "camiseta+manga+gola",
+      "semente": 29,
+      "avaliacoes": 256,
+      "consumoCm": 360,
+      "totalMs": 59.786599999999964,
+      "primeiraSolucaoMs": 1,
+      "melhorSolucaoMs": 30,
+      "validacaoMs": 2.022100000000023,
+      "rejeitadas": 0,
+      "historico": [
+        {
+          "ms": 8.013199999999983,
+          "consumoCm": 523,
+          "faltantes": 0
+        },
+        {
+          "ms": 10.46859999999998,
+          "consumoCm": 361.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 37.01089999999999,
+          "consumoCm": 360,
+          "faltantes": 0
+        }
+      ],
+      "sha256": "1b365c57831c5aa0e6a2786eeff6471f1b0db5d17a5f38f2cf7a30d9f6e6e1e5"
+    },
+    {
+      "nome": "camiseta+manga+gola",
+      "semente": 71,
+      "avaliacoes": 256,
+      "consumoCm": 358,
+      "totalMs": 84.05349999999999,
+      "primeiraSolucaoMs": 3,
+      "melhorSolucaoMs": 64,
+      "validacaoMs": 5.043000000000006,
+      "rejeitadas": 0,
+      "historico": [
+        {
+          "ms": 17.076099999999997,
+          "consumoCm": 523,
+          "faltantes": 0
+        },
+        {
+          "ms": 22.366899999999987,
+          "consumoCm": 361.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 77.73110000000003,
+          "consumoCm": 358,
+          "faltantes": 0
+        }
+      ],
+      "sha256": "6cd576031d25b686b6589fe392f8f713ecfa3850527c80bb545ca63326d21351"
+    },
+    {
+      "nome": "misturado-pequeno",
+      "semente": 11,
+      "avaliacoes": 256,
+      "consumoCm": 233,
+      "totalMs": 84.35420000000005,
+      "primeiraSolucaoMs": 1,
+      "melhorSolucaoMs": 30,
+      "validacaoMs": 5.7572000000000685,
+      "rejeitadas": 0,
+      "historico": [
+        {
+          "ms": 13.873199999999997,
+          "consumoCm": 294.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 15.370999999999981,
+          "consumoCm": 287.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 17.255800000000022,
+          "consumoCm": 260.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 18.973599999999976,
+          "consumoCm": 249.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 31.476699999999994,
+          "consumoCm": 236.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 36.497900000000016,
+          "consumoCm": 235.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 43.35740000000004,
+          "consumoCm": 233,
+          "faltantes": 0
+        }
+      ],
+      "sha256": "b5a6d77def1c97baac193ea81a17fe1879ea4e37ab335744195d6a1a9e378f19"
+    },
+    {
+      "nome": "misturado-pequeno",
+      "semente": 29,
+      "avaliacoes": 256,
+      "consumoCm": 228.5,
+      "totalMs": 72.63890000000004,
+      "primeiraSolucaoMs": 1,
+      "melhorSolucaoMs": 51,
+      "validacaoMs": 6.896900000000073,
+      "rejeitadas": 0,
+      "historico": [
+        {
+          "ms": 11.499900000000025,
+          "consumoCm": 294.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 13.102300000000014,
+          "consumoCm": 287.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 15.331099999999992,
+          "consumoCm": 260.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 16.717300000000023,
+          "consumoCm": 249.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 21.059499999999957,
+          "consumoCm": 246.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 22.44130000000007,
+          "consumoCm": 240,
+          "faltantes": 0
+        },
+        {
+          "ms": 31.398599999999988,
+          "consumoCm": 234,
+          "faltantes": 0
+        },
+        {
+          "ms": 52.226800000000026,
+          "consumoCm": 229.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 61.0607,
+          "consumoCm": 228.5,
+          "faltantes": 0
+        }
+      ],
+      "sha256": "68263281cdbf51c9107073747feb279f1019aa891bab97239d88d4aea80f0ffc"
+    },
+    {
+      "nome": "misturado-pequeno",
+      "semente": 71,
+      "avaliacoes": 256,
+      "consumoCm": 229,
+      "totalMs": 62.06979999999999,
+      "primeiraSolucaoMs": 1,
+      "melhorSolucaoMs": 36,
+      "validacaoMs": 5.333199999999806,
+      "rejeitadas": 0,
+      "historico": [
+        {
+          "ms": 8.633100000000013,
+          "consumoCm": 294.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 10.279699999999934,
+          "consumoCm": 287.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 11.876800000000003,
+          "consumoCm": 260.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 12.635400000000004,
+          "consumoCm": 249.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 15.543000000000006,
+          "consumoCm": 240.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 25.845699999999965,
+          "consumoCm": 233,
+          "faltantes": 0
+        },
+        {
+          "ms": 31.57669999999996,
+          "consumoCm": 229.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 43.83259999999996,
+          "consumoCm": 229,
+          "faltantes": 0
+        }
+      ],
+      "sha256": "c7dbc384228d5b3168e99a19114b53b8f815e97baa5982ad45629d3606187da7"
+    },
+    {
+      "nome": "lote-grande",
+      "semente": 11,
+      "avaliacoes": 256,
+      "consumoCm": 1415.5,
+      "totalMs": 118.02570000000003,
+      "primeiraSolucaoMs": 3,
+      "melhorSolucaoMs": 49,
+      "validacaoMs": 8.847999999999843,
+      "rejeitadas": 0,
+      "historico": [
+        {
+          "ms": 12.822499999999991,
+          "consumoCm": 1966.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 19.717100000000073,
+          "consumoCm": 1519.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 22.96950000000004,
+          "consumoCm": 1505.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 29.4366,
+          "consumoCm": 1437,
+          "faltantes": 0
+        },
+        {
+          "ms": 43.07190000000003,
+          "consumoCm": 1435,
+          "faltantes": 0
+        },
+        {
+          "ms": 50.04150000000004,
+          "consumoCm": 1430,
+          "faltantes": 0
+        },
+        {
+          "ms": 58.604600000000005,
+          "consumoCm": 1415.5,
+          "faltantes": 0
+        }
+      ],
+      "sha256": "0a027d035abbafca2ce08b8214c6679cf62162597c0dfca550cfd4809d44c14c"
+    },
+    {
+      "nome": "lote-grande",
+      "semente": 29,
+      "avaliacoes": 256,
+      "consumoCm": 1412,
+      "totalMs": 120.39880000000005,
+      "primeiraSolucaoMs": 3,
+      "melhorSolucaoMs": 99,
+      "validacaoMs": 3.5310000000000628,
+      "rejeitadas": 0,
+      "historico": [
+        {
+          "ms": 12.055500000000052,
+          "consumoCm": 1966.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 20.71199999999999,
+          "consumoCm": 1519.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 24.215299999999957,
+          "consumoCm": 1505.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 30.367899999999963,
+          "consumoCm": 1437,
+          "faltantes": 0
+        },
+        {
+          "ms": 52.59749999999997,
+          "consumoCm": 1435.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 58.32079999999996,
+          "consumoCm": 1424.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 61.61689999999999,
+          "consumoCm": 1419.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 107.55579999999998,
+          "consumoCm": 1412,
+          "faltantes": 0
+        }
+      ],
+      "sha256": "4cfcf808f8c0c8ea8f0ccd79bd3651c7ba200cddef0ce3a92da387524ed7549f"
+    },
+    {
+      "nome": "lote-grande",
+      "semente": 71,
+      "avaliacoes": 256,
+      "consumoCm": 1410.5,
+      "totalMs": 101.17279999999994,
+      "primeiraSolucaoMs": 3,
+      "melhorSolucaoMs": 67,
+      "validacaoMs": 2.4267999999999574,
+      "rejeitadas": 0,
+      "historico": [
+        {
+          "ms": 9.855599999999981,
+          "consumoCm": 1966.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 14.77419999999995,
+          "consumoCm": 1519.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 16.55639999999994,
+          "consumoCm": 1505.5,
+          "faltantes": 0
+        },
+        {
+          "ms": 21.082799999999907,
+          "consumoCm": 1437,
+          "faltantes": 0
+        },
+        {
+          "ms": 30.503799999999956,
+          "consumoCm": 1429,
+          "faltantes": 0
+        },
+        {
+          "ms": 41.5607,
+          "consumoCm": 1423,
+          "faltantes": 0
+        },
+        {
+          "ms": 74.72279999999989,
+          "consumoCm": 1410.5,
+          "faltantes": 0
+        }
+      ],
+      "sha256": "b1d38e4c523a41ff7e0acd1412b85c2418c8387eb3efa085efe7305bb67ed410"
+    }
+  ]
+}

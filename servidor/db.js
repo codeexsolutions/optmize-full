@@ -289,6 +289,12 @@ garantirColuna("encaixe_historico", "features_versao", "INTEGER");
 // Quando este encaixe foi mandado para a memória coletiva (ver
 // `encaixe-coletivo.js`). NULL = ainda na fila.
 garantirColuna("encaixe_historico", "coletivo_enviado_em", "TEXT");
+// O RELATÓRIO DO ENCAIXE (ver `encaixe-relatorio.js`): quanto o mesmo
+// trabalho gastaria pelo quadrado, em cm, e a folga com que foi feito. Linha
+// gravada antes disto fica NULL, e o relatório tenta refazer o quadrado com
+// as peças do encaixe guardado.
+garantirColuna("encaixe_historico", "consumo_quadrado", "REAL");
+garantirColuna("encaixe_historico", "espaco", "REAL");
 
 /*
  * A MEMÓRIA COLETIVA, do lado de cá (ver `encaixe-coletivo.js`):

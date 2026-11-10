@@ -37,6 +37,26 @@ const falhar = (texto) => { falhas.push(texto); };
 
 let modo = 'normal';
 let pedidos = 0;
+const semRede = process.argv.includes('--sem-rede');
+
+// O sandbox pode bloquear até loopback (EACCES). O modo sem rede exercita a
+// sessão, a renovação, o cache e o AbortSignal reais com transporte simulado.
+if (semRede) globalThis.fetch = async (url, opcoes = {}) => {
+  if (!String(url).startsWith('http://127.0.0.1:1/')) throw new Error('destino inesperado no teste');
+  pedidos++;
+  const recusa = modo === 'recusa';
+  const atraso = modo === 'lento' ? 5000 : recusa && String(url).endsWith('/device/token') ? 4000 : 0;
+  if (atraso) await new Promise((resolve, reject) => {
+    const sinal = opcoes.signal;
+    const abortar = () => { clearTimeout(timer); sinal?.removeEventListener('abort', abortar); reject(new Error('abortado')); };
+    const timer = setTimeout(() => { sinal?.removeEventListener('abort', abortar); resolve(); }, atraso);
+    if (sinal?.aborted) abortar();
+    else sinal?.addEventListener('abort', abortar, { once: true });
+  });
+  return new Response(JSON.stringify(recusa ? { code: 'invalid_token' }
+    : { receitas: [{ receita: 'r1', usos: 3, vitorias: 2 }], encaixes: 7 }),
+  { status: recusa ? 401 : 200, headers: { 'Content-Type': 'application/json' } });
+};
 
 const backend = http.createServer((req, res) => {
   pedidos++;
@@ -46,7 +66,7 @@ const backend = http.createServer((req, res) => {
   };
   if (modo === 'lento') return setTimeout(() => responder(200, { receitas: [], encaixes: 0 }), 5000);
   if (modo === 'recusa') {
-    if (req.url.startsWith('/auth/refresh')) return setTimeout(() => responder(401, { code: 'invalid_token' }), 4000);
+    if (req.url.startsWith('/device/token')) return setTimeout(() => responder(401, { code: 'invalid_token' }), 4000);
     return responder(401, { code: 'invalid_token' });
   }
   return responder(200, { receitas: [{ receita: 'r1', usos: 3, vitorias: 2 }], encaixes: 7 });
@@ -66,11 +86,34 @@ async function cronometrar(fazer) {
 }
 
 async function principal() {
-  await new Promise((pronto) => backend.listen(0, '127.0.0.1', pronto));
+  if (!semRede) await new Promise((pronto) => backend.listen(0, '127.0.0.1', pronto));
+  else console.log('transporte simulado: nenhuma conexão de rede');
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'optimize-coletivo-'));
   semearSessao(pasta);
+  // O contrato de sessão migrou de accessToken para token. A bancada antiga
+  // nem chegava à rede e dava uma falsa impressão de timeout rápido.
+  fs.writeFileSync(path.join(pasta, 'sessao', 'sessao.json'), JSON.stringify({
+    token: 'bancada-sem-valor', expira: new Date(Date.now() + 86400000).toISOString(),
+    perfil: { nome: 'Bancada de Teste' },
+  }));
   process.env.OPTIMIZE_DADOS = pasta;
-  process.env.OPTMIZE_BACKEND = `http://127.0.0.1:${backend.address().port}`;
+  process.env.OPTMIZE_BACKEND = `http://127.0.0.1:${semRede ? 1 : backend.address().port}`;
+
+  // Sem consentimento, nem uma consulta com a assinatura do trabalho sai.
+  delete process.env.OPTIMIZE_COLETIVO_AUTORIZADO;
+  {
+    const coletivo = coletivoNovo();
+    const antes = pedidos;
+    coletivo.iniciar(); coletivo.agendar(1);
+    const r = await coletivo.sincronizar();
+    if (r.enviados !== 0 || r.baixou) falhar('sem autorização: sincronizou');
+    if (await coletivo.placarDe('privado') !== null) falhar('sem autorização: usou placar coletivo');
+    if (coletivo.redeGlobal() !== null || coletivo.placarGeral().length) falhar('sem autorização: usou rede global');
+    await new Promise(pronto => setTimeout(pronto, 30));
+    if (pedidos !== antes) falhar('sem autorização: enviou pedido à rede');
+    console.log(`sem autorização: ${pedidos - antes} pedidos à rede`);
+  }
+  process.env.OPTIMIZE_COLETIVO_AUTORIZADO = '1';
 
   // ---- lento ----
   modo = 'lento';

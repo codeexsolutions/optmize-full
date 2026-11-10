@@ -107,7 +107,11 @@ async function buscarComoAProducao(motor, trabalho,
    * encaixador próprio e o `n` continuando 5, um quinto das receitas comuns não
    * roda em fatia nenhuma: fica órfão.
    */
+  // Na produção as fatias rodam juntas e o sparrow começa quando a ÚLTIMA
+  // acaba; com a busca parando no empacar, isso pode ser antes do fim da fase.
+  let fimDaBuscaMs = 0;
   for (let k = 0; k < fatias; k++) {
+    const relogioDaFatia = Date.now();
     const motoresDaK = motor.motoresDaFatia(k, fatias, motoresPedidos, extra.fatiasVaos);
     const resultado = await motor.buscarMelhorEncaixe(itens, {
       larguraTecido: receita.larguraTecido,
@@ -140,9 +144,13 @@ async function buscarComoAProducao(motor, trabalho,
       // comando vem depois, para dar para medir o motor COM e SEM o papel
       // (`--extra podar=true`).
       ...motor.papelDaFatia(k, fatias).config,
+      // Como a produção ("A BUSCA PARA QUANDO EMPACA", em encaixeParalelo.js):
+      // desligado por padrão; `--extra buscaParaNoEmpacar=true` liga.
+      ...(encolher && extra.buscaParaNoEmpacar === true ? { pararAoEmpacar: true } : {}),
       ...extra,
     });
     tentativas += resultado.tentativas || 0;
+    fimDaBuscaMs = Math.max(fimDaBuscaMs, Date.now() - relogioDaFatia);
     const melhor = !campeao
       || resultado.naoEncaixadas.length < campeao.naoEncaixadas.length
       || (resultado.naoEncaixadas.length === campeao.naoEncaixadas.length
@@ -171,10 +179,14 @@ async function buscarComoAProducao(motor, trabalho,
     const motivos = new Set();
     for (let k = 0; k < fatias; k++) {
       const r = motor.encolherEncaixe(itens, campeao, config, {
-        tempoMs: Math.max(0, tempoMs - tempoBusca),
+        // O sparrow fica com o que sobrou depois da fatia mais lenta, como na
+        // produção (`resto`, em buscarMelhorEncaixeEmParalelo).
+        tempoMs: Math.max(0, tempoMs - Math.min(tempoBusca, fimDaBuscaMs)),
         semente: sementeDaFatia(semente, k, true),
         trabalhadores: extra.encolherTrabalhadores,
         partir: extra.encolherPartir !== false,
+        // P7: `--extra sparrowExato=false` mede o casco em escada de antes.
+        ...(extra.sparrowExato === false || extra.sparrowExato === "false" ? { exato: false } : {}),
       });
       relatos += r.relatos;
       rejeitados += r.rejeitados;

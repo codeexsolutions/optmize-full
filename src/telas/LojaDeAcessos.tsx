@@ -135,9 +135,9 @@ export function LojaDeAcessos({ aoLiberar }: { aoLiberar: () => void }) {
   }
 
   /*
-    PLANO INDIVIDUAL: A LOJA NÃO VENDE. O Mensal e o Anual Individual são de
-    uma pessoa; mais gente é o plano Equipe. Em vez do preço e do Pix, o
-    caminho para quem precisa crescer.
+    PLANO QUE NÃO VENDE ACESSO. Desde 2026-11-10 todo plano pago vende acesso
+    extra (R$ 200 cada); sobra só o plano por crédito, fora de linha. Em vez
+    do preço e do Pix, o caminho para quem precisa crescer.
   */
   if (loja.vendeAcesso === false) {
     return (
@@ -147,8 +147,8 @@ export function LojaDeAcessos({ aoLiberar }: { aoLiberar: () => void }) {
           Mais gente no Optmize
         </p>
         <p className="mt-1 mb-0 text-[12px] leading-relaxed text-tinta-fraca">
-          O seu plano é de um acesso. Acesso extra é só nos planos Equipe — o Mensal Equipe e o
-          Anual Equipe já trazem três. Para mudar de plano, fale com a CodeEx.
+          O seu plano não vende acesso extra. Fale com a CodeEx para mudar de plano — nos planos
+          pagos, cada acesso a mais sai por R$ 200, uma vez.
         </p>
       </div>
     );

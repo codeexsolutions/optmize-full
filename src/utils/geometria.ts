@@ -62,13 +62,26 @@ export interface Caixa {
  * usa `Math.abs()` em cima.
  */
 export function areaComSinal(pontos: readonly Ponto[]): number {
+  if (pontos.length < 3) return 0;
+  // Origem local: os produtos dependem do tamanho da peça, e não da distância
+  // até a origem do arquivo. O cadarço em coordenadas globais cancelava termos
+  // enormes e podia devolver área zero para uma peça válida transladada.
+  const origem = pontos[0]!;
   let soma = 0;
-  for (let i = 0; i < pontos.length; i++) {
+  let compensacao = 0;
+  for (let i = 1; i < pontos.length - 1; i++) {
     const a = pontos[i]!;
-    const b = pontos[(i + 1) % pontos.length]!;
-    soma += a.x * b.y - b.x * a.y;
+    const b = pontos[i + 1]!;
+    const termo = (a.x - origem.x) * (b.y - origem.y)
+      - (b.x - origem.x) * (a.y - origem.y);
+    // Soma compensada de Neumaier, inclusive nos contornos côncavos cujos
+    // triângulos têm sinais diferentes. Não altera pontos nem arredonda área.
+    const total = soma + termo;
+    compensacao += Math.abs(soma) >= Math.abs(termo)
+      ? (soma - total) + termo : (termo - total) + soma;
+    soma = total;
   }
-  return soma / 2;
+  return (soma + compensacao) / 2;
 }
 
 /** A caixa retangular que envolve os pontos, já com largura e altura. */

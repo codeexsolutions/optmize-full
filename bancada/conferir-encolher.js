@@ -125,7 +125,10 @@ function conferirFormas(motor, passo, raio) {
     // `giroConsistente`): o 0° e o 180° sempre; o deitado, quando o casco
     // girado é o casco da peça girada. O incoerente não pode escapar para o
     // tipo, e o coerente tem de cobrir as células exatas.
-    const noTipo = motor.tiposDoEncaixe([{ indice: 0, copia: 1, giro: "livre", mascaras: peca.mascaras }])[0].rotacoes;
+    // O casco em escada é o caminho de RESERVA desde a P7 (peça com partes
+    // soltas, ou `sparrowExato: false`); o contorno exato tem a prova dele,
+    // em bancada/conferir-contorno-exato.js.
+    const noTipo = motor.tiposDoEncaixe([{ indice: 0, copia: 1, giro: "livre", mascaras: peca.mascaras }], false)[0].rotacoes;
     GIROS.forEach((rot) => {
       const m = peca.mascaras.rotacoes[rot];
       if (!m) { falhar(`forma: ${nome} sem máscara de ${rot}°`); return; }

@@ -1,0 +1,115 @@
+{
+  "quando": "2026-11-09T16:15:13.001Z",
+  "opcoes": {
+    "tempo": 1,
+    "sementes": 3,
+    "fatias": 2,
+    "trabalhos": [
+      "camiseta+manga+gola",
+      "misturado-pequeno",
+      "lote-grande"
+    ],
+    "json": "docs/optimize/benchmarks/busca-depois.json",
+    "contra": "docs/optimize/benchmarks/busca-antes.json",
+    "meta": 0,
+    "wasm": true,
+    "rodadas": 1,
+    "espalharSemente": true,
+    "extra": {}
+  },
+  "trabalhos": {
+    "camiseta+manga+gola": {
+      "nome": "camiseta+manga+gola",
+      "consumo": 360,
+      "mediana": 360,
+      "melhor": 360,
+      "pior": 360,
+      "desvio": 0,
+      "aproveitamento": 0.7304861111111111,
+      "tentativas": 20772,
+      "tentPorSegundo": 10310,
+      "sobraram": 0,
+      "receita": "contorno/solta/area/fundo/",
+      "pecas": 32,
+      "corridas": [
+        {
+          "consumo": 360,
+          "receita": "contorno/solta/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 360,
+          "receita": "contorno/solta/altura/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 360,
+          "receita": "contorno/solta/area/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "misturado-pequeno": {
+      "nome": "misturado-pequeno",
+      "consumo": 221.5,
+      "mediana": 222.5,
+      "melhor": 218.5,
+      "pior": 223.5,
+      "desvio": 2.160246899469287,
+      "aproveitamento": 0.7343667232519281,
+      "tentativas": 31854,
+      "tentPorSegundo": 15827,
+      "sobraram": 0,
+      "receita": "contorno/solta/altura/fundo/",
+      "pecas": 25,
+      "corridas": [
+        {
+          "consumo": 218.5,
+          "receita": "contorno/solta/lado/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 222.5,
+          "receita": "contorno/solta/altura/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 223.5,
+          "receita": "contorno/solta/altura/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "lote-grande": {
+      "nome": "lote-grande",
+      "consumo": 1384.6666666666667,
+      "mediana": 1391,
+      "melhor": 1362,
+      "pior": 1401,
+      "desvio": 16.539514973407037,
+      "aproveitamento": 0.7069774040572726,
+      "tentativas": 8064,
+      "tentPorSegundo": 4006,
+      "sobraram": 0,
+      "receita": "contorno/solta/familia/fundo/",
+      "pecas": 130,
+      "corridas": [
+        {
+          "consumo": 1391,
+          "receita": "contorno/solta/altura/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 1401,
+          "receita": "contorno/solta/familia/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 1362,
+          "receita": "contorno/solta/lado/fundo/",
+          "encolhimento": null
+        }
+      ]
+    }
+  }
+}
