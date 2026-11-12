@@ -110,6 +110,69 @@ function useVetorizador() {
   }), []);
 }
 
+/**
+ * A VITRINE DA VETORA — a imagem em pixel (a escada) vira curva: a borda é
+ * traçada por cima, os nós e as alças aparecem, a forma se preenche, e o
+ * pixel some por baixo. Seis segundos, em laço; parada para quem pede menos
+ * movimento. Só cor do tema (`--accent` e `currentColor`).
+ */
+const PIXELS_DA_VITRINE: [number, number][] = (() => {
+  const lista: [number, number][] = [];
+  for (let y = 0; y < 12; y++) {
+    for (let x = 0; x < 12; x++) {
+      const dx = x * 10 + 5 - 60, dy = y * 10 + 5 - 60;
+      if (dx * dx + dy * dy <= 44 * 44) lista.push([x * 10, y * 10]);
+    }
+  }
+  return lista;
+})();
+const NOS_DA_VITRINE = [
+  { x: 60, y: 18, h: [[37, 18], [83, 18]] },
+  { x: 102, y: 60, h: [[102, 37], [102, 83]] },
+  { x: 60, y: 102, h: [[83, 102], [37, 102]] },
+  { x: 18, y: 60, h: [[18, 83], [18, 37]] },
+];
+
+function AnimacaoVetora() {
+  return (
+    <svg viewBox="-8 -8 136 136" className="vetora-animacao size-56 text-tinta-apagada drop-shadow-[0_0_28px_var(--accent-soft)]" aria-hidden="true">
+      <style>{`
+        .vetora-animacao .px { animation: vetora-px 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+        .vetora-animacao .traco { stroke-dasharray: 100; animation: vetora-traco 6s ease-in-out infinite; }
+        .vetora-animacao .miolo { animation: vetora-miolo 6s ease-in-out infinite; }
+        .vetora-animacao .no, .vetora-animacao .alca { animation: vetora-no 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+        @keyframes vetora-px { 0%, 30% { opacity: .55; transform: scale(1); } 58%, 88% { opacity: 0; transform: scale(.5); } 100% { opacity: .55; transform: scale(1); } }
+        @keyframes vetora-traco { 0%, 18% { stroke-dashoffset: 100; opacity: 1; } 52% { stroke-dashoffset: 0; } 88% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+        @keyframes vetora-miolo { 0%, 50% { opacity: 0; } 66%, 86% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes vetora-no { 0%, 40% { opacity: 0; transform: scale(.2); } 50% { opacity: 1; transform: scale(1.25); } 56%, 86% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.6); } }
+        @media (prefers-reduced-motion: reduce) {
+          .vetora-animacao * { animation: none !important; }
+          .vetora-animacao .px { opacity: 0; } .vetora-animacao .traco { stroke-dashoffset: 0; } .vetora-animacao .miolo { opacity: 1; }
+        }
+      `}</style>
+      {PIXELS_DA_VITRINE.map(([x, y], k) => (
+        <rect key={k} className="px" x={x + 1} y={y + 1} width={8} height={8} rx={1.5} fill="currentColor"
+          style={{ animationDelay: `${((x + y) / 220) * 0.6}s` }} />
+      ))}
+      <path className="miolo" d="M60 18C83 18 102 37 102 60C102 83 83 102 60 102C37 102 18 83 18 60C18 37 37 18 60 18Z" fill="var(--accent)" />
+      <path className="traco" pathLength={100} d="M60 18C83 18 102 37 102 60C102 83 83 102 60 102C37 102 18 83 18 60C18 37 37 18 60 18Z"
+        fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeLinecap="round" />
+      {NOS_DA_VITRINE.map((n, k) => (
+        <g key={k}>
+          {n.h.map(([hx, hy], j) => (
+            <g key={j} className="alca" style={{ animationDelay: `${k * 0.08}s` }}>
+              <line x1={n.x} y1={n.y} x2={hx} y2={hy} stroke="currentColor" strokeWidth={1} opacity={0.8} />
+              <circle cx={hx} cy={hy} r={2.6} fill="currentColor" />
+            </g>
+          ))}
+          <rect className="no" x={n.x - 4} y={n.y - 4} width={8} height={8} rx={1.5} fill="var(--card-bg)" stroke="var(--accent)" strokeWidth={2}
+            style={{ animationDelay: `${k * 0.08}s` }} />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export function Vetorizar() {
   const entrada = useRef<HTMLInputElement>(null);
   const [imagem, setImagem] = useState<Imagem | null>(null);
@@ -275,7 +338,7 @@ export function Vetorizar() {
     >
       <div className="flex min-h-0 min-w-0 flex-col">
         <Cartao
-          titulo={imagem ? imagem.nome : "A imagem"}
+          titulo={imagem ? imagem.nome : "Nova vetorização"}
           icone="icones.svg#pen-tool"
           apoio={imagem ? `${imagem.largura} × ${imagem.altura} px · arraste a divisória para comparar o original com o vetor` : undefined}
           preencher
@@ -307,12 +370,19 @@ export function Vetorizar() {
             <button
               type="button"
               onClick={() => entrada.current?.click()}
-              className={`grid flex-1 w-full cursor-pointer place-items-center rounded-xl border-2 border-dashed transition-colors ${arquivoEmCima ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-linha hover:border-[var(--accent-line)]"}`}
+              className={`vetora-vitrine group relative grid flex-1 w-full cursor-pointer place-items-center overflow-hidden rounded-xl border-2 border-dashed transition-colors ${arquivoEmCima ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-linha hover:border-[var(--accent-line)]"}`}
             >
-              <span className="flex flex-col items-center gap-3 text-tinta-fraca">
-                <Icone referencia="icones.svg#pen-tool" className="size-10 text-ambar" />
-                <span className="text-[0.95rem] text-tinta">Solte a imagem aqui, ou clique para escolher</span>
-                <span className="text-[0.8rem]">PNG, JPG, WebP · o vetor sai em SVG e PDF</span>
+              <span className="relative flex flex-col items-center px-6 text-center">
+                <AnimacaoVetora />
+                <span className="mt-5 font-titulo text-[2.4rem] leading-none tracking-[-0.02em] text-tinta">
+                  Vetor<span className="text-ambar">a</span>
+                </span>
+                <span className="mt-2 text-[0.95rem] text-tinta-fraca">Do pixel à curva, sozinho.</span>
+                <span className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-[0.9rem] text-white shadow-lg shadow-black/30 transition-transform group-hover:-translate-y-0.5">
+                  <Icone referencia="icones.svg#image-plus" className="size-4" />
+                  {arquivoEmCima ? "Pode soltar" : "Escolher imagem"}
+                </span>
+                <span className="mt-3 text-[0.8rem] text-tinta-apagada">ou solte aqui um PNG, JPG ou WebP · sai em SVG e PDF</span>
               </span>
             </button>
           ) : (
