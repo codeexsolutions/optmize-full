@@ -297,7 +297,41 @@ export function acharPaleta(px, largura, altura, medida, opcoes = {}) {
       { pontos: partes[1], erro: erroDe(partes[1], centroDe(partes[1])) });
   }
 
+  // AS CORES PEQUENAS E DISTINTAS — o texto fino colorido num JPEG grande.
+  // O ruído do JPEG em volta das letras finas deixa pouco miolo de cada cor
+  // (num logo de 1000 px: 87 pixels lisos do vermelho, 182 do verde), e o
+  // grupo "vermelho + verde" fica abaixo do peso mínimo, sem divisão — o
+  // texto saía num cinza que é a média das duas. Um grupo pequeno se divide
+  // quando as duas metades são cores DISTINTAS de verdade (a 0,15 uma da
+  // outra, e a 3× a tolerância) e cada uma tem ao menos 20 pixels: o ruído
+  // não faz duas cores longe uma da outra com esse peso.
+  if (!fixo) {
+    let mudou = true;
+    while (mudou && grupos.length < teto) {
+      mudou = false;
+      for (let k = 0; k < grupos.length && grupos.length < teto; k++) {
+        const g = grupos[k];
+        if (g.pequenoFinal || g.pontos.length < 2) continue;
+        if (centroDe(g.pontos).w >= pesoMinimo) continue;
+        const partes = dividir(g);
+        const c0 = partes && centroDe(partes[0]), c1 = partes && centroDe(partes[1]);
+        if (!partes || c0.w < 20 || c1.w < 20 || Math.sqrt(dist2(c0, c1)) < Math.max(0.15, 3 * tol)) { g.pequenoFinal = true; continue; }
+        grupos.splice(k, 1,
+          { pontos: partes[0], erro: erroDe(partes[0], c0) },
+          { pontos: partes[1], erro: erroDe(partes[1], c1) });
+        mudou = true;
+      }
+    }
+  }
+
   const centros = refinar(grupos.map((g) => centroDe(g.pontos)), pontos);
+  // As cores dos traços finos, que o miolo não vê (ver `coresDosTracos`).
+  if (!fixo && doMiolo && centros.length < teto) {
+    for (const c of coresDosTracos(lab, opaco, miolo, largura, altura, centros, tol, quantosOpacos)) {
+      if (centros.length >= teto) break;
+      centros.push(c);
+    }
+  }
   const cores = centros
     .sort((x, y) => y.w - x.w)
     .map((c) => {
@@ -305,4 +339,142 @@ export function acharPaleta(px, largura, altura, medida, opcoes = {}) {
       return { L: c.L, a: c.a, b: c.b, rgb, hex: `#${rgb.map((v) => v.toString(16).padStart(2, "0")).join("")}`, peso: c.w };
     });
   return { cores, doMiolo };
+}
+
+/**
+ * AS CORES DOS TRAÇOS FINOS — a cor que não tem miolo.
+ *
+ * A paleta nasce do miolo das manchas, e uma letra de 2 pixels de espessura,
+ * toda serrilhada, não tem miolo nenhum: num logo que é só o nome em letra
+ * fina, o texto inteiro sumia (a paleta só via o fundo). Aqui entram os
+ * pixels que a paleta NÃO explica — longe de toda cor dela e também da
+ * MISTURA de quaisquer duas (o serrilhado entre duas cores da paleta é
+ * mistura, e não cor nova) —, e deles só os NÚCLEOS: o pixel mais longe da
+ * paleta entre os oito vizinhos, que é o meio do traço, a parte mais pura da
+ * cor. Os núcleos parecidos se juntam; o grupo com núcleos bastantes vira cor
+ * nova, tirada do terço mais puro dele (o meio do traço fino ainda tem um
+ * pouco do fundo).
+ *
+ * O ruído do JPEG mora perto das cores e das misturas: não passa do limiar.
+ * Só os pixels fora do miolo são olhados (no chapado, uns 5%), e só as
+ * misturas entre as 12 cores mais pesadas — a conta fica pequena.
+ */
+function coresDosTracos(lab, opaco, miolo, largura, altura, cores, tol, quantosOpacos) {
+  if (!cores.length) return [];
+  const total = largura * altura;
+  // O limiar do "não explicado" quase não depende da tolerância: no detalhe
+  // baixo ele subia a 0,19 e o anel fino do JPEG (0,15–0,24 da paleta) não
+  // passava. Quem decide se a cor é distinta é o "longe", lá embaixo.
+  const limiar = Math.max(0.1, 1.5 * tol);
+  const principais = [...cores].sort((x, y) => y.w - x.w).slice(0, 12);
+  const pares = [];
+  for (let p = 0; p < principais.length; p++) {
+    for (let q = p + 1; q < principais.length; q++) {
+      const P = principais[p], Q = principais[q];
+      const dL = Q.L - P.L, da = Q.a - P.a, db = Q.b - P.b;
+      const n2 = dL * dL + da * da + db * db;
+      if (n2 > 1e-6) pares.push({ P, dL, da, db, n2 });
+    }
+  }
+  // A distância de cada pixel de borda ao que a paleta explica.
+  const fora = new Float32Array(total);
+  for (let i = 0; i < total; i++) {
+    if (!opaco[i] || miolo[i]) continue;
+    const L = lab[i * 3], a = lab[i * 3 + 1], b = lab[i * 3 + 2];
+    let melhor = Infinity;
+    for (const c of cores) {
+      const d = (L - c.L) ** 2 + (a - c.a) ** 2 + (b - c.b) ** 2;
+      if (d < melhor) melhor = d;
+    }
+    if (melhor <= limiar * limiar) continue;
+    for (const s of pares) {
+      const t = Math.max(0, Math.min(1, ((L - s.P.L) * s.dL + (a - s.P.a) * s.da + (b - s.P.b) * s.db) / s.n2));
+      const d = (L - s.P.L - t * s.dL) ** 2 + (a - s.P.a - t * s.da) ** 2 + (b - s.P.b - t * s.db) ** 2;
+      if (d < melhor) melhor = d;
+      if (melhor <= limiar * limiar) break;
+    }
+    if (melhor > limiar * limiar) fora[i] = Math.sqrt(melhor);
+  }
+  // A cor da paleta mais perto de um pixel (o que "explica" ele).
+  const corDo = (i) => {
+    const L = lab[i * 3], a = lab[i * 3 + 1], b = lab[i * 3 + 2];
+    let k = -1, melhor = Infinity;
+    cores.forEach((c, j) => { const d = (L - c.L) ** 2 + (a - c.a) ** 2 + (b - c.b) ** 2; if (d < melhor) { melhor = d; k = j; } });
+    return k;
+  };
+  // O SANDUÍCHE: o traço fino tem a MESMA cor dos dois lados (a letra no
+  // fundo branco: branco de cá e de lá), em alguma das quatro direções; o
+  // defeito da divisa entre duas manchas — o tom esverdeado que o JPEG faz
+  // entre o amarelo e o azul-marinho (ele guarda a cor na metade da
+  // resolução), o halo que a IA de ampliação deixa — fica entre DUAS cores
+  // diferentes, e não é cor nova.
+  const DIRECOES = [[1, 0], [0, 1], [1, 1], [1, -1]];
+  const lado = (x, y, dx, dy) => {
+    for (let s = 1; s <= 8; s++) {
+      const xx = x + dx * s, yy = y + dy * s;
+      if (xx < 0 || yy < 0 || xx >= largura || yy >= altura) return -2;
+      const j = yy * largura + xx;
+      if (!opaco[j]) return -1;
+      if (!fora[j]) return corDo(j);
+    }
+    return -2;
+  };
+  const sanduiche = (x, y) => DIRECOES.some(([dx, dy]) => {
+    const a = lado(x, y, dx, dy);
+    return a >= -1 && a === lado(x, y, -dx, -dy);
+  });
+  // Os núcleos: o máximo local da distância (o meio do traço), no sanduíche.
+  const nucleos = [];
+  for (let y = 0; y < altura; y++) {
+    for (let x = 0; x < largura; x++) {
+      const i = y * largura + x;
+      const d = fora[i];
+      if (!d) continue;
+      let maior = true;
+      for (let dy = -1; dy <= 1 && maior; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= largura || yy >= altura) continue;
+          if (fora[yy * largura + xx] > d) { maior = false; break; }
+        }
+      }
+      if (maior && sanduiche(x, y)) nucleos.push(i);
+    }
+  }
+  const minimo = Math.max(6, quantosOpacos * 0.0001);
+  if (nucleos.length < minimo) return [];
+  // Os núcleos parecidos, juntos (do mais puro para o menos).
+  nucleos.sort((p, q) => fora[q] - fora[p]);
+  const raio2 = Math.max(0.08, 2 * tol) ** 2;
+  const grupos = [];
+  for (const i of nucleos) {
+    const L = lab[i * 3], a = lab[i * 3 + 1], b = lab[i * 3 + 2];
+    let g = null, dMelhor = raio2;
+    for (const h of grupos) {
+      const d = (L - h.L) ** 2 + (a - h.a) ** 2 + (b - h.b) ** 2;
+      if (d < dMelhor) { dMelhor = d; g = h; }
+    }
+    if (!g) { g = { L, a, b, membros: [] }; grupos.push(g); }
+    g.membros.push(i);
+  }
+  const novas = [];
+  for (const g of grupos) {
+    if (g.membros.length < minimo) continue;
+    // O terço mais puro (os primeiros: a lista veio do mais longe da paleta).
+    const puros = g.membros.slice(0, Math.max(3, Math.ceil(g.membros.length / 3)));
+    let L = 0, a = 0, b = 0;
+    for (const i of puros) { L += lab[i * 3]; a += lab[i * 3 + 1]; b += lab[i * 3 + 2]; }
+    const n = puros.length;
+    const c = { L: L / n, a: a / n, b: b / n, w: g.membros.length };
+    // Não repete uma cor que já está na paleta (ou que acabou de entrar).
+    const perto = [...cores, ...novas].some((k) => (k.L - c.L) ** 2 + (k.a - c.a) ** 2 + (k.b - c.b) ** 2 < Math.max(0.05, 1.5 * tol) ** 2);
+    // Cor nova de verdade fica LONGE da paleta: medido, o texto fino e o anel
+    // que o JPEG apagou ficam a 0,24–0,75 da cor mais perto; o tom escuro que
+    // o JPEG faz na divisa do anel amarelo com o azul-marinho (e que passa no
+    // sanduíche, porque o anel é fino) fica a 0,13.
+    const longe = cores.every((k) => (k.L - c.L) ** 2 + (k.a - c.a) ** 2 + (k.b - c.b) ** 2 >= Math.max(0.18, 2.5 * tol) ** 2);
+    if (!perto && longe) novas.push(c);
+  }
+  return novas.sort((x, y) => y.w - x.w);
 }

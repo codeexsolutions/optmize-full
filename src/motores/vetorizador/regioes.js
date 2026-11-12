@@ -197,12 +197,34 @@ export function limparRegioes(rotulos, largura, altura, cores, opcoes = {}) {
     return (cores[a].L - cores[b].L) ** 2 + (cores[a].a - cores[b].a) ** 2 + (cores[a].b - cores[b].b) ** 2;
   };
 
+  /**
+   * O DETALHE QUE NÃO É CISCO: o acento do "ó", o pingo do "i", o ponto
+   * final. Pequenos — num logo de 1000 px com texto de 40 px, o acento tem
+   * uns 30 px², menos que o cisco do detalhe padrão (63 px²) — mas com cara
+   * própria: uma ILHA (cercada por uma região só), compacta (não é franja),
+   * de cor bem diferente da que a cerca (ΔE ≥ 0,2), e de pelo menos 6 px e
+   * um quinto do cisco. O ruído do JPEG falha num desses: é de cor parecida
+   * com a vizinha, ou de 1 a 5 px, ou encosta numa divisa.
+   */
+  const ehDetalhe = (r) => {
+    if (area[r] < Math.max(6, areaMinima / 5)) return false;
+    if (area[r] / Math.max(1, perimetro[r] / 2) < espessuraMinima) return false;
+    let unica = -1;
+    for (const n0 of vizinhas[r].keys()) {
+      const n = achar(n0);
+      if (n === r) continue;
+      if (unica >= 0 && n !== unica) return false;
+      unica = n;
+    }
+    return unica >= 0 && parecida(r, unica) >= 0.2 * 0.2;
+  };
+
   const ordem = Array.from({ length: quantas }, (_, r) => r).sort((p, q) => area[p] - area[q]);
   for (const r0 of ordem) {
     const r = achar(r0);
     if (r !== r0) continue;
-    const cisco = area[r] < areaMinima;
-    const franja = !cisco && area[r] < areaDaFranja && area[r] / Math.max(1, perimetro[r] / 2) < espessuraMinima;
+    const cisco = area[r] < areaMinima && !ehDetalhe(r);
+    const franja = area[r] >= areaMinima && area[r] < areaDaFranja && area[r] / Math.max(1, perimetro[r] / 2) < espessuraMinima;
     if (!cisco && !franja) continue;
     let melhor = -1, melhorBorda = -1, melhorCor = Infinity;
     for (const [n0, borda] of vizinhas[r]) {

@@ -1,26 +1,27 @@
 #!/usr/bin/env node
 /**
- * BANCADA — a tela Vetorizar de verdade, num Chromium sem janela
+ * BANCADA — a tela da Vetora de verdade, num Chromium sem janela
  *
  *   node bancada/conferir-vetorizar-tela.cjs [--imagem arte.png] [--foto saida.png] [--ia]
  *
  * Sobe o Vite, abre `bancada/vetorizar-no-navegador.html` (a tela sozinha,
  * sem a casca que pede login), escolhe a imagem pelo campo de arquivo, como a
- * pessoa faria, espera o vetor (o worker de verdade) e fotografa a tela.
+ * pessoa faria, e confere o caminho inteiro:
+ *
+ *   - a rede olha a imagem e os TRÊS modelos ficam prontos (os workers de
+ *     verdade), com números diferentes;
+ *   - o visor aproxima (o botão +) e mostra os nós (o botão Nós) — e uma foto
+ *     de perto vai junto (`-perto.png`);
+ *   - trocar de modelo troca o cartão do vetor;
+ *   - o PDF baixado pelo botão, desenhado pelo pdf.js, é o mesmo desenho do
+ *     SVG do modelo escolhido, na largura em centímetros da imagem.
  *
  * Sem `--imagem`, gera um selo de teste em JPEG. Com `--ia`, o selo sai
  * MINÚSCULO (120 px) e a bancada sobe a rota do Extrator de verdade
  * (`servidor/extrator-api.js`, com a rede de ampliar de servidor/modelos)
  * num servidor de teste próprio, para onde o proxy do Vite aponta — o
  * servidor do programa exige a conta logada, e esta bancada não mexe em
- * sessão. Aí ela confere o caminho inteiro: o vetor direto chega, a IA liga
- * sozinha (imagem pequena e nítida), a ampliação roda e o vetor novo vem por
- * cima, no tamanho original.
- *
- * Sempre, no fim: clica em "PDF", pega o arquivo baixado e o desenha com o
- * pdf.js contra o SVG da prévia (`compararPdfComSvg`, na página da bancada).
- * O PDF tem de ser o mesmo desenho — furo como furo, cor por cor — e ter a
- * largura em centímetros que a tela mostra.
+ * sessão. Aí os modelos que a rede manda pela IA passam pela ampliação.
  */
 const net = require("net");
 const path = require("path");
@@ -76,59 +77,55 @@ const portaLivre = () => new Promise((ok) => {
   await vite.listen();
   const nav = await puppeteer.launch({ headless: "new", args: ["--no-sandbox"] });
   let falhou = false;
+  const falha = (texto) => { falhou = true; console.log(`FALHOU: ${texto}`); };
   try {
     const p = await nav.newPage();
     await p.setViewport({ width: 1440, height: 900 });
-    p.on("pageerror", (e) => { falhou = true; console.log("erro na página:", e.message); });
+    p.on("pageerror", (e) => falha(`erro na página: ${e.message}`));
     await p.goto(`http://127.0.0.1:${porta}/bancada/vetorizar-no-navegador.html`, { waitUntil: "networkidle2" });
     await p.waitForFunction("window.bancadaPronta === true", { timeout: 60000 });
     const campo = await p.waitForSelector('input[type="file"]');
     const t0 = Date.now();
     await campo.uploadFile(imagem);
-    const pronto = () => [...document.querySelectorAll("button")].some((b) => b.textContent.includes("Baixar SVG"))
-      && !!document.querySelector('img[alt="O vetor"]');
-    await p.waitForFunction(pronto, { timeout: 120000 });
-    const msDireto = Date.now() - t0;
-    const ler = () => p.evaluate(() => {
-      const texto = document.body.innerText;
-      const ia = [...document.querySelectorAll('input[type="checkbox"]')].find((c) => c.parentElement?.textContent?.includes("Limpar e ampliar com IA"));
-      return {
-        nos: texto.match(/Nós\s+([\d.]+)/)?.[1],
-        cores: texto.match(/Cores\s+(\d+)\s/)?.[1],
-        ia: ia ? ia.checked : null,
-        andando: /Limpando e ampliando com IA|Achando as cores|Ajustando as curvas|Montando o vetor/.test(texto),
-        svg: document.querySelector('img[alt="O vetor"]')?.getAttribute("src") || null,
-      };
-    });
-    const direto = await ler();
-    console.log(`vetor direto em ${msDireto} ms: ${direto.cores} cores, ${direto.nos} nós; IA ligada: ${direto.ia}`);
-    if (COM_IA) {
-      // A IA liga sozinha, a ampliação começa (o andamento dela aparece)…
-      await p.waitForFunction(() => /Limpando e ampliando com IA/.test(document.body.innerText), { timeout: 20000, polling: 50 });
-      console.log(`a IA ligou sozinha e começou a ampliar em ${Date.now() - t0} ms`);
-      // …e o vetor dela vem por cima (o endereço do SVG muda).
-      await p.waitForFunction((antes) => {
-        const texto = document.body.innerText;
-        const andando = /Limpando e ampliando com IA|Achando as cores|Separando as regiões|Traçando as divisas|Ajustando as curvas|Montando o vetor/.test(texto);
-        const src = document.querySelector('img[alt="O vetor"]')?.getAttribute("src");
-        return !andando && src && src !== antes;
-      }, { timeout: 240000, polling: 250 }, direto.svg);
-      const comIa = await ler();
-      // O vetor da IA sai no tamanho ORIGINAL (a `escala` desfaz a ampliação).
-      const tamanho = await p.evaluate(async () => {
-        const src = document.querySelector('img[alt="O vetor"]').getAttribute("src");
-        const texto = await (await fetch(src)).text();
-        return texto.match(/<svg[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"/)?.slice(1, 3).join(" × ");
-      });
-      console.log(`vetor com IA em ${Date.now() - t0} ms: ${comIa.cores} cores, ${comIa.nos} nós; IA ligada: ${comIa.ia}; SVG de ${tamanho}`);
-      if (tamanho !== "160 × 120") { falhou = true; console.log(`FALHOU: o vetor da IA devia sair em 160 × 120, saiu em ${tamanho}`); }
-    }
-    // O PDF do botão, contra o SVG.
+
+    // Os três modelos prontos.
+    const lerModelos = () => p.evaluate(() => [...document.querySelectorAll('[role="radio"]')].map((b) => ({
+      texto: b.textContent.replace(/\s+/g, " ").trim(),
+      ia: !!b.querySelector('[title^="Feito sobre a imagem"]'),
+      escolhido: b.getAttribute("aria-checked") === "true",
+    })));
+    await p.waitForFunction(() => [...document.querySelectorAll('[role="radio"]')].filter((b) => /nós ·/.test(b.textContent)).length === 3, { timeout: 300000, polling: 200 });
+    const modelos = await lerModelos();
+    console.log(`os três modelos em ${Date.now() - t0} ms:`);
+    for (const m of modelos) console.log(`  ${m.escolhido ? "▸" : " "} ${m.texto}${m.ia ? "  (com a IA)" : ""}`);
+    const nos = modelos.map((m) => Number(((m.texto.match(/([\d.]+) nós/) || [])[1] || "0").replace(/\./g, "")));
+    if (new Set(nos).size < 2) falha("os três modelos saíram com o mesmo número de nós");
+    if (!modelos.find((m) => m.escolhido && /Equilibrado/.test(m.texto))) falha("o modelo escolhido de início não é o Equilibrado");
+
+    await new Promise((ok) => setTimeout(ok, 500));
+    await p.screenshot({ path: foto });
+
+    // O zoom e os nós.
+    const zoom = () => p.evaluate(() => Number((document.body.innerText.match(/(\d+)%/) || [])[1]));
+    const antes = await zoom();
+    for (let k = 0; k < 3; k++) await p.click('button[title="Aproximar (+)"]');
+    await p.click('button[title="Mostrar os nós do vetor (N)"]');
+    await new Promise((ok) => setTimeout(ok, 400));
+    const depois = await zoom();
+    console.log(`zoom: ${antes}% → ${depois}%`);
+    if (!(depois > antes * 3)) falha("o botão de aproximar não aproximou");
+    await p.screenshot({ path: foto.replace(/\.png$/, "-perto.png") });
+    await p.click('button[title="Caber na tela (0)"]');
+    await p.click('button[title="Mostrar os nós do vetor (N)"]');
+
+    // Trocar de modelo troca o cartão do vetor.
+    await p.evaluate(() => [...document.querySelectorAll('[role="radio"]')].find((b) => /Fiel/.test(b.textContent)).click());
+    await p.waitForFunction(() => /O vetor · Fiel/.test(document.body.innerText), { timeout: 5000 }).catch(() => falha("trocar para o Fiel não trocou o cartão"));
+
+    // O PDF do botão, contra o SVG do modelo escolhido.
     const pastaDoPdf = fs.mkdtempSync(path.join(os.tmpdir(), "vetorizar-pdf-"));
     const cdp = await p.target().createCDPSession();
     await cdp.send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: pastaDoPdf });
-    // A tela não mostra mais a largura: o PDF sai com a da imagem a 300 ppp,
-    // no mínimo 10 cm (ver `abrir`, em Vetorizar.tsx).
     const larguraPx = await p.evaluate(() => Number((document.body.innerText.match(/(\d+) × \d+ px/) || [])[1]));
     const larguraCm = Math.max(10, Math.round(((larguraPx / 300) * 2.54) * 10) / 10);
     await p.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "PDF").click());
@@ -137,21 +134,18 @@ const portaLivre = () => new Promise((ok) => {
       await new Promise((ok) => setTimeout(ok, 100));
       arquivoPdf = fs.readdirSync(pastaDoPdf).find((n) => n.endsWith(".pdf")) || null;
     }
-    if (!arquivoPdf) { falhou = true; console.log("FALHOU: o botão PDF não baixou nada"); }
+    if (!arquivoPdf) falha("o botão PDF não baixou nada");
     else {
       const bytes = fs.readFileSync(path.join(pastaDoPdf, arquivoPdf));
       const r = await p.evaluate((b64) => window.compararPdfComSvg(b64), bytes.toString("base64"));
       const cm = (r.pontos[0] / 72) * 2.54;
-      console.log(`PDF ${arquivoPdf}: ${(bytes.length / 1024).toFixed(1)} KB, ${cm.toFixed(2)} cm de largura (a tela pede ${larguraCm}); igual ao SVG em ${(r.iguais * 100).toFixed(2)}% dos pixels (tinta: PDF ${(r.tintaPdf * 100).toFixed(1)}%, SVG ${(r.tintaSvg * 100).toFixed(1)}%)`);
-      if (r.iguais < 0.99) { falhou = true; console.log("FALHOU: o PDF não é o mesmo desenho do SVG"); }
-      if (r.tintaPdf < 0.05 || r.tintaSvg < 0.05) { falhou = true; console.log("FALHOU: o PDF ou o SVG saiu em branco"); }
-      if (Math.abs(cm - larguraCm) > 0.01) { falhou = true; console.log("FALHOU: a largura do PDF não é a da tela"); }
+      console.log(`PDF ${arquivoPdf}: ${(bytes.length / 1024).toFixed(1)} KB, ${cm.toFixed(2)} cm (a imagem pede ${larguraCm}); igual ao SVG do modelo em ${(r.iguais * 100).toFixed(2)}% dos pixels (tinta: PDF ${(r.tintaPdf * 100).toFixed(1)}%, SVG ${(r.tintaSvg * 100).toFixed(1)}%)`);
+      if (r.iguais < 0.99) falha("o PDF não é o mesmo desenho do SVG");
+      if (r.tintaPdf < 0.05 || r.tintaSvg < 0.05) falha("o PDF ou o SVG saiu em branco");
+      if (Math.abs(cm - larguraCm) > 0.01) falha("a largura do PDF não é a da imagem");
     }
     fs.rmSync(pastaDoPdf, { recursive: true, force: true });
-
-    await new Promise((ok) => setTimeout(ok, 600));
-    await p.screenshot({ path: foto });
-    console.log(`foto: ${foto}`);
+    console.log(`fotos: ${foto} e ${foto.replace(/\.png$/, "-perto.png")}`);
   } finally {
     await nav.close();
     await vite.close();

@@ -35,8 +35,9 @@ window.compararPdfComSvg = async (base64) => {
   const tela = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, w, h); return [c, x]; };
   const [c1, x1] = tela(W, H);
   await pagina.render({ canvas: c1, canvasContext: x1, viewport: vista }).promise;
+  // O SVG do modelo escolhido: a miniatura dele é o próprio SVG.
   const img = new Image();
-  img.src = document.querySelector('img[alt="O vetor"]').getAttribute("src");
+  img.src = document.querySelector('[role="radio"][aria-checked="true"] img').getAttribute("src");
   await img.decode();
   const [, x2] = tela(W, H);
   x2.drawImage(img, 0, 0, W, H);

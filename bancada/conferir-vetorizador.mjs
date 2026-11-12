@@ -35,6 +35,19 @@ const SAIDA = opcao("saida", null);
 
 const PISO = 0.97;
 const novo = await carregarModulo("src/motores/vetorizador/index.js");
+// A REDE DA VETORA nos casos desta bancada — que ela nunca viu: o treino é em
+// logos sintéticos (`bancada/vetora/`). Os três modelos dela entram como
+// "rede·fiel", "rede·equil" e "rede·limpo", nas imagens sem a IA de ampliação
+// (as linhas "+ IA" já são a imagem ampliada; a rede olha a imagem original).
+const rede = await (async () => {
+  const pesos = path.join(RAIZ, "src", "motores", "vetorizador", "rede", "pesos.json");
+  if (!fs.existsSync(pesos)) return null;
+  const modRede = await carregarModulo("src/motores/vetorizador/rede/rede.js");
+  const carac = await carregarModulo("src/motores/vetorizador/rede/caracteristicas.js");
+  const escolher = await carregarModulo("src/motores/vetorizador/rede/escolher.js");
+  const r = modRede.criarRede(JSON.parse(fs.readFileSync(pesos, "utf8")), carac.VERSAO_DAS_CARACTERISTICAS);
+  return r ? { r, carac, escolher } : null;
+})();
 const antigo = await carregarModulo("src/motores/vetor.js");
 
 // A IA da tela: a rede de ampliar do programa (Real-ESRGAN, servidor/modelos;
@@ -90,6 +103,15 @@ const CASOS = {
     <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#0b7a3e"/><stop offset="1" stop-color="#108a48"/></linearGradient></defs>
     <rect x="40" y="40" width="320" height="320" rx="60" fill="url(#g)"/>
     <polygon points="${estrela(200, 200, 120, 55, 6)}" fill="#fefefe"/>`, "#f2f2f2") },
+  // Texto fino em três cores, com acentos, pingos e pontos. A variante
+  // "grande (jpeg 80)" é a imagem de 1000 px: o JPEG deixa pouco miolo em cada
+  // cor das letras finas, e a paleta juntava o vermelho e o verde num cinza
+  // (ver "as cores pequenas e distintas", em paleta.js); a limpeza levava o
+  // acento e o pingo (ver "o detalhe que não é cisco", em regioes.js).
+  "texto-fino": { cores: 4, desenho: svg(`
+    <text x="16" y="110" font-family="Arial" font-size="17" fill="#1d3557">Ação · Café · Açaí · Pão · Missão</text>
+    <text x="16" y="200" font-family="Georgia" font-size="17" fill="#e63946">Tijolinho fixo: i j í ó ü ç ã ê</text>
+    <text x="16" y="290" font-family="Verdana" font-size="15" fill="#2a9d8f">Rua Ônix, nº 10. Fim.</text>`) },
 };
 
 async function rasterizar(texto, lado) {
@@ -138,7 +160,7 @@ const nos = (texto) => texto.split(/\r?\n/).filter((l) => /<path[^>]*fill="#/.te
 const linhas = [];
 const casos = Object.entries(CASOS).filter(([nome]) => !SO || SO.split(",").includes(nome));
 console.log(`vetorizador · raster de ${LADO} px · nota no dobro do tamanho\n`);
-console.log(`${"caso".padEnd(30)} ${"motor".padEnd(7)} ${"certos".padStart(8)} ${"erro".padStart(7)} ${"nós".padStart(6)} ${"KB".padStart(6)} ${"ms".padStart(6)}  cores`);
+console.log(`${"caso".padEnd(30)} ${"motor".padEnd(10)} ${"certos".padStart(8)} ${"erro".padStart(7)} ${"nós".padStart(6)} ${"KB".padStart(6)} ${"ms".padStart(6)}  cores`);
 for (const [nome, caso] of casos) {
   const verdade = await rasterizarVetor(caso.desenho, LADO * 2);
   const limpo = await rasterizar(caso.desenho, LADO);
@@ -159,6 +181,7 @@ for (const [nome, caso] of casos) {
   //              mudar de cor (ver `larguraDaBorda`, no index.js).
   // A IA é a da tela: a rede de ampliar (Real-ESRGAN) em 4×, e o vetor volta
   // ao tamanho com `escala` 0,25. Sem a rede, um Lanczos no lugar dela.
+  if (nome === "texto-fino") variantes.push(["texto-fino grande (jpeg 80)", await comJpeg(await rasterizar(caso.desenho, Math.round(LADO * 2.5)), 80)]);
   if (nome === "selo" || nome === "letras" || nome === "formas") {
     const esticar = async (img, lado, kernel) => {
       const { data, info } = await sharp(Buffer.from(img.data), { raw: { width: img.width, height: img.height, channels: 4 } })
@@ -194,17 +217,31 @@ for (const [nome, caso] of casos) {
     const t1 = Date.now();
     const v = antigo.vetorizarImagem({ width: img.width, height: img.height, data: img.data }, { cores: caso.cores });
     const msAntigo = Date.now() - t1;
-    for (const [motor, texto, ms, cores] of [["novo", r.svg, msNovo, r.estatisticas.cores], ["antes", v.svg, msAntigo, caso.cores]]) {
+    const motores = [["novo", r.svg, msNovo, r.estatisticas.cores], ["antes", v.svg, msAntigo, caso.cores]];
+    if (rede && !img.escala) {
+      const c = rede.carac.caracteristicas(img.data, img.width, img.height);
+      const modelos = rede.escolher.escolherModelos(rede.r, c.valores, { comIa: false });
+      if (new Set(modelos.map((m) => `${m.ajuste.d}/${m.ajuste.s}`)).size < 3) {
+        console.log(`  OS TRÊS MODELOS DA REDE SAÍRAM IGUAIS em ${rotulo}`);
+        process.exitCode = 1;
+      }
+      for (const m of modelos) {
+        const t = Date.now();
+        const rm = novo.vetorizar(img.data, img.width, img.height, { detalhe: m.ajuste.d, suavidade: m.ajuste.s });
+        motores.push([`rede·${m.chave.slice(0, 5)}`, rm.svg, Date.now() - t, rm.estatisticas.cores, `d${m.ajuste.d} s${m.ajuste.s}`]);
+      }
+    }
+    for (const [motor, texto, ms, cores, ajuste] of motores) {
       const n = nota(await rasterizarVetor(texto, LADO * 2), verdade);
       // O PISO: o motor novo acerta pelo menos 97% dos pixels em todo caso —
       // menos no minúsculo sem a IA, o caso que justifica a IA.
-      if (motor === "novo" && !img.semConferirCores && n.certos < PISO) {
+      if ((motor === "novo" || motor === "rede·fiel") && !img.semConferirCores && n.certos < PISO) {
         console.log(`  ABAIXO DO PISO em ${rotulo}: ${(n.certos * 100).toFixed(2)}% certos (o piso é ${PISO * 100}%)`);
         process.exitCode = 1;
       }
       linhas.push({ caso: rotulo, motor, ...n, nos: nos(texto), kb: texto.length / 1024, ms, cores });
-      const borda = motor === "novo" ? `  borda ${r.estatisticas.borda.toFixed(2)}` : "";
-      console.log(`${rotulo.padEnd(30)} ${motor.padEnd(7)} ${(n.certos * 100).toFixed(2).padStart(7)}% ${n.erro.toFixed(4).padStart(7)} ${String(nos(texto)).padStart(6)} ${(texto.length / 1024).toFixed(1).padStart(6)} ${String(ms).padStart(6)}  ${cores}${borda}`);
+      const borda = motor === "novo" ? `  borda ${r.estatisticas.borda.toFixed(2)}` : ajuste ? `  ${ajuste}` : "";
+      console.log(`${rotulo.padEnd(30)} ${motor.padEnd(10)} ${(n.certos * 100).toFixed(2).padStart(7)}% ${n.erro.toFixed(4).padStart(7)} ${String(nos(texto)).padStart(6)} ${(texto.length / 1024).toFixed(1).padStart(6)} ${String(ms).padStart(6)}  ${cores}${borda}`);
       if (SAIDA) {
         fs.mkdirSync(SAIDA, { recursive: true });
         fs.writeFileSync(path.join(SAIDA, `${rotulo.replace(/[^a-z0-9-]+/gi, "_")}-${motor}.svg`), texto);
@@ -219,3 +256,12 @@ const media = (motor, campo) => {
 };
 console.log(`\nmédia  novo: ${(media("novo", "certos") * 100).toFixed(2)}% certos, erro ${media("novo", "erro").toFixed(4)}, ${media("novo", "nos").toFixed(0)} nós`);
 console.log(`média antes: ${(media("antes", "certos") * 100).toFixed(2)}% certos, erro ${media("antes", "erro").toFixed(4)}, ${media("antes", "nos").toFixed(0)} nós`);
+if (rede) {
+  // As médias da rede são só das imagens sem IA; o "novo" ao lado, nas mesmas.
+  const semIa = (motor) => linhas.filter((l) => l.motor === motor && !/\+ (IA|lanczos)/.test(l.caso));
+  const m = (motor, campo) => { const ls = semIa(motor); return ls.reduce((t, l) => t + l[campo], 0) / ls.length; };
+  console.log(`\nnas imagens sem IA (${semIa("novo").length} casos):`);
+  for (const motor of ["novo", "rede·fiel", "rede·equil", "rede·limpo"]) {
+    console.log(`  ${motor.padEnd(10)} ${(m(motor, "certos") * 100).toFixed(2)}% certos, erro ${m(motor, "erro").toFixed(4)}, ${m(motor, "nos").toFixed(0)} nós`);
+  }
+}

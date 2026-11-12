@@ -104,3 +104,7 @@ estatico/ia/
 dist/ia/
 
 bancada/audaces/ver/
+
+# Os dados do treino da rede da Vetora (bancada/vetora/oraculo.mjs): gerados de
+# novo pelo oráculo a qualquer hora, e grandes demais para o git.
+bancada/vetora/dados/

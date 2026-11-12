@@ -1,27 +1,26 @@
 /**
  * ===========================================================================
- * VETORIZAR — a imagem vira vetor, com o motor próprio do Optmize
+ * VETORA — a imagem vira vetor, com o motor e a rede próprios do Optmize
  * ===========================================================================
  *
- * A pessoa solta um PNG ou JPG (logo, estampa, arte de cliente) e recebe o
- * vetor em SVG ou PDF. Quem vetoriza é `src/motores/vetorizador` (o motor
- * próprio: paleta perceptual, mapa planar, borda no subpixel, retas e curvas
- * de verdade), num Web Worker — a tela não trava enquanto ele trabalha.
+ * A pessoa solta um PNG ou JPG (logo, estampa, arte de cliente) e recebe TRÊS
+ * vetores para escolher, feitos ao mesmo tempo:
  *
- * A IA ENTRA ANTES, sempre ligada, em toda imagem de até 512 px: ela passa
- * pela rede de ampliação do programa (Real-ESRGAN, a mesma do Extrator,
- * rodando no servidor local), que recupera a cor e a borda fina que o JPEG
- * apagou; o vetor é feito na imagem ampliada e sai no tamanho original.
- * Medido na bancada (`bancada/conferir-vetorizador.mjs`): no logo de 100 px
- * com JPEG, a IA leva o vetor de 91% a 98,5% de pixels certos; na imagem de
- * 200 px ela empata, e na BORRADA ela piora um pouco. Sem a rede instalada,
- * ou se ela falhar, o vetor sai sem ela.
+ *   Fiel         o mais parecido com a imagem
+ *   Equilibrado  fiel e leve — e no gosto de quem usa (`vetora/gosto.ts`)
+ *   Limpo        o de menos nós, com as curvas mais lisas
  *
- * A ampliação fica guardada para a mesma imagem: mexer nos ajustes depois
- * disso só vetoriza de novo — e mexer DURANTE a ampliação não a recomeça.
+ * Quem escolhe os ajustes de cada um é a REDE DA VETORA
+ * (`motores/vetorizador/rede/`): uma rede neural treinada em milhares de
+ * logos com a verdade conhecida (`bancada/vetora/`), que olha a imagem e
+ * prevê o resultado de cada ajuste do vetorizador — inclusive se vale a pena
+ * passar a imagem pela IA de ampliação antes (Real-ESRGAN, a mesma do
+ * Extrator, rodando no servidor local). Quem vetoriza é o motor próprio
+ * (`motores/vetorizador`), em workers: a tela não trava.
  *
- * Cada ajuste mexido vetoriza de novo sozinho (com uma pequena espera, para
- * o arrastar do controle não disparar vinte vezes).
+ * O visor (`vetora/Visor.tsx`) compara o original com o vetor com zoom até 64
+ * vezes, e mostra os nós. Os ajustes da coluna mexem no modelo escolhido; o
+ * que a pessoa leva embora (SVG, PDF ou cópia) ensina o gosto.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -29,21 +28,19 @@ import { Botao } from "../casca/Botao";
 import { Cartao } from "../casca/Cartao";
 import { Icone } from "../casca/Icone";
 import { extratorApi } from "../api/extrator";
+import { LADO_COM_IA } from "../motores/vetorizador/rede/escolher";
+import { CHAVES, lerPixels, useTrabalhadores, type Ajuste, type Analise, type Chave, type Resultado } from "./vetora/trabalho";
+import { Visor } from "./vetora/Visor";
+import { Modelos } from "./vetora/Modelos";
+import { AnimacaoVetora, ESTILO_DA_VITRINE } from "./vetora/vitrine";
+import { lerLambda, registrarEscolha } from "./vetora/gosto";
 
-interface Forma { cor: string; d: string; area: number }
-interface Resultado {
-  svg: string;
-  formas: Forma[];
-  paleta: { hex: string; area: number }[];
-  estatisticas: { cores: number; formas: number; nos: number; bytes: number; ms: number; largura: number; altura: number; tirouFundo: boolean; borda: number };
-}
-interface Imagem { nome: string; largura: number; altura: number; px: Uint8ClampedArray<ArrayBuffer>; url: string }
+interface Imagem { id: number; nome: string; largura: number; altura: number; px: Uint8ClampedArray<ArrayBuffer>; url: string }
 interface Ampliada { px: Uint8ClampedArray<ArrayBuffer>; largura: number; altura: number; fator: number }
+interface Versao { nome: string; ajuste: Ajuste; ajustado: boolean; resultado: Resultado | null; assinatura: string | null }
 
 /** O maior lado vetorizado direto (acima disso a imagem é reduzida: o vetor não ganha nada). */
 const LADO_MAXIMO = 2400;
-/** Até aqui a IA amplia antes de traçar (acima, a imagem já tem detalhe de sobra). */
-const LADO_PARA_AMPLIAR = 512;
 /** O maior lado depois da ampliação. */
 const LADO_AMPLIADO = 2048;
 
@@ -65,230 +62,98 @@ function baixar(blob: Blob, arquivo: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-/** Os pixels de um arquivo de imagem, sem gerenciar cor, com o maior lado até `teto`. */
-async function lerPixels(fonte: Blob, teto: number) {
-  const bitmap = await createImageBitmap(fonte, { premultiplyAlpha: "none", colorSpaceConversion: "none", imageOrientation: "from-image" });
-  try {
-    const escala = Math.min(1, teto / Math.max(bitmap.width, bitmap.height));
-    const largura = Math.max(1, Math.round(bitmap.width * escala));
-    const altura = Math.max(1, Math.round(bitmap.height * escala));
-    const tela = new OffscreenCanvas(largura, altura);
-    const ctx = tela.getContext("2d", { willReadFrequently: true });
-    if (!ctx) throw new Error("O navegador não deu um canvas para ler a imagem.");
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(bitmap, 0, 0, largura, altura);
-    const dados = ctx.getImageData(0, 0, largura, altura);
-    return { px: new Uint8ClampedArray(dados.data), largura, altura };
-  } finally {
-    bitmap.close();
-  }
-}
-
-/** O worker do vetorizador, com o pedido mais novo valendo (os velhos são descartados). */
-function useVetorizador() {
-  const worker = useRef<Worker | null>(null);
-  const ultimo = useRef(0);
-  useEffect(() => () => { worker.current?.terminate(); }, []);
-  return useCallback((px: Uint8ClampedArray, largura: number, altura: number, opcoes: Record<string, unknown>,
-    aoAndar: (fase: string, fracao: number) => void) => new Promise<Resultado | null>((pronto, falhou) => {
-    // Um pedido novo interrompe o anterior de verdade: o worker velho é
-    // encerrado, em vez de terminar uma conta que ninguém vai usar.
-    if (worker.current) worker.current.terminate();
-    const w = new Worker(new URL("../motores/vetorizadorWorker.js", import.meta.url), { type: "module" });
-    worker.current = w;
-    const id = ++ultimo.current;
-    w.onmessage = (e: MessageEvent) => {
-      const msg = e.data as { id: number; tipo: string; fase?: string; fracao?: number; resultado?: Resultado; erro?: string };
-      if (msg.id !== ultimo.current) return;
-      if (msg.tipo === "andamento") aoAndar(msg.fase || "", msg.fracao || 0);
-      else if (msg.tipo === "pronto") { pronto(msg.resultado || null); w.terminate(); if (worker.current === w) worker.current = null; }
-      else if (msg.tipo === "falhou") { falhou(new Error(msg.erro || "O vetorizador parou no meio.")); w.terminate(); if (worker.current === w) worker.current = null; }
-    };
-    w.onerror = (e) => falhou(new Error(e.message || "O vetorizador quebrou."));
-    const copia = new Uint8ClampedArray(px);
-    w.postMessage({ id, px: copia.buffer, largura, altura, opcoes }, [copia.buffer]);
-  }), []);
-}
-
-/**
- * A VITRINE DA VETORA — o pixel virando curva, em três desenhos que se
- * revezam (o círculo, a estrela, o coração). Em cada um: a imagem em pixel
- * (a escada) aparece em onda, a caneta corre a borda traçando a curva por
- * cima, os nós e as alças saltam, a forma se enche de cor com um brilho
- * passando, e o pixel some por baixo. Seis segundos cada, em laço; parada no
- * desenho pronto para quem pede menos movimento. Só cor do tema.
- */
-interface DesenhoDaVitrine { d: string; nos: { x: number; y: number; h?: [number, number][] }[] }
-const DESENHOS_DA_VITRINE: DesenhoDaVitrine[] = [
-  {
-    d: "M60 16C84 16 104 36 104 60C104 84 84 104 60 104C36 104 16 84 16 60C16 36 36 16 60 16Z",
-    nos: [
-      { x: 60, y: 16, h: [[36, 16], [84, 16]] }, { x: 104, y: 60, h: [[104, 36], [104, 84]] },
-      { x: 60, y: 104, h: [[84, 104], [36, 104]] }, { x: 16, y: 60, h: [[16, 84], [16, 36]] },
-    ],
-  },
-  {
-    d: "M60 12L72 46L108 47L80 69L90 104L60 84L30 104L40 69L12 47L48 46Z",
-    nos: ([[60, 12], [72, 46], [108, 47], [80, 69], [90, 104], [60, 84], [30, 104], [40, 69], [12, 47], [48, 46]] as [number, number][]).map(([x, y]) => ({ x, y })),
-  },
-  {
-    d: "M60 104C22 78 10 52 22 34C34 18 54 22 60 38C66 22 86 18 98 34C110 52 98 78 60 104Z",
-    nos: [
-      { x: 60, y: 104, h: [[22, 78], [98, 78]] }, { x: 60, y: 38, h: [[54, 22], [66, 22]] },
-      { x: 22, y: 34, h: [[10, 52], [34, 18]] }, { x: 98, y: 34, h: [[86, 18], [110, 52]] },
-    ],
-  },
-];
-
-/** Os pixels de cada desenho: as casas de 8 px cujo centro cai dentro dele. */
-const pixelsDaVitrine = new Map<string, [number, number][]>();
-function pixelsDe(d: string): [number, number][] {
-  const guardado = pixelsDaVitrine.get(d);
-  if (guardado) return guardado;
-  const lista: [number, number][] = [];
-  const ctx = document.createElement("canvas").getContext("2d");
-  const forma = new Path2D(d);
-  for (let y = 0; y < 120; y += 8) for (let x = 0; x < 120; x += 8) {
-    if (ctx && ctx.isPointInPath(forma, x + 4, y + 4)) lista.push([x, y]);
-  }
-  pixelsDaVitrine.set(d, lista);
-  return lista;
-}
-
-const ESTILO_DA_VITRINE = `
-  .vetora-animacao .px { animation: vetora-px 6s ease-in-out infinite both; transform-box: fill-box; transform-origin: center; }
-  .vetora-animacao .traco { stroke-dasharray: 100; animation: vetora-traco 6s cubic-bezier(.6,0,.3,1) infinite both; }
-  .vetora-animacao .miolo { animation: vetora-miolo 6s ease-in-out infinite both; }
-  .vetora-animacao .brilho { animation: vetora-brilho 6s ease-in-out infinite both; }
-  .vetora-animacao .no, .vetora-animacao .alca { animation: vetora-no 6s cubic-bezier(.3,1.6,.5,1) infinite both; transform-box: fill-box; transform-origin: center; }
-  .vetora-animacao .caneta { animation: vetora-caneta 6s linear infinite both; }
-  .vetora-animacao .halo { animation: vetora-halo 6s ease-in-out infinite both; transform-origin: 60px 60px; }
-  @keyframes vetora-px { 0% { opacity: 0; transform: scale(.2); } 10%, 30% { opacity: .6; transform: scale(1); } 56%, 100% { opacity: 0; transform: scale(.4); } }
-  @keyframes vetora-traco { 0%, 22% { stroke-dashoffset: 100; opacity: 1; } 54% { stroke-dashoffset: 0; } 90% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
-  @keyframes vetora-caneta { 0%, 20% { opacity: 0; } 24%, 54% { opacity: 1; } 60%, 100% { opacity: 0; } }
-  @keyframes vetora-miolo { 0%, 54% { opacity: 0; } 68%, 90% { opacity: 1; } 100% { opacity: 0; } }
-  @keyframes vetora-brilho { 0%, 62% { transform: translateX(-140px); opacity: 0; } 66% { opacity: .55; } 82% { transform: translateX(140px); opacity: 0; } 100% { transform: translateX(140px); opacity: 0; } }
-  @keyframes vetora-no { 0%, 44% { opacity: 0; transform: scale(0); } 54%, 88% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.4); } }
-  @keyframes vetora-halo { 0%, 56% { opacity: 0; transform: scale(.85); } 72% { opacity: .9; transform: scale(1.08); } 90% { opacity: .5; transform: scale(1.12); } 100% { opacity: 0; transform: scale(1.2); } }
-  .vetora-entra { animation: vetora-entra .5s ease-out; }
-  @keyframes vetora-entra { from { opacity: 0; } to { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) {
-    .vetora-animacao *, .vetora-entra { animation: none !important; }
-    .vetora-animacao .px, .vetora-animacao .caneta, .vetora-animacao .brilho, .vetora-animacao .halo { opacity: 0; }
-    .vetora-animacao .traco { stroke-dashoffset: 0; } .vetora-animacao .miolo { opacity: 1; }
-  }
-`;
-
-function AnimacaoVetora() {
-  const [vez, setVez] = useState(0);
-  useEffect(() => {
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const relogio = setInterval(() => setVez((v) => v + 1), 6000);
-    return () => clearInterval(relogio);
-  }, []);
-  const desenho = DESENHOS_DA_VITRINE[vez % DESENHOS_DA_VITRINE.length]!;
-  const pixels = useMemo(() => pixelsDe(desenho.d), [desenho]);
-  return (
-    <svg key={vez} viewBox="-10 -10 140 140" className="vetora-animacao size-60 overflow-visible text-tinta-apagada" aria-hidden="true">
-      <defs>
-        <linearGradient id="vetora-cor" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--accent)" stopOpacity="1" />
-          <stop offset="1" stopColor="var(--accent)" stopOpacity=".7" />
-        </linearGradient>
-        <linearGradient id="vetora-luz" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#fff" stopOpacity="0" />
-          <stop offset=".5" stopColor="#fff" stopOpacity=".7" />
-          <stop offset="1" stopColor="#fff" stopOpacity="0" />
-        </linearGradient>
-        <clipPath id="vetora-recorte"><path d={desenho.d} /></clipPath>
-        <filter id="vetora-desfoque" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9" /></filter>
-      </defs>
-      <path className="halo" d={desenho.d} fill="var(--accent)" filter="url(#vetora-desfoque)" />
-      {pixels.map(([x, y], k) => (
-        <rect key={k} className="px" x={x + 1} y={y + 1} width={6} height={6} rx={1.4} fill="currentColor"
-          style={{ animationDelay: `${((x + y) / 240) * 0.5}s` }} />
-      ))}
-      <path className="miolo" d={desenho.d} fill="url(#vetora-cor)" />
-      <g clipPath="url(#vetora-recorte)">
-        <rect className="brilho" x={-20} y={-10} width={40} height={140} fill="url(#vetora-luz)" transform="skewX(-20)" />
-      </g>
-      <path className="traco" pathLength={100} d={desenho.d} fill="none" stroke="var(--accent)" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
-      {desenho.nos.map((n, k) => (
-        <g key={k}>
-          {(n.h || []).map(([hx, hy], j) => (
-            <g key={j} className="alca" style={{ animationDelay: `${k * 0.07}s` }}>
-              <line x1={n.x} y1={n.y} x2={hx} y2={hy} stroke="currentColor" strokeWidth={0.9} />
-              <circle cx={hx} cy={hy} r={2.4} fill="currentColor" />
-            </g>
-          ))}
-          <rect className="no" x={n.x - 3.5} y={n.y - 3.5} width={7} height={7} rx={1.4} fill="var(--card-bg)" stroke="var(--accent)" strokeWidth={1.8}
-            style={{ animationDelay: `${k * 0.07}s` }} />
-        </g>
-      ))}
-      {/* A caneta: a ponta corre a borda enquanto a curva é traçada. */}
-      <g className="caneta">
-        <animateMotion dur="6s" repeatCount="indefinite" rotate="auto" path={desenho.d}
-          keyPoints="0;0;1;1" keyTimes="0;0.22;0.54;1" calcMode="spline"
-          keySplines="0 0 1 1;0.6 0 0.3 1;0 0 1 1" />
-        <path d="M0 0L-12 -5L-9 0L-12 5Z" fill="var(--accent)" stroke="var(--card-bg)" strokeWidth={1} />
-        <circle cx={-14} cy={0} r={2.2} fill="currentColor" />
-      </g>
-    </svg>
-  );
-}
+let proximoId = 1;
 
 export function Vetorizar() {
   const entrada = useRef<HTMLInputElement>(null);
   const [imagem, setImagem] = useState<Imagem | null>(null);
-  const [resultado, setResultado] = useState<Resultado | null>(null);
-  const [svgUrl, setSvgUrl] = useState<string | null>(null);
-  const [andamento, setAndamento] = useState<{ texto: string; fracao: number } | null>(null);
+  const [original, setOriginal] = useState<HTMLImageElement | null>(null);
+  const [analise, setAnalise] = useState<Analise | null>(null);
+  const [versoes, setVersoes] = useState<Record<Chave, Versao> | null>(null);
+  const [fracoes, setFracoes] = useState<Partial<Record<Chave, number | null>>>({});
+  const [faseDaEscolhida, setFaseDaEscolhida] = useState<string | null>(null);
+  const [selecionada, setSelecionada] = useState<Chave>("equilibrado");
+  const [opcoes, setOpcoes] = useState({ automatico: true, cores: 6, semFundo: false, costura: true });
+  const [divisao, setDivisao] = useState(0.5);
+  const [mostrarNos, setMostrarNos] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [motivoSemIa, setMotivoSemIa] = useState<string | null>("Conferindo a rede de ampliação…");
+  const [iaConhecida, setIaConhecida] = useState(false);
   const [arquivoEmCima, setArquivoEmCima] = useState(false);
-  const [divisao, setDivisao] = useState(50);
   const [larguraCm, setLarguraCm] = useState(20);
-  const [opcoes, setOpcoes] = useState({
-    automatico: true, cores: 6, detalhe: 50, suavidade: 50, semFundo: false, ia: true, costura: true,
-  });
-  const vetorizarNoWorker = useVetorizador();
-  /** A ampliação da imagem atual: uma só, guardada, que os pedidos seguintes esperam. */
+  const trabalhadores = useTrabalhadores();
+  /** A ampliação da imagem atual: uma só, guardada, que os modelos com IA esperam juntos. */
   const ampliacao = useRef<{ imagem: Imagem; promessa: Promise<Ampliada>; sinal: AbortController } | null>(null);
+  /** O pedido em andamento de cada modelo (a assinatura dele): o resultado velho é descartado. */
+  const emAndamento = useRef(new Map<Chave, string>());
+  /**
+   * O que cada modelo já terminou, anotado NA HORA em que termina. O efeito
+   * que dispara os pedidos roda depois da pintura, às vezes com o estado de
+   * antes do resultado chegar — sem esta anotação ele via o modelo "sem
+   * resultado e sem pedido" e vetorizava tudo de novo (medido: o segundo
+   * vetor de cada modelo, 1,5 s a mais).
+   */
+  const concluidos = useRef(new Map<Chave, string>());
+  const versoesAgora = useRef(versoes);
+  versoesAgora.current = versoes;
+  const selecionadaAgora = useRef(selecionada);
+  selecionadaAgora.current = selecionada;
   useEffect(() => () => ampliacao.current?.sinal.abort(), []);
 
   // A rede de ampliar está instalada? (o mesmo estado do Extrator)
   useEffect(() => {
     extratorApi.estado()
       .then((e) => setMotivoSemIa(e.ampliar))
-      .catch(() => setMotivoSemIa("O servidor do programa não respondeu."));
+      .catch(() => setMotivoSemIa("O servidor do programa não respondeu."))
+      .finally(() => setIaConhecida(true));
   }, []);
 
-  const abrir = useCallback(async (arquivo: File) => {
+  const limpar = useCallback(() => {
+    ampliacao.current?.sinal.abort();
+    ampliacao.current = null;
+    emAndamento.current.clear();
+    concluidos.current.clear();
+    trabalhadores.pararTudo();
+    setAnalise(null);
+    setVersoes(null);
+    setFracoes({});
+    setFaseDaEscolhida(null);
     setErro(null);
+  }, [trabalhadores]);
+
+  const abrir = useCallback(async (arquivo: File) => {
     try {
       const { px, largura, altura } = await lerPixels(arquivo, LADO_MAXIMO);
+      limpar();
+      const url = URL.createObjectURL(arquivo);
+      const img = new Image();
+      img.src = url;
+      await img.decode().catch(() => {});
+      setOriginal(img);
       setImagem((antes) => {
         if (antes) URL.revokeObjectURL(antes.url);
-        return { nome: arquivo.name.replace(/\.[^.]+$/, ""), largura, altura, px, url: URL.createObjectURL(arquivo) };
+        return { id: proximoId++, nome: arquivo.name.replace(/\.[^.]+$/, ""), largura, altura, px, url };
       });
-      ampliacao.current?.sinal.abort();
-      ampliacao.current = null;
-      // A IA fica sempre ligada: a falha de uma imagem não passa para a próxima.
-      setOpcoes((o) => (o.ia ? o : { ...o, ia: true }));
-      setResultado(null);
-      // A largura física inicial: a imagem a 300 pontos por polegada (a do
-      // arquivo de impressão), e no mínimo 10 cm — o logo de 160 px daria
-      // 1,4 cm, e o vetor não tem tamanho certo: a pessoa escolhe.
+      setSelecionada("equilibrado");
+      setDivisao(0.5);
+      // A largura do PDF: a imagem a 300 pontos por polegada (a do arquivo de
+      // impressão), e no mínimo 10 cm.
       setLarguraCm(Math.max(10, Math.round(((largura / 300) * 2.54) * 10) / 10));
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não consegui abrir a imagem.");
     }
-  }, []);
+  }, [limpar]);
+
+  /** Tira a imagem: para tudo no meio, solta o arquivo e volta à vitrine. */
+  function remover() {
+    limpar();
+    setOriginal(null);
+    setImagem((antes) => { if (antes) URL.revokeObjectURL(antes.url); return null; });
+  }
 
   /**
-   * A imagem ampliada pela IA — uma vez por imagem. O pedido que chega com a
-   * ampliação em andamento espera a mesma (mexer num ajuste no meio não a
-   * recomeça); só a imagem nova a cancela.
+   * A imagem ampliada pela IA — uma vez por imagem, esperada por todos os
+   * modelos que a usam; só a imagem nova a cancela.
    */
   const garantirAmpliada = useCallback((img: Imagem): Promise<Ampliada> => {
     const atual = ampliacao.current;
@@ -296,96 +161,143 @@ export function Vetorizar() {
     atual?.sinal.abort();
     const sinal = new AbortController();
     const fator = Math.max(2, Math.min(4, Math.floor(LADO_AMPLIADO / Math.max(img.largura, img.altura))));
-    setAndamento({ texto: "Limpando e ampliando com IA", fracao: 0 });
     const promessa = (async () => {
       const png = await extratorApi.ampliar(
         { rgba: img.px, largura: img.largura, altura: img.altura },
         { largura: img.largura * fator, altura: img.altura * fator },
-        (feitos, total) => setAndamento({ texto: `Limpando e ampliando com IA (${feitos} de ${total})`, fracao: total ? (0.6 * feitos) / total : 0 }),
+        (feitos, total) => {
+          const versoesComIa = CHAVES.filter((c) => versoesAgora.current?.[c]?.ajuste.ia);
+          setFracoes((f) => ({ ...f, ...Object.fromEntries(versoesComIa.map((c) => [c, total ? (0.6 * feitos) / total : 0])) }));
+          if (versoesAgora.current?.[selecionadaAgora.current]?.ajuste.ia) setFaseDaEscolhida(`Limpando e ampliando com IA (${feitos} de ${total})`);
+        },
         sinal.signal,
       );
       const lida = await lerPixels(png, LADO_AMPLIADO * 2);
       return { ...lida, fator: lida.largura / img.largura };
     })();
     ampliacao.current = { imagem: img, promessa, sinal };
-    // A que falhou não fica guardada: a próxima tentativa amplia de novo.
     promessa.catch(() => { if (ampliacao.current?.promessa === promessa) ampliacao.current = null; });
     return promessa;
   }, []);
 
-  // Vetoriza de novo quando a imagem ou um ajuste muda (com uma pequena espera).
+  // 1. A rede olha a imagem e escolhe os três modelos.
   useEffect(() => {
-    if (!imagem) return;
+    if (!imagem || !iaConhecida) return;
     let vivo = true;
-    const espera = setTimeout(async () => {
-      try {
-        setErro(null);
-        const lado = Math.max(imagem.largura, imagem.altura);
-        const usarIa = opcoes.ia && !motivoSemIa && lado <= LADO_PARA_AMPLIAR;
-        let fonte: Ampliada | null = null;
-        if (usarIa) {
-          try {
-            fonte = await garantirAmpliada(imagem);
-          } catch (e) {
-            if (!vivo || (e as Error).name === "AbortError") return;
-            // A IA falhou: o vetor segue sem ela (desligar a IA vetoriza de
-            // novo), e o aviso fica junto da opção até a próxima imagem.
-            console.warn("Vetora: a IA não ampliou; o vetor sai sem ela.", e);
-            setAndamento(null);
-            setOpcoes((o) => ({ ...o, ia: false }));
-            return;
-          }
-        }
+    const lado = Math.max(imagem.largura, imagem.altura);
+    trabalhadores.analisar(imagem.px, imagem.largura, imagem.altura, { comIa: !motivoSemIa && lado <= LADO_COM_IA, lambda: lerLambda() })
+      .then((a) => {
         if (!vivo) return;
-        const px = fonte ? fonte.px : imagem.px;
-        const largura = fonte ? fonte.largura : imagem.largura;
-        const altura = fonte ? fonte.altura : imagem.altura;
-        const base = usarIa ? 0.6 : 0;
-        setAndamento({ texto: FASES.cores!, fracao: base });
-        const r = await vetorizarNoWorker(px, largura, altura, {
-          cores: opcoes.automatico ? undefined : opcoes.cores,
-          detalhe: opcoes.detalhe,
-          suavidade: opcoes.suavidade,
-          semFundo: opcoes.semFundo,
-          costura: opcoes.costura,
-          escala: fonte ? 1 / fonte.fator : 1,
-        }, (fase, fracao) => { if (vivo) setAndamento({ texto: FASES[fase] || fase, fracao: base + (1 - base) * fracao }); });
-        if (!vivo || !r) return;
-        setResultado(r);
-        setAndamento(null);
-      } catch (e) {
-        if (!vivo || (e as Error).name === "AbortError") return;
-        setAndamento(null);
-        setErro(e instanceof Error ? e.message : "O vetorizador parou no meio.");
+        setAnalise(a);
+        setVersoes(Object.fromEntries(a.modelos.map((m) => [m.chave, { nome: m.nome, ajuste: m.ajuste, ajustado: false, resultado: null, assinatura: null }])) as Record<Chave, Versao>);
+      })
+      .catch((e) => { if (vivo && (e as Error).name !== "AbortError") setErro(e instanceof Error ? e.message : "A análise da imagem falhou."); });
+    return () => { vivo = false; };
+  }, [imagem, iaConhecida]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const assinaturaDe = useCallback((img: Imagem, a: Ajuste) =>
+    `${img.id}|${a.d}|${a.s}|${a.ia}|${opcoes.automatico ? "a" : opcoes.cores}|${opcoes.semFundo ? 1 : 0}|${opcoes.costura ? 1 : 0}`, [opcoes]);
+
+  const vetorizarModelo = useCallback(async (chave: Chave, img: Imagem, ajuste: Ajuste, assinatura: string) => {
+    emAndamento.current.set(chave, assinatura);
+    const valendo = () => emAndamento.current.get(chave) === assinatura;
+    try {
+      let fonte: Ampliada | null = null;
+      if (ajuste.ia) {
+        try {
+          fonte = await garantirAmpliada(img);
+        } catch (e) {
+          if (!valendo() || (e as Error).name === "AbortError") return;
+          // A IA falhou (servidor fora, rede ausente): o modelo segue sem ela.
+          console.warn("Vetora: a IA não ampliou; o modelo segue sem ela.", e);
+          emAndamento.current.delete(chave);
+          setVersoes((vs) => (vs ? { ...vs, [chave]: { ...vs[chave], ajuste: { ...vs[chave].ajuste, ia: 0 } } } : vs));
+          return;
+        }
       }
-    }, 250);
-    return () => { vivo = false; clearTimeout(espera); };
-  }, [imagem, opcoes, motivoSemIa, garantirAmpliada, vetorizarNoWorker]);
+      if (!valendo()) return;
+      const base = fonte ? 0.6 : 0;
+      const r = await trabalhadores.vetorizar(chave, fonte ? fonte.px : img.px, fonte ? fonte.largura : img.largura, fonte ? fonte.altura : img.altura, {
+        cores: opcoes.automatico ? undefined : opcoes.cores,
+        detalhe: ajuste.d,
+        suavidade: ajuste.s,
+        semFundo: opcoes.semFundo,
+        costura: opcoes.costura,
+        escala: fonte ? 1 / fonte.fator : 1,
+      }, (fase, fracao) => {
+        if (!valendo()) return;
+        setFracoes((f) => ({ ...f, [chave]: base + (1 - base) * fracao }));
+        if (chave === selecionadaAgora.current) setFaseDaEscolhida(FASES[fase] || fase);
+      });
+      if (!valendo()) return;
+      concluidos.current.set(chave, assinatura);
+      emAndamento.current.delete(chave);
+      setVersoes((vs) => (vs ? { ...vs, [chave]: { ...vs[chave], resultado: r, assinatura } } : vs));
+      setFracoes((f) => ({ ...f, [chave]: null }));
+    } catch (e) {
+      if (!valendo() || (e as Error).name === "AbortError") return;
+      emAndamento.current.delete(chave);
+      setFracoes((f) => ({ ...f, [chave]: null }));
+      setErro(e instanceof Error ? e.message : "O vetorizador parou no meio.");
+    }
+  }, [garantirAmpliada, opcoes, trabalhadores]);
 
-  // O endereço do SVG para a prévia.
+  // 2. Cada modelo cujo ajuste (ou as opções) mudou vetoriza de novo — os
+  //    três ao mesmo tempo, cada um no seu worker. A pequena espera segura o
+  //    arrastar dos controles.
   useEffect(() => {
-    if (!resultado) { setSvgUrl(null); return; }
-    const url = URL.createObjectURL(new Blob([resultado.svg], { type: "image/svg+xml" }));
-    setSvgUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [resultado]);
+    if (!imagem || !versoes) return;
+    const pendentes = CHAVES.filter((c) => {
+      const v = versoes[c];
+      const s = assinaturaDe(imagem, v.ajuste);
+      return v.assinatura !== s && emAndamento.current.get(c) !== s && concluidos.current.get(c) !== s;
+    });
+    if (!pendentes.length) return;
+    const primeiraVez = pendentes.every((c) => !versoes[c].resultado);
+    const espera = setTimeout(() => {
+      for (const c of pendentes) void vetorizarModelo(c, imagem, versoes[c].ajuste, assinaturaDe(imagem, versoes[c].ajuste));
+    }, primeiraVez ? 0 : 220);
+    return () => clearTimeout(espera);
+  }, [imagem, versoes, assinaturaDe, vetorizarModelo]);
 
-  const mudar = <K extends keyof typeof opcoes>(chave: K, valor: (typeof opcoes)[K]) => setOpcoes((o) => ({ ...o, [chave]: valor }));
+  // Os endereços dos SVGs (miniaturas), um por resultado, soltos quando trocam.
+  const urls = useRef(new Map<Chave, { svg: string; url: string }>());
+  const svgUrlDe = (c: Chave) => {
+    const r = versoes?.[c]?.resultado;
+    const guardado = urls.current.get(c);
+    if (!r) { if (guardado) { URL.revokeObjectURL(guardado.url); urls.current.delete(c); } return null; }
+    if (guardado && guardado.svg === r.svg) return guardado.url;
+    if (guardado) URL.revokeObjectURL(guardado.url);
+    const url = URL.createObjectURL(new Blob([r.svg], { type: "image/svg+xml" }));
+    urls.current.set(c, { svg: r.svg, url });
+    return url;
+  };
+  useEffect(() => () => { for (const g of urls.current.values()) URL.revokeObjectURL(g.url); }, []);
+
+  const escolhida = versoes ? versoes[selecionada] : null;
+  const resultado = escolhida?.resultado ?? null;
   const areaTotal = useMemo(() => (resultado ? resultado.paleta.reduce((t, c) => t + c.area, 0) : 0), [resultado]);
-  // O primeiro vetor da imagem: até ele chegar, a animação; depois, ajustar
-  // um controle só mostra a barrinha, sem esconder o vetor que já está ali.
-  const vetorPronto = !!svgUrl;
+  const vetorDoVisor = useMemo(() => (resultado ? { formas: resultado.formas, costura: resultado.costura, larguraTraco: resultado.larguraTraco } : null), [resultado]);
 
-  /** Tira a imagem: para a IA no meio, solta o arquivo e volta à vitrine. */
-  function remover() {
-    ampliacao.current?.sinal.abort();
-    ampliacao.current = null;
-    setImagem((antes) => { if (antes) URL.revokeObjectURL(antes.url); return null; });
-    setResultado(null);
-    setAndamento(null);
-    setErro(null);
-    setOpcoes((o) => (o.ia ? o : { ...o, ia: true }));
-  }
+  const mudarAjuste = (campo: "d" | "s", valor: number) => setVersoes((vs) => (vs ? {
+    ...vs, [selecionada]: { ...vs[selecionada], ajuste: { ...vs[selecionada].ajuste, [campo]: valor }, ajustado: true },
+  } : vs));
+  const mudar = <K extends keyof typeof opcoes>(chave: K, valor: (typeof opcoes)[K]) => setOpcoes((o) => ({ ...o, [chave]: valor }));
+
+  /** A pessoa levou um vetor: o gosto aprende (ver `vetora/gosto.ts`). */
+  const levou = (como: "svg" | "pdf" | "copia") => {
+    if (!analise || !versoes || !escolhida) return;
+    registrarEscolha({
+      quando: new Date().toISOString(),
+      rede: analise.versaoDaRede,
+      carac: analise.carac,
+      modelos: CHAVES.map((c) => ({ chave: c, ajuste: versoes[c].ajuste, nos: versoes[c].resultado?.estatisticas.nos ?? null, cores: versoes[c].resultado?.estatisticas.cores ?? null })),
+      escolhida: selecionada,
+      ajusteFinal: escolhida.ajuste,
+      mexeu: escolhida.ajustado,
+      como,
+    }, analise.lambda);
+  };
 
   async function baixarPdf() {
     if (!resultado || !imagem) return;
@@ -396,14 +308,17 @@ export function Vetorizar() {
         formas: resultado.formas, largura: resultado.estatisticas.largura, altura: resultado.estatisticas.altura,
       }, larguraCm);
       baixar(new Blob([bytes as BlobPart], { type: "application/pdf" }), `${imagem.nome}-vetor.pdf`);
+      levou("pdf");
     } catch (e) {
       setErro(e instanceof Error ? `Não consegui montar o PDF: ${e.message}` : "Não consegui montar o PDF.");
     }
   }
 
+  const sufixo = selecionada === "equilibrado" ? "" : `-${selecionada}`;
+
   return (
     <div
-      className="grid min-h-0 flex-1 gap-3.5 overflow-y-auto p-3 lg:p-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden"
+      className="grid min-h-0 flex-1 gap-3.5 overflow-y-auto p-3 lg:p-4 xl:grid-cols-[minmax(0,1fr)_340px] xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden"
       onDragOver={(e) => { e.preventDefault(); setArquivoEmCima(true); }}
       onDragLeave={() => setArquivoEmCima(false)}
       onDrop={(e) => {
@@ -447,91 +362,91 @@ export function Vetorizar() {
             }}
           />
           <div className="flex h-full min-h-[320px] flex-col">
-          {erro && (
-            <p className="mt-0 mb-3 flex items-start gap-2 text-[0.85rem] text-[var(--danger)]">
-              <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-4 shrink-0" />
-              <span>{erro}</span>
-            </p>
-          )}
-          {!imagem ? (
-            <button
-              type="button"
-              onClick={() => entrada.current?.click()}
-              className={`vetora-vitrine group relative grid flex-1 w-full cursor-pointer place-items-center overflow-hidden rounded-xl border-2 border-dashed transition-colors ${arquivoEmCima ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-linha hover:border-[var(--accent-line)]"}`}
-            >
-              <span className="relative flex flex-col items-center px-6 text-center">
-                <AnimacaoVetora />
-                <span className="mt-5 font-titulo text-[2.4rem] leading-none tracking-[-0.02em] text-tinta">
-                  Vetor<span className="text-ambar">a</span>
+            {erro && (
+              <p className="mt-0 mb-3 flex items-start gap-2 text-[0.85rem] text-[var(--danger)]">
+                <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-4 shrink-0" />
+                <span>{erro}</span>
+              </p>
+            )}
+            {!imagem ? (
+              <button
+                type="button"
+                onClick={() => entrada.current?.click()}
+                className={`vetora-vitrine group relative grid flex-1 w-full cursor-pointer place-items-center overflow-hidden rounded-xl border-2 border-dashed transition-colors ${arquivoEmCima ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-linha hover:border-[var(--accent-line)]"}`}
+              >
+                <span className="relative flex flex-col items-center px-6 text-center">
+                  <AnimacaoVetora />
+                  <span className="mt-5 font-titulo text-[2.4rem] leading-none tracking-[-0.02em] text-tinta">
+                    Vetor<span className="text-ambar">a</span>
+                  </span>
+                  <span className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-[0.9rem] text-white shadow-lg shadow-black/30 transition-transform group-hover:-translate-y-0.5">
+                    <Icone referencia="icones.svg#image-plus" className="size-4" />
+                    {arquivoEmCima ? "Pode soltar" : "Escolher imagem"}
+                  </span>
                 </span>
-                <span className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-[0.9rem] text-white shadow-lg shadow-black/30 transition-transform group-hover:-translate-y-0.5">
-                  <Icone referencia="icones.svg#image-plus" className="size-4" />
-                  {arquivoEmCima ? "Pode soltar" : "Escolher imagem"}
-                </span>
-              </span>
-            </button>
-          ) : (
-            <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-linha"
-              style={{ background: "repeating-conic-gradient(#d9d9d9 0% 25%, #ffffff 0% 50%) 50% / 18px 18px" }}>
-              {/*
-                Preso à altura da janela: a imagem cabe na caixa (object-contain)
-                e nunca empurra a tela. Enquanto o vetor não fica pronto, a
-                comparação não aparece pela metade: o original fica apagado sob
-                a animação da Vetora, e original e vetor entram juntos.
-              */}
-              <div className="absolute inset-0">
-                <img src={imagem.url} alt="A imagem original" draggable={false}
-                  className={`absolute inset-0 h-full w-full object-contain transition-[opacity,filter] duration-500 ${vetorPronto ? "" : "opacity-30 blur-[2px]"}`} />
-                {vetorPronto && (
-                  <>
-                    <img
-                      src={svgUrl!}
-                      alt="O vetor"
-                      className="vetora-entra absolute inset-0 h-full w-full object-contain"
-                      style={{ clipPath: `inset(0 0 0 ${divisao}%)` }}
-                      draggable={false}
-                    />
-                    <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-[var(--accent)] shadow-[0_0_0_1px_rgba(0,0,0,0.25)]" style={{ left: `${divisao}%` }} />
-                    <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] text-white">Original</span>
-                    <span className="pointer-events-none absolute top-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] text-white">Vetor</span>
-                    {andamento && (
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1 bg-black/30">
-                        <div className="h-full bg-[var(--accent)] transition-[width]" style={{ width: `${Math.round(andamento.fracao * 100)}%` }} />
-                      </div>
-                    )}
-                  </>
-                )}
-                {!vetorPronto && (
-                  <div className="absolute inset-0 grid place-items-center bg-black/35">
+              </button>
+            ) : (
+              <>
+                <Visor
+                  original={original}
+                  largura={imagem.largura}
+                  altura={imagem.altura}
+                  vetor={vetorDoVisor}
+                  divisao={divisao}
+                  aoDividir={setDivisao}
+                  mostrarNos={mostrarNos}
+                  aoMostrarNos={setMostrarNos}
+                  progresso={fracoes[selecionada] ?? null}
+                  espera={(
                     <div className="flex w-64 flex-col items-center text-center text-white">
                       <AnimacaoVetora />
-                      <span className="mt-2 text-[0.9rem]">{andamento ? andamento.texto : "Preparando"}…</span>
+                      <span className="mt-2 text-[0.9rem]">{versoes ? (faseDaEscolhida || "Preparando") : "A rede está olhando a imagem"}…</span>
                       <div className="mt-2 h-1 w-full overflow-hidden rounded bg-white/20">
-                        <div className="h-full bg-[var(--accent)] transition-[width]" style={{ width: `${Math.round((andamento ? andamento.fracao : 0) * 100)}%` }} />
+                        <div className="h-full bg-[var(--accent)] transition-[width]" style={{ width: `${Math.round((fracoes[selecionada] ?? 0) * 100)}%` }} />
                       </div>
+                      {/* Outro modelo já pronto (o da IA demora mais): dá para olhar ele enquanto isso. */}
+                      {versoes && (() => {
+                        const pronto = CHAVES.find((c) => c !== selecionada && versoes[c].resultado);
+                        return pronto ? (
+                          <button type="button" onClick={() => setSelecionada(pronto)}
+                            className="mt-4 rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-[0.82rem] text-white hover:bg-white/20">
+                            Ver o {versoes[pronto].nome} enquanto isso
+                          </button>
+                        ) : null;
+                      })()}
                     </div>
-                  </div>
-                )}
-              </div>
-              {vetorPronto && (
-                <input
-                  type="range" min={0} max={100} value={divisao}
-                  onChange={(e) => setDivisao(Number(e.target.value))}
-                  aria-label="Divisória entre o original e o vetor"
-                  className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
+                  )}
                 />
-              )}
-            </div>
-          )}
+                {versoes && (
+                  <Modelos
+                    selecionada={selecionada}
+                    aoEscolher={(c) => { setSelecionada(c); setFaseDaEscolhida(null); }}
+                    itens={CHAVES.map((c) => ({
+                      chave: c,
+                      nome: versoes[c].nome,
+                      ia: !!versoes[c].ajuste.ia,
+                      ajustado: versoes[c].ajustado,
+                      resultado: versoes[c].resultado,
+                      svgUrl: svgUrlDe(c),
+                      fracao: fracoes[c] ?? null,
+                    }))}
+                  />
+                )}
+              </>
+            )}
           </div>
         </Cartao>
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-col gap-3.5 xl:overflow-y-auto">
-        <Cartao titulo="Ajustes" icone="icones.svg#settings">
-          <div className="flex flex-col gap-4 text-[0.85rem]">
+        <Cartao titulo="Ajustes" icone="icones.svg#settings" apoio={escolhida ? `Do modelo ${escolhida.nome}` : undefined}>
+          {/*
+            Compacto, para a coluna caber na janela de notebook sem rolar: a
+            explicação de cada controle mora na dica (`title`), não embaixo.
+          */}
+          <div className="flex flex-col gap-3 text-[0.85rem]">
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
+              <div className="flex items-center justify-between">
                 <span className="text-tinta">Cores</span>
                 <span className="flex overflow-hidden rounded-lg border border-linha text-[12px]">
                   <button type="button" onClick={() => mudar("automatico", true)} className={`px-2.5 py-1 ${opcoes.automatico ? "bg-[var(--accent-soft)] text-ambar" : "text-tinta-fraca"}`}>Automático</button>
@@ -539,43 +454,37 @@ export function Vetorizar() {
                 </span>
               </div>
               {!opcoes.automatico && (
-                <label className="flex items-center gap-3">
+                <label className="mt-1.5 flex items-center gap-3">
                   <input type="range" min={1} max={32} value={opcoes.cores} onChange={(e) => mudar("cores", Number(e.target.value))} className="flex-1 accent-[var(--accent)]" />
                   <span className="w-6 text-right font-mono text-tinta">{opcoes.cores}</span>
                 </label>
               )}
             </div>
-            <label className="block">
-              <span className="mb-1 flex justify-between"><span className="text-tinta">Detalhe</span><span className="font-mono text-tinta-fraca">{opcoes.detalhe}</span></span>
-              <input type="range" min={0} max={100} value={opcoes.detalhe} onChange={(e) => mudar("detalhe", Number(e.target.value))} className="w-full accent-[var(--accent)]" />
-              <span className="text-[11.5px] text-tinta-apagada">Mais detalhe: mais cores no automático, ciscos menores ficam, curva mais justa.</span>
+            <label className={`block ${escolhida ? "" : "opacity-50"}`} title="Mais detalhe: mais cores no automático, ciscos menores ficam, curva mais justa.">
+              <span className="flex justify-between"><span className="text-tinta">Detalhe</span><span className="font-mono text-tinta-fraca">{escolhida ? escolhida.ajuste.d : "—"}</span></span>
+              <input type="range" min={0} max={100} disabled={!escolhida} value={escolhida ? escolhida.ajuste.d : 50} onChange={(e) => mudarAjuste("d", Number(e.target.value))} className="w-full accent-[var(--accent)]" />
             </label>
-            <label className="block">
-              <span className="mb-1 flex justify-between"><span className="text-tinta">Suavidade</span><span className="font-mono text-tinta-fraca">{opcoes.suavidade}</span></span>
-              <input type="range" min={0} max={100} value={opcoes.suavidade} onChange={(e) => mudar("suavidade", Number(e.target.value))} className="w-full accent-[var(--accent)]" />
-              <span className="text-[11.5px] text-tinta-apagada">Mais suave: curvas mais lisas e só canto bem vivo vira quina.</span>
+            <label className={`block ${escolhida ? "" : "opacity-50"}`} title="Mais suave: curvas mais lisas e só canto bem vivo vira quina.">
+              <span className="flex justify-between"><span className="text-tinta">Suavidade</span><span className="font-mono text-tinta-fraca">{escolhida ? escolhida.ajuste.s : "—"}</span></span>
+              <input type="range" min={0} max={100} disabled={!escolhida} value={escolhida ? escolhida.ajuste.s : 50} onChange={(e) => mudarAjuste("s", Number(e.target.value))} className="w-full accent-[var(--accent)]" />
             </label>
-            <label className="flex items-start gap-2.5">
-              <input type="checkbox" checked={opcoes.semFundo} onChange={(e) => mudar("semFundo", e.target.checked)} className="mt-0.5 accent-[var(--accent)]" />
-              <span><span className="text-tinta">Tirar o fundo</span><br /><span className="text-[11.5px] text-tinta-apagada">A cor lisa que encosta na borda da imagem vira transparente.</span></span>
-            </label>
-            <label className="flex items-start gap-2.5">
-              <input type="checkbox" checked={opcoes.costura} onChange={(e) => mudar("costura", e.target.checked)} className="mt-0.5 accent-[var(--accent)]" />
-              <span><span className="text-tinta">Sem frestas na tela</span><br /><span className="text-[11.5px] text-tinta-apagada">Um traço fino por baixo das divisas esconde o fio claro entre duas cores. Desligue para corte em plotter.</span></span>
-            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex items-center gap-2" title="A cor lisa que encosta na borda da imagem vira transparente.">
+                <input type="checkbox" checked={opcoes.semFundo} onChange={(e) => mudar("semFundo", e.target.checked)} className="accent-[var(--accent)]" />
+                <span className="text-tinta">Tirar o fundo</span>
+              </label>
+              <label className="flex items-center gap-2" title="Um traço fino por baixo das divisas esconde o fio claro entre duas cores na tela. Desligue para corte em plotter.">
+                <input type="checkbox" checked={opcoes.costura} onChange={(e) => mudar("costura", e.target.checked)} className="accent-[var(--accent)]" />
+                <span className="text-tinta">Sem frestas</span>
+              </label>
+            </div>
           </div>
         </Cartao>
 
-        {/* Só aparece com o vetor feito: sem imagem, a coluna fica só com os ajustes. */}
+        {/* Só aparece com o vetor do modelo escolhido feito. */}
         {resultado && (
-        <Cartao titulo="O vetor" icone="icones.svg#spline">
-          {(
+          <Cartao titulo={`O vetor · ${escolhida!.nome}`} icone="icones.svg#spline">
             <div className="flex flex-col gap-3.5 text-[0.85rem]">
-              {/*
-                A paleta em amostras pequenas (o código da cor e a fatia do
-                desenho no `title`): 16 cores cabem em duas linhas, e a coluna
-                não cresce até rolar.
-              */}
               <div className="flex flex-wrap gap-1">
                 {resultado.paleta.map((c) => (
                   <span key={c.hex} className="size-5 rounded-[5px] border border-white/10 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.15)]" style={{ background: c.hex }}
@@ -596,7 +505,7 @@ export function Vetorizar() {
               </div>
               <div className="flex flex-col gap-2">
                 <Botao jeito="primario" icone={<Icone referencia="icones.svg#download" className="size-4" />}
-                  onClick={() => imagem && baixar(new Blob([resultado.svg], { type: "image/svg+xml" }), `${imagem.nome}-vetor.svg`)}>
+                  onClick={() => { if (!imagem) return; baixar(new Blob([resultado.svg], { type: "image/svg+xml" }), `${imagem.nome}-vetor${sufixo}.svg`); levou("svg"); }}>
                   Baixar SVG
                 </Botao>
                 <div className="grid grid-cols-2 gap-2">
@@ -604,14 +513,13 @@ export function Vetorizar() {
                     PDF
                   </Botao>
                   <Botao jeito="secundario" icone={<Icone referencia="icones.svg#file-text" className="size-4" />}
-                    onClick={() => void navigator.clipboard.writeText(resultado.svg)}>
+                    onClick={() => { void navigator.clipboard.writeText(resultado.svg); levou("copia"); }}>
                     Copiar SVG
                   </Botao>
                 </div>
               </div>
             </div>
-          )}
-        </Cartao>
+          </Cartao>
         )}
       </div>
     </div>

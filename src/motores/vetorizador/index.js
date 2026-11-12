@@ -227,12 +227,15 @@ export function vetorizar(px, largura, altura, opcoes = {}, aoAndar = () => {}) 
   const borrao = medidaDaBorda < 1.25 ? 1 : Math.min(4 * p0.daEscala, medidaDaBorda);
   const p = parametros(opcoes, largura, altura, borrao);
   // A franja grudada numa região de verdade (ver `desmisturar`).
-  rotulos = desmisturar(rotulos, medida.lab, largura, altura, cores, Math.max(1, Math.round(borrao)));
+  if (opcoes.desmisturar !== false) rotulos = desmisturar(rotulos, medida.lab, largura, altura, cores, Math.max(1, Math.round(borrao)));
   const fundoTirado = opcoes.semFundo ? tirarFundo(rotulos, largura, altura) : -1;
   const tirouFundo = fundoTirado >= 0;
-  // A franja de antisserrilhado tem 1 pixel do ORIGINAL: na imagem ampliada
-  // ela tem `fator` pixels de largura, e a espessura mínima acompanha.
-  rotulos = limparRegioes(rotulos, largura, altura, cores, { areaMinima: p.areaMinima, espessuraMinima: 1.2 * p.fator });
+  // A franja de antisserrilhado tem a largura da BORDA desta imagem (medida:
+  // `borrao`) — e não o fator da ampliação. A rede de ampliação entrega a
+  // borda nítida (medida ~1,2 px na imagem ampliada); com a espessura mínima
+  // multiplicada pelo fator (4), o traço fino de verdade — o acento do "ó",
+  // o pingo do "i" — era tomado por franja e sumia do vetor da IA.
+  rotulos = limparRegioes(rotulos, largura, altura, cores, { areaMinima: p.areaMinima, espessuraMinima: 1.2 * borrao });
   const { regiao, rotuloDa, areaDa, quantas } = separarRegioes(rotulos, largura, altura);
 
   aoAndar("divisas", 0.4);
@@ -272,6 +275,10 @@ export function vetorizar(px, largura, altura, opcoes = {}, aoAndar = () => {}) 
   return {
     svg,
     formas,
+    // O traço da costura por cor, para quem desenha o vetor sem o SVG (o
+    // visor da tela, em canvas): mesma largura (`larguraTraco`) e por baixo.
+    costura: costura ? [...costura].map(([cor, d]) => ({ cor, d })) : [],
+    larguraTraco: escala,
     paleta,
     estatisticas: {
       cores: paleta.length,
