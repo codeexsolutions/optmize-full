@@ -8,16 +8,14 @@
  * próprio: paleta perceptual, mapa planar, borda no subpixel, retas e curvas
  * de verdade), num Web Worker — a tela não trava enquanto ele trabalha.
  *
- * A IA ENTRA ANTES, na imagem pequena: ela passa pela rede de ampliação do
- * programa (Real-ESRGAN, a mesma do Extrator, rodando no servidor local),
- * que recupera a cor e a borda fina que o JPEG apagou; o vetor é feito na
- * imagem ampliada e sai no tamanho original. Medido na bancada
- * (`bancada/conferir-vetorizador.mjs`): no logo de 100 px com JPEG, a IA
- * leva o vetor de 91% a 98,5% de pixels certos (o selo) e de 96% a 99% (as
- * letras); na imagem de 200 px ela empata, e na BORRADA ela piora (a rede
- * inventa halo e faceta). Por isso ela liga sozinha só na imagem de até
- * 256 px que não é borrada (a borda medida pelo motor, `estatisticas.borda`),
- * e a pessoa pode ligar à mão até 512 px.
+ * A IA ENTRA ANTES, sempre ligada, em toda imagem de até 512 px: ela passa
+ * pela rede de ampliação do programa (Real-ESRGAN, a mesma do Extrator,
+ * rodando no servidor local), que recupera a cor e a borda fina que o JPEG
+ * apagou; o vetor é feito na imagem ampliada e sai no tamanho original.
+ * Medido na bancada (`bancada/conferir-vetorizador.mjs`): no logo de 100 px
+ * com JPEG, a IA leva o vetor de 91% a 98,5% de pixels certos; na imagem de
+ * 200 px ela empata, e na BORRADA ela piora um pouco. Sem a rede instalada,
+ * ou se ela falhar, o vetor sai sem ela.
  *
  * A ampliação fica guardada para a mesma imagem: mexer nos ajustes depois
  * disso só vetoriza de novo — e mexer DURANTE a ampliação não a recomeça.
@@ -44,12 +42,8 @@ interface Ampliada { px: Uint8ClampedArray<ArrayBuffer>; largura: number; altura
 
 /** O maior lado vetorizado direto (acima disso a imagem é reduzida: o vetor não ganha nada). */
 const LADO_MAXIMO = 2400;
-/** Até aqui a pessoa pode ligar a IA (acima, a imagem já tem detalhe de sobra). */
+/** Até aqui a IA amplia antes de traçar (acima, a imagem já tem detalhe de sobra). */
 const LADO_PARA_AMPLIAR = 512;
-/** Até aqui a IA liga sozinha, se a imagem não for borrada (é onde ela rende). */
-const LADO_IA_SOZINHA = 256;
-/** A borda acima disso é borrada (ver `larguraDaBorda`, no motor): a IA não ajuda. */
-const BORDA_BORRADA = 1.6;
 /** O maior lado depois da ampliação. */
 const LADO_AMPLIADO = 2048;
 
@@ -129,13 +123,11 @@ export function Vetorizar() {
   const [divisao, setDivisao] = useState(50);
   const [larguraCm, setLarguraCm] = useState(20);
   const [opcoes, setOpcoes] = useState({
-    automatico: true, cores: 6, detalhe: 50, suavidade: 50, semFundo: false, ia: false, costura: true,
+    automatico: true, cores: 6, detalhe: 50, suavidade: 50, semFundo: false, ia: true, costura: true,
   });
   const vetorizarNoWorker = useVetorizador();
   /** A ampliação da imagem atual: uma só, guardada, que os pedidos seguintes esperam. */
   const ampliacao = useRef<{ imagem: Imagem; promessa: Promise<Ampliada>; sinal: AbortController } | null>(null);
-  /** A pessoa mexeu na IA nesta imagem? Então a escolha é dela, e a tela não liga sozinha. */
-  const iaTocada = useRef(false);
   useEffect(() => () => ampliacao.current?.sinal.abort(), []);
 
   // A rede de ampliar está instalada? (o mesmo estado do Extrator)
@@ -155,9 +147,9 @@ export function Vetorizar() {
       });
       ampliacao.current?.sinal.abort();
       ampliacao.current = null;
-      iaTocada.current = false;
       setAvisoIa(null);
-      setOpcoes((o) => (o.ia ? { ...o, ia: false } : o));
+      // A IA fica sempre ligada: a falha de uma imagem não passa para a próxima.
+      setOpcoes((o) => (o.ia ? o : { ...o, ia: true }));
       setResultado(null);
       // A largura física inicial: a imagem a 300 pontos por polegada (a do
       // arquivo de impressão), e no mínimo 10 cm — o logo de 160 px daria
@@ -213,7 +205,6 @@ export function Vetorizar() {
             if (!vivo || (e as Error).name === "AbortError") return;
             // A IA falhou: o vetor segue sem ela (desligar a IA vetoriza de
             // novo), e o aviso fica junto da opção até a próxima imagem.
-            iaTocada.current = true;
             setAvisoIa(`A IA não conseguiu ampliar (${e instanceof Error ? e.message : "erro desconhecido"}); o vetor saiu sem ela.`);
             setAndamento(null);
             setOpcoes((o) => ({ ...o, ia: false }));
@@ -237,12 +228,6 @@ export function Vetorizar() {
         if (!vivo || !r) return;
         setResultado(r);
         setAndamento(null);
-        // O vetor direto da imagem pequena e nítida chegou: a IA liga sozinha
-        // (a menos que a pessoa já tenha escolhido), e o vetor melhor vem por
-        // cima deste.
-        if (!usarIa && !iaTocada.current && !motivoSemIa && lado <= LADO_IA_SOZINHA && r.estatisticas.borda < BORDA_BORRADA) {
-          setOpcoes((o) => (o.ia ? o : { ...o, ia: true }));
-        }
       } catch (e) {
         if (!vivo || (e as Error).name === "AbortError") return;
         setAndamento(null);
@@ -262,18 +247,6 @@ export function Vetorizar() {
 
   const mudar = <K extends keyof typeof opcoes>(chave: K, valor: (typeof opcoes)[K]) => setOpcoes((o) => ({ ...o, [chave]: valor }));
   const areaTotal = useMemo(() => (resultado ? resultado.paleta.reduce((t, c) => t + c.area, 0) : 0), [resultado]);
-  const imagemGrande = imagem ? Math.max(imagem.largura, imagem.altura) > LADO_PARA_AMPLIAR : false;
-  const imagemBorrada = resultado ? resultado.estatisticas.borda >= BORDA_BORRADA : false;
-  const apoioDaIa = motivoSemIa
-    ? motivoSemIa
-    : avisoIa
-      ? avisoIa
-      : imagemGrande
-        ? `A IA só ajuda em imagem pequena (até ${LADO_PARA_AMPLIAR} px); esta já tem detalhe de sobra.`
-        : imagemBorrada && !opcoes.ia
-          ? "Esta imagem é borrada: nela a IA inventa halo em vez de limpar. O vetorizador já trata a borda borrada sozinho."
-          : `Liga sozinha em imagem pequena e nítida (até ${LADO_IA_SOZINHA} px): a rede de ampliação (Real-ESRGAN) recupera a cor e a borda fina que o JPEG apagou. Roda no seu computador.`;
-
   async function baixarPdf() {
     if (!resultado || !imagem) return;
     try {
@@ -290,7 +263,7 @@ export function Vetorizar() {
 
   return (
     <div
-      className="grid gap-3.5 xl:grid-cols-[minmax(0,1fr)_360px]"
+      className="grid min-h-0 flex-1 gap-3.5 xl:grid-cols-[minmax(0,1fr)_360px]"
       onDragOver={(e) => { e.preventDefault(); setArquivoEmCima(true); }}
       onDragLeave={() => setArquivoEmCima(false)}
       onDrop={(e) => {
@@ -300,13 +273,12 @@ export function Vetorizar() {
         if (f) void abrir(f);
       }}
     >
-      <div className="min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-col">
         <Cartao
           titulo={imagem ? imagem.nome : "A imagem"}
           icone="icones.svg#pen-tool"
-          apoio={imagem
-            ? `${imagem.largura} × ${imagem.altura} px · arraste a divisória para comparar o original com o vetor`
-            : "Solte aqui um PNG ou JPG — logo, estampa, arte de cliente — e receba o vetor em SVG ou PDF."}
+          apoio={imagem ? `${imagem.largura} × ${imagem.altura} px · arraste a divisória para comparar o original com o vetor` : undefined}
+          preencher
           acao={(
             <Botao jeito="secundario" icone={<Icone referencia="icones.svg#image-plus" className="size-4" />} onClick={() => entrada.current?.click()}>
               {imagem ? "Outra imagem" : "Escolher imagem"}
@@ -324,17 +296,18 @@ export function Vetorizar() {
               e.target.value = "";
             }}
           />
-          {erro && (
+          <div className="flex h-full min-h-[320px] flex-col">
+          {(erro || avisoIa) && (
             <p className="mt-0 mb-3 flex items-start gap-2 text-[0.85rem] text-[var(--danger)]">
               <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-4 shrink-0" />
-              <span>{erro}</span>
+              <span>{erro || avisoIa}</span>
             </p>
           )}
           {!imagem ? (
             <button
               type="button"
               onClick={() => entrada.current?.click()}
-              className={`grid min-h-[420px] w-full cursor-pointer place-items-center rounded-xl border-2 border-dashed transition-colors ${arquivoEmCima ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-linha hover:border-[var(--accent-line)]"}`}
+              className={`grid flex-1 w-full cursor-pointer place-items-center rounded-xl border-2 border-dashed transition-colors ${arquivoEmCima ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-linha hover:border-[var(--accent-line)]"}`}
             >
               <span className="flex flex-col items-center gap-3 text-tinta-fraca">
                 <Icone referencia="icones.svg#pen-tool" className="size-10 text-ambar" />
@@ -343,9 +316,9 @@ export function Vetorizar() {
               </span>
             </button>
           ) : (
-            <div className="relative overflow-hidden rounded-xl border border-linha"
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-linha"
               style={{ background: "repeating-conic-gradient(#d9d9d9 0% 25%, #ffffff 0% 50%) 50% / 18px 18px" }}>
-              <div className="relative mx-auto" style={{ aspectRatio: `${imagem.largura} / ${imagem.altura}`, maxHeight: "68vh" }}>
+              <div className="absolute inset-0">
                 <img src={imagem.url} alt="A imagem original" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
                 {svgUrl && (
                   <img
@@ -374,6 +347,7 @@ export function Vetorizar() {
               />
             </div>
           )}
+          </div>
         </Cartao>
       </div>
 
@@ -408,19 +382,6 @@ export function Vetorizar() {
             <label className="flex items-start gap-2.5">
               <input type="checkbox" checked={opcoes.semFundo} onChange={(e) => mudar("semFundo", e.target.checked)} className="mt-0.5 accent-[var(--accent)]" />
               <span><span className="text-tinta">Tirar o fundo</span><br /><span className="text-[11.5px] text-tinta-apagada">A cor lisa que encosta na borda da imagem vira transparente.</span></span>
-            </label>
-            <label className={`flex items-start gap-2.5 ${motivoSemIa || imagemGrande ? "opacity-60" : ""}`}>
-              <input
-                type="checkbox"
-                checked={opcoes.ia && !imagemGrande}
-                disabled={!!motivoSemIa || imagemGrande}
-                onChange={(e) => { iaTocada.current = true; mudar("ia", e.target.checked); }}
-                className="mt-0.5 accent-[var(--accent)]"
-              />
-              <span>
-                <span className="text-tinta">Limpar e ampliar com IA</span><br />
-                <span className="text-[11.5px] text-tinta-apagada">{apoioDaIa}</span>
-              </span>
             </label>
             <label className="flex items-start gap-2.5">
               <input type="checkbox" checked={opcoes.costura} onChange={(e) => mudar("costura", e.target.checked)} className="mt-0.5 accent-[var(--accent)]" />
