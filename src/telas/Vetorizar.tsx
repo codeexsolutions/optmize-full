@@ -310,6 +310,10 @@ export function Vetorizar() {
 
   const mudar = <K extends keyof typeof opcoes>(chave: K, valor: (typeof opcoes)[K]) => setOpcoes((o) => ({ ...o, [chave]: valor }));
   const areaTotal = useMemo(() => (resultado ? resultado.paleta.reduce((t, c) => t + c.area, 0) : 0), [resultado]);
+  // O primeiro vetor da imagem: até ele chegar, a animação; depois, ajustar
+  // um controle só mostra a barrinha, sem esconder o vetor que já está ali.
+  const vetorPronto = !!svgUrl;
+
   async function baixarPdf() {
     if (!resultado || !imagem) return;
     try {
@@ -326,7 +330,7 @@ export function Vetorizar() {
 
   return (
     <div
-      className="grid min-h-0 flex-1 gap-3.5 overflow-y-auto p-3 lg:p-4 xl:grid-cols-[minmax(0,1fr)_360px]"
+      className="grid min-h-0 flex-1 gap-3.5 overflow-y-auto p-3 lg:p-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden"
       onDragOver={(e) => { e.preventDefault(); setArquivoEmCima(true); }}
       onDragLeave={() => setArquivoEmCima(false)}
       onDrop={(e) => {
@@ -336,6 +340,7 @@ export function Vetorizar() {
         if (f) void abrir(f);
       }}
     >
+      <style>{`.vetora-entra { animation: vetora-entra .5s ease-out; } @keyframes vetora-entra { from { opacity: 0; } to { opacity: 1; } } @media (prefers-reduced-motion: reduce) { .vetora-entra { animation: none; } }`}</style>
       <div className="flex min-h-0 min-w-0 flex-col">
         <Cartao
           titulo={imagem ? imagem.nome : "Nova vetorização"}
@@ -388,40 +393,61 @@ export function Vetorizar() {
           ) : (
             <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-linha"
               style={{ background: "repeating-conic-gradient(#d9d9d9 0% 25%, #ffffff 0% 50%) 50% / 18px 18px" }}>
+              {/*
+                Preso à altura da janela: a imagem cabe na caixa (object-contain)
+                e nunca empurra a tela. Enquanto o vetor não fica pronto, a
+                comparação não aparece pela metade: o original fica apagado sob
+                a animação da Vetora, e original e vetor entram juntos.
+              */}
               <div className="absolute inset-0">
-                <img src={imagem.url} alt="A imagem original" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
-                {svgUrl && (
-                  <img
-                    src={svgUrl}
-                    alt="O vetor"
-                    className="absolute inset-0 h-full w-full object-contain"
-                    style={{ clipPath: `inset(0 0 0 ${divisao}%)` }}
-                    draggable={false}
-                  />
+                <img src={imagem.url} alt="A imagem original" draggable={false}
+                  className={`absolute inset-0 h-full w-full object-contain transition-[opacity,filter] duration-500 ${vetorPronto ? "" : "opacity-30 blur-[2px]"}`} />
+                {vetorPronto && (
+                  <>
+                    <img
+                      src={svgUrl!}
+                      alt="O vetor"
+                      className="vetora-entra absolute inset-0 h-full w-full object-contain"
+                      style={{ clipPath: `inset(0 0 0 ${divisao}%)` }}
+                      draggable={false}
+                    />
+                    <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-[var(--accent)] shadow-[0_0_0_1px_rgba(0,0,0,0.25)]" style={{ left: `${divisao}%` }} />
+                    <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] text-white">Original</span>
+                    <span className="pointer-events-none absolute top-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] text-white">Vetor</span>
+                    {andamento && (
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1 bg-black/30">
+                        <div className="h-full bg-[var(--accent)] transition-[width]" style={{ width: `${Math.round(andamento.fracao * 100)}%` }} />
+                      </div>
+                    )}
+                  </>
                 )}
-                <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-[var(--accent)] shadow-[0_0_0_1px_rgba(0,0,0,0.25)]" style={{ left: `${divisao}%` }} />
-                <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] text-white">Original</span>
-                <span className="pointer-events-none absolute top-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] text-white">Vetor</span>
-                {andamento && (
-                  <div className="absolute inset-x-0 bottom-0 bg-black/70 px-3 py-2 text-[12px] text-white">
-                    <div className="mb-1 flex justify-between"><span>{andamento.texto}</span><span>{Math.round(andamento.fracao * 100)}%</span></div>
-                    <div className="h-1 overflow-hidden rounded bg-white/20"><div className="h-full bg-[var(--accent)] transition-[width]" style={{ width: `${Math.round(andamento.fracao * 100)}%` }} /></div>
+                {!vetorPronto && (
+                  <div className="absolute inset-0 grid place-items-center bg-black/35">
+                    <div className="flex w-64 flex-col items-center text-center text-white">
+                      <AnimacaoVetora />
+                      <span className="mt-2 text-[0.9rem]">{andamento ? andamento.texto : "Preparando"}…</span>
+                      <div className="mt-2 h-1 w-full overflow-hidden rounded bg-white/20">
+                        <div className="h-full bg-[var(--accent)] transition-[width]" style={{ width: `${Math.round((andamento ? andamento.fracao : 0) * 100)}%` }} />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-              <input
-                type="range" min={0} max={100} value={divisao}
-                onChange={(e) => setDivisao(Number(e.target.value))}
-                aria-label="Divisória entre o original e o vetor"
-                className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
-              />
+              {vetorPronto && (
+                <input
+                  type="range" min={0} max={100} value={divisao}
+                  onChange={(e) => setDivisao(Number(e.target.value))}
+                  aria-label="Divisória entre o original e o vetor"
+                  className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
+                />
+              )}
             </div>
           )}
           </div>
         </Cartao>
       </div>
 
-      <div className="flex min-w-0 flex-col gap-3.5">
+      <div className="flex min-h-0 min-w-0 flex-col gap-3.5 xl:overflow-y-auto">
         <Cartao titulo="Ajustes" icone="icones.svg#settings">
           <div className="flex flex-col gap-4 text-[0.85rem]">
             <div>
