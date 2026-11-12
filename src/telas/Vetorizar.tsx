@@ -314,6 +314,18 @@ export function Vetorizar() {
   // um controle só mostra a barrinha, sem esconder o vetor que já está ali.
   const vetorPronto = !!svgUrl;
 
+  /** Tira a imagem: para a IA no meio, solta o arquivo e volta à vitrine. */
+  function remover() {
+    ampliacao.current?.sinal.abort();
+    ampliacao.current = null;
+    setImagem((antes) => { if (antes) URL.revokeObjectURL(antes.url); return null; });
+    setResultado(null);
+    setAndamento(null);
+    setErro(null);
+    setAvisoIa(null);
+    setOpcoes((o) => (o.ia ? o : { ...o, ia: true }));
+  }
+
   async function baixarPdf() {
     if (!resultado || !imagem) return;
     try {
@@ -347,9 +359,18 @@ export function Vetorizar() {
           icone="icones.svg#pen-tool"
           apoio={imagem ? `${imagem.largura} × ${imagem.altura} px · arraste a divisória para comparar o original com o vetor` : undefined}
           preencher
-          acao={(
+          acao={imagem ? (
+            <div className="flex gap-2">
+              <Botao jeito="secundario" icone={<Icone referencia="icones.svg#image-plus" className="size-4" />} onClick={() => entrada.current?.click()}>
+                Outra imagem
+              </Botao>
+              <Botao jeito="perigo" icone={<Icone referencia="icones.svg#trash-2" className="size-4" />} onClick={remover}>
+                Remover
+              </Botao>
+            </div>
+          ) : (
             <Botao jeito="secundario" icone={<Icone referencia="icones.svg#image-plus" className="size-4" />} onClick={() => entrada.current?.click()}>
-              {imagem ? "Outra imagem" : "Escolher imagem"}
+              Escolher imagem
             </Botao>
           )}
         >
