@@ -269,7 +269,7 @@ export const TELAS: readonly Tela[] = [
      */
     nome: "vetorizar",
     grupo: "producao",
-    rotulo: "Vetorizar",
+    rotulo: "Vetora",
     apoioMenu: "A imagem vira vetor",
     apoioTopo: "Mande um PNG ou JPG — logo, estampa, arte de cliente — e receba o vetor em SVG ou PDF, com IA para limpar e ampliar.",
     icone: "icones.svg#pen-tool",
