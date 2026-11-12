@@ -486,26 +486,37 @@ export function Vetorizar() {
           </div>
         </Cartao>
 
+        {/* Só aparece com o vetor feito: sem imagem, a coluna fica só com os ajustes. */}
+        {resultado && (
         <Cartao titulo="O vetor" icone="icones.svg#spline">
-          {!resultado ? (
-            <p className="m-0 text-[0.85rem] text-tinta-fraca">{imagem ? "Vetorizando…" : "Escolha uma imagem para começar."}</p>
-          ) : (
+          {(
             <div className="flex flex-col gap-3.5 text-[0.85rem]">
-              <div className="flex flex-wrap gap-1.5">
+              {/*
+                A paleta em amostras pequenas (o código da cor e a fatia do
+                desenho no `title`): 16 cores cabem em duas linhas, e a coluna
+                não cresce até rolar.
+              */}
+              <div className="flex flex-wrap gap-1">
                 {resultado.paleta.map((c) => (
-                  <span key={c.hex} className="flex items-center gap-1.5 rounded-md border border-linha px-1.5 py-1 font-mono text-[11px] text-tinta-fraca" title={`${((c.area / Math.max(1, areaTotal)) * 100).toFixed(1)}% do desenho`}>
-                    <span className="size-3.5 rounded-sm border border-black/10" style={{ background: c.hex }} />
-                    {c.hex}
-                  </span>
+                  <span key={c.hex} className="size-5 rounded-[5px] border border-white/10 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.15)]" style={{ background: c.hex }}
+                    title={`${c.hex} · ${((c.area / Math.max(1, areaTotal)) * 100).toFixed(1)}% do desenho`} />
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12.5px]">
-                <span className="text-tinta-fraca">Cores</span><span className="text-right font-mono text-tinta">{resultado.estatisticas.cores}</span>
-                <span className="text-tinta-fraca">Formas</span><span className="text-right font-mono text-tinta">{resultado.estatisticas.formas}</span>
-                <span className="text-tinta-fraca">Nós</span><span className="text-right font-mono text-tinta">{resultado.estatisticas.nos.toLocaleString("pt-BR")}</span>
-                <span className="text-tinta-fraca">Tamanho do SVG</span><span className="text-right font-mono text-tinta">{(resultado.estatisticas.bytes / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} KB</span>
-                <span className="text-tinta-fraca">Tempo</span><span className="text-right font-mono text-tinta">{(resultado.estatisticas.ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s</span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  ["Cores", String(resultado.estatisticas.cores)],
+                  ["Formas", resultado.estatisticas.formas.toLocaleString("pt-BR")],
+                  ["Nós", resultado.estatisticas.nos.toLocaleString("pt-BR")],
+                ].map(([rotulo, valor]) => (
+                  <div key={rotulo} className="rounded-lg border border-linha bg-painel-suave px-2 py-1.5">
+                    <div className="text-[11px] text-tinta-apagada">{rotulo}</div>
+                    <div className="font-mono text-[13px] text-tinta">{valor}</div>
+                  </div>
+                ))}
               </div>
+              <p className="m-0 text-[12px] text-tinta-apagada">
+                SVG de {(resultado.estatisticas.bytes / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} KB · feito em {(resultado.estatisticas.ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s
+              </p>
               <label className="flex items-center justify-between gap-3 text-[12.5px]">
                 <span className="text-tinta-fraca">Largura no PDF</span>
                 <span className="flex items-center gap-1.5">
@@ -532,6 +543,7 @@ export function Vetorizar() {
             </div>
           )}
         </Cartao>
+        )}
       </div>
     </div>
   );
