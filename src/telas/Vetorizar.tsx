@@ -263,7 +263,7 @@ export function Vetorizar() {
 
   return (
     <div
-      className="grid min-h-0 flex-1 gap-3.5 xl:grid-cols-[minmax(0,1fr)_360px]"
+      className="grid min-h-0 flex-1 gap-3.5 overflow-y-auto p-3 lg:p-4 xl:grid-cols-[minmax(0,1fr)_360px]"
       onDragOver={(e) => { e.preventDefault(); setArquivoEmCima(true); }}
       onDragLeave={() => setArquivoEmCima(false)}
       onDrop={(e) => {
