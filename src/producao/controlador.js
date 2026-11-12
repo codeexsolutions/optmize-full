@@ -13,6 +13,7 @@ import { assinaturaDoTrabalho,
   midiaConsumida, aproveitamentoDaMidia, metragemPelaCaixa,
   prepararComplemento, analisarComplemento, complementarNosVaos } from "../motores/encaixeMotor";
 import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "../motores/encaixeParalelo";
+import { limitesInferiores } from "../motores/limitesInferiores";
 import { recusarPorSobreposicao } from "../motores/encaixeSobreposicao";
 import {
   conferirEncaixePelaArte, pecasDaConferencia, recadoDaConferencia,
@@ -3406,7 +3407,100 @@ function metrosNaTela(consumo, posicoes) {
   return formatarMetros(midiaConsumida(consumo, bancadaDaTela(), posicoes));
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * O DIAGNÓSTICO DO MOTOR (2026-11-12)
+ * ---------------------------------------------------------------------------
+ *
+ * O painel técnico (`src/telas/DiagnosticoDoEncaixe.tsx`) desenha o retrato
+ * que sai daqui, pelo evento `encaixe:diagnostico`. Só números da corrida: o
+ * melhor encaixe válido, o limite inferior provado das peças, o trabalho feito
+ * (tentativas da busca, avaliações e separações do sparrow) e de onde veio
+ * cada melhoria. Nada aqui muda a procura — é só leitura do que ela relata.
+ */
+let diagnostico = null;
+
+function comecarDiagnostico(itens, larguraTecido, espaco) {
+  diagnostico = {
+    historico: [],
+    limite: limitesInferiores(itens, larguraTecido, espaco),
+    larguraTecido,
+    ultimo: null,
+  };
+}
+
+function origemDoEstado(estado) {
+  if (estado.fase === "encolhendo") return estado.origem || "sparrow";
+  return estado.receita ? `busca · ${String(estado.receita).replace(/\/$/, "")}` : "busca";
+}
+
+function estrategiaDoEstado(estado) {
+  if (estado.fase === "encolhendo") {
+    return `compactação (sparrow${estado.plano ? `, ${estado.plano}` : ""}) · ${estado.workers || 1} núcleo(s)`;
+  }
+  if (estado.fase === "base") return "primeiro encaixe de cada receita";
+  if (estado.fase === "perseguindo") return "busca · perseguindo o melhor já guardado";
+  if (estado.fase === "pronto") return "finalizando";
+  return `busca · ${estado.modo === "explorar" ? "explorando" : "refinando"}${estado.receita ? ` · ${String(estado.receita).replace(/\/$/, "")}` : ""}`;
+}
+
+/**
+ * Manda o retrato da corrida para o painel. `final` é o resultado do motor, no
+ * fim; durante a procura vem só o `estado` do andamento.
+ */
+function emitirDiagnostico(estado, final = null) {
+  if (!diagnostico) return;
+  const d = diagnostico;
+  const consumoBruto = final ? final.consumo : estado && estado.consumo;
+  const midia = Number.isFinite(consumoBruto)
+    ? midiaConsumida(consumoBruto, bancadaDaTela(), final ? final.posicoes : undefined) : null;
+  const ultimo = d.historico[d.historico.length - 1];
+  if (midia != null && (!ultimo || midia < ultimo.consumo - 1e-6)) {
+    d.historico.push({
+      ms: final ? (final.decorridoMs || (estado && estado.decorridoMs) || 0) : estado.decorridoMs,
+      consumo: midia,
+      origem: final && !estado ? "resultado" : origemDoEstado(estado || {}),
+    });
+  }
+  const enc = final && final.encolhimento;
+  const sparrowAoVivo = estado && estado.sparrow;
+  const sparrow = enc && (enc.avaliacoes || enc.relatos)
+    ? {
+      avaliacoes: enc.avaliacoes || 0, separacoes: enc.separacoes || 0,
+      resolvidas: enc.separacoesResolvidas || 0, relatos: enc.relatos || 0, rejeitados: enc.rejeitados || 0,
+    }
+    : sparrowAoVivo
+      ? { avaliacoes: sparrowAoVivo.avaliacoes || 0, separacoes: 0, resolvidas: 0, relatos: 0, rejeitados: 0 }
+      : (d.ultimo && d.ultimo.sparrow) || null;
+  const areaPecas = d.limite ? d.limite.areaPecas : null;
+  const retrato = {
+    rodando: !final,
+    fase: final ? "Pronto" : estado.fase === "encolhendo" ? "Compactando" : estado.fase === "base" ? "Primeiro encaixe" : "Procurando",
+    estrategia: final
+      ? (enc && enc.depois < enc.antes ? `busca + compactação (sparrow${enc.plano ? `, ${enc.plano}` : ""})`
+        : `busca · ${String(final.receita || "").replace(/\/$/, "")}`)
+      : estrategiaDoEstado(estado),
+    decorridoMs: final ? (final.decorridoMs || (d.ultimo ? d.ultimo.decorridoMs : 0)) : estado.decorridoMs,
+    totalMs: tempoDeProcuraMs(),
+    workers: (estado && estado.workers) || (enc && enc.workers) || (d.ultimo ? d.ultimo.workers : 1),
+    consumo: midia,
+    consumoDaBusca: (() => {
+      const daBusca = enc && Number.isFinite(enc.antes) ? enc.antes
+        : estado && Number.isFinite(estado.consumoDaBusca) ? estado.consumoDaBusca : null;
+      return daBusca == null ? (d.ultimo ? d.ultimo.consumoDaBusca : null) : midiaConsumida(daBusca, bancadaDaTela());
+    })(),
+    aproveitamento: midia && areaPecas && d.larguraTecido ? areaPecas / (d.larguraTecido * midia) : null,
+    limite: d.limite,
+    tentativas: (final ? final.tentativas : estado.tentativas) || 0,
+    sparrow,
+    historico: d.historico.slice(),
+  };
+  d.ultimo = retrato;
+  window.dispatchEvent(new CustomEvent("encaixe:diagnostico", { detail: retrato }));
+}
+
 function mostrarAndamento(estado, aprendido) {
+  emitirDiagnostico(estado);
   const metros = estado.consumo ? metrosNaTela(estado.consumo) : "—";
   const decorrido = formatarNumero(estado.decorridoMs / 1000, 1);
   const totalMs = tempoDeProcuraMs();
@@ -3868,6 +3962,7 @@ async function optmizar({
     // fora) e é assentada no fim do rolo, com aviso — ver `assentarAsLargas`.
     const largas = itens.filter((it) => !cabeNaMidia(it, larguraTecido));
     const itensDaBusca = largas.length > 0 ? itens.filter((it) => cabeNaMidia(it, larguraTecido)) : itens;
+    comecarDiagnostico(itensDaBusca, larguraTecido, espaco);
     const doMotor = itensDaBusca.length === 0 ? resultadoSemBusca() : await buscarMelhorEncaixeEmParalelo(itensDaBusca, {
       larguraTecido, espaco, comprimentoBancada, passo, raio, alturaMax, motores,
       // O melhor encaixe deste trabalho exato, para a compactação continuar
@@ -3927,6 +4022,7 @@ async function optmizar({
       aoProgredir: (estado) => mostrarAndamento(estado, aprendido),
       aoDesenhar: (especieOuQuadro, resultado) => receberTentativa(especieOuQuadro, resultado, larguraTecido),
     });
+    emitirDiagnostico(null, doMotor);
     guardarResultado(assentarAsLargas(doMotor, largas, { larguraTecido, espaco, comprimentoBancada, passo }),
       { semJanela: true });
     resultadoGeradoNesteCarregamento = true;

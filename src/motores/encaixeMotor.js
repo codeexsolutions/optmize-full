@@ -1620,6 +1620,85 @@ export function mesmaSilhueta(a, b) {
  * um balde próprio, marcado pelo índice — pior que agrupar, melhor que
  * agrupar errado, que é peça em cima de peça.
  */
+/**
+ * O MEDIDOR DE REPETIÇÃO (2026-11-12) — quanto da busca reavalia o que ela já
+ * avaliou.
+ *
+ * Cada tentativa é uma receita e uma ordem de unidades, decodificada de forma
+ * determinística. Duas tentativas com a mesma receita e a mesma sequência de
+ * SILHUETAS dão o mesmo encaixe — trocar de lugar duas cópias da mesma peça
+ * (155 arquivos do pedido de produção são só 5 silhuetas) não muda nada. E
+ * ordens diferentes podem dar o mesmo encaixe no fim. O medidor conta:
+ *
+ *   ordensUnicas    (receita, sequência de silhuetas) diferentes — o resto é
+ *                   decodificação repetida, trabalho que não traz informação;
+ *   encaixesUnicos  encaixes diferentes (silhueta, giro e posição de cada
+ *                   peça, sem importar a ordem) — o resto é resultado repetido;
+ *   consumosUnicos  metragens diferentes (ao milímetro).
+ *
+ * As chaves são hashes de 2×32 bits: com até ~10⁵ tentativas a chance de
+ * colisão é desprezível para uma contagem.
+ */
+export function criarMedidorDeRepeticao(itens) {
+  const classe = new Map();
+  let n = 0;
+  agruparPorSilhueta(itens).forEach((balde) => {
+    n++;
+    balde.itens.forEach((item) => classe.set(item, n));
+  });
+  const ordens = new Set();
+  const encaixes = new Set();
+  const consumos = new Set();
+  let tentativas = 0;
+  const misturar = (h, v) => Math.imul(h ^ v, 16777619) >>> 0;
+  const textoParaHash = (t) => {
+    let h = 2166136261;
+    for (let i = 0; i < t.length; i++) h = misturar(h, t.charCodeAt(i));
+    return h;
+  };
+  return {
+    anotar(resultado, chave) {
+      tentativas++;
+      const ordem = resultado.ordemUsada;
+      if (Array.isArray(ordem)) {
+        let h1 = textoParaHash(String(chave));
+        let h2 = 0x9e3779b9;
+        for (const u of ordem) {
+          for (const it of (u.itens || [])) {
+            const c = classe.get(it) || 0;
+            h1 = misturar(h1, c);
+            h2 = misturar(h2 ^ (h1 >>> 7), c + 0x51);
+          }
+          h1 = misturar(h1, 0xffff);
+        }
+        ordens.add(`${h1}:${h2}`);
+      }
+      // O encaixe sem ordem: soma e xor de um hash por peça.
+      let soma = 0;
+      let xor = 0;
+      for (const p of resultado.posicoes || []) {
+        let h = misturar(2166136261, classe.get(p.item) || 0);
+        h = misturar(h, p.rot || 0);
+        h = misturar(h, Math.round((p.x || 0) * 100));
+        h = misturar(h, Math.round((p.y || 0) * 100));
+        soma = (soma + h) >>> 0;
+        xor = (xor ^ h) >>> 0;
+      }
+      encaixes.add(`${soma}:${xor}:${(resultado.posicoes || []).length}`);
+      if (Number.isFinite(resultado.consumo)) consumos.add(Math.round(resultado.consumo * 10));
+    },
+    resumo() {
+      return {
+        tentativas,
+        ordensUnicas: ordens.size,
+        encaixesUnicos: encaixes.size,
+        consumosUnicos: consumos.size,
+        silhuetas: n,
+      };
+    },
+  };
+}
+
 export function agruparPorSilhueta(itens) {
   const baldes = new Map();
   itens.forEach((item) => {
@@ -4319,6 +4398,9 @@ export async function buscarMelhorEncaixe(itens, config) {
   const maxTentativas = Number.isSafeInteger(config.maxTentativas) && config.maxTentativas > 0
     ? config.maxTentativas : Infinity;
   let rejeitadas = 0;
+  // Quantas tentativas repetem um estado já avaliado (ver
+  // `criarMedidorDeRepeticao`). Só com `config.medirRepeticao` — a bancada liga.
+  const repeticao = config.medirRepeticao ? criarMedidorDeRepeticao(itens) : null;
   let validacaoMs = 0;
   let primeiraSolucaoMs = null;
   let melhorSolucaoMs = null;
@@ -4391,6 +4473,7 @@ export async function buscarMelhorEncaixe(itens, config) {
 
   const considerar = (resultado, chave) => {
     tentativas++;
+    if (repeticao) repeticao.anotar(resultado, chave);
     // Só uma solução conferida pode virar recorde, ser publicada ou servir de
     // melhor resultado. A verificação fina roda nos candidatos que melhoram
     // o objetivo; os demais não são incumbentes e não pagam esse custo.
@@ -4725,6 +4808,7 @@ export async function buscarMelhorEncaixe(itens, config) {
     melhor.primeiraSolucaoMs = primeiraSolucaoMs;
     melhor.melhorSolucaoMs = melhorSolucaoMs;
     melhor.paredes = paredes;
+    if (repeticao) melhor.repeticao = repeticao.resumo();
     melhor.decorridoMs = Date.now() - inicio;
     // Qual motor venceu. O nome importa: antes isso se chamava `porContorno` e
     // era sobrescrito lá na tela pelo que a pessoa tinha *pedido*, então o

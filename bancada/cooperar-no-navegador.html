@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Bancada — os workers que cooperam, no caminho de produção</title>
+<!--
+  O caminho de PRODUÇÃO da segunda fase (encaixeParalelo.js) com a cooperação
+  ligada ou desligada: workers de verdade, o WASM servido pelo Vite, a partida
+  exata trocada entre rodadas e a trava no fim. Sobe pelo Vite e chame:
+    await bancada.rodar({ copias: 1, tempo: 60, cooperar: 3, semente: 1 })
+  `cooperar: 1` é o de hoje (cada worker sozinho). Devolve o consumo, o que a
+  segunda fase relatou (avaliações, separações, rejeitados) e se o encaixe
+  passou na trava. O driver é `bancada/conferir-cooperar-navegador.cjs`.
+  As peças são polígonos simples (retângulo com entalhe, L, trapézio, tira).
+-->
+</head>
+<body>
+<script type="module">
+import { buscarMelhorEncaixeEmParalelo, derrubarPool } from "/src/motores/encaixeParalelo.js";
+import { grade, gradeDaPeca, rasterizarPoligono, mascarasDeSilhueta } from "/src/motores/encaixeMascara.js";
+import { acharSobreposicao } from "/src/motores/encaixeSobreposicao.js";
+const W = 179, ESPACO = 0.4;
+const MOLDES = [
+  { nome: "entalhe", largura: 30, altura: 22, qtd: 30, pol: [[0,0],[1,0],[1,1],[0.6,1],[0.6,0.6],[0.4,0.6],[0.4,1],[0,1]] },
+  { nome: "ele", largura: 26, altura: 34, qtd: 30, pol: [[0,0],[0.45,0],[0.45,0.6],[1,0.6],[1,1],[0,1]] },
+  { nome: "trapezio", largura: 40, altura: 18, qtd: 25, pol: [[0.15,0],[0.85,0],[1,1],[0,1]] },
+  { nome: "tira", largura: 55, altura: 8, qtd: 15, pol: [[0,0],[1,0],[1,1],[0,1]] },
+];
+function montar(copias) {
+  const { passo, raio } = grade(W, ESPACO);
+  const itens = [];
+  MOLDES.forEach((molde, indice) => {
+    const { cols, rows } = gradeDaPeca(molde, passo);
+    const ex = molde.largura / (cols * passo), ey = molde.altura / (rows * passo);
+    const bits = rasterizarPoligono(molde.pol.map(([x, y]) => [x * ex, y * ey]), cols, rows);
+    const mascaras = mascarasDeSilhueta({ bits, modo: "alfa" }, cols, rows, passo, raio, molde);
+    const qtd = molde.qtd * copias;
+    for (let copia = 1; copia <= qtd; copia++) {
+      itens.push({ indice, copia, nome: molde.nome, qtd, giro: "180", largura: molde.largura, altura: molde.altura, mascaras, grupo: null });
+    }
+  });
+  const alturaMax = itens.reduce((s, it) => s + Math.max(it.largura, it.altura) + ESPACO, 0);
+  return { itens, passo, raio, alturaMax };
+}
+async function rodar({ copias = 1, tempo = 60, cooperar = 1, semente = 1, ajustes = null, etapas = null, rodadas = null, plano = true } = {}) {
+  const t = montar(copias);
+  const inicio = performance.now();
+  const historico = [];
+  const r = await buscarMelhorEncaixeEmParalelo(t.itens, {
+    larguraTecido: W, espaco: ESPACO, comprimentoBancada: 0, passo: t.passo, raio: t.raio, alturaMax: t.alturaMax,
+    motores: ["contorno", "vaos", "faixas"], memoria: null, alvo: null, rede: null, redeMadura: false,
+    metaAproveitamento: 0, tempoMaximoMs: tempo * 1000, msSemGanho: Math.max(800, tempo * 250),
+    tentativasPorLote: 8, semente, encolherCooperar: cooperar, encolherAjustes: ajustes || undefined,
+    encolherEtapas: etapas || undefined,
+    encolherRodadas: rodadas || undefined,
+    encolherPlano: plano,
+    aoProgredir: (e) => {
+      const ultimo = historico[historico.length - 1];
+      if (e.consumo && (!ultimo || e.consumo < ultimo[1] - 1e-9)) historico.push([Math.round(e.decorridoMs), e.consumo, e.fase, e.origem || null]);
+    },
+  });
+  const guarda = acharSobreposicao(r.posicoes);
+  const todas = new Set(r.posicoes.map((p) => `${p.item.indice}#${p.item.copia}`));
+  derrubarPool();
+  return {
+    pecas: t.itens.length, cooperar, consumo: r.consumo,
+    encolhimento: r.encolhimento,
+    valido: guarda.pares === 0 && guarda.conferidas === r.posicoes.length && todas.size === t.itens.length,
+    segundos: Math.round((performance.now() - inicio) / 100) / 10,
+    workers: navigator.hardwareConcurrency,
+    historico,
+  };
+}
+
+window.bancada = { rodar };
+window.bancadaPronta = true;
+</script>
+</body>
+</html>

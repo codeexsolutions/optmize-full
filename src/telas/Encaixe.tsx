@@ -2,6 +2,7 @@
 import { memo } from "react";
 import { BotaoComoUsarDa } from "../casca/ComoUsar";
 import { BotaoRelatorioDoEncaixe } from "./RelatorioDoEncaixe";
+import { BotaoDiagnosticoDoEncaixe } from "./DiagnosticoDoEncaixe";
 export const Encaixe = memo(function Encaixe() { return <><div className="page h-full" data-page="encaixe">
 
 
@@ -194,6 +195,8 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 
 <span className="ml-auto flex shrink-0 items-center gap-0.5">
+
+<BotaoDiagnosticoDoEncaixe />
 
 <BotaoRelatorioDoEncaixe />
 

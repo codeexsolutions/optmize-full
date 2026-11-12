@@ -936,7 +936,6 @@ checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
 [[package]]
 name = "sparrow"
 version = "0.2.0"
-source = "git+https://github.com/JeroenGar/sparrow?rev=7f0e10f946f70a86138d3938548a13ee46464f39#7f0e10f946f70a86138d3938548a13ee46464f39"
 dependencies = [
  "anyhow",
  "clap",

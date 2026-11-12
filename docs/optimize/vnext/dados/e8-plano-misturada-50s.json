@@ -1,0 +1,216 @@
+{
+ "quando": "2026-11-12T13:27:34.341Z",
+ "opcoes": {
+  "trabalhos": [
+   "producao-misturada"
+  ],
+  "tempo": 50,
+  "sementes": 3,
+  "paralelo": 5,
+  "rodadas": 3,
+  "trabalhadores": 3,
+  "ajustes": null,
+  "json": "docs/optimize/vnext/dados/e8-plano-misturada-50s.json",
+  "partidas": "docs/optimize/vnext/dados/partidas.json",
+  "bracos": {
+   "hoje": {
+    "modo": "sozinhos"
+   },
+   "plano": {
+    "modo": "sozinhos",
+    "etapas": [
+     {
+      "fracao": 0.5,
+      "fracaoCompressao": 0,
+      "ajustes": {
+       "poly_simpl_tolerance": 0.01,
+       "quadtree_depth": 6,
+       "expl": {
+        "split_guiado": [
+         0.9,
+         2
+        ]
+       }
+      }
+     },
+     {
+      "ajustes": {
+       "quadtree_depth": 6,
+       "expl": {
+        "split_guiado": [
+         0.9,
+         2
+        ]
+       },
+       "cmpr": {
+        "split_guiado": [
+         0.7,
+         2
+        ]
+       }
+      }
+     }
+    ]
+   },
+   "plano-cooperando": {
+    "modo": "cooperam",
+    "rodadas": [
+     {
+      "fracao": 0.5,
+      "fracaoCompressao": 0,
+      "ajustes": {
+       "poly_simpl_tolerance": 0.01,
+       "quadtree_depth": 6,
+       "expl": {
+        "split_guiado": [
+         0.9,
+         2
+        ]
+       }
+      }
+     },
+     {
+      "ajustes": {
+       "quadtree_depth": 6,
+       "expl": {
+        "split_guiado": [
+         0.9,
+         2
+        ]
+       },
+       "cmpr": {
+        "split_guiado": [
+         0.7,
+         2
+        ]
+       }
+      }
+     }
+    ]
+   }
+  }
+ },
+ "maquina": "AMD Ryzen 5 5600X 6-Core Processor             ",
+ "corridas": [
+  {
+   "trabalho": "producao-misturada",
+   "semente": 1,
+   "inicial": 3266.6,
+   "bracos": {
+    "hoje": {
+     "final": 3184,
+     "finais": [
+      3198.6000000000004,
+      3184,
+      3190.8,
+      3196.4,
+      3201.2000000000003
+     ],
+     "avaliacoes": 15585496,
+     "pares": 0
+    },
+    "plano": {
+     "final": 3160.6000000000004,
+     "finais": [
+      3160.6000000000004,
+      3173.2000000000003,
+      3163.6000000000004,
+      3184.4,
+      3173.2000000000003
+     ],
+     "avaliacoes": 34655530,
+     "pares": 0
+    },
+    "plano-cooperando": {
+     "final": 3160.6,
+     "porRodada": [
+      3176.4,
+      3160.6
+     ],
+     "avaliacoes": 33373726,
+     "pares": 0
+    }
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "semente": 7920,
+   "inicial": 3266.6,
+   "bracos": {
+    "plano": {
+     "final": 3157.4,
+     "finais": [
+      3157.4,
+      3166.8,
+      3181.2000000000003,
+      3168.4,
+      3157.4
+     ],
+     "avaliacoes": 34197534,
+     "pares": 0
+    },
+    "plano-cooperando": {
+     "final": 3152.6000000000004,
+     "porRodada": [
+      3173.2000000000003,
+      3152.6000000000004
+     ],
+     "avaliacoes": 34797222,
+     "pares": 0
+    },
+    "hoje": {
+     "final": 3193.8,
+     "finais": [
+      3193.8,
+      3201.8,
+      3205,
+      3205,
+      3198.6000000000004
+     ],
+     "avaliacoes": 16224054,
+     "pares": 0
+    }
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "semente": 15839,
+   "inicial": 3266.6,
+   "bracos": {
+    "plano-cooperando": {
+     "final": 3160.8,
+     "porRodada": [
+      3176.4,
+      3160.8
+     ],
+     "avaliacoes": 34644830,
+     "pares": 0
+    },
+    "hoje": {
+     "final": 3184.4,
+     "finais": [
+      3184.4,
+      3202.8,
+      3192.2000000000003,
+      3196.4,
+      3199
+     ],
+     "avaliacoes": 16775946,
+     "pares": 0
+    },
+    "plano": {
+     "final": 3163.6,
+     "finais": [
+      3163.6,
+      3165.2000000000003,
+      3179.6000000000004,
+      3176.4,
+      3163.6
+     ],
+     "avaliacoes": 33430888,
+     "pares": 0
+    }
+   }
+  }
+ ]
+}

@@ -13,7 +13,12 @@ crate-type = ["cdylib"]
 # O encaixador de referência (MIT). Fixado no commit que foi MEDIDO contra o
 # nosso motor em 2026-09-21 (ver o cabeçalho de src/lib.rs): trocar de commit é
 # mexer no motor, e mexida no motor passa pela bancada.
-sparrow = { git = "https://github.com/JeroenGar/sparrow", rev = "7f0e10f946f70a86138d3938548a13ee46464f39" }
+#
+# DESDE 2026-11-12 É UMA CÓPIA LOCAL (`sparrow/`), do MESMO commit, com uma
+# mudança marcada "[Optmize]": o corte guiado pelo desperdício
+# (`sparrow/src/util/corte_guiado.rs`), desligado por padrão. Sem o ajuste
+# `split_guiado`, o comportamento é o do commit original, linha por linha.
+sparrow = { path = "sparrow" }
 # A mesma versão que o sparrow daquele commit exige. Aparece aqui porque a ponte
 # fala a língua dele (instância, solução, importação) diretamente.
 jagua-rs = { version = "=0.8.3", features = ["spp"] }

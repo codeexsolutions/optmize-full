@@ -273,12 +273,24 @@ self.onmessage = async (evento) => {
         semente: msg.semente,
         trabalhadores: msg.config.trabalhadores,
         partir: msg.config.partir,
-        aoMelhorar: (novo) => self.postMessage({ tipo: "encolhido", k, resultado: resultadoParaEnviar(novo) }),
-        aoAndar: (voltas) => self.postMessage({ tipo: "encolhendo", k, voltas }),
+        ajustes: msg.config.ajustes,
+        // O "do grosso para o fino" (ver "AS ETAPAS", em encaixeEncolher.js).
+        etapas: msg.config.etapas,
+        // A partida exata dos workers que cooperam (ver "OS WORKERS QUE
+        // COOPERAM", em encaixeParalelo.js): o JSON do próprio sparrow.
+        partidaDoSparrow: msg.partidaJson || undefined,
+        fracaoCompressao: msg.config.fracaoCompressao,
+        aoMelhorar: (novo, json, origem) => self.postMessage({
+          tipo: "encolhido", k, resultado: resultadoParaEnviar(novo), origem,
+          json: msg.config.devolverJson ? json : undefined,
+        }),
+        aoAndar: (voltas, avaliacoes) => self.postMessage({ tipo: "encolhendo", k, voltas, avaliacoes }),
       });
       self.postMessage({
         tipo: "encolheu", k, motivo: saida.motivo,
         relatos: saida.relatos, rejeitados: saida.rejeitados, partiu: saida.partiu,
+        estatisticas: saida.estatisticas || null,
+        json: msg.config.devolverJson ? saida.melhorJson : undefined,
       });
     } catch (erro) {
       self.postMessage({ tipo: "falhou", k, erro: String((erro && erro.message) || erro) });

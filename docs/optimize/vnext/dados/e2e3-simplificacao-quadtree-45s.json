@@ -1,0 +1,11593 @@
+{
+ "quando": "2026-11-12T12:16:27.252Z",
+ "opcoes": {
+  "trabalhos": [
+   "producao-avulsa",
+   "camiseta+manga+gola",
+   "giro-livre",
+   "pedido-confeccao",
+   "calca-bolso",
+   "producao-misturada"
+  ],
+  "tempo": 45,
+  "sementes": 3,
+  "paralelo": 5,
+  "partidaMs": 3000,
+  "bracos": {
+   "base": {},
+   "s003": {
+    "ajustes": {
+     "poly_simpl_tolerance": 0.003
+    }
+   },
+   "s01": {
+    "ajustes": {
+     "poly_simpl_tolerance": 0.01
+    }
+   },
+   "q6": {
+    "ajustes": {
+     "quadtree_depth": 6
+    }
+   },
+   "q8": {
+    "ajustes": {
+     "quadtree_depth": 8
+    }
+   }
+  },
+  "json": "docs/optimize/vnext/dados/e2e3-simplificacao-quadtree-45s.json"
+ },
+ "maquina": {
+  "cpu": "AMD Ryzen 5 5600X 6-Core Processor             ",
+  "nucleos": 12
+ },
+ "resumo": [
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "base",
+   "inicial": 3242.4,
+   "m25": 3231.6,
+   "m50": 3220.7999999999997,
+   "final": 3205.4,
+   "ganho": -1.14113002714039,
+   "difMedia": 0,
+   "erroPadrao": 0,
+   "n": 3,
+   "voltasPorS": 0.8044704389379708,
+   "verticesColisao": 732,
+   "inflacaoArea": 0.11463874617840819,
+   "avaliacoesPorS": 38571.81895549142,
+   "cmPorMilAvaliacoes": 0.0205330132607527,
+   "separacoesResolvidas": 0.9803921568627452,
+   "primeiroGanhoS": 8.950666666666667,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "s003",
+   "inicial": 3242.4,
+   "m25": 3229.3333333333335,
+   "m50": 3204.866666666667,
+   "final": 3188.3333333333335,
+   "ganho": -1.6674891027222614,
+   "difMedia": -0.5325965521451428,
+   "erroPadrao": 0.13395664139392377,
+   "n": 3,
+   "voltasPorS": 1.0111340557570003,
+   "verticesColisao": 409,
+   "inflacaoArea": 0.3269895312146831,
+   "avaliacoesPorS": 55241.69263015967,
+   "cmPorMilAvaliacoes": 0.01923205618086288,
+   "separacoesResolvidas": 0.9871794871794872,
+   "primeiroGanhoS": 6.957666666666667,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "s01",
+   "inicial": 3242.4,
+   "m25": 3201.5333333333333,
+   "m50": 3182.4,
+   "final": 3170.6666666666665,
+   "ganho": -2.2123529895550695,
+   "difMedia": -1.0833828887988097,
+   "erroPadrao": 0.1286585319869862,
+   "n": 3,
+   "voltasPorS": 1.615296369089296,
+   "verticesColisao": 131,
+   "inflacaoArea": 0.9530059102021315,
+   "avaliacoesPorS": 154169.00750812076,
+   "cmPorMilAvaliacoes": 0.0103522173063694,
+   "separacoesResolvidas": 0.9379679144385027,
+   "primeiroGanhoS": 4.656,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "q6",
+   "inicial": 3242.4,
+   "m25": 3227.3333333333335,
+   "m50": 3215.3999999999996,
+   "final": 3195,
+   "ganho": -1.4618800888230967,
+   "difMedia": -0.32450929961832264,
+   "erroPadrao": 0.059153128459176765,
+   "n": 3,
+   "voltasPorS": 0.9920115042384622,
+   "verticesColisao": 732,
+   "inflacaoArea": 0.11463874617840819,
+   "avaliacoesPorS": 50275.19751096762,
+   "cmPorMilAvaliacoes": 0.01999097388520001,
+   "separacoesResolvidas": 0.9855072463768115,
+   "primeiroGanhoS": 7.841666666666667,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "q8",
+   "inicial": 3242.4,
+   "m25": 3230.5333333333333,
+   "m50": 3215.3999999999996,
+   "final": 3194.2666666666664,
+   "ganho": -1.4844970803520128,
+   "difMedia": -0.34747476698500607,
+   "erroPadrao": 0.13903773719892046,
+   "n": 3,
+   "voltasPorS": 1.0534406233218276,
+   "verticesColisao": 732,
+   "inflacaoArea": 0.11463874617840819,
+   "avaliacoesPorS": 52078.97034674067,
+   "cmPorMilAvaliacoes": 0.020113752570001798,
+   "separacoesResolvidas": 0.9833333333333334,
+   "primeiroGanhoS": 8.033333333333333,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "base",
+   "inicial": 361,
+   "m25": 350.5,
+   "m50": 344.5,
+   "final": 341.3333333333333,
+   "ganho": -5.4478301015697195,
+   "difMedia": 0,
+   "erroPadrao": 0,
+   "n": 3,
+   "voltasPorS": 3.0763681284650555,
+   "verticesColisao": 235,
+   "inflacaoArea": 0.12317721731525122,
+   "avaliacoesPorS": 129898.84188969636,
+   "cmPorMilAvaliacoes": 0.00327731207260213,
+   "separacoesResolvidas": 0.970610377167023,
+   "primeiroGanhoS": 0.8863333333333334,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "s003",
+   "inicial": 361,
+   "m25": 345.8333333333333,
+   "m50": 344.5,
+   "final": 343.8333333333333,
+   "ganho": -4.755309325946451,
+   "difMedia": 0.7430654045873828,
+   "erroPadrao": 1.2264480179538721,
+   "n": 3,
+   "voltasPorS": 3.0595298140289646,
+   "verticesColisao": 195,
+   "inflacaoArea": 0.33145143284969425,
+   "avaliacoesPorS": 135061.0649999699,
+   "cmPorMilAvaliacoes": 0.0027179075767732323,
+   "separacoesResolvidas": 0.93971027479092,
+   "primeiroGanhoS": 0.6503333333333333,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "s01",
+   "inicial": 361,
+   "m25": 349.8333333333333,
+   "m50": 345.8333333333333,
+   "final": 344.1666666666667,
+   "ganho": -4.662973222530004,
+   "difMedia": 0.8315053567982741,
+   "erroPadrao": 0.35418070702784193,
+   "n": 3,
+   "voltasPorS": 2.9095824077123402,
+   "verticesColisao": 127,
+   "inflacaoArea": 1.0800775241532223,
+   "avaliacoesPorS": 165138.2385494037,
+   "cmPorMilAvaliacoes": 0.0022206208144061467,
+   "separacoesResolvidas": 0.9524951750758203,
+   "primeiroGanhoS": 1.392,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "q6",
+   "inicial": 361,
+   "m25": 350.8333333333333,
+   "m50": 344.5,
+   "final": 341.5,
+   "ganho": -5.401662049861495,
+   "difMedia": 0.049236829148202856,
+   "erroPadrao": 0.04923682914820286,
+   "n": 3,
+   "voltasPorS": 3.044988576324086,
+   "verticesColisao": 235,
+   "inflacaoArea": 0.12317721731525122,
+   "avaliacoesPorS": 121581.4848455094,
+   "cmPorMilAvaliacoes": 0.0035433818497801316,
+   "separacoesResolvidas": 0.9640348476555373,
+   "primeiroGanhoS": 0.976,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "q8",
+   "inicial": 361,
+   "m25": 352.8333333333333,
+   "m50": 347.1666666666667,
+   "final": 341.5,
+   "ganho": -5.401662049861495,
+   "difMedia": 0.049236829148202856,
+   "erroPadrao": 0.04923682914820286,
+   "n": 3,
+   "voltasPorS": 3.3495837325942817,
+   "verticesColisao": 235,
+   "inflacaoArea": 0.12317721731525122,
+   "avaliacoesPorS": 94179.81380393647,
+   "cmPorMilAvaliacoes": 0.00462377973301768,
+   "separacoesResolvidas": 0.9803240740740741,
+   "primeiroGanhoS": 1.1996666666666667,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "base",
+   "inicial": 350.5,
+   "m25": 340.3333333333333,
+   "m50": 340.3333333333333,
+   "final": 336.8333333333333,
+   "ganho": -3.899191631003334,
+   "difMedia": 0,
+   "erroPadrao": 0,
+   "n": 3,
+   "voltasPorS": 3.128506674163109,
+   "verticesColisao": 309,
+   "inflacaoArea": 0.12551899171944214,
+   "avaliacoesPorS": 118578.50915766756,
+   "cmPorMilAvaliacoes": 0.0025348458563924444,
+   "separacoesResolvidas": 0.9598482116513131,
+   "primeiroGanhoS": 1.6703333333333332,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "s003",
+   "inicial": 350.5,
+   "m25": 339.8333333333333,
+   "m50": 334.5,
+   "final": 334,
+   "ganho": -4.70756062767475,
+   "difMedia": -0.8403899570032841,
+   "erroPadrao": 0.2745207065163722,
+   "n": 3,
+   "voltasPorS": 2.81362924013407,
+   "verticesColisao": 263,
+   "inflacaoArea": 0.33250712100367785,
+   "avaliacoesPorS": 134800.2443067476,
+   "cmPorMilAvaliacoes": 0.002677165073390968,
+   "separacoesResolvidas": 0.9646276957459868,
+   "primeiroGanhoS": 1.2763333333333333,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "s01",
+   "inicial": 350.5,
+   "m25": 344,
+   "m50": 340.5,
+   "final": 339.1666666666667,
+   "ganho": -3.233475986685682,
+   "difMedia": 0.6929031903314679,
+   "erroPadrao": 0.3016737377953171,
+   "n": 3,
+   "voltasPorS": 2.287144671418163,
+   "verticesColisao": 183,
+   "inflacaoArea": 1.107797594663884,
+   "avaliacoesPorS": 168990.00335558777,
+   "cmPorMilAvaliacoes": 0.0014642188923962324,
+   "separacoesResolvidas": 0.9436595150880865,
+   "primeiroGanhoS": 1.5096666666666667,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "q6",
+   "inicial": 350.5,
+   "m25": 340.3333333333333,
+   "m50": 340.3333333333333,
+   "final": 337.8333333333333,
+   "ganho": -3.613884926295773,
+   "difMedia": 0.29798626209644613,
+   "erroPadrao": 0.44624500479065426,
+   "n": 3,
+   "voltasPorS": 2.745527032869027,
+   "verticesColisao": 309,
+   "inflacaoArea": 0.12551899171944214,
+   "avaliacoesPorS": 109634.45050046168,
+   "cmPorMilAvaliacoes": 0.0025414176731137213,
+   "separacoesResolvidas": 0.9500660554076704,
+   "primeiroGanhoS": 1.8153333333333332,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "q8",
+   "inicial": 350.5,
+   "m25": 340.8333333333333,
+   "m50": 340.3333333333333,
+   "final": 339.6666666666667,
+   "ganho": -3.0908226343319014,
+   "difMedia": 0.8430328545484563,
+   "erroPadrao": 0.6333602498826613,
+   "n": 3,
+   "voltasPorS": 2.019141371493301,
+   "verticesColisao": 309,
+   "inflacaoArea": 0.12551899171944214,
+   "avaliacoesPorS": 82002.25550610088,
+   "cmPorMilAvaliacoes": 0.002826193505045651,
+   "separacoesResolvidas": 0.9472685185185186,
+   "primeiroGanhoS": 2.3403333333333336,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "base",
+   "inicial": 642.6,
+   "m25": 637.6,
+   "m50": 630.4666666666667,
+   "final": 623.6666666666669,
+   "ganho": -2.94636373067743,
+   "difMedia": 0,
+   "erroPadrao": 0,
+   "n": 3,
+   "voltasPorS": 1.817180386833445,
+   "verticesColisao": 495,
+   "inflacaoArea": 0.1188231668847628,
+   "avaliacoesPorS": 55262.98210578027,
+   "cmPorMilAvaliacoes": 0.007275260910292969,
+   "separacoesResolvidas": 0.974969474969475,
+   "primeiroGanhoS": 4.024666666666667,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "s003",
+   "inicial": 642.6,
+   "m25": 633.8666666666667,
+   "m50": 630.0000000000001,
+   "final": 627.6,
+   "ganho": -2.3342670401493932,
+   "difMedia": 0.6298973457233451,
+   "erroPadrao": 0.47251284999797694,
+   "n": 3,
+   "voltasPorS": 1.60143439464266,
+   "verticesColisao": 371,
+   "inflacaoArea": 0.3305527183525392,
+   "avaliacoesPorS": 70833.23383280796,
+   "cmPorMilAvaliacoes": 0.004571435122976599,
+   "separacoesResolvidas": 0.9500000000000001,
+   "primeiroGanhoS": 3.343,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "s01",
+   "inicial": 642.6,
+   "m25": 635.2666666666668,
+   "m50": 629.6,
+   "final": 626.2666666666668,
+   "ganho": -2.541757443718216,
+   "difMedia": 0.4164894711090407,
+   "erroPadrao": 0.24852487671752846,
+   "n": 3,
+   "voltasPorS": 1.8239922379586027,
+   "verticesColisao": 204,
+   "inflacaoArea": 1.0903212501437887,
+   "avaliacoesPorS": 125192.17787834445,
+   "cmPorMilAvaliacoes": 0.0028095984539649754,
+   "separacoesResolvidas": 0.9556661925082978,
+   "primeiroGanhoS": 2.5,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "q6",
+   "inicial": 642.6,
+   "m25": 637.2,
+   "m50": 629.1999999999999,
+   "final": 623.6666666666667,
+   "ganho": -2.9463637306774477,
+   "difMedia": 0.00006852974369053282,
+   "erroPadrao": 0.03702160950223956,
+   "n": 3,
+   "voltasPorS": 1.8793080816767338,
+   "verticesColisao": 495,
+   "inflacaoArea": 0.1188231668847628,
+   "avaliacoesPorS": 59723.44042483306,
+   "cmPorMilAvaliacoes": 0.007009398868740207,
+   "separacoesResolvidas": 0.9662393162393162,
+   "primeiroGanhoS": 3.6073333333333335,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "q8",
+   "inicial": 642.6,
+   "m25": 638.0666666666666,
+   "m50": 632.1999999999999,
+   "final": 625.1333333333334,
+   "ganho": -2.7181242867517246,
+   "difMedia": 0.23491310839678378,
+   "erroPadrao": 0.16142808748220336,
+   "n": 3,
+   "voltasPorS": 1.6689103708638964,
+   "verticesColisao": 495,
+   "inflacaoArea": 0.1188231668847628,
+   "avaliacoesPorS": 51066.15878095097,
+   "cmPorMilAvaliacoes": 0.007329813739041777,
+   "separacoesResolvidas": 0.9736842105263158,
+   "primeiroGanhoS": 4.666,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "base",
+   "inicial": 225.5,
+   "m25": 224.5,
+   "m50": 224.5,
+   "final": 224,
+   "ganho": -0.6651884700665188,
+   "difMedia": 0,
+   "erroPadrao": 0,
+   "n": 3,
+   "voltasPorS": 1.9349957350510385,
+   "verticesColisao": 103,
+   "inflacaoArea": 0.11940281468374447,
+   "avaliacoesPorS": 231379.81398036281,
+   "cmPorMilAvaliacoes": 0.00014365036331622148,
+   "separacoesResolvidas": 0.6363837312113174,
+   "primeiroGanhoS": 0.47733333333333333,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "s003",
+   "inicial": 225.5,
+   "m25": 225.16666666666666,
+   "m50": 224.83333333333334,
+   "final": 224.5,
+   "ganho": -0.4434589800443459,
+   "difMedia": 0.2232142857142857,
+   "erroPadrao": 0.1288728279441129,
+   "n": 3,
+   "voltasPorS": 1.7567689179672972,
+   "verticesColisao": 84,
+   "inflacaoArea": 0.34143812604086055,
+   "avaliacoesPorS": 250805.58147380746,
+   "cmPorMilAvaliacoes": 0.00008823510773512673,
+   "separacoesResolvidas": 0.6640690464219876,
+   "primeiroGanhoS": 11.171,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "s01",
+   "inicial": 225.5,
+   "m25": 225.5,
+   "m50": 225.33333333333334,
+   "final": 225,
+   "ganho": -0.22172949002217296,
+   "difMedia": 0.4464285714285714,
+   "erroPadrao": 0,
+   "n": 3,
+   "voltasPorS": 2.097720141053078,
+   "verticesColisao": 47,
+   "inflacaoArea": 1.0737005570589986,
+   "avaliacoesPorS": 337432.72306046815,
+   "cmPorMilAvaliacoes": 0.00003284781121190082,
+   "separacoesResolvidas": 0.5084776334776335,
+   "primeiroGanhoS": 24.306,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "q6",
+   "inicial": 225.5,
+   "m25": 224.5,
+   "m50": 224.5,
+   "final": 224,
+   "ganho": -0.6651884700665188,
+   "difMedia": 0,
+   "erroPadrao": 0,
+   "n": 3,
+   "voltasPorS": 1.7152723994521597,
+   "verticesColisao": 103,
+   "inflacaoArea": 0.11940281468374447,
+   "avaliacoesPorS": 207261.14722492127,
+   "cmPorMilAvaliacoes": 0.00015981864699295896,
+   "separacoesResolvidas": 0.6722222222222222,
+   "primeiroGanhoS": 0.6466666666666666,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "q8",
+   "inicial": 225.5,
+   "m25": 224.5,
+   "m50": 224.5,
+   "final": 224.16666666666666,
+   "ganho": -0.591278640059132,
+   "difMedia": 0.0744047619047619,
+   "erroPadrao": 0.07440476190476189,
+   "n": 3,
+   "voltasPorS": 1.4022400744797514,
+   "verticesColisao": 103,
+   "inflacaoArea": 0.11940281468374447,
+   "avaliacoesPorS": 151360.78975870527,
+   "cmPorMilAvaliacoes": 0.000193378747212889,
+   "separacoesResolvidas": 0.746376811594203,
+   "primeiroGanhoS": 0.8003333333333333,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "base",
+   "inicial": 3266.6,
+   "m25": 3262.066666666667,
+   "m50": 3234.066666666667,
+   "final": 3207.133333333333,
+   "ganho": -1.8204453152105153,
+   "difMedia": 0,
+   "erroPadrao": 0,
+   "n": 3,
+   "voltasPorS": 1.104500688435268,
+   "verticesColisao": 1538,
+   "inflacaoArea": 0.11412245090076656,
+   "avaliacoesPorS": 46346.11577893838,
+   "cmPorMilAvaliacoes": 0.026308853046808797,
+   "separacoesResolvidas": 1,
+   "primeiroGanhoS": 10.535,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "s003",
+   "inicial": 3266.6,
+   "m25": 3254.6000000000004,
+   "m50": 3234.933333333334,
+   "final": 3206.933333333334,
+   "ganho": -1.826567889140576,
+   "difMedia": -0.0061803179177589125,
+   "erroPadrao": 0.21451614662621354,
+   "n": 3,
+   "voltasPorS": 1.1653600983600614,
+   "verticesColisao": 983,
+   "inflacaoArea": 0.3231009299804244,
+   "avaliacoesPorS": 59374.508273176594,
+   "cmPorMilAvaliacoes": 0.021256006792854585,
+   "separacoesResolvidas": 0.9726327312534209,
+   "primeiroGanhoS": 8.745666666666667,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "s01",
+   "inicial": 3266.6,
+   "m25": 3239.5333333333333,
+   "m50": 3216.933333333334,
+   "final": 3194.133333333333,
+   "ganho": -2.218412620665729,
+   "difMedia": -0.4053470635672698,
+   "erroPadrao": 0.11511090526714232,
+   "n": 3,
+   "voltasPorS": 1.3282540295152534,
+   "verticesColisao": 416,
+   "inflacaoArea": 0.9847203857549225,
+   "avaliacoesPorS": 119986.1017091492,
+   "cmPorMilAvaliacoes": 0.012580216341574253,
+   "separacoesResolvidas": 0.980952380952381,
+   "primeiroGanhoS": 7.627333333333333,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "q6",
+   "inicial": 3266.6,
+   "m25": 3255.5333333333333,
+   "m50": 3226.466666666667,
+   "final": 3198,
+   "ganho": -2.100042858017508,
+   "difMedia": -0.2847953137843796,
+   "erroPadrao": 0.01785592817252886,
+   "n": 3,
+   "voltasPorS": 1.2437004632421829,
+   "verticesColisao": 1538,
+   "inflacaoArea": 0.11412245090076656,
+   "avaliacoesPorS": 60059.25750920423,
+   "cmPorMilAvaliacoes": 0.023737342951315105,
+   "separacoesResolvidas": 0.98989898989899,
+   "primeiroGanhoS": 9.391333333333334,
+   "rejeitados": 0,
+   "pares": 0
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "q8",
+   "inicial": 3266.6,
+   "m25": 3254.466666666667,
+   "m50": 3226.466666666667,
+   "final": 3197.266666666667,
+   "ganho": -2.1224922957611287,
+   "difMedia": -0.3076015354393507,
+   "erroPadrao": 0.02579458046003724,
+   "n": 3,
+   "voltasPorS": 1.2923480110896122,
+   "verticesColisao": 1538,
+   "inflacaoArea": 0.11412245090076656,
+   "avaliacoesPorS": 62877.54401320644,
+   "cmPorMilAvaliacoes": 0.02286430898161623,
+   "separacoesResolvidas": 0.9784722222222223,
+   "primeiroGanhoS": 9.443666666666665,
+   "rejeitados": 0,
+   "pares": 0
+  }
+ ],
+ "corridas": [
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "q8",
+   "semente": 1,
+   "inicial": 3242.4,
+   "final": 3181.4,
+   "curva": [
+    [
+     8143,
+     3239.8
+    ],
+    [
+     8750,
+     3236.6
+    ],
+    [
+     9523,
+     3233.2
+    ],
+    [
+     10097,
+     3230
+    ],
+    [
+     10575,
+     3226.8
+    ],
+    [
+     11582,
+     3223.6
+    ],
+    [
+     17564,
+     3220.4
+    ],
+    [
+     19189,
+     3217.2
+    ],
+    [
+     20277,
+     3214
+    ],
+    [
+     22070,
+     3210.6
+    ],
+    [
+     22896,
+     3207.4
+    ],
+    [
+     25300,
+     3204.2
+    ],
+    [
+     32125,
+     3201
+    ],
+    [
+     33366,
+     3197.8
+    ],
+    [
+     34116,
+     3194.6
+    ],
+    [
+     35092,
+     3191.4
+    ],
+    [
+     36754,
+     3188.2
+    ],
+    [
+     41849,
+     3187.8
+    ],
+    [
+     43507,
+     3186.2
+    ],
+    [
+     44355,
+     3185
+    ],
+    [
+     44532,
+     3183.8
+    ],
+    [
+     44693,
+     3182.6
+    ],
+    [
+     45070,
+     3181.4
+    ]
+   ],
+   "voltas": 58,
+   "ms": 45095,
+   "relatos": 29,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11960595.776367188,
+    "areaOriginal": 11946900,
+    "avaliacoes": 2373614,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 23,
+    "iteracoes": 1341,
+    "movimentos": 13170,
+    "msAteCompressao": 41870.1933,
+    "msTotal": 45051.165,
+    "segundosSeparando": 39.89143657311797,
+    "separacoes": 28,
+    "separacoesResolvidas": 28,
+    "verticesColisao": 732,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "base",
+   "semente": 1,
+   "inicial": 3242.4,
+   "final": 3199.4,
+   "curva": [
+    [
+     8955,
+     3239.8
+    ],
+    [
+     9612,
+     3236.6
+    ],
+    [
+     10476,
+     3233.2
+    ],
+    [
+     10878,
+     3230
+    ],
+    [
+     11127,
+     3226.8
+    ],
+    [
+     12144,
+     3223.6
+    ],
+    [
+     20882,
+     3220.4
+    ],
+    [
+     22923,
+     3217.2
+    ],
+    [
+     24125,
+     3214
+    ],
+    [
+     26609,
+     3210.6
+    ],
+    [
+     27551,
+     3207.4
+    ],
+    [
+     31166,
+     3204.2
+    ],
+    [
+     42831,
+     3201
+    ],
+    [
+     43889,
+     3199.4
+    ]
+   ],
+   "voltas": 42,
+   "ms": 45430,
+   "relatos": 21,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11960595.776367188,
+    "areaOriginal": 11946900,
+    "avaliacoes": 1755806,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 18,
+    "iteracoes": 947,
+    "movimentos": 9758,
+    "msAteCompressao": 42818.3634,
+    "msTotal": 45387.364,
+    "segundosSeparando": 41.27367755770683,
+    "separacoes": 20,
+    "separacoesResolvidas": 20,
+    "verticesColisao": 732,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "q6",
+   "semente": 1,
+   "inicial": 3242.4,
+   "final": 3186.2,
+   "curva": [
+    [
+     7908,
+     3239.8
+    ],
+    [
+     8399,
+     3236.6
+    ],
+    [
+     9308,
+     3233.2
+    ],
+    [
+     9786,
+     3230
+    ],
+    [
+     10195,
+     3226.8
+    ],
+    [
+     11171,
+     3223.6
+    ],
+    [
+     17423,
+     3220.4
+    ],
+    [
+     18994,
+     3217.2
+    ],
+    [
+     20032,
+     3214
+    ],
+    [
+     21802,
+     3210.6
+    ],
+    [
+     22569,
+     3207.4
+    ],
+    [
+     25240,
+     3204.2
+    ],
+    [
+     33309,
+     3201
+    ],
+    [
+     34500,
+     3197.8
+    ],
+    [
+     35159,
+     3194.6
+    ],
+    [
+     36334,
+     3191.4
+    ],
+    [
+     37990,
+     3188.2
+    ],
+    [
+     43555,
+     3187.8
+    ],
+    [
+     45518,
+     3186.2
+    ]
+   ],
+   "voltas": 50,
+   "ms": 45527,
+   "relatos": 25,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11960595.776367188,
+    "areaOriginal": 11946900,
+    "avaliacoes": 2299350,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 23,
+    "iteracoes": 1291,
+    "movimentos": 12760,
+    "msAteCompressao": 43539.8474,
+    "msTotal": 45488.0581,
+    "segundosSeparando": 41.332401126623154,
+    "separacoes": 24,
+    "separacoesResolvidas": 24,
+    "verticesColisao": 732,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "s01",
+   "semente": 1,
+   "inicial": 3242.4,
+   "final": 3172.6,
+   "curva": [
+    [
+     5628,
+     3240.2
+    ],
+    [
+     5997,
+     3237
+    ],
+    [
+     6167,
+     3233.8
+    ],
+    [
+     6329,
+     3230.6
+    ],
+    [
+     6455,
+     3227.4
+    ],
+    [
+     7139,
+     3224
+    ],
+    [
+     7267,
+     3220.8
+    ],
+    [
+     7461,
+     3217.6
+    ],
+    [
+     7907,
+     3214.4
+    ],
+    [
+     8816,
+     3211.2
+    ],
+    [
+     9371,
+     3208
+    ],
+    [
+     10394,
+     3207
+    ],
+    [
+     15219,
+     3203.8
+    ],
+    [
+     15351,
+     3200.6
+    ],
+    [
+     18189,
+     3197.4
+    ],
+    [
+     19996,
+     3194.2
+    ],
+    [
+     20140,
+     3191
+    ],
+    [
+     33801,
+     3187.8
+    ],
+    [
+     34350,
+     3184.6
+    ],
+    [
+     36892,
+     3181.4
+    ],
+    [
+     37283,
+     3178.2
+    ],
+    [
+     41493,
+     3176.6
+    ],
+    [
+     44416,
+     3175.2
+    ],
+    [
+     44481,
+     3174.4
+    ],
+    [
+     44516,
+     3173.6
+    ],
+    [
+     45661,
+     3172.6
+    ]
+   ],
+   "voltas": 74,
+   "ms": 45666,
+   "relatos": 32,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12060754.663085938,
+    "areaOriginal": 11946900,
+    "avaliacoes": 6012844,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 26,
+    "iteracoes": 4071,
+    "movimentos": 32917,
+    "msAteCompressao": 40400.8732,
+    "msTotal": 45632.562399999995,
+    "segundosSeparando": 41.85258536133915,
+    "separacoes": 33,
+    "separacoesResolvidas": 31,
+    "verticesColisao": 131,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "s003",
+   "semente": 1,
+   "inicial": 3242.4,
+   "final": 3175.2,
+   "curva": [
+    [
+     6403,
+     3242
+    ],
+    [
+     6945,
+     3238.8
+    ],
+    [
+     7495,
+     3235.6
+    ],
+    [
+     8655,
+     3232.4
+    ],
+    [
+     9155,
+     3229
+    ],
+    [
+     10268,
+     3225.8
+    ],
+    [
+     11463,
+     3222.6
+    ],
+    [
+     11815,
+     3219.4
+    ],
+    [
+     15003,
+     3216.6
+    ],
+    [
+     16693,
+     3213.4
+    ],
+    [
+     16902,
+     3210.2
+    ],
+    [
+     17286,
+     3207
+    ],
+    [
+     17642,
+     3203.8
+    ],
+    [
+     18243,
+     3200.6
+    ],
+    [
+     18554,
+     3197.4
+    ],
+    [
+     19196,
+     3194.2
+    ],
+    [
+     20034,
+     3191
+    ],
+    [
+     20877,
+     3187.8
+    ],
+    [
+     22420,
+     3184.6
+    ],
+    [
+     22809,
+     3181.4
+    ],
+    [
+     37473,
+     3178.2000000000003
+    ],
+    [
+     58399,
+     3175.2
+    ]
+   ],
+   "voltas": 56,
+   "ms": 58427,
+   "relatos": 28,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11985965.112304688,
+    "areaOriginal": 11946900,
+    "avaliacoes": 3215612,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 27,
+    "iteracoes": 1727,
+    "movimentos": 17799,
+    "msAteCompressao": 58384.4318,
+    "msTotal": 58392.8585,
+    "segundosSeparando": 54.44128453731537,
+    "separacoes": 27,
+    "separacoesResolvidas": 27,
+    "verticesColisao": 409,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "base",
+   "semente": 1,
+   "inicial": 361,
+   "final": 342,
+   "curva": [
+    [
+     787,
+     360.5
+    ],
+    [
+     880,
+     360
+    ],
+    [
+     939,
+     359.5
+    ],
+    [
+     1158,
+     359
+    ],
+    [
+     1433,
+     358.5
+    ],
+    [
+     1599,
+     358
+    ],
+    [
+     1695,
+     357.5
+    ],
+    [
+     3152,
+     357
+    ],
+    [
+     3909,
+     356.5
+    ],
+    [
+     3915,
+     356
+    ],
+    [
+     4407,
+     355.5
+    ],
+    [
+     5842,
+     355
+    ],
+    [
+     6785,
+     354.5
+    ],
+    [
+     7780,
+     354
+    ],
+    [
+     7887,
+     353.5
+    ],
+    [
+     8195,
+     353
+    ],
+    [
+     12644,
+     352.5
+    ],
+    [
+     12746,
+     352
+    ],
+    [
+     13440,
+     351.5
+    ],
+    [
+     13539,
+     351
+    ],
+    [
+     15293,
+     350.5
+    ],
+    [
+     15303,
+     350
+    ],
+    [
+     18002,
+     349.5
+    ],
+    [
+     18020,
+     349
+    ],
+    [
+     18042,
+     348.5
+    ],
+    [
+     18330,
+     348
+    ],
+    [
+     18381,
+     347.5
+    ],
+    [
+     18648,
+     347
+    ],
+    [
+     18711,
+     346.5
+    ],
+    [
+     18771,
+     346
+    ],
+    [
+     18810,
+     345.5
+    ],
+    [
+     24248,
+     345
+    ],
+    [
+     24266,
+     344.5
+    ],
+    [
+     24271,
+     344
+    ],
+    [
+     24320,
+     343.5
+    ],
+    [
+     24331,
+     343
+    ],
+    [
+     24887,
+     342.5
+    ],
+    [
+     27685,
+     342
+    ]
+   ],
+   "voltas": 140,
+   "ms": 45151,
+   "relatos": 62,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 188768.2333984375,
+    "areaOriginal": 188536,
+    "avaliacoes": 5949888,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 61,
+    "iteracoes": 4317,
+    "movimentos": 31625,
+    "msAteCompressao": 37112.5285,
+    "msTotal": 45149.3334,
+    "segundosSeparando": 44.559734879339885,
+    "separacoes": 63,
+    "separacoesResolvidas": 61,
+    "verticesColisao": 235,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "q6",
+   "semente": 1,
+   "inicial": 361,
+   "final": 342,
+   "curva": [
+    [
+     817,
+     360.5
+    ],
+    [
+     907,
+     360
+    ],
+    [
+     966,
+     359.5
+    ],
+    [
+     1198,
+     359
+    ],
+    [
+     1513,
+     358.5
+    ],
+    [
+     1703,
+     358
+    ],
+    [
+     1781,
+     357.5
+    ],
+    [
+     3282,
+     357
+    ],
+    [
+     4057,
+     356.5
+    ],
+    [
+     4068,
+     356
+    ],
+    [
+     4460,
+     355.5
+    ],
+    [
+     5897,
+     355
+    ],
+    [
+     6928,
+     354.5
+    ],
+    [
+     7940,
+     354
+    ],
+    [
+     8052,
+     353.5
+    ],
+    [
+     8395,
+     353
+    ],
+    [
+     13019,
+     352.5
+    ],
+    [
+     13094,
+     352
+    ],
+    [
+     13671,
+     351.5
+    ],
+    [
+     13779,
+     351
+    ],
+    [
+     15720,
+     350.5
+    ],
+    [
+     15742,
+     350
+    ],
+    [
+     18583,
+     349.5
+    ],
+    [
+     18607,
+     349
+    ],
+    [
+     18629,
+     348.5
+    ],
+    [
+     18972,
+     348
+    ],
+    [
+     19030,
+     347.5
+    ],
+    [
+     19367,
+     347
+    ],
+    [
+     19431,
+     346.5
+    ],
+    [
+     19510,
+     346
+    ],
+    [
+     19547,
+     345.5
+    ],
+    [
+     25073,
+     345
+    ],
+    [
+     25118,
+     344.5
+    ],
+    [
+     25129,
+     344
+    ],
+    [
+     25203,
+     343.5
+    ],
+    [
+     25218,
+     343
+    ],
+    [
+     25794,
+     342.5
+    ],
+    [
+     28818,
+     342
+    ]
+   ],
+   "voltas": 139,
+   "ms": 46279,
+   "relatos": 62,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 188768.2333984375,
+    "areaOriginal": 188536,
+    "avaliacoes": 5790956,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 61,
+    "iteracoes": 4217,
+    "movimentos": 30775,
+    "msAteCompressao": 39015.6131,
+    "msTotal": 46277.0743,
+    "segundosSeparando": 45.40967627240752,
+    "separacoes": 63,
+    "separacoesResolvidas": 61,
+    "verticesColisao": 235,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "s01",
+   "semente": 1,
+   "inicial": 361,
+   "final": 342.5,
+   "curva": [
+    [
+     1539,
+     360.5
+    ],
+    [
+     2284,
+     360
+    ],
+    [
+     2296,
+     359.5
+    ],
+    [
+     2304,
+     359
+    ],
+    [
+     2313,
+     358.5
+    ],
+    [
+     2344,
+     358
+    ],
+    [
+     2361,
+     357.5
+    ],
+    [
+     2400,
+     357
+    ],
+    [
+     2562,
+     356.5
+    ],
+    [
+     2617,
+     356
+    ],
+    [
+     2725,
+     355.5
+    ],
+    [
+     2848,
+     355
+    ],
+    [
+     2897,
+     354.5
+    ],
+    [
+     3492,
+     354
+    ],
+    [
+     3549,
+     353.5
+    ],
+    [
+     10583,
+     353
+    ],
+    [
+     12530,
+     352.5
+    ],
+    [
+     12539,
+     352
+    ],
+    [
+     12601,
+     351.5
+    ],
+    [
+     12634,
+     351
+    ],
+    [
+     12712,
+     350.5
+    ],
+    [
+     12894,
+     350
+    ],
+    [
+     13346,
+     349.5
+    ],
+    [
+     13432,
+     349
+    ],
+    [
+     13530,
+     348.5
+    ],
+    [
+     13641,
+     348
+    ],
+    [
+     13696,
+     347.5
+    ],
+    [
+     13910,
+     347
+    ],
+    [
+     14029,
+     346.5
+    ],
+    [
+     22441,
+     346
+    ],
+    [
+     24927,
+     345.5
+    ],
+    [
+     25624,
+     345
+    ],
+    [
+     25877,
+     344.5
+    ],
+    [
+     26149,
+     344
+    ],
+    [
+     26380,
+     343.5
+    ],
+    [
+     26787,
+     343
+    ],
+    [
+     33981,
+     342.5
+    ]
+   ],
+   "voltas": 143,
+   "ms": 46618,
+   "relatos": 61,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 190572.3349609375,
+    "areaOriginal": 188536,
+    "avaliacoes": 7570726,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 59,
+    "iteracoes": 4830,
+    "movimentos": 40901,
+    "msAteCompressao": 37623.2362,
+    "msTotal": 46616.519400000005,
+    "segundosSeparando": 46.1187611715759,
+    "separacoes": 62,
+    "separacoesResolvidas": 60,
+    "verticesColisao": 127,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "s003",
+   "semente": 1,
+   "inicial": 361,
+   "final": 342.5,
+   "curva": [
+    [
+     643,
+     360.5
+    ],
+    [
+     743,
+     360
+    ],
+    [
+     770,
+     359.5
+    ],
+    [
+     1146,
+     359
+    ],
+    [
+     1750,
+     358.5
+    ],
+    [
+     2118,
+     358
+    ],
+    [
+     2304,
+     357.5
+    ],
+    [
+     2397,
+     357
+    ],
+    [
+     2468,
+     356.5
+    ],
+    [
+     2955,
+     356
+    ],
+    [
+     3015,
+     355.5
+    ],
+    [
+     3187,
+     355
+    ],
+    [
+     3265,
+     354.5
+    ],
+    [
+     3825,
+     354
+    ],
+    [
+     3917,
+     353.5
+    ],
+    [
+     3985,
+     353
+    ],
+    [
+     5209,
+     352.5
+    ],
+    [
+     5280,
+     352
+    ],
+    [
+     5402,
+     351.5
+    ],
+    [
+     5434,
+     351
+    ],
+    [
+     5722,
+     350.5
+    ],
+    [
+     5766,
+     350
+    ],
+    [
+     5854,
+     349.5
+    ],
+    [
+     5913,
+     349
+    ],
+    [
+     5949,
+     348.5
+    ],
+    [
+     6041,
+     348
+    ],
+    [
+     6905,
+     347.5
+    ],
+    [
+     6956,
+     347
+    ],
+    [
+     6975,
+     346.5
+    ],
+    [
+     7613,
+     346
+    ],
+    [
+     8682,
+     345.5
+    ],
+    [
+     8745,
+     345
+    ],
+    [
+     8830,
+     344.5
+    ],
+    [
+     8846,
+     344
+    ],
+    [
+     9034,
+     343.5
+    ],
+    [
+     11893,
+     343
+    ],
+    [
+     40728,
+     342.5
+    ]
+   ],
+   "voltas": 137,
+   "ms": 47374,
+   "relatos": 61,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 189160.9052734375,
+    "areaOriginal": 188536,
+    "avaliacoes": 6120752,
+    "encolhidasNaCompressao": 3,
+    "encolhidasNaExploracao": 57,
+    "iteracoes": 3704,
+    "movimentos": 33022,
+    "msAteCompressao": 39352.527799999996,
+    "msTotal": 47372.495800000004,
+    "segundosSeparando": 46.82576477667317,
+    "separacoes": 62,
+    "separacoesResolvidas": 60,
+    "verticesColisao": 195,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "q8",
+   "semente": 1,
+   "inicial": 361,
+   "final": 342,
+   "curva": [
+    [
+     1015,
+     360.5
+    ],
+    [
+     1168,
+     360
+    ],
+    [
+     1274,
+     359.5
+    ],
+    [
+     1635,
+     359
+    ],
+    [
+     2091,
+     358.5
+    ],
+    [
+     2374,
+     358
+    ],
+    [
+     2551,
+     357.5
+    ],
+    [
+     4503,
+     357
+    ],
+    [
+     5608,
+     356.5
+    ],
+    [
+     5634,
+     356
+    ],
+    [
+     6261,
+     355.5
+    ],
+    [
+     8222,
+     355
+    ],
+    [
+     9379,
+     354.5
+    ],
+    [
+     10585,
+     354
+    ],
+    [
+     10771,
+     353.5
+    ],
+    [
+     11268,
+     353
+    ],
+    [
+     17138,
+     352.5
+    ],
+    [
+     17288,
+     352
+    ],
+    [
+     18178,
+     351.5
+    ],
+    [
+     18319,
+     351
+    ],
+    [
+     21015,
+     350.5
+    ],
+    [
+     21076,
+     350
+    ],
+    [
+     24518,
+     349.5
+    ],
+    [
+     24586,
+     349
+    ],
+    [
+     24649,
+     348.5
+    ],
+    [
+     25059,
+     348
+    ],
+    [
+     25149,
+     347.5
+    ],
+    [
+     25501,
+     347
+    ],
+    [
+     25598,
+     346.5
+    ],
+    [
+     25720,
+     346
+    ],
+    [
+     25786,
+     345.5
+    ],
+    [
+     33159,
+     345
+    ],
+    [
+     33319,
+     344.5
+    ],
+    [
+     33363,
+     344
+    ],
+    [
+     33518,
+     343.5
+    ],
+    [
+     33563,
+     343
+    ],
+    [
+     34368,
+     342.5
+    ],
+    [
+     37792,
+     342
+    ]
+   ],
+   "voltas": 136,
+   "ms": 45308,
+   "relatos": 63,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 188768.2333984375,
+    "areaOriginal": 188536,
+    "avaliacoes": 4356724,
+    "encolhidasNaCompressao": 3,
+    "encolhidasNaExploracao": 59,
+    "iteracoes": 3420,
+    "movimentos": 22979,
+    "msAteCompressao": 37412.4883,
+    "msTotal": 45305.8306,
+    "segundosSeparando": 42.64312138406967,
+    "separacoes": 64,
+    "separacoesResolvidas": 62,
+    "verticesColisao": 235,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "base",
+   "semente": 1,
+   "inicial": 350.5,
+   "final": 336.5,
+   "curva": [
+    [
+     1400,
+     350
+    ],
+    [
+     1422,
+     349.5
+    ],
+    [
+     1584,
+     349
+    ],
+    [
+     1608,
+     348.5
+    ],
+    [
+     2867,
+     348
+    ],
+    [
+     2892,
+     347.5
+    ],
+    [
+     2949,
+     347
+    ],
+    [
+     2991,
+     346.5
+    ],
+    [
+     3044,
+     346
+    ],
+    [
+     3172,
+     345.5
+    ],
+    [
+     3261,
+     345
+    ],
+    [
+     3534,
+     344.5
+    ],
+    [
+     3630,
+     344
+    ],
+    [
+     3718,
+     343.5
+    ],
+    [
+     3960,
+     343
+    ],
+    [
+     4032,
+     342.5
+    ],
+    [
+     4569,
+     342
+    ],
+    [
+     4731,
+     341.5
+    ],
+    [
+     4967,
+     341
+    ],
+    [
+     5459,
+     340.5
+    ],
+    [
+     5527,
+     340
+    ],
+    [
+     5665,
+     339.5
+    ],
+    [
+     23311,
+     339
+    ],
+    [
+     26452,
+     338.5
+    ],
+    [
+     27422,
+     338
+    ],
+    [
+     27571,
+     337.5
+    ],
+    [
+     42613,
+     337
+    ],
+    [
+     42833,
+     336.5
+    ]
+   ],
+   "voltas": 132,
+   "ms": 45892,
+   "relatos": 58,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 179953.5927734375,
+    "areaOriginal": 179728,
+    "avaliacoes": 5565902,
+    "encolhidasNaCompressao": 12,
+    "encolhidasNaExploracao": 45,
+    "iteracoes": 3614,
+    "movimentos": 30003,
+    "msAteCompressao": 37785.8962,
+    "msTotal": 45873.5766,
+    "segundosSeparando": 45.17355079902336,
+    "separacoes": 59,
+    "separacoesResolvidas": 57,
+    "verticesColisao": 309,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "s003",
+   "semente": 1,
+   "inicial": 350.5,
+   "final": 333,
+   "curva": [
+    [
+     1664,
+     350
+    ],
+    [
+     1704,
+     349.5
+    ],
+    [
+     1892,
+     349
+    ],
+    [
+     1940,
+     348.5
+    ],
+    [
+     2078,
+     348
+    ],
+    [
+     2418,
+     347.5
+    ],
+    [
+     2504,
+     347
+    ],
+    [
+     2676,
+     346.5
+    ],
+    [
+     2974,
+     346
+    ],
+    [
+     3098,
+     345.5
+    ],
+    [
+     3145,
+     345
+    ],
+    [
+     3355,
+     344.5
+    ],
+    [
+     3687,
+     344
+    ],
+    [
+     4049,
+     343.5
+    ],
+    [
+     4077,
+     343
+    ],
+    [
+     4114,
+     342.5
+    ],
+    [
+     4596,
+     342
+    ],
+    [
+     4713,
+     341.5
+    ],
+    [
+     5518,
+     341
+    ],
+    [
+     5547,
+     340.5
+    ],
+    [
+     5647,
+     340
+    ],
+    [
+     5699,
+     339.5
+    ],
+    [
+     6207,
+     339
+    ],
+    [
+     6271,
+     338.5
+    ],
+    [
+     6493,
+     338
+    ],
+    [
+     6928,
+     337.5
+    ],
+    [
+     10302,
+     337
+    ],
+    [
+     12334,
+     336.5
+    ],
+    [
+     12460,
+     336
+    ],
+    [
+     12569,
+     335.5
+    ],
+    [
+     12774,
+     335
+    ],
+    [
+     13126,
+     334.5
+    ],
+    [
+     15363,
+     334
+    ],
+    [
+     21469,
+     333.5
+    ],
+    [
+     26578,
+     333
+    ]
+   ],
+   "voltas": 133,
+   "ms": 45845,
+   "relatos": 58,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 180325.6083984375,
+    "areaOriginal": 179728,
+    "avaliacoes": 6138742,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 57,
+    "iteracoes": 3470,
+    "movimentos": 32983,
+    "msAteCompressao": 37031.8469,
+    "msTotal": 45825.739,
+    "segundosSeparando": 45.195720818825066,
+    "separacoes": 59,
+    "separacoesResolvidas": 57,
+    "verticesColisao": 263,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "q6",
+   "semente": 1,
+   "inicial": 350.5,
+   "final": 336,
+   "curva": [
+    [
+     1552,
+     350
+    ],
+    [
+     1573,
+     349.5
+    ],
+    [
+     1789,
+     349
+    ],
+    [
+     1827,
+     348.5
+    ],
+    [
+     3224,
+     348
+    ],
+    [
+     3256,
+     347.5
+    ],
+    [
+     3307,
+     347
+    ],
+    [
+     3354,
+     346.5
+    ],
+    [
+     3405,
+     346
+    ],
+    [
+     3542,
+     345.5
+    ],
+    [
+     3676,
+     345
+    ],
+    [
+     3948,
+     344.5
+    ],
+    [
+     4035,
+     344
+    ],
+    [
+     4117,
+     343.5
+    ],
+    [
+     4471,
+     343
+    ],
+    [
+     4558,
+     342.5
+    ],
+    [
+     5093,
+     342
+    ],
+    [
+     5291,
+     341.5
+    ],
+    [
+     5545,
+     341
+    ],
+    [
+     6030,
+     340.5
+    ],
+    [
+     6116,
+     340
+    ],
+    [
+     6264,
+     339.5
+    ],
+    [
+     25392,
+     339
+    ],
+    [
+     28541,
+     338.5
+    ],
+    [
+     29483,
+     338
+    ],
+    [
+     29641,
+     337.5
+    ],
+    [
+     42377,
+     337
+    ],
+    [
+     42914,
+     336.5
+    ],
+    [
+     43408,
+     336
+    ]
+   ],
+   "voltas": 151,
+   "ms": 45083,
+   "relatos": 68,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 179953.5927734375,
+    "areaOriginal": 179728,
+    "avaliacoes": 4890276,
+    "encolhidasNaCompressao": 22,
+    "encolhidasNaExploracao": 45,
+    "iteracoes": 3252,
+    "movimentos": 26406,
+    "msAteCompressao": 36672.473,
+    "msTotal": 45060.487,
+    "segundosSeparando": 43.828817523237376,
+    "separacoes": 69,
+    "separacoesResolvidas": 67,
+    "verticesColisao": 309,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "s01",
+   "semente": 1,
+   "inicial": 350.5,
+   "final": 337,
+   "curva": [
+    [
+     1126,
+     350
+    ],
+    [
+     1209,
+     349.5
+    ],
+    [
+     1314,
+     349
+    ],
+    [
+     1354,
+     348.5
+    ],
+    [
+     1397,
+     348
+    ],
+    [
+     3294,
+     347.5
+    ],
+    [
+     3366,
+     347
+    ],
+    [
+     3578,
+     346.5
+    ],
+    [
+     4543,
+     346
+    ],
+    [
+     4822,
+     345.5
+    ],
+    [
+     4865,
+     345
+    ],
+    [
+     4888,
+     344.5
+    ],
+    [
+     4904,
+     344
+    ],
+    [
+     11215,
+     343.5
+    ],
+    [
+     11254,
+     343
+    ],
+    [
+     11316,
+     342.5
+    ],
+    [
+     11589,
+     342
+    ],
+    [
+     12627,
+     341.5
+    ],
+    [
+     14100,
+     341
+    ],
+    [
+     14108,
+     340.5
+    ],
+    [
+     14135,
+     340
+    ],
+    [
+     16204,
+     339.5
+    ],
+    [
+     27296,
+     339
+    ],
+    [
+     27387,
+     338.5
+    ],
+    [
+     29936,
+     338
+    ],
+    [
+     37717,
+     337.5
+    ],
+    [
+     37901,
+     337
+    ]
+   ],
+   "voltas": 117,
+   "ms": 47154,
+   "relatos": 48,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 181719.0224609375,
+    "areaOriginal": 179728,
+    "avaliacoes": 7958314,
+    "encolhidasNaCompressao": 3,
+    "encolhidasNaExploracao": 44,
+    "iteracoes": 5757,
+    "movimentos": 42340,
+    "msAteCompressao": 37703.2423,
+    "msTotal": 47135.8533,
+    "segundosSeparando": 46.552441905252635,
+    "separacoes": 49,
+    "separacoesResolvidas": 47,
+    "verticesColisao": 183,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "q8",
+   "semente": 1,
+   "inicial": 350.5,
+   "final": 338,
+   "curva": [
+    [
+     2101,
+     350
+    ],
+    [
+     2151,
+     349.5
+    ],
+    [
+     2391,
+     349
+    ],
+    [
+     2441,
+     348.5
+    ],
+    [
+     4151,
+     348
+    ],
+    [
+     4203,
+     347.5
+    ],
+    [
+     4264,
+     347
+    ],
+    [
+     4349,
+     346.5
+    ],
+    [
+     4439,
+     346
+    ],
+    [
+     4665,
+     345.5
+    ],
+    [
+     4839,
+     345
+    ],
+    [
+     5203,
+     344.5
+    ],
+    [
+     5372,
+     344
+    ],
+    [
+     5568,
+     343.5
+    ],
+    [
+     5929,
+     343
+    ],
+    [
+     6047,
+     342.5
+    ],
+    [
+     6748,
+     342
+    ],
+    [
+     6978,
+     341.5
+    ],
+    [
+     7385,
+     341
+    ],
+    [
+     8008,
+     340.5
+    ],
+    [
+     8160,
+     340
+    ],
+    [
+     8390,
+     339.5
+    ],
+    [
+     34179,
+     339
+    ],
+    [
+     38466,
+     338.5
+    ],
+    [
+     43538,
+     338
+    ]
+   ],
+   "voltas": 111,
+   "ms": 45311,
+   "relatos": 50,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 179953.5927734375,
+    "areaOriginal": 179728,
+    "avaliacoes": 3622302,
+    "encolhidasNaCompressao": 9,
+    "encolhidasNaExploracao": 40,
+    "iteracoes": 2511,
+    "movimentos": 19548,
+    "msAteCompressao": 38108.7644,
+    "msTotal": 45291.4133,
+    "segundosSeparando": 43.103430737031886,
+    "separacoes": 50,
+    "separacoesResolvidas": 49,
+    "verticesColisao": 309,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "base",
+   "semente": 1,
+   "inicial": 642.6,
+   "final": 622.8000000000001,
+   "curva": [
+    [
+     4526,
+     641.8000000000001
+    ],
+    [
+     5079,
+     641.2
+    ],
+    [
+     6357,
+     640.6
+    ],
+    [
+     6623,
+     640.2
+    ],
+    [
+     6735,
+     639.6
+    ],
+    [
+     7122,
+     638.8000000000001
+    ],
+    [
+     7869,
+     638.2
+    ],
+    [
+     8148,
+     637.6
+    ],
+    [
+     8422,
+     637
+    ],
+    [
+     14515,
+     636.4000000000001
+    ],
+    [
+     14698,
+     635.8000000000001
+    ],
+    [
+     15117,
+     635
+    ],
+    [
+     15757,
+     634.4000000000001
+    ],
+    [
+     16189,
+     633.8000000000001
+    ],
+    [
+     18886,
+     633.2
+    ],
+    [
+     19004,
+     632.6
+    ],
+    [
+     19147,
+     632
+    ],
+    [
+     19508,
+     631.2
+    ],
+    [
+     19627,
+     630.6
+    ],
+    [
+     19781,
+     630
+    ],
+    [
+     20061,
+     629.4
+    ],
+    [
+     20356,
+     628.8
+    ],
+    [
+     21053,
+     628.2
+    ],
+    [
+     21357,
+     627.6
+    ],
+    [
+     21938,
+     626.8000000000001
+    ],
+    [
+     22715,
+     626.2
+    ],
+    [
+     24494,
+     625.6
+    ],
+    [
+     26402,
+     625
+    ],
+    [
+     27299,
+     624.4000000000001
+    ],
+    [
+     29011,
+     623.8000000000001
+    ],
+    [
+     42124,
+     623.4000000000001
+    ],
+    [
+     43223,
+     623.2
+    ],
+    [
+     43298,
+     623
+    ],
+    [
+     43480,
+     622.8000000000001
+    ]
+   ],
+   "voltas": 88,
+   "ms": 45342,
+   "relatos": 42,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2228036.28125,
+    "areaOriginal": 2225392,
+    "avaliacoes": 2566628,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 36,
+    "iteracoes": 1516,
+    "movimentos": 13947,
+    "msAteCompressao": 39303.492900000005,
+    "msTotal": 45339.2486,
+    "segundosSeparando": 43.47548206523061,
+    "separacoes": 42,
+    "separacoesResolvidas": 41,
+    "verticesColisao": 495,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "s003",
+   "semente": 1,
+   "inicial": 642.6,
+   "final": 621,
+   "curva": [
+    [
+     3555,
+     642.2
+    ],
+    [
+     4155,
+     641.4000000000001
+    ],
+    [
+     4336,
+     640.8000000000001
+    ],
+    [
+     4757,
+     640.2
+    ],
+    [
+     5017,
+     639.6
+    ],
+    [
+     5262,
+     639
+    ],
+    [
+     5917,
+     638.2
+    ],
+    [
+     6330,
+     637.6
+    ],
+    [
+     7823,
+     637
+    ],
+    [
+     7936,
+     636.4000000000001
+    ],
+    [
+     8189,
+     635.8000000000001
+    ],
+    [
+     8324,
+     635
+    ],
+    [
+     10125,
+     634.4000000000001
+    ],
+    [
+     10399,
+     633.8000000000001
+    ],
+    [
+     10442,
+     633.2
+    ],
+    [
+     10972,
+     632.6
+    ],
+    [
+     11062,
+     632
+    ],
+    [
+     16582,
+     631.2
+    ],
+    [
+     16747,
+     630.6
+    ],
+    [
+     17266,
+     630
+    ],
+    [
+     17788,
+     629.4000000000001
+    ],
+    [
+     19045,
+     628.8000000000001
+    ],
+    [
+     19131,
+     628.2
+    ],
+    [
+     19717,
+     627.6
+    ],
+    [
+     20130,
+     626.8000000000001
+    ],
+    [
+     23179,
+     626.2
+    ],
+    [
+     27214,
+     625.6
+    ],
+    [
+     27799,
+     625
+    ],
+    [
+     33880,
+     624.4000000000001
+    ],
+    [
+     37912,
+     623.8000000000001
+    ],
+    [
+     38505,
+     623.4000000000001
+    ],
+    [
+     39585,
+     623.2
+    ],
+    [
+     39609,
+     622.8
+    ],
+    [
+     39637,
+     622.6
+    ],
+    [
+     39970,
+     622.4
+    ],
+    [
+     40102,
+     622.2
+    ],
+    [
+     42300,
+     622
+    ],
+    [
+     42422,
+     621.8000000000001
+    ],
+    [
+     42474,
+     621.6
+    ],
+    [
+     42511,
+     621.4000000000001
+    ],
+    [
+     42604,
+     621.2
+    ],
+    [
+     45252,
+     621
+    ]
+   ],
+   "voltas": 101,
+   "ms": 45255,
+   "relatos": 50,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2232748.09375,
+    "areaOriginal": 2225392,
+    "avaliacoes": 3300870,
+    "encolhidasNaCompressao": 13,
+    "encolhidasNaExploracao": 36,
+    "iteracoes": 2189,
+    "movimentos": 17728,
+    "msAteCompressao": 37918.105599999995,
+    "msTotal": 45252.5784,
+    "segundosSeparando": 43.424663924612105,
+    "separacoes": 49,
+    "separacoesResolvidas": 49,
+    "verticesColisao": 371,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "q6",
+   "semente": 1,
+   "inicial": 642.6,
+   "final": 623.2,
+   "curva": [
+    [
+     4093,
+     641.8000000000001
+    ],
+    [
+     4678,
+     641.2
+    ],
+    [
+     5834,
+     640.6
+    ],
+    [
+     6174,
+     640.2
+    ],
+    [
+     6308,
+     639.6
+    ],
+    [
+     6716,
+     638.8000000000001
+    ],
+    [
+     7320,
+     638.2
+    ],
+    [
+     7504,
+     637.6
+    ],
+    [
+     7782,
+     637
+    ],
+    [
+     13884,
+     636.4000000000001
+    ],
+    [
+     14090,
+     635.8000000000001
+    ],
+    [
+     14447,
+     635
+    ],
+    [
+     14938,
+     634.4000000000001
+    ],
+    [
+     15306,
+     633.8000000000001
+    ],
+    [
+     18206,
+     633.2
+    ],
+    [
+     18325,
+     632.6
+    ],
+    [
+     18457,
+     632
+    ],
+    [
+     18802,
+     631.2
+    ],
+    [
+     18943,
+     630.6
+    ],
+    [
+     19131,
+     630
+    ],
+    [
+     19493,
+     629.4
+    ],
+    [
+     19805,
+     628.8
+    ],
+    [
+     20513,
+     628.2
+    ],
+    [
+     20822,
+     627.6
+    ],
+    [
+     21292,
+     626.8000000000001
+    ],
+    [
+     22035,
+     626.2
+    ],
+    [
+     23811,
+     625.6
+    ],
+    [
+     25538,
+     625
+    ],
+    [
+     26525,
+     624.4000000000001
+    ],
+    [
+     28148,
+     623.8000000000001
+    ],
+    [
+     40639,
+     623.4000000000001
+    ],
+    [
+     44970,
+     623.2
+    ]
+   ],
+   "voltas": 83,
+   "ms": 45012,
+   "relatos": 39,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2228036.28125,
+    "areaOriginal": 2225392,
+    "avaliacoes": 2671894,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 36,
+    "iteracoes": 1500,
+    "movimentos": 14524,
+    "msAteCompressao": 37665.8563,
+    "msTotal": 45008.6873,
+    "segundosSeparando": 43.09241591986978,
+    "separacoes": 40,
+    "separacoesResolvidas": 38,
+    "verticesColisao": 495,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "s01",
+   "semente": 1,
+   "inicial": 642.6,
+   "final": 624.6,
+   "curva": [
+    [
+     2685,
+     642.2
+    ],
+    [
+     2984,
+     641.4000000000001
+    ],
+    [
+     3049,
+     640.8000000000001
+    ],
+    [
+     3428,
+     640.2
+    ],
+    [
+     3658,
+     639.6
+    ],
+    [
+     8097,
+     639
+    ],
+    [
+     8172,
+     638.2
+    ],
+    [
+     8318,
+     637.6
+    ],
+    [
+     8409,
+     637
+    ],
+    [
+     8488,
+     636.4000000000001
+    ],
+    [
+     8802,
+     635.8000000000001
+    ],
+    [
+     8879,
+     635
+    ],
+    [
+     8946,
+     634.4000000000001
+    ],
+    [
+     11998,
+     633.8000000000001
+    ],
+    [
+     12036,
+     633.2
+    ],
+    [
+     12213,
+     632.6
+    ],
+    [
+     12904,
+     632
+    ],
+    [
+     13150,
+     631.2
+    ],
+    [
+     13444,
+     630.6
+    ],
+    [
+     14571,
+     630
+    ],
+    [
+     15047,
+     629.4000000000001
+    ],
+    [
+     16161,
+     628.8000000000001
+    ],
+    [
+     16552,
+     628.2
+    ],
+    [
+     16709,
+     627.6
+    ],
+    [
+     17178,
+     626.8000000000001
+    ],
+    [
+     22410,
+     626.2
+    ],
+    [
+     26430,
+     625.6
+    ],
+    [
+     29275,
+     625
+    ],
+    [
+     43870,
+     624.6
+    ]
+   ],
+   "voltas": 80,
+   "ms": 47520,
+   "relatos": 36,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2249655.921875,
+    "areaOriginal": 2225392,
+    "avaliacoes": 5823920,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 34,
+    "iteracoes": 3030,
+    "movimentos": 31279,
+    "msAteCompressao": 43534.347599999994,
+    "msTotal": 47517.3917,
+    "segundosSeparando": 46.24661412462592,
+    "separacoes": 37,
+    "separacoesResolvidas": 35,
+    "verticesColisao": 204,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "q8",
+   "semente": 1,
+   "inicial": 642.6,
+   "final": 623.8000000000001,
+   "curva": [
+    [
+     5580,
+     641.8000000000001
+    ],
+    [
+     6214,
+     641.2
+    ],
+    [
+     7282,
+     640.6
+    ],
+    [
+     7635,
+     640.2
+    ],
+    [
+     7814,
+     639.6
+    ],
+    [
+     8286,
+     638.8000000000001
+    ],
+    [
+     9193,
+     638.2
+    ],
+    [
+     9539,
+     637.6
+    ],
+    [
+     9858,
+     637
+    ],
+    [
+     16907,
+     636.4000000000001
+    ],
+    [
+     17078,
+     635.8000000000001
+    ],
+    [
+     17452,
+     635
+    ],
+    [
+     18205,
+     634.4000000000001
+    ],
+    [
+     18747,
+     633.8000000000001
+    ],
+    [
+     21956,
+     633.2
+    ],
+    [
+     22115,
+     632.6
+    ],
+    [
+     22237,
+     632
+    ],
+    [
+     22544,
+     631.2
+    ],
+    [
+     22723,
+     630.6
+    ],
+    [
+     22892,
+     630
+    ],
+    [
+     23217,
+     629.4
+    ],
+    [
+     23580,
+     628.8
+    ],
+    [
+     24273,
+     628.2
+    ],
+    [
+     24622,
+     627.6
+    ],
+    [
+     25259,
+     626.8000000000001
+    ],
+    [
+     26221,
+     626.2
+    ],
+    [
+     28261,
+     625.6
+    ],
+    [
+     30191,
+     625
+    ],
+    [
+     31400,
+     624.4000000000001
+    ],
+    [
+     33656,
+     623.8000000000001
+    ]
+   ],
+   "voltas": 79,
+   "ms": 47442,
+   "relatos": 37,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2228036.28125,
+    "areaOriginal": 2225392,
+    "avaliacoes": 2367382,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 36,
+    "iteracoes": 1327,
+    "movimentos": 12881,
+    "msAteCompressao": 44847.4939,
+    "msTotal": 47438.350300000006,
+    "segundosSeparando": 44.27538409084082,
+    "separacoes": 38,
+    "separacoesResolvidas": 36,
+    "verticesColisao": 495,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "base",
+   "semente": 1,
+   "inicial": 225.5,
+   "final": 224,
+   "curva": [
+    [
+     550,
+     225
+    ],
+    [
+     1211,
+     224.5
+    ],
+    [
+     4381,
+     224
+    ]
+   ],
+   "voltas": 91,
+   "ms": 45081,
+   "relatos": 15,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122642.263671875,
+    "areaOriginal": 122496,
+    "avaliacoes": 10635569,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 14,
+    "iteracoes": 9279,
+    "movimentos": 58019,
+    "msAteCompressao": 37136.9118,
+    "msTotal": 45079.3338,
+    "segundosSeparando": 44.95727043785155,
+    "separacoes": 26,
+    "separacoesResolvidas": 14,
+    "verticesColisao": 103,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "s003",
+   "semente": 1,
+   "inicial": 225.5,
+   "final": 224,
+   "curva": [
+    [
+     9816,
+     225
+    ],
+    [
+     31306,
+     224.5
+    ],
+    [
+     36315,
+     224
+    ]
+   ],
+   "voltas": 89,
+   "ms": 45851,
+   "relatos": 20,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122914.248046875,
+    "areaOriginal": 122496,
+    "avaliacoes": 11656486,
+    "encolhidasNaCompressao": 6,
+    "encolhidasNaExploracao": 13,
+    "iteracoes": 7711,
+    "movimentos": 64371,
+    "msAteCompressao": 36300.9283,
+    "msTotal": 45850.8677,
+    "segundosSeparando": 45.73628823844774,
+    "separacoes": 26,
+    "separacoesResolvidas": 19,
+    "verticesColisao": 84,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "s01",
+   "semente": 1,
+   "inicial": 225.5,
+   "final": 225,
+   "curva": [
+    [
+     38501,
+     225
+    ]
+   ],
+   "voltas": 85,
+   "ms": 45036,
+   "relatos": 14,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 123811.240234375,
+    "areaOriginal": 122496,
+    "avaliacoes": 15177067,
+    "encolhidasNaCompressao": 6,
+    "encolhidasNaExploracao": 7,
+    "iteracoes": 9212,
+    "movimentos": 84206,
+    "msAteCompressao": 37806.1232,
+    "msTotal": 45035.1664,
+    "segundosSeparando": 44.91442789812572,
+    "separacoes": 22,
+    "separacoesResolvidas": 13,
+    "verticesColisao": 47,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "q6",
+   "semente": 1,
+   "inicial": 225.5,
+   "final": 224,
+   "curva": [
+    [
+     852,
+     225
+    ],
+    [
+     1547,
+     224.5
+    ],
+    [
+     4839,
+     224
+    ]
+   ],
+   "voltas": 85,
+   "ms": 45230,
+   "relatos": 16,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122642.263671875,
+    "areaOriginal": 122496,
+    "avaliacoes": 9393597,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 14,
+    "iteracoes": 8044,
+    "movimentos": 51268,
+    "msAteCompressao": 36094.867999999995,
+    "msTotal": 45228.9598,
+    "segundosSeparando": 45.015542563050985,
+    "separacoes": 25,
+    "separacoesResolvidas": 15,
+    "verticesColisao": 103,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "q8",
+   "semente": 1,
+   "inicial": 225.5,
+   "final": 224,
+   "curva": [
+    [
+     968,
+     225
+    ],
+    [
+     2046,
+     224.5
+    ],
+    [
+     6373,
+     224
+    ]
+   ],
+   "voltas": 70,
+   "ms": 45593,
+   "relatos": 15,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122642.263671875,
+    "areaOriginal": 122496,
+    "avaliacoes": 7442601,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 14,
+    "iteracoes": 6314,
+    "movimentos": 40626,
+    "msAteCompressao": 36548.830700000006,
+    "msTotal": 45591.9307,
+    "segundosSeparando": 45.14628350175917,
+    "separacoes": 21,
+    "separacoesResolvidas": 14,
+    "verticesColisao": 103,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "s01",
+   "semente": 1,
+   "inicial": 3266.6,
+   "final": 3190.6,
+   "curva": [
+    [
+     7100,
+     3263.4
+    ],
+    [
+     7206,
+     3260
+    ],
+    [
+     7366,
+     3256.8
+    ],
+    [
+     7738,
+     3253.6000000000004
+    ],
+    [
+     7907,
+     3250.4
+    ],
+    [
+     8681,
+     3247
+    ],
+    [
+     9131,
+     3243.8
+    ],
+    [
+     9529,
+     3240.6000000000004
+    ],
+    [
+     12103,
+     3237.4
+    ],
+    [
+     12835,
+     3234
+    ],
+    [
+     13340,
+     3230.8
+    ],
+    [
+     13752,
+     3227.6000000000004
+    ],
+    [
+     14337,
+     3224.4
+    ],
+    [
+     15817,
+     3221.2000000000003
+    ],
+    [
+     16591,
+     3218
+    ],
+    [
+     17019,
+     3214.8
+    ],
+    [
+     18174,
+     3211.6000000000004
+    ],
+    [
+     21569,
+     3208.4
+    ],
+    [
+     26425,
+     3205
+    ],
+    [
+     30350,
+     3201.8
+    ],
+    [
+     35597,
+     3198.6000000000004
+    ],
+    [
+     36933,
+     3195.4
+    ],
+    [
+     43997,
+     3192.2
+    ],
+    [
+     46242,
+     3190.6
+    ]
+   ],
+   "voltas": 62,
+   "ms": 46249,
+   "relatos": 31,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12459876.5234375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 5723480,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 29,
+    "iteracoes": 2357,
+    "movimentos": 31492,
+    "msAteCompressao": 44009.080599999994,
+    "msTotal": 46243.4803,
+    "segundosSeparando": 42.25241992622614,
+    "separacoes": 30,
+    "separacoesResolvidas": 30,
+    "verticesColisao": 416,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "s003",
+   "semente": 1,
+   "inicial": 3266.6,
+   "final": 3220.6000000000004,
+   "curva": [
+    [
+     8245,
+     3263.4
+    ],
+    [
+     8412,
+     3260
+    ],
+    [
+     10548,
+     3256.8
+    ],
+    [
+     12334,
+     3253.6000000000004
+    ],
+    [
+     12811,
+     3250.2000000000003
+    ],
+    [
+     14079,
+     3246.4
+    ],
+    [
+     15384,
+     3243.2000000000003
+    ],
+    [
+     16799,
+     3240
+    ],
+    [
+     19643,
+     3236.8
+    ],
+    [
+     20102,
+     3233.6000000000004
+    ],
+    [
+     22377,
+     3230.2000000000003
+    ],
+    [
+     28712,
+     3227
+    ],
+    [
+     35380,
+     3223.8
+    ],
+    [
+     38462,
+     3220.6000000000004
+    ]
+   ],
+   "voltas": 43,
+   "ms": 47828,
+   "relatos": 21,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12378243.4140625,
+    "areaOriginal": 12338378,
+    "avaliacoes": 2566672,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 20,
+    "iteracoes": 1339,
+    "movimentos": 14114,
+    "msAteCompressao": 47802.0172,
+    "msTotal": 47821.206699999995,
+    "segundosSeparando": 43.75024277716875,
+    "separacoes": 21,
+    "separacoesResolvidas": 20,
+    "verticesColisao": 983,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "q6",
+   "semente": 1,
+   "inicial": 3266.6,
+   "final": 3200.2000000000003,
+   "curva": [
+    [
+     8962,
+     3266.4
+    ],
+    [
+     9175,
+     3263.2000000000003
+    ],
+    [
+     10862,
+     3259.8
+    ],
+    [
+     11277,
+     3256.6000000000004
+    ],
+    [
+     12428,
+     3253.4
+    ],
+    [
+     12847,
+     3250.2000000000003
+    ],
+    [
+     14392,
+     3246.8
+    ],
+    [
+     15638,
+     3243.6000000000004
+    ],
+    [
+     16461,
+     3240.4
+    ],
+    [
+     17280,
+     3237.2000000000003
+    ],
+    [
+     18851,
+     3233.8
+    ],
+    [
+     19355,
+     3230.6000000000004
+    ],
+    [
+     20206,
+     3227.4
+    ],
+    [
+     21580,
+     3224.2000000000003
+    ],
+    [
+     23195,
+     3221
+    ],
+    [
+     26930,
+     3217.8
+    ],
+    [
+     28881,
+     3214.6000000000004
+    ],
+    [
+     32876,
+     3211.6000000000004
+    ],
+    [
+     36337,
+     3208.4
+    ],
+    [
+     38795,
+     3205
+    ],
+    [
+     43552,
+     3201.8
+    ],
+    [
+     46234,
+     3200.2000000000003
+    ]
+   ],
+   "voltas": 56,
+   "ms": 46245,
+   "relatos": 28,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12352458.859375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 2876248,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 26,
+    "iteracoes": 1523,
+    "movimentos": 15891,
+    "msAteCompressao": 43577.4419,
+    "msTotal": 46239.3431,
+    "segundosSeparando": 41.22979245334864,
+    "separacoes": 27,
+    "separacoesResolvidas": 27,
+    "verticesColisao": 1538,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "base",
+   "semente": 1,
+   "inicial": 3266.6,
+   "final": 3210,
+   "curva": [
+    [
+     9742,
+     3266.4
+    ],
+    [
+     9962,
+     3263.2000000000003
+    ],
+    [
+     12854,
+     3259.8
+    ],
+    [
+     13473,
+     3256.6000000000004
+    ],
+    [
+     14910,
+     3253.4
+    ],
+    [
+     15488,
+     3250.2000000000003
+    ],
+    [
+     17212,
+     3246.8
+    ],
+    [
+     18910,
+     3243.6000000000004
+    ],
+    [
+     19845,
+     3240.4
+    ],
+    [
+     20621,
+     3237.2000000000003
+    ],
+    [
+     22628,
+     3233.8
+    ],
+    [
+     23431,
+     3230.6000000000004
+    ],
+    [
+     24160,
+     3227.4
+    ],
+    [
+     26520,
+     3224.2000000000003
+    ],
+    [
+     28524,
+     3221
+    ],
+    [
+     32659,
+     3217.8
+    ],
+    [
+     34865,
+     3214.6000000000004
+    ],
+    [
+     40633,
+     3211.6000000000004
+    ],
+    [
+     51089,
+     3210
+    ]
+   ],
+   "voltas": 50,
+   "ms": 51096,
+   "relatos": 25,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12352458.859375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 2309992,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 23,
+    "iteracoes": 1275,
+    "movimentos": 12737,
+    "msAteCompressao": 40678.3845,
+    "msTotal": 51091.3154,
+    "segundosSeparando": 46.61172844469547,
+    "separacoes": 24,
+    "separacoesResolvidas": 24,
+    "verticesColisao": 1538,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "q8",
+   "semente": 1,
+   "inicial": 3266.6,
+   "final": 3199.2000000000003,
+   "curva": [
+    [
+     9015,
+     3266.4
+    ],
+    [
+     9244,
+     3263.2000000000003
+    ],
+    [
+     10767,
+     3259.8
+    ],
+    [
+     11145,
+     3256.6000000000004
+    ],
+    [
+     12143,
+     3253.4
+    ],
+    [
+     12594,
+     3250.2000000000003
+    ],
+    [
+     14119,
+     3246.8
+    ],
+    [
+     15647,
+     3243.6000000000004
+    ],
+    [
+     16457,
+     3240.4
+    ],
+    [
+     17155,
+     3237.2000000000003
+    ],
+    [
+     18822,
+     3233.8
+    ],
+    [
+     19385,
+     3230.6000000000004
+    ],
+    [
+     20199,
+     3227.4
+    ],
+    [
+     21755,
+     3224.2000000000003
+    ],
+    [
+     23113,
+     3221
+    ],
+    [
+     26277,
+     3217.8
+    ],
+    [
+     28112,
+     3214.6000000000004
+    ],
+    [
+     32026,
+     3211.6000000000004
+    ],
+    [
+     34985,
+     3208.4
+    ],
+    [
+     37341,
+     3205
+    ],
+    [
+     41701,
+     3201.8
+    ],
+    [
+     44256,
+     3200.2000000000003
+    ],
+    [
+     49036,
+     3199.2000000000003
+    ]
+   ],
+   "voltas": 58,
+   "ms": 49058,
+   "relatos": 29,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12352458.859375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 3135340,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 26,
+    "iteracoes": 1656,
+    "movimentos": 17327,
+    "msAteCompressao": 41766.0371,
+    "msTotal": 49053.1097,
+    "segundosSeparando": 43.541433181613684,
+    "separacoes": 28,
+    "separacoesResolvidas": 28,
+    "verticesColisao": 1538,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "s01",
+   "semente": 7920,
+   "inicial": 3242.4,
+   "final": 3173.6,
+   "curva": [
+    [
+     4141,
+     3239.2
+    ],
+    [
+     4579,
+     3236
+    ],
+    [
+     4709,
+     3232.8
+    ],
+    [
+     5072,
+     3229.6
+    ],
+    [
+     5472,
+     3226.4
+    ],
+    [
+     5619,
+     3223
+    ],
+    [
+     6262,
+     3219.8
+    ],
+    [
+     6571,
+     3216.6
+    ],
+    [
+     6668,
+     3213.4
+    ],
+    [
+     6751,
+     3210.2
+    ],
+    [
+     6883,
+     3207
+    ],
+    [
+     7292,
+     3203.8
+    ],
+    [
+     7597,
+     3200.4
+    ],
+    [
+     9113,
+     3197.2
+    ],
+    [
+     12551,
+     3194
+    ],
+    [
+     12756,
+     3190.8
+    ],
+    [
+     13592,
+     3187.6
+    ],
+    [
+     13743,
+     3184.4
+    ],
+    [
+     14562,
+     3181.2
+    ],
+    [
+     15605,
+     3178
+    ],
+    [
+     32992,
+     3175.2
+    ],
+    [
+     41953,
+     3173.6
+    ]
+   ],
+   "voltas": 66,
+   "ms": 45513,
+   "relatos": 29,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12060754.663085938,
+    "areaOriginal": 11946900,
+    "avaliacoes": 6925158,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 27,
+    "iteracoes": 3404,
+    "movimentos": 37754,
+    "msAteCompressao": 40822.6086,
+    "msTotal": 45507.1235,
+    "segundosSeparando": 43.38198437541723,
+    "separacoes": 30,
+    "separacoesResolvidas": 28,
+    "verticesColisao": 131,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "q6",
+   "semente": 7920,
+   "inicial": 3242.4,
+   "final": 3199,
+   "curva": [
+    [
+     7756,
+     3242
+    ],
+    [
+     8158,
+     3238.8
+    ],
+    [
+     9282,
+     3235.6
+    ],
+    [
+     10327,
+     3232.4
+    ],
+    [
+     13528,
+     3229.2
+    ],
+    [
+     15563,
+     3225.8
+    ],
+    [
+     16153,
+     3222.6
+    ],
+    [
+     18643,
+     3219.4
+    ],
+    [
+     20368,
+     3216.2
+    ],
+    [
+     24928,
+     3213.4
+    ],
+    [
+     30098,
+     3210.2000000000003
+    ],
+    [
+     33319,
+     3207
+    ],
+    [
+     35575,
+     3203.8
+    ],
+    [
+     43858,
+     3200.6000000000004
+    ],
+    [
+     45219,
+     3199
+    ]
+   ],
+   "voltas": 42,
+   "ms": 45226,
+   "relatos": 21,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11960595.776367188,
+    "areaOriginal": 11946900,
+    "avaliacoes": 2347408,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 19,
+    "iteracoes": 1286,
+    "movimentos": 13010,
+    "msAteCompressao": 43888.8702,
+    "msTotal": 45220.432,
+    "segundosSeparando": 42.623635679483414,
+    "separacoes": 20,
+    "separacoesResolvidas": 20,
+    "verticesColisao": 732,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "s003",
+   "semente": 7920,
+   "inicial": 3242.4,
+   "final": 3192.6,
+   "curva": [
+    [
+     8025,
+     3239.2
+    ],
+    [
+     9084,
+     3236
+    ],
+    [
+     10074,
+     3232.8
+    ],
+    [
+     13726,
+     3229.6
+    ],
+    [
+     14361,
+     3226.4
+    ],
+    [
+     15251,
+     3223.2
+    ],
+    [
+     16143,
+     3219.8
+    ],
+    [
+     17039,
+     3216.6
+    ],
+    [
+     18166,
+     3213.4
+    ],
+    [
+     19258,
+     3210.2
+    ],
+    [
+     22372,
+     3207
+    ],
+    [
+     27696,
+     3203.8
+    ],
+    [
+     37060,
+     3200.6
+    ],
+    [
+     38644,
+     3197.4
+    ],
+    [
+     42947,
+     3195.8
+    ],
+    [
+     43174,
+     3195
+    ],
+    [
+     43243,
+     3194.2
+    ],
+    [
+     43520,
+     3193.4
+    ],
+    [
+     43831,
+     3192.6
+    ]
+   ],
+   "voltas": 55,
+   "ms": 47747,
+   "relatos": 26,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11985965.112304688,
+    "areaOriginal": 11946900,
+    "avaliacoes": 2716538,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 20,
+    "iteracoes": 1521,
+    "movimentos": 15043,
+    "msAteCompressao": 38652.0879,
+    "msTotal": 47741.2221,
+    "segundosSeparando": 45.104289112612605,
+    "separacoes": 26,
+    "separacoesResolvidas": 25,
+    "verticesColisao": 409,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "base",
+   "semente": 7920,
+   "inicial": 3242.4,
+   "final": 3210.2000000000003,
+   "curva": [
+    [
+     8923,
+     3242
+    ],
+    [
+     9313,
+     3238.8
+    ],
+    [
+     10536,
+     3235.6
+    ],
+    [
+     12202,
+     3232.4
+    ],
+    [
+     16295,
+     3229.2
+    ],
+    [
+     19102,
+     3225.8
+    ],
+    [
+     19771,
+     3222.6
+    ],
+    [
+     23101,
+     3219.4
+    ],
+    [
+     25338,
+     3216.2
+    ],
+    [
+     33251,
+     3213.4
+    ],
+    [
+     41190,
+     3210.2000000000003
+    ]
+   ],
+   "voltas": 36,
+   "ms": 49904,
+   "relatos": 17,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11960595.776367188,
+    "areaOriginal": 11946900,
+    "avaliacoes": 1917626,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 16,
+    "iteracoes": 1058,
+    "movimentos": 10618,
+    "msAteCompressao": 41216.2584,
+    "msTotal": 49898.2995,
+    "segundosSeparando": 47.5208438038826,
+    "separacoes": 17,
+    "separacoesResolvidas": 16,
+    "verticesColisao": 732,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "q8",
+   "semente": 7920,
+   "inicial": 3242.4,
+   "final": 3197.6000000000004,
+   "curva": [
+    [
+     7588,
+     3242
+    ],
+    [
+     7891,
+     3238.8
+    ],
+    [
+     8871,
+     3235.6
+    ],
+    [
+     9806,
+     3232.4
+    ],
+    [
+     12845,
+     3229.2
+    ],
+    [
+     15028,
+     3225.8
+    ],
+    [
+     15714,
+     3222.6
+    ],
+    [
+     17905,
+     3219.4
+    ],
+    [
+     19672,
+     3216.2
+    ],
+    [
+     24244,
+     3213.4
+    ],
+    [
+     29607,
+     3210.2000000000003
+    ],
+    [
+     32839,
+     3207
+    ],
+    [
+     34852,
+     3203.8
+    ],
+    [
+     42224,
+     3200.6000000000004
+    ],
+    [
+     43478,
+     3199
+    ],
+    [
+     46168,
+     3197.6000000000004
+    ]
+   ],
+   "voltas": 44,
+   "ms": 46189,
+   "relatos": 22,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11960595.776367188,
+    "areaOriginal": 11946900,
+    "avaliacoes": 2466488,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 19,
+    "iteracoes": 1362,
+    "movimentos": 13664,
+    "msAteCompressao": 42254.7336,
+    "msTotal": 46183.417,
+    "segundosSeparando": 42.79001125693321,
+    "separacoes": 21,
+    "separacoesResolvidas": 21,
+    "verticesColisao": 732,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "base",
+   "semente": 7920,
+   "inicial": 361,
+   "final": 343.5,
+   "curva": [
+    [
+     1041,
+     360.5
+    ],
+    [
+     1091,
+     360
+    ],
+    [
+     1254,
+     359.5
+    ],
+    [
+     1542,
+     359
+    ],
+    [
+     1594,
+     358.5
+    ],
+    [
+     1811,
+     358
+    ],
+    [
+     1835,
+     357.5
+    ],
+    [
+     1870,
+     357
+    ],
+    [
+     1941,
+     356.5
+    ],
+    [
+     2444,
+     356
+    ],
+    [
+     5391,
+     355.5
+    ],
+    [
+     5417,
+     355
+    ],
+    [
+     5466,
+     354.5
+    ],
+    [
+     5503,
+     354
+    ],
+    [
+     5553,
+     353.5
+    ],
+    [
+     6716,
+     353
+    ],
+    [
+     6738,
+     352.5
+    ],
+    [
+     6752,
+     352
+    ],
+    [
+     6906,
+     351.5
+    ],
+    [
+     9446,
+     351
+    ],
+    [
+     14441,
+     350
+    ],
+    [
+     14586,
+     349.5
+    ],
+    [
+     15498,
+     349
+    ],
+    [
+     19639,
+     348.5
+    ],
+    [
+     26860,
+     347.5
+    ],
+    [
+     27072,
+     347
+    ],
+    [
+     27159,
+     346.5
+    ],
+    [
+     29101,
+     346
+    ],
+    [
+     29214,
+     345.5
+    ],
+    [
+     29694,
+     345
+    ],
+    [
+     30576,
+     344.5
+    ],
+    [
+     31155,
+     344
+    ],
+    [
+     39186,
+     343.5
+    ]
+   ],
+   "voltas": 129,
+   "ms": 46645,
+   "relatos": 59,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 188768.2333984375,
+    "areaOriginal": 188536,
+    "avaliacoes": 6348470,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 56,
+    "iteracoes": 4357,
+    "movimentos": 33791,
+    "msAteCompressao": 39188.7583,
+    "msTotal": 46644.4523,
+    "segundosSeparando": 46.1345798894763,
+    "separacoes": 59,
+    "separacoesResolvidas": 58,
+    "verticesColisao": 235,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "s003",
+   "semente": 7920,
+   "inicial": 361,
+   "final": 340,
+   "curva": [
+    [
+     620,
+     360.5
+    ],
+    [
+     680,
+     360
+    ],
+    [
+     1016,
+     359.5
+    ],
+    [
+     1197,
+     359
+    ],
+    [
+     1542,
+     358.5
+    ],
+    [
+     2141,
+     358
+    ],
+    [
+     2244,
+     357.5
+    ],
+    [
+     2286,
+     357
+    ],
+    [
+     2471,
+     356.5
+    ],
+    [
+     2595,
+     356
+    ],
+    [
+     2812,
+     355.5
+    ],
+    [
+     2850,
+     355
+    ],
+    [
+     2944,
+     354.5
+    ],
+    [
+     3001,
+     354
+    ],
+    [
+     3075,
+     353.5
+    ],
+    [
+     3356,
+     353
+    ],
+    [
+     3945,
+     352.5
+    ],
+    [
+     4024,
+     352
+    ],
+    [
+     4404,
+     351.5
+    ],
+    [
+     4492,
+     351
+    ],
+    [
+     4937,
+     350.5
+    ],
+    [
+     5653,
+     350
+    ],
+    [
+     6375,
+     349.5
+    ],
+    [
+     6549,
+     347.5
+    ],
+    [
+     6662,
+     347
+    ],
+    [
+     8054,
+     346.5
+    ],
+    [
+     9359,
+     346
+    ],
+    [
+     9409,
+     345.5
+    ],
+    [
+     9464,
+     345
+    ],
+    [
+     9597,
+     344.5
+    ],
+    [
+     11412,
+     344
+    ],
+    [
+     11567,
+     343.5
+    ],
+    [
+     11743,
+     343
+    ],
+    [
+     11951,
+     342.5
+    ],
+    [
+     12012,
+     342
+    ],
+    [
+     12635,
+     341.5
+    ],
+    [
+     18690,
+     341
+    ],
+    [
+     42830,
+     340.5
+    ],
+    [
+     43190,
+     340
+    ]
+   ],
+   "voltas": 173,
+   "ms": 46541,
+   "relatos": 78,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 189160.9052734375,
+    "areaOriginal": 188536,
+    "avaliacoes": 6833444,
+    "encolhidasNaCompressao": 14,
+    "encolhidasNaExploracao": 63,
+    "iteracoes": 4602,
+    "movimentos": 36490,
+    "msAteCompressao": 37659.4408,
+    "msTotal": 46540.4111,
+    "segundosSeparando": 45.87251683929935,
+    "separacoes": 80,
+    "separacoesResolvidas": 77,
+    "verticesColisao": 195,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "s01",
+   "semente": 7920,
+   "inicial": 361,
+   "final": 347,
+   "curva": [
+    [
+     1114,
+     360.5
+    ],
+    [
+     1123,
+     360
+    ],
+    [
+     1131,
+     359.5
+    ],
+    [
+     1160,
+     359
+    ],
+    [
+     1294,
+     358.5
+    ],
+    [
+     1370,
+     358
+    ],
+    [
+     1459,
+     357.5
+    ],
+    [
+     1493,
+     357
+    ],
+    [
+     1565,
+     356.5
+    ],
+    [
+     1583,
+     356
+    ],
+    [
+     1600,
+     355.5
+    ],
+    [
+     1924,
+     355
+    ],
+    [
+     2680,
+     354.5
+    ],
+    [
+     2764,
+     354
+    ],
+    [
+     2956,
+     353.5
+    ],
+    [
+     3821,
+     353
+    ],
+    [
+     3862,
+     352.5
+    ],
+    [
+     4388,
+     352
+    ],
+    [
+     5855,
+     351.5
+    ],
+    [
+     8762,
+     351
+    ],
+    [
+     9984,
+     350.5
+    ],
+    [
+     10004,
+     350
+    ],
+    [
+     11510,
+     349.5
+    ],
+    [
+     11518,
+     349
+    ],
+    [
+     11587,
+     348.5
+    ],
+    [
+     11653,
+     348
+    ],
+    [
+     12494,
+     347.5
+    ],
+    [
+     38450,
+     347
+    ]
+   ],
+   "voltas": 126,
+   "ms": 45573,
+   "relatos": 49,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 190572.3349609375,
+    "areaOriginal": 188536,
+    "avaliacoes": 7815354,
+    "encolhidasNaCompressao": 3,
+    "encolhidasNaExploracao": 45,
+    "iteracoes": 5667,
+    "movimentos": 41996,
+    "msAteCompressao": 38418.828499999996,
+    "msTotal": 45572.2507,
+    "segundosSeparando": 45.17171283764765,
+    "separacoes": 52,
+    "separacoesResolvidas": 48,
+    "verticesColisao": 127,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "q6",
+   "semente": 7920,
+   "inicial": 361,
+   "final": 343.5,
+   "curva": [
+    [
+     1192,
+     360.5
+    ],
+    [
+     1261,
+     360
+    ],
+    [
+     1456,
+     359.5
+    ],
+    [
+     1761,
+     359
+    ],
+    [
+     1821,
+     358.5
+    ],
+    [
+     2000,
+     358
+    ],
+    [
+     2033,
+     357.5
+    ],
+    [
+     2078,
+     357
+    ],
+    [
+     2202,
+     356.5
+    ],
+    [
+     2771,
+     356
+    ],
+    [
+     5716,
+     355.5
+    ],
+    [
+     5734,
+     355
+    ],
+    [
+     5789,
+     354.5
+    ],
+    [
+     5842,
+     354
+    ],
+    [
+     5888,
+     353.5
+    ],
+    [
+     7148,
+     353
+    ],
+    [
+     7167,
+     352.5
+    ],
+    [
+     7186,
+     352
+    ],
+    [
+     7364,
+     351.5
+    ],
+    [
+     9892,
+     351
+    ],
+    [
+     14210,
+     350
+    ],
+    [
+     14364,
+     349.5
+    ],
+    [
+     15231,
+     349
+    ],
+    [
+     20402,
+     348.5
+    ],
+    [
+     28394,
+     347.5
+    ],
+    [
+     28555,
+     347
+    ],
+    [
+     28623,
+     346.5
+    ],
+    [
+     30538,
+     346
+    ],
+    [
+     30623,
+     345.5
+    ],
+    [
+     31091,
+     345
+    ],
+    [
+     31967,
+     344.5
+    ],
+    [
+     32519,
+     344
+    ],
+    [
+     40343,
+     343.5
+    ]
+   ],
+   "voltas": 126,
+   "ms": 45736,
+   "relatos": 57,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 188768.2333984375,
+    "areaOriginal": 188536,
+    "avaliacoes": 5798044,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 55,
+    "iteracoes": 4008,
+    "movimentos": 30811,
+    "msAteCompressao": 37124.2606,
+    "msTotal": 45734.705,
+    "segundosSeparando": 44.96009101718664,
+    "separacoes": 58,
+    "separacoesResolvidas": 56,
+    "verticesColisao": 235,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "q8",
+   "semente": 7920,
+   "inicial": 361,
+   "final": 343.5,
+   "curva": [
+    [
+     1493,
+     360.5
+    ],
+    [
+     1630,
+     360
+    ],
+    [
+     1967,
+     359.5
+    ],
+    [
+     2455,
+     359
+    ],
+    [
+     2588,
+     358.5
+    ],
+    [
+     2912,
+     358
+    ],
+    [
+     2988,
+     357.5
+    ],
+    [
+     3064,
+     357
+    ],
+    [
+     3236,
+     356.5
+    ],
+    [
+     4055,
+     356
+    ],
+    [
+     7686,
+     355.5
+    ],
+    [
+     7740,
+     355
+    ],
+    [
+     7853,
+     354.5
+    ],
+    [
+     7962,
+     354
+    ],
+    [
+     8057,
+     353.5
+    ],
+    [
+     9600,
+     353
+    ],
+    [
+     9653,
+     352.5
+    ],
+    [
+     9687,
+     352
+    ],
+    [
+     9956,
+     351.5
+    ],
+    [
+     13615,
+     351
+    ],
+    [
+     19769,
+     350
+    ],
+    [
+     19920,
+     349.5
+    ],
+    [
+     20968,
+     349
+    ],
+    [
+     26324,
+     348.5
+    ],
+    [
+     35932,
+     347.5
+    ],
+    [
+     36182,
+     347
+    ],
+    [
+     36270,
+     346.5
+    ],
+    [
+     36782,
+     346
+    ],
+    [
+     37534,
+     345.5
+    ],
+    [
+     38887,
+     345
+    ],
+    [
+     39444,
+     344.5
+    ],
+    [
+     40824,
+     344
+    ],
+    [
+     41420,
+     343.5
+    ]
+   ],
+   "voltas": 169,
+   "ms": 45157,
+   "relatos": 82,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 188768.2333984375,
+    "areaOriginal": 188536,
+    "avaliacoes": 4492150,
+    "encolhidasNaCompressao": 35,
+    "encolhidasNaExploracao": 46,
+    "iteracoes": 3221,
+    "movimentos": 23848,
+    "msAteCompressao": 36291.6585,
+    "msTotal": 45155.599700000006,
+    "segundosSeparando": 41.820680981036276,
+    "separacoes": 81,
+    "separacoesResolvidas": 81,
+    "verticesColisao": 235,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "base",
+   "semente": 7920,
+   "inicial": 350.5,
+   "final": 338,
+   "curva": [
+    [
+     1694,
+     350
+    ],
+    [
+     1835,
+     349.5
+    ],
+    [
+     1878,
+     349
+    ],
+    [
+     1895,
+     348.5
+    ],
+    [
+     1958,
+     348
+    ],
+    [
+     2147,
+     347.5
+    ],
+    [
+     2177,
+     347
+    ],
+    [
+     2218,
+     346.5
+    ],
+    [
+     2317,
+     346
+    ],
+    [
+     2501,
+     345.5
+    ],
+    [
+     2681,
+     345
+    ],
+    [
+     2750,
+     344.5
+    ],
+    [
+     2799,
+     344
+    ],
+    [
+     2990,
+     343.5
+    ],
+    [
+     3411,
+     343
+    ],
+    [
+     3430,
+     342.5
+    ],
+    [
+     3780,
+     342
+    ],
+    [
+     3911,
+     341.5
+    ],
+    [
+     4113,
+     341
+    ],
+    [
+     4593,
+     340.5
+    ],
+    [
+     5727,
+     340
+    ],
+    [
+     5770,
+     339.5
+    ],
+    [
+     7714,
+     339
+    ],
+    [
+     7726,
+     338.5
+    ],
+    [
+     7785,
+     338
+    ]
+   ],
+   "voltas": 108,
+   "ms": 45601,
+   "relatos": 45,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 179953.5927734375,
+    "areaOriginal": 179728,
+    "avaliacoes": 5468470,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 43,
+    "iteracoes": 3660,
+    "movimentos": 29554,
+    "msAteCompressao": 40847.8261,
+    "msTotal": 45585.8122,
+    "segundosSeparando": 45.007747461088,
+    "separacoes": 47,
+    "separacoesResolvidas": 44,
+    "verticesColisao": 309,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "s003",
+   "semente": 7920,
+   "inicial": 350.5,
+   "final": 334,
+   "curva": [
+    [
+     742,
+     350
+    ],
+    [
+     767,
+     349.5
+    ],
+    [
+     1045,
+     349
+    ],
+    [
+     1110,
+     348
+    ],
+    [
+     1614,
+     347.5
+    ],
+    [
+     1974,
+     347
+    ],
+    [
+     2209,
+     346.5
+    ],
+    [
+     2241,
+     346
+    ],
+    [
+     3197,
+     345.5
+    ],
+    [
+     3847,
+     345
+    ],
+    [
+     4170,
+     344.5
+    ],
+    [
+     4197,
+     344
+    ],
+    [
+     8065,
+     343.5
+    ],
+    [
+     8099,
+     343
+    ],
+    [
+     8136,
+     342.5
+    ],
+    [
+     8229,
+     342
+    ],
+    [
+     9072,
+     341.5
+    ],
+    [
+     11346,
+     341
+    ],
+    [
+     11381,
+     340.5
+    ],
+    [
+     13326,
+     340
+    ],
+    [
+     13893,
+     339.5
+    ],
+    [
+     13973,
+     339
+    ],
+    [
+     16163,
+     338.5
+    ],
+    [
+     16272,
+     338
+    ],
+    [
+     16279,
+     337.5
+    ],
+    [
+     17089,
+     337
+    ],
+    [
+     17138,
+     336.5
+    ],
+    [
+     17191,
+     336
+    ],
+    [
+     17266,
+     335.5
+    ],
+    [
+     17359,
+     335
+    ],
+    [
+     17506,
+     334.5
+    ],
+    [
+     37910,
+     334
+    ]
+   ],
+   "voltas": 130,
+   "ms": 45499,
+   "relatos": 57,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 180325.6083984375,
+    "areaOriginal": 179728,
+    "avaliacoes": 6368644,
+    "encolhidasNaCompressao": 3,
+    "encolhidasNaExploracao": 53,
+    "iteracoes": 4708,
+    "movimentos": 34095,
+    "msAteCompressao": 37365.880099999995,
+    "msTotal": 45483.9408,
+    "segundosSeparando": 44.879112099763006,
+    "separacoes": 58,
+    "separacoesResolvidas": 56,
+    "verticesColisao": 263,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "s01",
+   "semente": 7920,
+   "inicial": 350.5,
+   "final": 340.5,
+   "curva": [
+    [
+     2006,
+     350
+    ],
+    [
+     2030,
+     349.5
+    ],
+    [
+     2048,
+     349
+    ],
+    [
+     2092,
+     348.5
+    ],
+    [
+     3001,
+     348
+    ],
+    [
+     3262,
+     347.5
+    ],
+    [
+     3630,
+     347
+    ],
+    [
+     4408,
+     346.5
+    ],
+    [
+     4492,
+     346
+    ],
+    [
+     4798,
+     345.5
+    ],
+    [
+     5788,
+     345
+    ],
+    [
+     7630,
+     344.5
+    ],
+    [
+     7736,
+     344
+    ],
+    [
+     15514,
+     343.5
+    ],
+    [
+     15761,
+     343
+    ],
+    [
+     15842,
+     342.5
+    ],
+    [
+     18443,
+     342
+    ],
+    [
+     18465,
+     341.5
+    ],
+    [
+     18593,
+     341
+    ],
+    [
+     18662,
+     340.5
+    ]
+   ],
+   "voltas": 97,
+   "ms": 45156,
+   "relatos": 37,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 181719.0224609375,
+    "areaOriginal": 179728,
+    "avaliacoes": 8112652,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 35,
+    "iteracoes": 5328,
+    "movimentos": 43535,
+    "msAteCompressao": 39787.8185,
+    "msTotal": 45134.3033,
+    "segundosSeparando": 44.57861894927919,
+    "separacoes": 39,
+    "separacoesResolvidas": 36,
+    "verticesColisao": 183,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "q6",
+   "semente": 7920,
+   "inicial": 350.5,
+   "final": 337.5,
+   "curva": [
+    [
+     1909,
+     350
+    ],
+    [
+     2091,
+     349.5
+    ],
+    [
+     2151,
+     349
+    ],
+    [
+     2174,
+     348.5
+    ],
+    [
+     2245,
+     348
+    ],
+    [
+     2419,
+     347.5
+    ],
+    [
+     2459,
+     347
+    ],
+    [
+     2525,
+     346.5
+    ],
+    [
+     2651,
+     346
+    ],
+    [
+     2838,
+     345.5
+    ],
+    [
+     3079,
+     345
+    ],
+    [
+     3157,
+     344.5
+    ],
+    [
+     3213,
+     344
+    ],
+    [
+     3463,
+     343.5
+    ],
+    [
+     3806,
+     343
+    ],
+    [
+     3821,
+     342.5
+    ],
+    [
+     4084,
+     342
+    ],
+    [
+     4171,
+     341.5
+    ],
+    [
+     4378,
+     341
+    ],
+    [
+     4839,
+     340.5
+    ],
+    [
+     5948,
+     340
+    ],
+    [
+     5978,
+     339.5
+    ],
+    [
+     7885,
+     339
+    ],
+    [
+     7901,
+     338.5
+    ],
+    [
+     7983,
+     338
+    ],
+    [
+     44664,
+     337.5
+    ]
+   ],
+   "voltas": 115,
+   "ms": 46204,
+   "relatos": 47,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 179953.5927734375,
+    "areaOriginal": 179728,
+    "avaliacoes": 5253120,
+    "encolhidasNaCompressao": 3,
+    "encolhidasNaExploracao": 43,
+    "iteracoes": 3609,
+    "movimentos": 28389,
+    "msAteCompressao": 37944.1838,
+    "msTotal": 46189.3948,
+    "segundosSeparando": 45.36365636436676,
+    "separacoes": 50,
+    "separacoesResolvidas": 46,
+    "verticesColisao": 309,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "q8",
+   "semente": 7920,
+   "inicial": 350.5,
+   "final": 338,
+   "curva": [
+    [
+     2246,
+     350
+    ],
+    [
+     2540,
+     349.5
+    ],
+    [
+     2691,
+     349
+    ],
+    [
+     2725,
+     348.5
+    ],
+    [
+     2808,
+     348
+    ],
+    [
+     3038,
+     347.5
+    ],
+    [
+     3117,
+     347
+    ],
+    [
+     3228,
+     346.5
+    ],
+    [
+     3415,
+     346
+    ],
+    [
+     3783,
+     345.5
+    ],
+    [
+     4177,
+     345
+    ],
+    [
+     4373,
+     344.5
+    ],
+    [
+     4539,
+     344
+    ],
+    [
+     4880,
+     343.5
+    ],
+    [
+     5402,
+     343
+    ],
+    [
+     5433,
+     342.5
+    ],
+    [
+     5842,
+     342
+    ],
+    [
+     6033,
+     341.5
+    ],
+    [
+     6331,
+     341
+    ],
+    [
+     6901,
+     340.5
+    ],
+    [
+     8424,
+     340
+    ],
+    [
+     8481,
+     339.5
+    ],
+    [
+     11319,
+     339
+    ],
+    [
+     11378,
+     338.5
+    ],
+    [
+     11553,
+     338
+    ]
+   ],
+   "voltas": 97,
+   "ms": 48479,
+   "relatos": 44,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 179953.5927734375,
+    "areaOriginal": 179728,
+    "avaliacoes": 4071658,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 43,
+    "iteracoes": 2667,
+    "movimentos": 22004,
+    "msAteCompressao": 48434.8668,
+    "msTotal": 48463.784,
+    "segundosSeparando": 46.86500323098153,
+    "separacoes": 45,
+    "separacoesResolvidas": 43,
+    "verticesColisao": 309,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "s003",
+   "semente": 7920,
+   "inicial": 642.6,
+   "final": 629,
+   "curva": [
+    [
+     3195,
+     642.2
+    ],
+    [
+     3618,
+     641.4000000000001
+    ],
+    [
+     4038,
+     640.8000000000001
+    ],
+    [
+     4220,
+     640.2
+    ],
+    [
+     4873,
+     639.6
+    ],
+    [
+     5448,
+     639
+    ],
+    [
+     6109,
+     638.2
+    ],
+    [
+     6780,
+     637.6
+    ],
+    [
+     8999,
+     637
+    ],
+    [
+     9157,
+     636.4000000000001
+    ],
+    [
+     9588,
+     635.8000000000001
+    ],
+    [
+     10007,
+     635
+    ],
+    [
+     10818,
+     634.4000000000001
+    ],
+    [
+     11094,
+     633.8000000000001
+    ],
+    [
+     11169,
+     633.2
+    ],
+    [
+     12058,
+     632.6
+    ],
+    [
+     13332,
+     632
+    ],
+    [
+     14367,
+     631.2
+    ],
+    [
+     15383,
+     630.6
+    ],
+    [
+     17149,
+     630
+    ],
+    [
+     17706,
+     629.4000000000001
+    ],
+    [
+     40243,
+     629
+    ]
+   ],
+   "voltas": 66,
+   "ms": 45791,
+   "relatos": 29,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2232748.09375,
+    "areaOriginal": 2225392,
+    "avaliacoes": 3272548,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 27,
+    "iteracoes": 2120,
+    "movimentos": 17866,
+    "msAteCompressao": 37751.8764,
+    "msTotal": 45789.3556,
+    "segundosSeparando": 44.300923727452755,
+    "separacoes": 30,
+    "separacoesResolvidas": 28,
+    "verticesColisao": 371,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "s01",
+   "semente": 7920,
+   "inicial": 642.6,
+   "final": 623.8000000000001,
+   "curva": [
+    [
+     2420,
+     642.2
+    ],
+    [
+     2796,
+     641.4000000000001
+    ],
+    [
+     3633,
+     640.8000000000001
+    ],
+    [
+     5162,
+     640.2
+    ],
+    [
+     5370,
+     639.6
+    ],
+    [
+     5646,
+     639
+    ],
+    [
+     5723,
+     638.2
+    ],
+    [
+     6064,
+     637.6
+    ],
+    [
+     6289,
+     637
+    ],
+    [
+     6484,
+     636.4
+    ],
+    [
+     6709,
+     635.8
+    ],
+    [
+     7650,
+     635
+    ],
+    [
+     16700,
+     634.4000000000001
+    ],
+    [
+     19188,
+     633.8000000000001
+    ],
+    [
+     19226,
+     633.2
+    ],
+    [
+     19288,
+     632.6
+    ],
+    [
+     19359,
+     632
+    ],
+    [
+     19530,
+     631.2
+    ],
+    [
+     19659,
+     630.6
+    ],
+    [
+     19867,
+     630
+    ],
+    [
+     20537,
+     629.4000000000001
+    ],
+    [
+     20894,
+     628.8000000000001
+    ],
+    [
+     25434,
+     628.2
+    ],
+    [
+     30445,
+     627.6
+    ],
+    [
+     32204,
+     626.8000000000001
+    ],
+    [
+     34033,
+     626.2
+    ],
+    [
+     34307,
+     625.6
+    ],
+    [
+     34730,
+     625
+    ],
+    [
+     35568,
+     624.4000000000001
+    ],
+    [
+     36057,
+     623.8000000000001
+    ]
+   ],
+   "voltas": 84,
+   "ms": 45743,
+   "relatos": 37,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2249655.921875,
+    "areaOriginal": 2225392,
+    "avaliacoes": 6167260,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 36,
+    "iteracoes": 3584,
+    "movimentos": 33303,
+    "msAteCompressao": 42500.7132,
+    "msTotal": 45740.3597,
+    "segundosSeparando": 44.39891628641635,
+    "separacoes": 38,
+    "separacoesResolvidas": 36,
+    "verticesColisao": 204,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "q6",
+   "semente": 7920,
+   "inicial": 642.6,
+   "final": 623.4000000000001,
+   "curva": [
+    [
+     3161,
+     642.2
+    ],
+    [
+     3639,
+     641.4000000000001
+    ],
+    [
+     3986,
+     640.8000000000001
+    ],
+    [
+     4599,
+     640.2
+    ],
+    [
+     5552,
+     639.6
+    ],
+    [
+     10478,
+     639
+    ],
+    [
+     11050,
+     638.2
+    ],
+    [
+     12485,
+     637.6
+    ],
+    [
+     12563,
+     637
+    ],
+    [
+     12600,
+     636.4000000000001
+    ],
+    [
+     12728,
+     635.8000000000001
+    ],
+    [
+     13626,
+     635
+    ],
+    [
+     13785,
+     634.4000000000001
+    ],
+    [
+     14228,
+     633.8000000000001
+    ],
+    [
+     14351,
+     633.2
+    ],
+    [
+     14673,
+     632.6
+    ],
+    [
+     15578,
+     632
+    ],
+    [
+     20787,
+     631.2
+    ],
+    [
+     21278,
+     630.6
+    ],
+    [
+     21363,
+     630
+    ],
+    [
+     21659,
+     629.4000000000001
+    ],
+    [
+     22369,
+     628.8000000000001
+    ],
+    [
+     22661,
+     628.2
+    ],
+    [
+     23673,
+     627.6
+    ],
+    [
+     23836,
+     626.8000000000001
+    ],
+    [
+     24266,
+     626.2
+    ],
+    [
+     24812,
+     625.6
+    ],
+    [
+     25100,
+     625
+    ],
+    [
+     25994,
+     624.4000000000001
+    ],
+    [
+     27074,
+     623.8000000000001
+    ],
+    [
+     40888,
+     623.4000000000001
+    ]
+   ],
+   "voltas": 81,
+   "ms": 45647,
+   "relatos": 38,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2228036.28125,
+    "areaOriginal": 2225392,
+    "avaliacoes": 2815374,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 36,
+    "iteracoes": 1724,
+    "movimentos": 15247,
+    "msAteCompressao": 39860.8659,
+    "msTotal": 45644.604100000004,
+    "segundosSeparando": 43.95833950303495,
+    "separacoes": 39,
+    "separacoesResolvidas": 37,
+    "verticesColisao": 495,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "base",
+   "semente": 7920,
+   "inicial": 642.6,
+   "final": 623.4000000000001,
+   "curva": [
+    [
+     3656,
+     642.2
+    ],
+    [
+     4193,
+     641.4000000000001
+    ],
+    [
+     4614,
+     640.8000000000001
+    ],
+    [
+     5253,
+     640.2
+    ],
+    [
+     6184,
+     639.6
+    ],
+    [
+     10258,
+     639
+    ],
+    [
+     10726,
+     638.2
+    ],
+    [
+     12529,
+     637.6
+    ],
+    [
+     12611,
+     637
+    ],
+    [
+     12658,
+     636.4000000000001
+    ],
+    [
+     12783,
+     635.8000000000001
+    ],
+    [
+     13816,
+     635
+    ],
+    [
+     14004,
+     634.4000000000001
+    ],
+    [
+     14341,
+     633.8000000000001
+    ],
+    [
+     14500,
+     633.2
+    ],
+    [
+     14992,
+     632.6
+    ],
+    [
+     15945,
+     632
+    ],
+    [
+     22654,
+     631.2
+    ],
+    [
+     23186,
+     630.6
+    ],
+    [
+     23278,
+     630
+    ],
+    [
+     23563,
+     629.4000000000001
+    ],
+    [
+     24335,
+     628.8000000000001
+    ],
+    [
+     24651,
+     628.2
+    ],
+    [
+     25544,
+     627.6
+    ],
+    [
+     25678,
+     626.8000000000001
+    ],
+    [
+     26135,
+     626.2
+    ],
+    [
+     26579,
+     625.6
+    ],
+    [
+     26892,
+     625
+    ],
+    [
+     28094,
+     624.4000000000001
+    ],
+    [
+     29631,
+     623.8000000000001
+    ],
+    [
+     44276,
+     623.4000000000001
+    ]
+   ],
+   "voltas": 81,
+   "ms": 51142,
+   "relatos": 38,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2228036.28125,
+    "areaOriginal": 2225392,
+    "avaliacoes": 2848322,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 36,
+    "iteracoes": 1799,
+    "movimentos": 15441,
+    "msAteCompressao": 43130.4208,
+    "msTotal": 51140.2839,
+    "segundosSeparando": 49.263403192162514,
+    "separacoes": 39,
+    "separacoesResolvidas": 37,
+    "verticesColisao": 495,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "q8",
+   "semente": 7920,
+   "inicial": 642.6,
+   "final": 623.4000000000001,
+   "curva": [
+    [
+     4043,
+     642.2
+    ],
+    [
+     4660,
+     641.4000000000001
+    ],
+    [
+     5139,
+     640.8000000000001
+    ],
+    [
+     5775,
+     640.2
+    ],
+    [
+     6719,
+     639.6
+    ],
+    [
+     11279,
+     639
+    ],
+    [
+     11853,
+     638.2
+    ],
+    [
+     13756,
+     637.6
+    ],
+    [
+     13852,
+     637
+    ],
+    [
+     13951,
+     636.4000000000001
+    ],
+    [
+     14138,
+     635.8000000000001
+    ],
+    [
+     15395,
+     635
+    ],
+    [
+     15606,
+     634.4000000000001
+    ],
+    [
+     15980,
+     633.8000000000001
+    ],
+    [
+     16224,
+     633.2
+    ],
+    [
+     16791,
+     632.6
+    ],
+    [
+     17995,
+     632
+    ],
+    [
+     24280,
+     631.2
+    ],
+    [
+     24842,
+     630.6
+    ],
+    [
+     24961,
+     630
+    ],
+    [
+     25241,
+     629.4000000000001
+    ],
+    [
+     25767,
+     628.8000000000001
+    ],
+    [
+     26078,
+     628.2
+    ],
+    [
+     27246,
+     627.6
+    ],
+    [
+     27496,
+     626.8000000000001
+    ],
+    [
+     28175,
+     626.2
+    ],
+    [
+     28718,
+     625.6
+    ],
+    [
+     29080,
+     625
+    ],
+    [
+     30092,
+     624.4000000000001
+    ],
+    [
+     31626,
+     623.8000000000001
+    ],
+    [
+     46071,
+     623.4000000000001
+    ]
+   ],
+   "voltas": 79,
+   "ms": 46107,
+   "relatos": 38,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2228036.28125,
+    "areaOriginal": 2225392,
+    "avaliacoes": 2506384,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 36,
+    "iteracoes": 1617,
+    "movimentos": 13593,
+    "msAteCompressao": 44813.525499999996,
+    "msTotal": 46104.9016,
+    "segundosSeparando": 43.266126956790686,
+    "separacoes": 38,
+    "separacoesResolvidas": 37,
+    "verticesColisao": 495,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "base",
+   "semente": 7920,
+   "inicial": 225.5,
+   "final": 224,
+   "curva": [
+    [
+     454,
+     225
+    ],
+    [
+     2403,
+     224.5
+    ],
+    [
+     37518,
+     224
+    ]
+   ],
+   "voltas": 99,
+   "ms": 45128,
+   "relatos": 19,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122642.263671875,
+    "areaOriginal": 122496,
+    "avaliacoes": 10269939,
+    "encolhidasNaCompressao": 7,
+    "encolhidasNaExploracao": 11,
+    "iteracoes": 9875,
+    "movimentos": 55805,
+    "msAteCompressao": 36915.697100000005,
+    "msTotal": 45128.1178,
+    "segundosSeparando": 44.964691827539355,
+    "separacoes": 29,
+    "separacoesResolvidas": 18,
+    "verticesColisao": 103,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "s003",
+   "semente": 7920,
+   "inicial": 225.5,
+   "final": 225,
+   "curva": [
+    [
+     8157,
+     225
+    ]
+   ],
+   "voltas": 79,
+   "ms": 45080,
+   "relatos": 11,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122914.248046875,
+    "areaOriginal": 122496,
+    "avaliacoes": 11745402,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 9,
+    "iteracoes": 8887,
+    "movimentos": 64822,
+    "msAteCompressao": 37265.1427,
+    "msTotal": 45079.5146,
+    "segundosSeparando": 44.96562428938432,
+    "separacoes": 18,
+    "separacoesResolvidas": 10,
+    "verticesColisao": 84,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "s01",
+   "semente": 7920,
+   "inicial": 225.5,
+   "final": 225,
+   "curva": [
+    [
+     22843,
+     225
+    ]
+   ],
+   "voltas": 108,
+   "ms": 45205,
+   "relatos": 12,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 123811.240234375,
+    "areaOriginal": 122496,
+    "avaliacoes": 15550122,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 9,
+    "iteracoes": 13326,
+    "movimentos": 85518,
+    "msAteCompressao": 36351.6256,
+    "msTotal": 45204.2599,
+    "segundosSeparando": 45.10421407222748,
+    "separacoes": 24,
+    "separacoesResolvidas": 11,
+    "verticesColisao": 47,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "q6",
+   "semente": 7920,
+   "inicial": 225.5,
+   "final": 224,
+   "curva": [
+    [
+     582,
+     225
+    ],
+    [
+     3208,
+     224.5
+    ],
+    [
+     37828,
+     224
+    ]
+   ],
+   "voltas": 84,
+   "ms": 45168,
+   "relatos": 19,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122642.263671875,
+    "areaOriginal": 122496,
+    "avaliacoes": 9178406,
+    "encolhidasNaCompressao": 7,
+    "encolhidasNaExploracao": 11,
+    "iteracoes": 8181,
+    "movimentos": 50044,
+    "msAteCompressao": 37289.668300000005,
+    "msTotal": 45166.829,
+    "segundosSeparando": 44.912944913841784,
+    "separacoes": 27,
+    "separacoesResolvidas": 18,
+    "verticesColisao": 103,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "q8",
+   "semente": 7920,
+   "inicial": 225.5,
+   "final": 224,
+   "curva": [
+    [
+     749,
+     225
+    ],
+    [
+     3714,
+     224.5
+    ],
+    [
+     40053,
+     224
+    ]
+   ],
+   "voltas": 69,
+   "ms": 45402,
+   "relatos": 18,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122642.263671875,
+    "areaOriginal": 122496,
+    "avaliacoes": 6686344,
+    "encolhidasNaCompressao": 6,
+    "encolhidasNaExploracao": 11,
+    "iteracoes": 6075,
+    "movimentos": 36385,
+    "msAteCompressao": 39096.8906,
+    "msTotal": 45401.5117,
+    "segundosSeparando": 44.82709032855928,
+    "separacoes": 23,
+    "separacoesResolvidas": 17,
+    "verticesColisao": 103,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "s003",
+   "semente": 7920,
+   "inicial": 3266.6,
+   "final": 3197,
+   "curva": [
+    [
+     8901,
+     3266.4
+    ],
+    [
+     9068,
+     3263.2000000000003
+    ],
+    [
+     9537,
+     3260
+    ],
+    [
+     10013,
+     3256.6000000000004
+    ],
+    [
+     12009,
+     3253.4
+    ],
+    [
+     13236,
+     3250.4
+    ],
+    [
+     13471,
+     3247
+    ],
+    [
+     15402,
+     3243.8
+    ],
+    [
+     16283,
+     3240.6000000000004
+    ],
+    [
+     24566,
+     3237.4
+    ],
+    [
+     24735,
+     3234
+    ],
+    [
+     25199,
+     3230.8
+    ],
+    [
+     25932,
+     3227.6000000000004
+    ],
+    [
+     28429,
+     3224.4
+    ],
+    [
+     28630,
+     3221.2000000000003
+    ],
+    [
+     29262,
+     3218
+    ],
+    [
+     29498,
+     3214.8
+    ],
+    [
+     29731,
+     3211.6000000000004
+    ],
+    [
+     31406,
+     3208.4
+    ],
+    [
+     31725,
+     3205
+    ],
+    [
+     32731,
+     3201.8
+    ],
+    [
+     35336,
+     3198.6000000000004
+    ],
+    [
+     46812,
+     3197
+    ]
+   ],
+   "voltas": 61,
+   "ms": 46820,
+   "relatos": 29,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12378243.4140625,
+    "areaOriginal": 12338378,
+    "avaliacoes": 2951990,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 27,
+    "iteracoes": 1422,
+    "movimentos": 16127,
+    "msAteCompressao": 43108.339,
+    "msTotal": 46812.254799999995,
+    "segundosSeparando": 42.677268639206886,
+    "separacoes": 29,
+    "separacoesResolvidas": 28,
+    "verticesColisao": 983,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "s01",
+   "semente": 7920,
+   "inicial": 3266.6,
+   "final": 3203.4,
+   "curva": [
+    [
+     7011,
+     3263.4
+    ],
+    [
+     7181,
+     3260
+    ],
+    [
+     7431,
+     3256.8
+    ],
+    [
+     7652,
+     3253.6000000000004
+    ],
+    [
+     8385,
+     3250.4
+    ],
+    [
+     8488,
+     3247
+    ],
+    [
+     8598,
+     3243.8
+    ],
+    [
+     9067,
+     3240.6000000000004
+    ],
+    [
+     12362,
+     3237.4
+    ],
+    [
+     15468,
+     3234
+    ],
+    [
+     19498,
+     3230.8
+    ],
+    [
+     26914,
+     3227.6
+    ],
+    [
+     27530,
+     3224.4
+    ],
+    [
+     29711,
+     3220.8
+    ],
+    [
+     30824,
+     3217.6000000000004
+    ],
+    [
+     32535,
+     3214.4
+    ],
+    [
+     33619,
+     3211.2000000000003
+    ],
+    [
+     39052,
+     3208
+    ],
+    [
+     43536,
+     3204.6000000000004
+    ],
+    [
+     45734,
+     3203.4
+    ]
+   ],
+   "voltas": 56,
+   "ms": 45738,
+   "relatos": 27,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12459876.5234375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 5575888,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 25,
+    "iteracoes": 2595,
+    "movimentos": 30414,
+    "msAteCompressao": 43543.1402,
+    "msTotal": 45733.8134,
+    "segundosSeparando": 41.93058788590133,
+    "separacoes": 26,
+    "separacoesResolvidas": 26,
+    "verticesColisao": 416,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "base",
+   "semente": 7920,
+   "inicial": 3266.6,
+   "final": 3210,
+   "curva": [
+    [
+     9950,
+     3266.2000000000003
+    ],
+    [
+     10012,
+     3263
+    ],
+    [
+     10219,
+     3259.8
+    ],
+    [
+     10724,
+     3256.4
+    ],
+    [
+     11905,
+     3253.2000000000003
+    ],
+    [
+     12256,
+     3250
+    ],
+    [
+     14248,
+     3246.8
+    ],
+    [
+     15208,
+     3243.4
+    ],
+    [
+     16273,
+     3240.2000000000003
+    ],
+    [
+     18580,
+     3237
+    ],
+    [
+     19769,
+     3234
+    ],
+    [
+     20177,
+     3230.8
+    ],
+    [
+     20507,
+     3227.6
+    ],
+    [
+     29636,
+     3224.4
+    ],
+    [
+     30405,
+     3221.2
+    ],
+    [
+     33253,
+     3218
+    ],
+    [
+     38615,
+     3214.8
+    ],
+    [
+     43880,
+     3211.6
+    ],
+    [
+     49678,
+     3210
+    ]
+   ],
+   "voltas": 51,
+   "ms": 49683,
+   "relatos": 25,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12352458.859375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 2190740,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 23,
+    "iteracoes": 1245,
+    "movimentos": 12012,
+    "msAteCompressao": 43901.8736,
+    "msTotal": 49678.4718,
+    "segundosSeparando": 45.01484876126051,
+    "separacoes": 24,
+    "separacoesResolvidas": 24,
+    "verticesColisao": 1538,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "q6",
+   "semente": 7920,
+   "inicial": 3266.6,
+   "final": 3202,
+   "curva": [
+    [
+     8707,
+     3266.2000000000003
+    ],
+    [
+     8808,
+     3263
+    ],
+    [
+     9074,
+     3259.8
+    ],
+    [
+     9675,
+     3256.4
+    ],
+    [
+     10701,
+     3253.2000000000003
+    ],
+    [
+     10977,
+     3250
+    ],
+    [
+     12420,
+     3246.8
+    ],
+    [
+     13281,
+     3243.4
+    ],
+    [
+     14320,
+     3240.2000000000003
+    ],
+    [
+     15902,
+     3237
+    ],
+    [
+     17084,
+     3234
+    ],
+    [
+     17396,
+     3230.8
+    ],
+    [
+     17747,
+     3227.6
+    ],
+    [
+     23623,
+     3224.4
+    ],
+    [
+     24255,
+     3221.2
+    ],
+    [
+     26087,
+     3218
+    ],
+    [
+     29530,
+     3214.8
+    ],
+    [
+     32823,
+     3211.6
+    ],
+    [
+     34451,
+     3208.4
+    ],
+    [
+     42627,
+     3205
+    ],
+    [
+     43300,
+     3203.4
+    ],
+    [
+     53973,
+     3202
+    ]
+   ],
+   "voltas": 57,
+   "ms": 53984,
+   "relatos": 28,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12352458.859375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 3003074,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 25,
+    "iteracoes": 1670,
+    "movimentos": 16543,
+    "msAteCompressao": 42650.9835,
+    "msTotal": 53979.417499999996,
+    "segundosSeparando": 48.93124610558152,
+    "separacoes": 27,
+    "separacoesResolvidas": 27,
+    "verticesColisao": 1538,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "q8",
+   "semente": 7920,
+   "inicial": 3266.6,
+   "final": 3199.4,
+   "curva": [
+    [
+     9028,
+     3266.2000000000003
+    ],
+    [
+     9110,
+     3263
+    ],
+    [
+     9333,
+     3259.8
+    ],
+    [
+     9937,
+     3256.4
+    ],
+    [
+     10777,
+     3253.2000000000003
+    ],
+    [
+     11151,
+     3250
+    ],
+    [
+     12569,
+     3246.8
+    ],
+    [
+     13356,
+     3243.4
+    ],
+    [
+     14509,
+     3240.2000000000003
+    ],
+    [
+     16114,
+     3237
+    ],
+    [
+     17080,
+     3234
+    ],
+    [
+     17404,
+     3230.8
+    ],
+    [
+     17800,
+     3227.6
+    ],
+    [
+     23954,
+     3224.4
+    ],
+    [
+     24600,
+     3221.2
+    ],
+    [
+     26380,
+     3218
+    ],
+    [
+     29375,
+     3214.8
+    ],
+    [
+     32497,
+     3211.6
+    ],
+    [
+     33640,
+     3208.4
+    ],
+    [
+     41441,
+     3205
+    ],
+    [
+     42243,
+     3203.4
+    ],
+    [
+     42927,
+     3202
+    ],
+    [
+     43133,
+     3200.6000000000004
+    ],
+    [
+     43549,
+     3199.4
+    ]
+   ],
+   "voltas": 63,
+   "ms": 48921,
+   "relatos": 30,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12352458.859375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 2878446,
+    "encolhidasNaCompressao": 4,
+    "encolhidasNaExploracao": 25,
+    "iteracoes": 1679,
+    "movimentos": 15806,
+    "msAteCompressao": 41503.5181,
+    "msTotal": 48916.1314,
+    "segundosSeparando": 42.77589509636164,
+    "separacoes": 30,
+    "separacoesResolvidas": 29,
+    "verticesColisao": 1538,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "base",
+   "semente": 15839,
+   "inicial": 3242.4,
+   "final": 3206.6,
+   "curva": [
+    [
+     8974,
+     3242.2
+    ],
+    [
+     9391,
+     3238.8
+    ],
+    [
+     10414,
+     3235.6
+    ],
+    [
+     11168,
+     3232.4
+    ],
+    [
+     12538,
+     3229.2
+    ],
+    [
+     12969,
+     3226
+    ],
+    [
+     19377,
+     3222.8
+    ],
+    [
+     22390,
+     3219.4
+    ],
+    [
+     29856,
+     3216.2
+    ],
+    [
+     33473,
+     3213
+    ],
+    [
+     34627,
+     3209.8
+    ],
+    [
+     45552,
+     3206.6
+    ]
+   ],
+   "voltas": 35,
+   "ms": 45601,
+   "relatos": 18,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11960595.776367188,
+    "areaOriginal": 11946900,
+    "avaliacoes": 1762048,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 17,
+    "iteracoes": 1082,
+    "movimentos": 9748,
+    "msAteCompressao": 45581.3857,
+    "msTotal": 45597.0692,
+    "segundosSeparando": 43.042353332042694,
+    "separacoes": 17,
+    "separacoesResolvidas": 17,
+    "verticesColisao": 732,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "s003",
+   "semente": 15839,
+   "inicial": 3242.4,
+   "final": 3197.2,
+   "curva": [
+    [
+     6445,
+     3239
+    ],
+    [
+     7183,
+     3235.8
+    ],
+    [
+     7913,
+     3232.6
+    ],
+    [
+     8393,
+     3229.4
+    ],
+    [
+     12804,
+     3226.2
+    ],
+    [
+     13421,
+     3223
+    ],
+    [
+     23116,
+     3219.8
+    ],
+    [
+     23660,
+     3216.4
+    ],
+    [
+     23907,
+     3213.2
+    ],
+    [
+     29221,
+     3210
+    ],
+    [
+     29688,
+     3206.8
+    ],
+    [
+     30515,
+     3203.6
+    ],
+    [
+     32486,
+     3200.4
+    ],
+    [
+     45468,
+     3197.2
+    ]
+   ],
+   "voltas": 42,
+   "ms": 45502,
+   "relatos": 21,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11985965.112304688,
+    "areaOriginal": 11946900,
+    "avaliacoes": 2447746,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 20,
+    "iteracoes": 1526,
+    "movimentos": 13481,
+    "msAteCompressao": 45487.2634,
+    "msTotal": 45497.9985,
+    "segundosSeparando": 42.94527317583561,
+    "separacoes": 20,
+    "separacoesResolvidas": 20,
+    "verticesColisao": 409,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "s01",
+   "semente": 15839,
+   "inicial": 3242.4,
+   "final": 3165.8,
+   "curva": [
+    [
+     4199,
+     3242.2
+    ],
+    [
+     4398,
+     3239
+    ],
+    [
+     4456,
+     3235.8
+    ],
+    [
+     5010,
+     3232.6
+    ],
+    [
+     5099,
+     3229.4
+    ],
+    [
+     5240,
+     3226
+    ],
+    [
+     5360,
+     3222.8
+    ],
+    [
+     5681,
+     3219.6
+    ],
+    [
+     6261,
+     3216.4
+    ],
+    [
+     6944,
+     3213.2
+    ],
+    [
+     8766,
+     3210
+    ],
+    [
+     8902,
+     3206.8
+    ],
+    [
+     9006,
+     3203.6
+    ],
+    [
+     9557,
+     3200.4
+    ],
+    [
+     11666,
+     3197.4
+    ],
+    [
+     12121,
+     3194.2
+    ],
+    [
+     14288,
+     3191
+    ],
+    [
+     16235,
+     3187.8
+    ],
+    [
+     16427,
+     3184.6
+    ],
+    [
+     16960,
+     3181.4
+    ],
+    [
+     18165,
+     3178.2
+    ],
+    [
+     26965,
+     3175.2
+    ],
+    [
+     34261,
+     3172
+    ],
+    [
+     39368,
+     3170.4
+    ],
+    [
+     40143,
+     3168.8
+    ],
+    [
+     40288,
+     3167.4
+    ],
+    [
+     41223,
+     3165.8
+    ]
+   ],
+   "voltas": 80,
+   "ms": 45063,
+   "relatos": 33,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12060754.663085938,
+    "areaOriginal": 11946900,
+    "avaliacoes": 8051820,
+    "encolhidasNaCompressao": 4,
+    "encolhidasNaExploracao": 28,
+    "iteracoes": 4045,
+    "movimentos": 44263,
+    "msAteCompressao": 39346.6527,
+    "msTotal": 45059.1362,
+    "segundosSeparando": 42.70437131635845,
+    "separacoes": 34,
+    "separacoesResolvidas": 32,
+    "verticesColisao": 131,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "q6",
+   "semente": 15839,
+   "inicial": 3242.4,
+   "final": 3199.8,
+   "curva": [
+    [
+     7861,
+     3242.2
+    ],
+    [
+     8207,
+     3238.8
+    ],
+    [
+     8944,
+     3235.6
+    ],
+    [
+     9527,
+     3232.4
+    ],
+    [
+     10683,
+     3229.2
+    ],
+    [
+     11107,
+     3226
+    ],
+    [
+     15528,
+     3222.8
+    ],
+    [
+     17494,
+     3219.4
+    ],
+    [
+     22778,
+     3216.2
+    ],
+    [
+     25432,
+     3213
+    ],
+    [
+     26315,
+     3209.8
+    ],
+    [
+     34528,
+     3206.6
+    ],
+    [
+     43204,
+     3205.4
+    ],
+    [
+     44532,
+     3203.8
+    ],
+    [
+     44625,
+     3202.4
+    ],
+    [
+     44702,
+     3201
+    ],
+    [
+     51621,
+     3199.8
+    ]
+   ],
+   "voltas": 49,
+   "ms": 51627,
+   "relatos": 23,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11960595.776367188,
+    "areaOriginal": 11946900,
+    "avaliacoes": 2499596,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 17,
+    "iteracoes": 1559,
+    "movimentos": 13800,
+    "msAteCompressao": 43118.133299999994,
+    "msTotal": 51623.7445,
+    "segundosSeparando": 48.66784089291468,
+    "separacoes": 23,
+    "separacoesResolvidas": 22,
+    "verticesColisao": 732,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "braco": "q8",
+   "semente": 15839,
+   "inicial": 3242.4,
+   "final": 3203.8,
+   "curva": [
+    [
+     8369,
+     3242.2
+    ],
+    [
+     8798,
+     3238.8
+    ],
+    [
+     9612,
+     3235.6
+    ],
+    [
+     10350,
+     3232.4
+    ],
+    [
+     11612,
+     3229.2
+    ],
+    [
+     12077,
+     3226
+    ],
+    [
+     16636,
+     3222.8
+    ],
+    [
+     18502,
+     3219.4
+    ],
+    [
+     23191,
+     3216.2
+    ],
+    [
+     25720,
+     3213
+    ],
+    [
+     26811,
+     3209.8
+    ],
+    [
+     34264,
+     3206.6
+    ],
+    [
+     42321,
+     3205.4
+    ],
+    [
+     46641,
+     3203.8
+    ]
+   ],
+   "voltas": 43,
+   "ms": 46661,
+   "relatos": 20,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 11960595.776367188,
+    "areaOriginal": 11946900,
+    "avaliacoes": 2342436,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 17,
+    "iteracoes": 1505,
+    "movimentos": 12919,
+    "msAteCompressao": 42187.1265,
+    "msTotal": 46656.7005,
+    "segundosSeparando": 43.44847788847983,
+    "separacoes": 20,
+    "separacoesResolvidas": 19,
+    "verticesColisao": 732,
+    "verticesOriginais": 1228
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "s003",
+   "semente": 15839,
+   "inicial": 361,
+   "final": 349,
+   "curva": [
+    [
+     688,
+     360.5
+    ],
+    [
+     712,
+     360
+    ],
+    [
+     732,
+     359.5
+    ],
+    [
+     858,
+     359
+    ],
+    [
+     878,
+     358.5
+    ],
+    [
+     1021,
+     358
+    ],
+    [
+     1321,
+     357.5
+    ],
+    [
+     1427,
+     357
+    ],
+    [
+     1636,
+     356.5
+    ],
+    [
+     1717,
+     356
+    ],
+    [
+     2838,
+     355.5
+    ],
+    [
+     2928,
+     355
+    ],
+    [
+     2960,
+     354.5
+    ],
+    [
+     3439,
+     354
+    ],
+    [
+     5403,
+     353.5
+    ],
+    [
+     5457,
+     353
+    ],
+    [
+     5580,
+     352.5
+    ],
+    [
+     5632,
+     352
+    ],
+    [
+     6196,
+     351.5
+    ],
+    [
+     6336,
+     351
+    ],
+    [
+     6650,
+     350.5
+    ],
+    [
+     6894,
+     350
+    ],
+    [
+     7337,
+     349.5
+    ],
+    [
+     41012,
+     349
+    ]
+   ],
+   "voltas": 116,
+   "ms": 45144,
+   "relatos": 41,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 189160.9052734375,
+    "areaOriginal": 188536,
+    "avaliacoes": 5830628,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 39,
+    "iteracoes": 5996,
+    "movimentos": 30948,
+    "msAteCompressao": 36546.6428,
+    "msTotal": 45142.9893,
+    "segundosSeparando": 44.722225399687886,
+    "separacoes": 45,
+    "separacoesResolvidas": 40,
+    "verticesColisao": 195,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "base",
+   "semente": 15839,
+   "inicial": 361,
+   "final": 338.5,
+   "curva": [
+    [
+     831,
+     360.5
+    ],
+    [
+     879,
+     360
+    ],
+    [
+     931,
+     359.5
+    ],
+    [
+     1012,
+     359
+    ],
+    [
+     1107,
+     358.5
+    ],
+    [
+     1424,
+     358
+    ],
+    [
+     1500,
+     357.5
+    ],
+    [
+     1590,
+     357
+    ],
+    [
+     3047,
+     356.5
+    ],
+    [
+     3215,
+     356
+    ],
+    [
+     3380,
+     355.5
+    ],
+    [
+     3535,
+     355
+    ],
+    [
+     3720,
+     354.5
+    ],
+    [
+     7364,
+     354
+    ],
+    [
+     7484,
+     353.5
+    ],
+    [
+     8591,
+     353
+    ],
+    [
+     8600,
+     352.5
+    ],
+    [
+     8610,
+     352
+    ],
+    [
+     8666,
+     351.5
+    ],
+    [
+     8693,
+     351
+    ],
+    [
+     9291,
+     350.5
+    ],
+    [
+     9431,
+     350
+    ],
+    [
+     10206,
+     349.5
+    ],
+    [
+     10290,
+     349
+    ],
+    [
+     10494,
+     348.5
+    ],
+    [
+     10913,
+     348
+    ],
+    [
+     11041,
+     347.5
+    ],
+    [
+     11322,
+     347
+    ],
+    [
+     11628,
+     346.5
+    ],
+    [
+     11680,
+     346
+    ],
+    [
+     11736,
+     345.5
+    ],
+    [
+     11792,
+     345
+    ],
+    [
+     11945,
+     344.5
+    ],
+    [
+     12046,
+     344
+    ],
+    [
+     12436,
+     343.5
+    ],
+    [
+     12624,
+     343
+    ],
+    [
+     12965,
+     342.5
+    ],
+    [
+     17047,
+     342
+    ],
+    [
+     17477,
+     341.5
+    ],
+    [
+     17520,
+     341
+    ],
+    [
+     17715,
+     340.5
+    ],
+    [
+     17755,
+     340
+    ],
+    [
+     17807,
+     339.5
+    ],
+    [
+     38257,
+     339
+    ],
+    [
+     41740,
+     338.5
+    ]
+   ],
+   "voltas": 160,
+   "ms": 47579,
+   "relatos": 74,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 188768.2333984375,
+    "areaOriginal": 188536,
+    "avaliacoes": 5795938,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 68,
+    "iteracoes": 3382,
+    "movimentos": 31088,
+    "msAteCompressao": 38201.6764,
+    "msTotal": 47578.389899999995,
+    "segundosSeparando": 46.90516954544,
+    "separacoes": 76,
+    "separacoesResolvidas": 73,
+    "verticesColisao": 235,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "s01",
+   "semente": 15839,
+   "inicial": 361,
+   "final": 343,
+   "curva": [
+    [
+     1523,
+     360.5
+    ],
+    [
+     1750,
+     360
+    ],
+    [
+     1757,
+     359.5
+    ],
+    [
+     1791,
+     359
+    ],
+    [
+     1927,
+     358.5
+    ],
+    [
+     2530,
+     358
+    ],
+    [
+     2569,
+     357.5
+    ],
+    [
+     2596,
+     357
+    ],
+    [
+     3108,
+     356.5
+    ],
+    [
+     3815,
+     356
+    ],
+    [
+     4989,
+     355.5
+    ],
+    [
+     5030,
+     355
+    ],
+    [
+     5059,
+     354.5
+    ],
+    [
+     6049,
+     354
+    ],
+    [
+     6059,
+     353.5
+    ],
+    [
+     6687,
+     353
+    ],
+    [
+     6750,
+     352.5
+    ],
+    [
+     6762,
+     352
+    ],
+    [
+     6777,
+     351.5
+    ],
+    [
+     6802,
+     351
+    ],
+    [
+     6906,
+     350.5
+    ],
+    [
+     6954,
+     350
+    ],
+    [
+     7047,
+     349.5
+    ],
+    [
+     7093,
+     349
+    ],
+    [
+     7153,
+     348.5
+    ],
+    [
+     7926,
+     348
+    ],
+    [
+     7931,
+     347.5
+    ],
+    [
+     8037,
+     347
+    ],
+    [
+     8508,
+     346.5
+    ],
+    [
+     13844,
+     346
+    ],
+    [
+     13896,
+     345.5
+    ],
+    [
+     13975,
+     345
+    ],
+    [
+     14147,
+     344.5
+    ],
+    [
+     19146,
+     344
+    ],
+    [
+     23773,
+     343.5
+    ],
+    [
+     24797,
+     343
+    ]
+   ],
+   "voltas": 133,
+   "ms": 45918,
+   "relatos": 59,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 190572.3349609375,
+    "areaOriginal": 188536,
+    "avaliacoes": 7416888,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 57,
+    "iteracoes": 4400,
+    "movimentos": 40012,
+    "msAteCompressao": 38323.6914,
+    "msTotal": 45917.4139,
+    "segundosSeparando": 45.431794844567776,
+    "separacoes": 60,
+    "separacoesResolvidas": 58,
+    "verticesColisao": 127,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "q6",
+   "semente": 15839,
+   "inicial": 361,
+   "final": 339,
+   "curva": [
+    [
+     919,
+     360.5
+    ],
+    [
+     979,
+     360
+    ],
+    [
+     1015,
+     359.5
+    ],
+    [
+     1095,
+     359
+    ],
+    [
+     1164,
+     358.5
+    ],
+    [
+     1518,
+     358
+    ],
+    [
+     1640,
+     357.5
+    ],
+    [
+     1746,
+     357
+    ],
+    [
+     3418,
+     356.5
+    ],
+    [
+     3608,
+     356
+    ],
+    [
+     3804,
+     355.5
+    ],
+    [
+     4019,
+     355
+    ],
+    [
+     4260,
+     354.5
+    ],
+    [
+     7987,
+     354
+    ],
+    [
+     8076,
+     353.5
+    ],
+    [
+     9155,
+     353
+    ],
+    [
+     9166,
+     352.5
+    ],
+    [
+     9180,
+     352
+    ],
+    [
+     9263,
+     351.5
+    ],
+    [
+     9290,
+     351
+    ],
+    [
+     9902,
+     350.5
+    ],
+    [
+     10064,
+     350
+    ],
+    [
+     10860,
+     349.5
+    ],
+    [
+     10951,
+     349
+    ],
+    [
+     11170,
+     348.5
+    ],
+    [
+     11589,
+     348
+    ],
+    [
+     11756,
+     347.5
+    ],
+    [
+     12084,
+     347
+    ],
+    [
+     12481,
+     346.5
+    ],
+    [
+     12562,
+     346
+    ],
+    [
+     12632,
+     345.5
+    ],
+    [
+     12675,
+     345
+    ],
+    [
+     12834,
+     344.5
+    ],
+    [
+     12951,
+     344
+    ],
+    [
+     13337,
+     343.5
+    ],
+    [
+     13458,
+     343
+    ],
+    [
+     13839,
+     342.5
+    ],
+    [
+     18117,
+     342
+    ],
+    [
+     18466,
+     341.5
+    ],
+    [
+     18515,
+     341
+    ],
+    [
+     18715,
+     340.5
+    ],
+    [
+     18750,
+     340
+    ],
+    [
+     18796,
+     339.5
+    ],
+    [
+     41408,
+     339
+    ]
+   ],
+   "voltas": 152,
+   "ms": 45017,
+   "relatos": 70,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 188768.2333984375,
+    "areaOriginal": 188536,
+    "avaliacoes": 5079766,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 68,
+    "iteracoes": 3025,
+    "movimentos": 27236,
+    "msAteCompressao": 41321.3203,
+    "msTotal": 45016.9911,
+    "segundosSeparando": 44.1465640864335,
+    "separacoes": 72,
+    "separacoesResolvidas": 69,
+    "verticesColisao": 235,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "braco": "q8",
+   "semente": 15839,
+   "inicial": 361,
+   "final": 339,
+   "curva": [
+    [
+     1091,
+     360.5
+    ],
+    [
+     1167,
+     360
+    ],
+    [
+     1250,
+     359.5
+    ],
+    [
+     1383,
+     359
+    ],
+    [
+     1521,
+     358.5
+    ],
+    [
+     1979,
+     358
+    ],
+    [
+     2152,
+     357.5
+    ],
+    [
+     2259,
+     357
+    ],
+    [
+     4277,
+     356.5
+    ],
+    [
+     4511,
+     356
+    ],
+    [
+     4752,
+     355.5
+    ],
+    [
+     4981,
+     355
+    ],
+    [
+     5222,
+     354.5
+    ],
+    [
+     10393,
+     354
+    ],
+    [
+     10548,
+     353.5
+    ],
+    [
+     11925,
+     353
+    ],
+    [
+     11957,
+     352.5
+    ],
+    [
+     12004,
+     352
+    ],
+    [
+     12124,
+     351.5
+    ],
+    [
+     12165,
+     351
+    ],
+    [
+     12925,
+     350.5
+    ],
+    [
+     13141,
+     350
+    ],
+    [
+     14217,
+     349.5
+    ],
+    [
+     14404,
+     349
+    ],
+    [
+     14780,
+     348.5
+    ],
+    [
+     15322,
+     348
+    ],
+    [
+     15506,
+     347.5
+    ],
+    [
+     15926,
+     347
+    ],
+    [
+     16377,
+     346.5
+    ],
+    [
+     16500,
+     346
+    ],
+    [
+     16595,
+     345.5
+    ],
+    [
+     16671,
+     345
+    ],
+    [
+     16873,
+     344.5
+    ],
+    [
+     17066,
+     344
+    ],
+    [
+     17617,
+     343.5
+    ],
+    [
+     17882,
+     343
+    ],
+    [
+     18381,
+     342.5
+    ],
+    [
+     24074,
+     342
+    ],
+    [
+     24670,
+     341.5
+    ],
+    [
+     24777,
+     341
+    ],
+    [
+     25134,
+     340.5
+    ],
+    [
+     25207,
+     340
+    ],
+    [
+     25303,
+     339.5
+    ],
+    [
+     41227,
+     339
+    ]
+   ],
+   "voltas": 149,
+   "ms": 45089,
+   "relatos": 71,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 188768.2333984375,
+    "areaOriginal": 188536,
+    "avaliacoes": 3918370,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 68,
+    "iteracoes": 2549,
+    "movimentos": 20969,
+    "msAteCompressao": 41015.7946,
+    "msTotal": 45088.4063,
+    "segundosSeparando": 42.702970265987574,
+    "separacoes": 72,
+    "separacoesResolvidas": 70,
+    "verticesColisao": 235,
+    "verticesOriginais": 272
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "base",
+   "semente": 15839,
+   "inicial": 350.5,
+   "final": 336,
+   "curva": [
+    [
+     1917,
+     350
+    ],
+    [
+     2043,
+     349.5
+    ],
+    [
+     2708,
+     349
+    ],
+    [
+     2758,
+     348.5
+    ],
+    [
+     2935,
+     348
+    ],
+    [
+     2970,
+     347.5
+    ],
+    [
+     2995,
+     347
+    ],
+    [
+     3344,
+     346.5
+    ],
+    [
+     3864,
+     346
+    ],
+    [
+     4053,
+     345.5
+    ],
+    [
+     4092,
+     345
+    ],
+    [
+     4154,
+     344.5
+    ],
+    [
+     4262,
+     344
+    ],
+    [
+     4395,
+     343.5
+    ],
+    [
+     37517,
+     343
+    ],
+    [
+     37634,
+     342.5
+    ],
+    [
+     37707,
+     342
+    ],
+    [
+     37783,
+     341.5
+    ],
+    [
+     37884,
+     341
+    ],
+    [
+     38449,
+     340.5
+    ],
+    [
+     38737,
+     340
+    ],
+    [
+     38914,
+     339.5
+    ],
+    [
+     39014,
+     339
+    ],
+    [
+     39271,
+     338.5
+    ],
+    [
+     39512,
+     338
+    ],
+    [
+     39757,
+     337.5
+    ],
+    [
+     42390,
+     337
+    ],
+    [
+     43017,
+     336.5
+    ],
+    [
+     44599,
+     336
+    ]
+   ],
+   "voltas": 187,
+   "ms": 45160,
+   "relatos": 87,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 179953.5927734375,
+    "areaOriginal": 179728,
+    "avaliacoes": 5172308,
+    "encolhidasNaCompressao": 58,
+    "encolhidasNaExploracao": 28,
+    "iteracoes": 3701,
+    "movimentos": 28054,
+    "msAteCompressao": 37516.634699999995,
+    "msTotal": 45153.7626,
+    "segundosSeparando": 44.11150751216337,
+    "separacoes": 88,
+    "separacoesResolvidas": 86,
+    "verticesColisao": 309,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "s01",
+   "semente": 15839,
+   "inicial": 350.5,
+   "final": 340,
+   "curva": [
+    [
+     1397,
+     350
+    ],
+    [
+     1441,
+     349.5
+    ],
+    [
+     1847,
+     349
+    ],
+    [
+     1866,
+     348.5
+    ],
+    [
+     1930,
+     348
+    ],
+    [
+     1966,
+     347.5
+    ],
+    [
+     1983,
+     347
+    ],
+    [
+     2076,
+     346.5
+    ],
+    [
+     2119,
+     346
+    ],
+    [
+     2253,
+     345.5
+    ],
+    [
+     2401,
+     345
+    ],
+    [
+     8600,
+     344.5
+    ],
+    [
+     12878,
+     344
+    ],
+    [
+     12984,
+     343.5
+    ],
+    [
+     13224,
+     343
+    ],
+    [
+     13292,
+     342.5
+    ],
+    [
+     17328,
+     342
+    ],
+    [
+     17592,
+     341.5
+    ],
+    [
+     24682,
+     341
+    ],
+    [
+     27512,
+     340.5
+    ],
+    [
+     39943,
+     340
+    ]
+   ],
+   "voltas": 101,
+   "ms": 45249,
+   "relatos": 38,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 181719.0224609375,
+    "areaOriginal": 179728,
+    "avaliacoes": 7173724,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 36,
+    "iteracoes": 4972,
+    "movimentos": 38831,
+    "msAteCompressao": 36713.205700000006,
+    "msTotal": 45243.129,
+    "segundosSeparando": 44.759261118713766,
+    "separacoes": 39,
+    "separacoesResolvidas": 37,
+    "verticesColisao": 183,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "s003",
+   "semente": 15839,
+   "inicial": 350.5,
+   "final": 335,
+   "curva": [
+    [
+     1423,
+     350
+    ],
+    [
+     1447,
+     349.5
+    ],
+    [
+     1508,
+     349
+    ],
+    [
+     1535,
+     348.5
+    ],
+    [
+     1658,
+     348
+    ],
+    [
+     1725,
+     347.5
+    ],
+    [
+     1738,
+     347
+    ],
+    [
+     2045,
+     346.5
+    ],
+    [
+     2598,
+     346
+    ],
+    [
+     3317,
+     345.5
+    ],
+    [
+     3602,
+     345
+    ],
+    [
+     3869,
+     344.5
+    ],
+    [
+     4054,
+     344
+    ],
+    [
+     6024,
+     343.5
+    ],
+    [
+     6074,
+     343
+    ],
+    [
+     6164,
+     342.5
+    ],
+    [
+     6275,
+     342
+    ],
+    [
+     6331,
+     341.5
+    ],
+    [
+     9181,
+     341
+    ],
+    [
+     11642,
+     340.5
+    ],
+    [
+     20241,
+     340
+    ],
+    [
+     20802,
+     339.5
+    ],
+    [
+     21198,
+     339
+    ],
+    [
+     21207,
+     338.5
+    ],
+    [
+     21285,
+     338
+    ],
+    [
+     21318,
+     337.5
+    ],
+    [
+     21342,
+     337
+    ],
+    [
+     21436,
+     336.5
+    ],
+    [
+     21501,
+     336
+    ],
+    [
+     21781,
+     335.5
+    ],
+    [
+     33723,
+     335
+    ]
+   ],
+   "voltas": 123,
+   "ms": 45851,
+   "relatos": 52,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 180325.6083984375,
+    "areaOriginal": 179728,
+    "avaliacoes": 5984718,
+    "encolhidasNaCompressao": 0,
+    "encolhidasNaExploracao": 51,
+    "iteracoes": 4036,
+    "movimentos": 32372,
+    "msAteCompressao": 38288.5579,
+    "msTotal": 45845.4427,
+    "segundosSeparando": 45.2523563047871,
+    "separacoes": 53,
+    "separacoesResolvidas": 51,
+    "verticesColisao": 263,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "q6",
+   "semente": 15839,
+   "inicial": 350.5,
+   "final": 340,
+   "curva": [
+    [
+     1985,
+     350
+    ],
+    [
+     2091,
+     349.5
+    ],
+    [
+     2775,
+     349
+    ],
+    [
+     2836,
+     348.5
+    ],
+    [
+     3008,
+     348
+    ],
+    [
+     3046,
+     347.5
+    ],
+    [
+     3071,
+     347
+    ],
+    [
+     3428,
+     346.5
+    ],
+    [
+     3956,
+     346
+    ],
+    [
+     4201,
+     345.5
+    ],
+    [
+     4249,
+     345
+    ],
+    [
+     4326,
+     344.5
+    ],
+    [
+     4476,
+     344
+    ],
+    [
+     4634,
+     343.5
+    ],
+    [
+     40793,
+     343
+    ],
+    [
+     40923,
+     342.5
+    ],
+    [
+     41022,
+     342
+    ],
+    [
+     41107,
+     341.5
+    ],
+    [
+     41251,
+     341
+    ],
+    [
+     43948,
+     340.5
+    ],
+    [
+     45027,
+     340
+    ]
+   ],
+   "voltas": 108,
+   "ms": 45033,
+   "relatos": 48,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 179953.5927734375,
+    "areaOriginal": 179728,
+    "avaliacoes": 4806668,
+    "encolhidasNaCompressao": 19,
+    "encolhidasNaExploracao": 28,
+    "iteracoes": 3535,
+    "movimentos": 26022,
+    "msAteCompressao": 40796.1088,
+    "msTotal": 45025.8861,
+    "segundosSeparando": 44.055818263906986,
+    "separacoes": 49,
+    "separacoesResolvidas": 47,
+    "verticesColisao": 309,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "giro-livre",
+   "braco": "q8",
+   "semente": 15839,
+   "inicial": 350.5,
+   "final": 343,
+   "curva": [
+    [
+     2674,
+     350
+    ],
+    [
+     2835,
+     349.5
+    ],
+    [
+     3824,
+     349
+    ],
+    [
+     3961,
+     348.5
+    ],
+    [
+     4261,
+     348
+    ],
+    [
+     4348,
+     347.5
+    ],
+    [
+     4401,
+     347
+    ],
+    [
+     4936,
+     346.5
+    ],
+    [
+     5765,
+     346
+    ],
+    [
+     6114,
+     345.5
+    ],
+    [
+     6194,
+     345
+    ],
+    [
+     6300,
+     344.5
+    ],
+    [
+     6525,
+     344
+    ],
+    [
+     6781,
+     343.5
+    ],
+    [
+     42196,
+     343
+    ]
+   ],
+   "voltas": 75,
+   "ms": 46676,
+   "relatos": 30,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 179953.5927734375,
+    "areaOriginal": 179728,
+    "avaliacoes": 3830960,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 27,
+    "iteracoes": 2641,
+    "movimentos": 20745,
+    "msAteCompressao": 37356.27680000001,
+    "msTotal": 46669.57,
+    "segundosSeparando": 45.26619605952874,
+    "separacoes": 32,
+    "separacoesResolvidas": 29,
+    "verticesColisao": 309,
+    "verticesOriginais": 344
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "base",
+   "semente": 15839,
+   "inicial": 642.6,
+   "final": 624.8000000000001,
+   "curva": [
+    [
+     3892,
+     642.4000000000001
+    ],
+    [
+     4602,
+     641.8000000000001
+    ],
+    [
+     5569,
+     641
+    ],
+    [
+     7637,
+     640.8000000000001
+    ],
+    [
+     7802,
+     640.2
+    ],
+    [
+     8073,
+     639.6
+    ],
+    [
+     8314,
+     639
+    ],
+    [
+     8733,
+     638.2
+    ],
+    [
+     9176,
+     637.6
+    ],
+    [
+     11278,
+     637
+    ],
+    [
+     11933,
+     636.4000000000001
+    ],
+    [
+     12204,
+     635.8000000000001
+    ],
+    [
+     14662,
+     635
+    ],
+    [
+     15397,
+     634.4000000000001
+    ],
+    [
+     15794,
+     633.8000000000001
+    ],
+    [
+     17020,
+     633.2
+    ],
+    [
+     18526,
+     632.6
+    ],
+    [
+     31517,
+     632
+    ],
+    [
+     33543,
+     631.2
+    ],
+    [
+     34156,
+     630.6
+    ],
+    [
+     34240,
+     630
+    ],
+    [
+     34403,
+     629.4000000000001
+    ],
+    [
+     34560,
+     628.8000000000001
+    ],
+    [
+     35747,
+     628.2
+    ],
+    [
+     39791,
+     627.6
+    ],
+    [
+     40336,
+     627.2
+    ],
+    [
+     41043,
+     626.8000000000001
+    ],
+    [
+     42111,
+     626.6
+    ],
+    [
+     42280,
+     626.4000000000001
+    ],
+    [
+     42332,
+     626.2
+    ],
+    [
+     42427,
+     626
+    ],
+    [
+     42692,
+     625.8000000000001
+    ],
+    [
+     42865,
+     625.4000000000001
+    ],
+    [
+     42913,
+     625.2
+    ],
+    [
+     43318,
+     625
+    ],
+    [
+     43472,
+     624.8000000000001
+    ]
+   ],
+   "voltas": 87,
+   "ms": 45150,
+   "relatos": 43,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2228036.28125,
+    "areaOriginal": 2225392,
+    "avaliacoes": 2415010,
+    "encolhidasNaCompressao": 12,
+    "encolhidasNaExploracao": 30,
+    "iteracoes": 1636,
+    "movimentos": 13121,
+    "msAteCompressao": 39801.8389,
+    "msTotal": 45147.9776,
+    "segundosSeparando": 43.2218358181417,
+    "separacoes": 42,
+    "separacoesResolvidas": 42,
+    "verticesColisao": 495,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "s01",
+   "semente": 15839,
+   "inicial": 642.6,
+   "final": 630.4000000000001,
+   "curva": [
+    [
+     2395,
+     642.2
+    ],
+    [
+     2697,
+     641.4000000000001
+    ],
+    [
+     3513,
+     640.8000000000001
+    ],
+    [
+     5122,
+     640.2
+    ],
+    [
+     5380,
+     639.4
+    ],
+    [
+     5850,
+     639
+    ],
+    [
+     6754,
+     638.2
+    ],
+    [
+     10093,
+     637.6
+    ],
+    [
+     10227,
+     637
+    ],
+    [
+     10627,
+     636.4000000000001
+    ],
+    [
+     15498,
+     635.8000000000001
+    ],
+    [
+     15605,
+     635
+    ],
+    [
+     16909,
+     634.4000000000001
+    ],
+    [
+     19202,
+     633.8000000000001
+    ],
+    [
+     23962,
+     633.2
+    ],
+    [
+     24034,
+     632.6
+    ],
+    [
+     31476,
+     632
+    ],
+    [
+     44043,
+     631.6
+    ],
+    [
+     44218,
+     631.4000000000001
+    ],
+    [
+     44467,
+     631.2
+    ],
+    [
+     44576,
+     631
+    ],
+    [
+     44760,
+     630.8000000000001
+    ],
+    [
+     44847,
+     630.6
+    ],
+    [
+     44936,
+     630.4000000000001
+    ]
+   ],
+   "voltas": 88,
+   "ms": 45079,
+   "relatos": 38,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2249655.921875,
+    "areaOriginal": 2225392,
+    "avaliacoes": 5328120,
+    "encolhidasNaCompressao": 14,
+    "encolhidasNaExploracao": 23,
+    "iteracoes": 3736,
+    "movimentos": 28988,
+    "msAteCompressao": 38097.9405,
+    "msTotal": 45077.7938,
+    "segundosSeparando": 43.52588960994035,
+    "separacoes": 38,
+    "separacoesResolvidas": 37,
+    "verticesColisao": 204,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "s003",
+   "semente": 15839,
+   "inicial": 642.6,
+   "final": 632.8000000000001,
+   "curva": [
+    [
+     3279,
+     642.2
+    ],
+    [
+     4120,
+     641.4000000000001
+    ],
+    [
+     4844,
+     640.8000000000001
+    ],
+    [
+     5836,
+     640.2
+    ],
+    [
+     6417,
+     639.6
+    ],
+    [
+     7126,
+     639
+    ],
+    [
+     7725,
+     638.2
+    ],
+    [
+     9005,
+     637.6
+    ],
+    [
+     10068,
+     637
+    ],
+    [
+     10855,
+     636.4000000000001
+    ],
+    [
+     11710,
+     635.8000000000001
+    ],
+    [
+     16460,
+     635
+    ],
+    [
+     20183,
+     634.4000000000001
+    ],
+    [
+     20256,
+     633.8000000000001
+    ],
+    [
+     24205,
+     633.2
+    ],
+    [
+     42445,
+     632.8000000000001
+    ]
+   ],
+   "voltas": 54,
+   "ms": 47738,
+   "relatos": 23,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2232748.09375,
+    "areaOriginal": 2225392,
+    "avaliacoes": 3250638,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 21,
+    "iteracoes": 2056,
+    "movimentos": 17886,
+    "msAteCompressao": 40626.677,
+    "msTotal": 47737.2071,
+    "segundosSeparando": 46.250990867614746,
+    "separacoes": 24,
+    "separacoesResolvidas": 22,
+    "verticesColisao": 371,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "q6",
+   "semente": 15839,
+   "inicial": 642.6,
+   "final": 624.4000000000001,
+   "curva": [
+    [
+     3568,
+     642.4000000000001
+    ],
+    [
+     4379,
+     641.8000000000001
+    ],
+    [
+     5225,
+     641
+    ],
+    [
+     7036,
+     640.8000000000001
+    ],
+    [
+     7208,
+     640.2
+    ],
+    [
+     7468,
+     639.6
+    ],
+    [
+     7687,
+     639
+    ],
+    [
+     8172,
+     638.2
+    ],
+    [
+     8596,
+     637.6
+    ],
+    [
+     10481,
+     637
+    ],
+    [
+     11185,
+     636.4000000000001
+    ],
+    [
+     11509,
+     635.8000000000001
+    ],
+    [
+     14141,
+     635
+    ],
+    [
+     14798,
+     634.4000000000001
+    ],
+    [
+     15310,
+     633.8000000000001
+    ],
+    [
+     16366,
+     633.2
+    ],
+    [
+     18139,
+     632.6
+    ],
+    [
+     29782,
+     632
+    ],
+    [
+     31482,
+     631.2
+    ],
+    [
+     31895,
+     630.6
+    ],
+    [
+     31973,
+     630
+    ],
+    [
+     32136,
+     629.4000000000001
+    ],
+    [
+     32337,
+     628.8000000000001
+    ],
+    [
+     33353,
+     628.2
+    ],
+    [
+     36416,
+     627.6
+    ],
+    [
+     37353,
+     626.8000000000001
+    ],
+    [
+     38068,
+     626.6
+    ],
+    [
+     38386,
+     626.2
+    ],
+    [
+     39066,
+     626
+    ],
+    [
+     40042,
+     625.8000000000001
+    ],
+    [
+     40399,
+     625.6
+    ],
+    [
+     40492,
+     625.4000000000001
+    ],
+    [
+     42341,
+     625.2
+    ],
+    [
+     42425,
+     625
+    ],
+    [
+     42571,
+     624.8000000000001
+    ],
+    [
+     42834,
+     624.6
+    ],
+    [
+     43644,
+     624.4000000000001
+    ]
+   ],
+   "voltas": 91,
+   "ms": 45061,
+   "relatos": 45,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2228036.28125,
+    "areaOriginal": 2225392,
+    "avaliacoes": 2619560,
+    "encolhidasNaCompressao": 13,
+    "encolhidasNaExploracao": 31,
+    "iteracoes": 1772,
+    "movimentos": 14217,
+    "msAteCompressao": 37368.354600000006,
+    "msTotal": 45059.531,
+    "segundosSeparando": 42.87267816439271,
+    "separacoes": 44,
+    "separacoesResolvidas": 44,
+    "verticesColisao": 495,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "braco": "q8",
+   "semente": 15839,
+   "inicial": 642.6,
+   "final": 628.2,
+   "curva": [
+    [
+     4375,
+     642.4000000000001
+    ],
+    [
+     5252,
+     641.8000000000001
+    ],
+    [
+     6305,
+     641
+    ],
+    [
+     8679,
+     640.8000000000001
+    ],
+    [
+     8938,
+     640.2
+    ],
+    [
+     9378,
+     639.6
+    ],
+    [
+     9737,
+     639
+    ],
+    [
+     10347,
+     638.2
+    ],
+    [
+     10879,
+     637.6
+    ],
+    [
+     13078,
+     637
+    ],
+    [
+     13865,
+     636.4000000000001
+    ],
+    [
+     14200,
+     635.8000000000001
+    ],
+    [
+     16623,
+     635
+    ],
+    [
+     17380,
+     634.4000000000001
+    ],
+    [
+     17903,
+     633.8000000000001
+    ],
+    [
+     19196,
+     633.2
+    ],
+    [
+     21113,
+     632.6
+    ],
+    [
+     34611,
+     632
+    ],
+    [
+     36540,
+     631.2
+    ],
+    [
+     37186,
+     630.6
+    ],
+    [
+     37402,
+     630.4000000000001
+    ],
+    [
+     37878,
+     630
+    ],
+    [
+     39478,
+     629.8000000000001
+    ],
+    [
+     39667,
+     629.6
+    ],
+    [
+     39910,
+     629.2
+    ],
+    [
+     40127,
+     629
+    ],
+    [
+     41060,
+     628.8000000000001
+    ],
+    [
+     41197,
+     628.6
+    ],
+    [
+     41437,
+     628.4000000000001
+    ],
+    [
+     41593,
+     628.2
+    ]
+   ],
+   "voltas": 75,
+   "ms": 46065,
+   "relatos": 37,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 2228036.28125,
+    "areaOriginal": 2225392,
+    "avaliacoes": 2254318,
+    "encolhidasNaCompressao": 11,
+    "encolhidasNaExploracao": 25,
+    "iteracoes": 1522,
+    "movimentos": 12239,
+    "msAteCompressao": 37237.4483,
+    "msTotal": 46062.3566,
+    "segundosSeparando": 42.4983413554728,
+    "separacoes": 36,
+    "separacoesResolvidas": 36,
+    "verticesColisao": 495,
+    "verticesOriginais": 682
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "base",
+   "semente": 15839,
+   "inicial": 225.5,
+   "final": 224,
+   "curva": [
+    [
+     428,
+     225
+    ],
+    [
+     31043,
+     224.5
+    ],
+    [
+     37190,
+     224
+    ]
+   ],
+   "voltas": 72,
+   "ms": 45208,
+   "relatos": 16,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122642.263671875,
+    "areaOriginal": 122496,
+    "avaliacoes": 10426980,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 13,
+    "iteracoes": 7103,
+    "movimentos": 56839,
+    "msAteCompressao": 36727.131499999996,
+    "msTotal": 45207.5498,
+    "segundosSeparando": 45.07447318919003,
+    "separacoes": 20,
+    "separacoesResolvidas": 15,
+    "verticesColisao": 103,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "s003",
+   "semente": 15839,
+   "inicial": 225.5,
+   "final": 224.5,
+   "curva": [
+    [
+     15540,
+     225
+    ],
+    [
+     21444,
+     224.5
+    ]
+   ],
+   "voltas": 71,
+   "ms": 45028,
+   "relatos": 13,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122914.248046875,
+    "areaOriginal": 122496,
+    "avaliacoes": 10700709,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 11,
+    "iteracoes": 9176,
+    "movimentos": 58455,
+    "msAteCompressao": 37387.0069,
+    "msTotal": 45027.7963,
+    "segundosSeparando": 44.92888782918453,
+    "separacoes": 17,
+    "separacoesResolvidas": 12,
+    "verticesColisao": 84,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "s01",
+   "semente": 15839,
+   "inicial": 225.5,
+   "final": 225,
+   "curva": [
+    [
+     11574,
+     225
+    ]
+   ],
+   "voltas": 91,
+   "ms": 45124,
+   "relatos": 11,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 123811.240234375,
+    "areaOriginal": 122496,
+    "avaliacoes": 14949961,
+    "encolhidasNaCompressao": 1,
+    "encolhidasNaExploracao": 9,
+    "iteracoes": 10081,
+    "movimentos": 82080,
+    "msAteCompressao": 36984.4137,
+    "msTotal": 45123.877,
+    "segundosSeparando": 45.01379050780088,
+    "separacoes": 21,
+    "separacoesResolvidas": 10,
+    "verticesColisao": 47,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "q6",
+   "semente": 15839,
+   "inicial": 225.5,
+   "final": 224,
+   "curva": [
+    [
+     506,
+     225
+    ],
+    [
+     34129,
+     224.5
+    ],
+    [
+     37020,
+     224
+    ]
+   ],
+   "voltas": 64,
+   "ms": 45493,
+   "relatos": 16,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122642.263671875,
+    "areaOriginal": 122496,
+    "avaliacoes": 9594128,
+    "encolhidasNaCompressao": 2,
+    "encolhidasNaExploracao": 13,
+    "iteracoes": 5611,
+    "movimentos": 52368,
+    "msAteCompressao": 36469.8439,
+    "msTotal": 45492.892,
+    "segundosSeparando": 45.30086124967784,
+    "separacoes": 20,
+    "separacoesResolvidas": 15,
+    "verticesColisao": 103,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "calca-bolso",
+   "braco": "q8",
+   "semente": 15839,
+   "inicial": 225.5,
+   "final": 224.5,
+   "curva": [
+    [
+     684,
+     225
+    ],
+    [
+     41238,
+     224.5
+    ]
+   ],
+   "voltas": 52,
+   "ms": 45153,
+   "relatos": 16,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 122642.263671875,
+    "areaOriginal": 122496,
+    "avaliacoes": 6482732,
+    "encolhidasNaCompressao": 6,
+    "encolhidasNaExploracao": 9,
+    "iteracoes": 3912,
+    "movimentos": 35289,
+    "msAteCompressao": 39738.9294,
+    "msTotal": 45151.2948,
+    "segundosSeparando": 44.5876856232062,
+    "separacoes": 18,
+    "separacoesResolvidas": 15,
+    "verticesColisao": 103,
+    "verticesOriginais": 118
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "base",
+   "semente": 15839,
+   "inicial": 3266.6,
+   "final": 3201.4,
+   "curva": [
+    [
+     11913,
+     3263.4
+    ],
+    [
+     12451,
+     3260
+    ],
+    [
+     12587,
+     3256.8
+    ],
+    [
+     13252,
+     3253.6000000000004
+    ],
+    [
+     13681,
+     3250.4
+    ],
+    [
+     15179,
+     3247
+    ],
+    [
+     17166,
+     3243.8
+    ],
+    [
+     17696,
+     3240.6000000000004
+    ],
+    [
+     18314,
+     3237.4
+    ],
+    [
+     23507,
+     3234
+    ],
+    [
+     23667,
+     3230.8
+    ],
+    [
+     25062,
+     3227.6000000000004
+    ],
+    [
+     27725,
+     3224.4
+    ],
+    [
+     29175,
+     3221.2000000000003
+    ],
+    [
+     34697,
+     3218
+    ],
+    [
+     36948,
+     3214.8
+    ],
+    [
+     38209,
+     3211.6000000000004
+    ],
+    [
+     40223,
+     3208.4
+    ],
+    [
+     40447,
+     3206.8
+    ],
+    [
+     41509,
+     3205.2000000000003
+    ],
+    [
+     42705,
+     3203.8
+    ],
+    [
+     42888,
+     3202.6000000000004
+    ],
+    [
+     45850,
+     3201.4
+    ]
+   ],
+   "voltas": 60,
+   "ms": 45856,
+   "relatos": 30,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12352458.859375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 2280654,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 24,
+    "iteracoes": 1233,
+    "movimentos": 12461,
+    "msAteCompressao": 40266.2179,
+    "msTotal": 45852.2808,
+    "segundosSeparando": 40.75251317769289,
+    "separacoes": 29,
+    "separacoesResolvidas": 29,
+    "verticesColisao": 1538,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "s003",
+   "semente": 15839,
+   "inicial": 3266.6,
+   "final": 3203.2000000000003,
+   "curva": [
+    [
+     9091,
+     3263.4
+    ],
+    [
+     9401,
+     3260
+    ],
+    [
+     9628,
+     3256.8
+    ],
+    [
+     9981,
+     3253.6000000000004
+    ],
+    [
+     10736,
+     3250.4
+    ],
+    [
+     12598,
+     3247
+    ],
+    [
+     13449,
+     3243.8
+    ],
+    [
+     14773,
+     3240.6000000000004
+    ],
+    [
+     17161,
+     3237.4
+    ],
+    [
+     18831,
+     3234
+    ],
+    [
+     24787,
+     3230.8
+    ],
+    [
+     25055,
+     3227.6000000000004
+    ],
+    [
+     25387,
+     3224.4
+    ],
+    [
+     26389,
+     3221.2000000000003
+    ],
+    [
+     27725,
+     3218
+    ],
+    [
+     30140,
+     3214.8
+    ],
+    [
+     32755,
+     3211.6000000000004
+    ],
+    [
+     39927,
+     3208.4
+    ],
+    [
+     42494,
+     3206.8
+    ],
+    [
+     44653,
+     3205.6000000000004
+    ],
+    [
+     44724,
+     3204.8
+    ],
+    [
+     44806,
+     3204
+    ],
+    [
+     46355,
+     3203.2000000000003
+    ]
+   ],
+   "voltas": 60,
+   "ms": 46362,
+   "relatos": 30,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12378243.4140625,
+    "areaOriginal": 12338378,
+    "avaliacoes": 2847050,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 24,
+    "iteracoes": 1677,
+    "movimentos": 15624,
+    "msAteCompressao": 39949.1685,
+    "msTotal": 46358.529599999994,
+    "segundosSeparando": 41.67591571621597,
+    "separacoes": 29,
+    "separacoesResolvidas": 29,
+    "verticesColisao": 983,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "s01",
+   "semente": 15839,
+   "inicial": 3266.6,
+   "final": 3188.4,
+   "curva": [
+    [
+     8771,
+     3263.4
+    ],
+    [
+     8845,
+     3260
+    ],
+    [
+     8907,
+     3256.8
+    ],
+    [
+     9025,
+     3253.6
+    ],
+    [
+     9168,
+     3250.4
+    ],
+    [
+     9320,
+     3247
+    ],
+    [
+     9657,
+     3243.8
+    ],
+    [
+     9781,
+     3240.6
+    ],
+    [
+     10198,
+     3237.4
+    ],
+    [
+     12238,
+     3234
+    ],
+    [
+     13324,
+     3230.8
+    ],
+    [
+     14217,
+     3227.6
+    ],
+    [
+     14726,
+     3224.4
+    ],
+    [
+     15336,
+     3221.2
+    ],
+    [
+     20224,
+     3218
+    ],
+    [
+     21087,
+     3214.8
+    ],
+    [
+     22375,
+     3211.6000000000004
+    ],
+    [
+     23491,
+     3208.4
+    ],
+    [
+     27423,
+     3205
+    ],
+    [
+     29256,
+     3201.8
+    ],
+    [
+     32356,
+     3198.6
+    ],
+    [
+     34335,
+     3195.4
+    ],
+    [
+     40462,
+     3193.8
+    ],
+    [
+     41482,
+     3192.4
+    ],
+    [
+     42149,
+     3191
+    ],
+    [
+     42193,
+     3189.6000000000004
+    ],
+    [
+     42325,
+     3188.4
+    ]
+   ],
+   "voltas": 74,
+   "ms": 52119,
+   "relatos": 34,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12459876.5234375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 5956962,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 28,
+    "iteracoes": 2690,
+    "movimentos": 32307,
+    "msAteCompressao": 40222.5184,
+    "msTotal": 52114.3633,
+    "segundosSeparando": 48.03585680946708,
+    "separacoes": 35,
+    "separacoesResolvidas": 33,
+    "verticesColisao": 416,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "q6",
+   "semente": 15839,
+   "inicial": 3266.6,
+   "final": 3191.8,
+   "curva": [
+    [
+     10505,
+     3263.4
+    ],
+    [
+     10892,
+     3260
+    ],
+    [
+     11043,
+     3256.8
+    ],
+    [
+     11589,
+     3253.6000000000004
+    ],
+    [
+     12015,
+     3250.4
+    ],
+    [
+     13070,
+     3247
+    ],
+    [
+     14421,
+     3243.8
+    ],
+    [
+     14786,
+     3240.6000000000004
+    ],
+    [
+     15289,
+     3237.4
+    ],
+    [
+     19890,
+     3234
+    ],
+    [
+     20089,
+     3230.8
+    ],
+    [
+     21117,
+     3227.6000000000004
+    ],
+    [
+     23050,
+     3224.4
+    ],
+    [
+     24344,
+     3221.2000000000003
+    ],
+    [
+     28232,
+     3218
+    ],
+    [
+     29904,
+     3214.8
+    ],
+    [
+     30828,
+     3211.6000000000004
+    ],
+    [
+     32592,
+     3208.4
+    ],
+    [
+     34031,
+     3205
+    ],
+    [
+     38693,
+     3201.8
+    ],
+    [
+     41838,
+     3198.6000000000004
+    ],
+    [
+     42085,
+     3197
+    ],
+    [
+     43684,
+     3195.6000000000004
+    ],
+    [
+     44029,
+     3194.2000000000003
+    ],
+    [
+     44218,
+     3193
+    ],
+    [
+     44960,
+     3191.8
+    ]
+   ],
+   "voltas": 66,
+   "ms": 45073,
+   "relatos": 33,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12352458.859375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 2810434,
+    "encolhidasNaCompressao": 5,
+    "encolhidasNaExploracao": 27,
+    "iteracoes": 1469,
+    "movimentos": 15421,
+    "msAteCompressao": 41868.7217,
+    "msTotal": 45069.346600000004,
+    "segundosSeparando": 39.45579571380836,
+    "separacoes": 33,
+    "separacoesResolvidas": 32,
+    "verticesColisao": 1538,
+    "verticesOriginais": 2396
+   }
+  },
+  {
+   "trabalho": "producao-misturada",
+   "braco": "q8",
+   "semente": 15839,
+   "inicial": 3266.6,
+   "final": 3193.2000000000003,
+   "curva": [
+    [
+     10288,
+     3263.4
+    ],
+    [
+     10759,
+     3260
+    ],
+    [
+     10948,
+     3256.8
+    ],
+    [
+     11455,
+     3253.6000000000004
+    ],
+    [
+     11900,
+     3250.4
+    ],
+    [
+     12774,
+     3247
+    ],
+    [
+     13928,
+     3243.8
+    ],
+    [
+     14432,
+     3240.6000000000004
+    ],
+    [
+     14884,
+     3237.4
+    ],
+    [
+     19616,
+     3234
+    ],
+    [
+     19796,
+     3230.8
+    ],
+    [
+     20918,
+     3227.6000000000004
+    ],
+    [
+     22879,
+     3224.4
+    ],
+    [
+     24248,
+     3221.2000000000003
+    ],
+    [
+     28204,
+     3218
+    ],
+    [
+     29541,
+     3214.8
+    ],
+    [
+     30689,
+     3211.6000000000004
+    ],
+    [
+     32272,
+     3208.4
+    ],
+    [
+     33563,
+     3205
+    ],
+    [
+     37302,
+     3201.8
+    ],
+    [
+     40376,
+     3198.6000000000004
+    ],
+    [
+     40848,
+     3197
+    ],
+    [
+     41969,
+     3195.6000000000004
+    ],
+    [
+     43269,
+     3194.2000000000003
+    ],
+    [
+     43421,
+     3193.2000000000003
+    ]
+   ],
+   "voltas": 66,
+   "ms": 46909,
+   "relatos": 32,
+   "rejeitados": 0,
+   "motivo": null,
+   "pares": 0,
+   "estatisticas": {
+    "areaColisao": 12352458.859375,
+    "areaOriginal": 12338378,
+    "avaliacoes": 3090510,
+    "encolhidasNaCompressao": 4,
+    "encolhidasNaExploracao": 27,
+    "iteracoes": 1650,
+    "movimentos": 16964,
+    "msAteCompressao": 40448.9555,
+    "msTotal": 46903.4645,
+    "segundosSeparando": 40.69785987585783,
+    "separacoes": 32,
+    "separacoesResolvidas": 31,
+    "verticesColisao": 1538,
+    "verticesOriginais": 2396
+   }
+  }
+ ]
+}

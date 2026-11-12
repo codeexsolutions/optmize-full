@@ -1,0 +1,11 @@
+{
+  "hoje": { "modo": "sozinhos" },
+  "plano": { "modo": "sozinhos", "etapas": [
+    { "fracao": 0.5, "fracaoCompressao": 0, "ajustes": { "poly_simpl_tolerance": 0.01, "quadtree_depth": 6, "expl": { "split_guiado": [0.9, 2] } } },
+    { "ajustes": { "quadtree_depth": 6, "expl": { "split_guiado": [0.9, 2] }, "cmpr": { "split_guiado": [0.7, 2] } } }
+  ] },
+  "plano-cooperando": { "modo": "cooperam", "rodadas": [
+    { "fracao": 0.5, "fracaoCompressao": 0, "ajustes": { "poly_simpl_tolerance": 0.01, "quadtree_depth": 6, "expl": { "split_guiado": [0.9, 2] } } },
+    { "ajustes": { "quadtree_depth": 6, "expl": { "split_guiado": [0.9, 2] }, "cmpr": { "split_guiado": [0.7, 2] } } }
+  ] }
+}

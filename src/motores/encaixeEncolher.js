@@ -65,7 +65,9 @@
 import { agruparPorSilhueta, colunasDoTecido, consumoDoFundo } from "./encaixeMotor";
 import { rotacoesDe } from "./encaixeGiro";
 import { acharSobreposicao } from "./encaixeSobreposicao";
-import iniciarCola, { initSync, encolher as encolherNoWasm } from "./encolher/encolher.js";
+import iniciarCola, {
+  initSync, encolher as encolherNoWasm, estatisticas as estatisticasDoWasm,
+} from "./encolher/encolher.js";
 
 // ==================== OS AJUSTES ====================
 
@@ -682,6 +684,89 @@ export async function carregarEncolhedor(fonte) {
 
 export const temEncolhedor = () => encolhedor !== null;
 
+/*
+ * ---------------------------------------------------------------------------
+ * O PLANO DO SPARROW — os ajustes que cada perfil de trabalho pede (2026-11-12)
+ * ---------------------------------------------------------------------------
+ *
+ * Medido no laboratório (docs/optimize/vnext/RELATORIO.md, E2/E3/E6/E7/E8):
+ * tudo o que barateia a avaliação do sparrow — polígono mais simples, quadtree
+ * mais funda, corte onde a faixa está vazia — compra tecido no ROLO LONGO
+ * (o sparrow está longe de convergir no tempo que tem) e fica neutro ou piora
+ * no curto (ele já convergiu, e só sobra o custo da forma mais gorda).
+ *
+ * Então o plano só existe para o rolo longo com avaliação cara (contorno de
+ * muitos vértices), e é "do grosso para o fino": a
+ * primeira metade com o polígono simplificado a 1% (muitas avaliações
+ * baratas), a segunda com a forma de sempre e a compressão fina — o que a
+ * etapa grossa acha continua válido na fina, porque a forma simplificada
+ * CONTÉM a exata. Fora disso, `null`: o sparrow roda exatamente como antes.
+ */
+/** A partir de quantas larguras de comprimento o rolo é "longo". */
+export const ROLO_LONGO_PROPORCAO = 8;
+/**
+ * A partir de quantos vértices (média por peça, do contorno em escada) a
+ * avaliação do sparrow é "cara". Medido (E7B): o lote-grande tem rolo longo,
+ * mas grade de 5 mm e ~84 vértices por peça — a avaliação já é barata e o
+ * plano só piora; os pedidos de produção (grade de 2 mm) têm ~250.
+ */
+export const VERTICES_CAROS = 150;
+/** As etapas do rolo longo e caro: metade grossa, metade fina (E7B/E7C). */
+export const ETAPAS_DO_ROLO_LONGO = [
+  { fracao: 0.5, fracaoCompressao: 0,
+    ajustes: { poly_simpl_tolerance: 0.01, quadtree_depth: 6, expl: { split_guiado: [0.9, 2] } } },
+  { ajustes: { quadtree_depth: 6, expl: { split_guiado: [0.9, 2] }, cmpr: { split_guiado: [0.7, 2] } } },
+];
+
+/**
+ * A carga de vértices de um trabalho: a média, por peça, dos vértices do
+ * contorno em escada da silhueta dela — o custo de mover uma peça no
+ * sparrow cresce com isso.
+ */
+export function cargaDeVertices(itens) {
+  let soma = 0;
+  let n = 0;
+  agruparPorSilhueta(itens).forEach((balde) => {
+    const m0 = balde.mascaras && balde.mascaras.rotacoes && balde.mascaras.rotacoes[0];
+    if (!m0) return;
+    soma += contornoEmEscada(m0).length * balde.itens.length;
+    n += balde.itens.length;
+  });
+  return n > 0 ? soma / n : 0;
+}
+
+/**
+ * O plano de um trabalho: `{ etapas }` para o rolo longo com avaliação cara,
+ * ou `null` (o sparrow roda exatamente como antes). `comprimento` e
+ * `larguraTecido` em cm (o comprimento é o do encaixe da busca); `vertices`
+ * é a `cargaDeVertices`.
+ */
+export function planoDoSparrow({ comprimento, larguraTecido, vertices }) {
+  const proporcao = Number(comprimento) / Number(larguraTecido);
+  if (!(proporcao >= ROLO_LONGO_PROPORCAO)) return null;
+  if (!(Number(vertices) >= VERTICES_CAROS)) return null;
+  return { etapas: ETAPAS_DO_ROLO_LONGO };
+}
+
+/** Os ajustes como o WASM os lê: JSON, ou nada para o padrão. */
+function ajustesDoSparrow(ajustes) {
+  if (!ajustes || typeof ajustes !== "object" || Object.keys(ajustes).length === 0) return undefined;
+  return JSON.stringify(ajustes);
+}
+
+/**
+ * O que a última chamada do sparrow fez de verdade (separações, avaliações,
+ * movimentos, tempo de cada fase) — ver "AS ESTATÍSTICAS", em
+ * wasm-encolher/src/lib.rs. `null` com um `.wasm` antigo, sem a função.
+ */
+function lerEstatisticas() {
+  try {
+    return typeof estatisticasDoWasm === "function" ? JSON.parse(estatisticasDoWasm()) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Encolhe o rolo de um encaixe pronto. É SÍNCRONO e dura `tempoMs` inteiro —
  * quem chama é um worker (ou a bancada), nunca a thread da tela.
@@ -710,12 +795,24 @@ export function encolherEncaixe(itens, resultado, config, opcoes = {}) {
   const tipos = tiposDoEncaixe(itens, config.sparrowExato !== false && opcoes.exato !== false);
   const instancia = JSON.stringify(instanciaDoSparrow(tipos, colsTecido));
   const partir = opcoes.partir !== false;
-  const partida = partir ? partidaDoSparrow(resultado, tipos, passo, colsTecido) : null;
+  /*
+   * A PARTIDA EXATA (2026-11-12). Quem já tem um encaixe do PRÓPRIO sparrow
+   * (o JSON que ele relatou, com as posições em ponto flutuante e a separação
+   * mínima respeitada) pode recomeçar dele sem passar pela grade: arredondar
+   * para a célula encosta as peças, e o sparrow gastaria a primeira separação
+   * só para afastá-las de novo. É o que os workers que cooperam trocam entre
+   * si (ver "OS WORKERS QUE COOPERAM", em encaixeParalelo.js). A instância
+   * tem de ser a mesma — os tipos saem das mesmas peças, na mesma ordem.
+   */
+  const partidaExata = typeof opcoes.partidaDoSparrow === "string" ? opcoes.partidaDoSparrow : null;
+  const partida = partidaExata ? null : (partir ? partidaDoSparrow(resultado, tipos, passo, colsTecido) : null);
 
   let melhor = null;
+  let melhorJson = null;
   let relatos = 0;
   let rejeitados = 0;
-  const avaliar = (json) => {
+  const ORIGENS = { 1: "sparrow · exploração", 2: "sparrow · compressão", 3: "sparrow · final" };
+  const avaliar = (json, origem) => {
     relatos++;
     let solucao;
     try { solucao = JSON.parse(json); } catch { rejeitados++; return; }
@@ -724,30 +821,83 @@ export function encolherEncaixe(itens, resultado, config, opcoes = {}) {
     const alvo = melhor ? melhor.consumo : resultado.consumo;
     if (novo.consumo < alvo - 1e-9) {
       melhor = novo;
-      if (opcoes.aoMelhorar) opcoes.aoMelhorar(novo);
+      melhorJson = json;
+      if (opcoes.aoMelhorar) opcoes.aoMelhorar(novo, json, ORIGENS[origem] || "sparrow");
+    }
+  };
+
+  /*
+   * AS ETAPAS (2026-11-12, `opcoes.etapas`). Sem elas, uma chamada só do
+   * sparrow, como sempre. Com elas, o relógio é repartido: cada etapa roda
+   * com os SEUS ajustes e recomeça do melhor encaixe até ali pela partida
+   * exata. É o "do grosso para o fino": formas simplificadas e a quadtree
+   * funda primeiro (muitas avaliações baratas), a forma de verdade no fim (o
+   * que a etapa grossa acha continua válido na fina — a forma simplificada
+   * CONTÉM a exata). Cada etapa: `{ fracao, ajustes, fracaoCompressao }`; a
+   * última fica com o que sobrar do relógio. Ver docs/optimize/vnext.
+   */
+  const etapas = Array.isArray(opcoes.etapas) && opcoes.etapas.length > 0 ? opcoes.etapas : [null];
+  const total = Math.max(0, opcoes.tempoMs || 0);
+  const semente = opcoes.semente != null ? opcoes.semente : 1;
+  let estatisticas = null;
+  let voltasAntes = 0;
+  let avaliacoesAntes = 0;
+  let gasto = 0;
+  let jsonAtual = partidaExata;
+  const somarEstatisticas = () => {
+    const e = lerEstatisticas();
+    if (!e) return;
+    if (!estatisticas) { estatisticas = { ...e }; return; }
+    for (const campo of ["avaliacoes", "separacoes", "separacoesResolvidas", "movimentos", "iteracoes",
+      "segundosSeparando", "encolhidasNaExploracao", "encolhidasNaCompressao", "msTotal"]) {
+      estatisticas[campo] = (estatisticas[campo] || 0) + (e[campo] || 0);
     }
   };
 
   try {
-    const final = encolhedor(
-      instancia,
-      partida ? JSON.stringify(partida) : undefined,
-      Math.max(0, opcoes.tempoMs || 0),
-      opcoes.fracaoCompressao != null ? opcoes.fracaoCompressao : ENCOLHER_FRACAO_COMPRESSAO,
-      opcoes.semente != null ? opcoes.semente : 1,
-      opcoes.separacao != null ? opcoes.separacao : ENCOLHER_SEPARACAO,
-      opcoes.trabalhadores || ENCOLHER_TRABALHADORES,
-      (json) => avaliar(json),
-      // Quantas voltas o sparrow já deu, umas quatro vezes por segundo: é o
-      // contador de tentativas desta fase (ver `Terminador`, em wasm-encolher).
-      (voltas) => { if (opcoes.aoAndar) opcoes.aoAndar(voltas); },
-    );
-    avaliar(final);
+    for (let i = 0; i < etapas.length; i++) {
+      const etapa = etapas[i];
+      const ultima = i === etapas.length - 1;
+      const tempo = ultima ? Math.max(0, total - gasto) : Math.round(total * Math.max(0, Math.min(1, etapa.fracao || 0)));
+      let voltasDaEtapa = 0;
+      const final = encolhedor(
+        instancia,
+        jsonAtual || (partida ? JSON.stringify(partida) : undefined),
+        tempo,
+        etapa && etapa.fracaoCompressao != null ? etapa.fracaoCompressao
+          : opcoes.fracaoCompressao != null ? opcoes.fracaoCompressao : ENCOLHER_FRACAO_COMPRESSAO,
+        semente + i * 7,
+        opcoes.separacao != null ? opcoes.separacao : ENCOLHER_SEPARACAO,
+        opcoes.trabalhadores || ENCOLHER_TRABALHADORES,
+        (json, _largura, origem) => avaliar(json, origem),
+        // Quantas voltas o sparrow já deu, umas quatro vezes por segundo: é o
+        // contador de tentativas desta fase (ver `Terminador`, em wasm-encolher).
+        // O segundo número são as avaliações geométricas até ali — somadas
+        // entre as etapas, para o contador não voltar a zero.
+        (voltas, avaliacoes) => {
+          voltasDaEtapa = voltas;
+          if (opcoes.aoAndar) opcoes.aoAndar(voltasAntes + voltas, avaliacoesAntes + (avaliacoes || 0));
+        },
+        // Os ajustes do sparrow (ver "OS AJUSTES", em wasm-encolher/src/lib.rs):
+        // os da etapa, ou os gerais; sem nenhum, vale o padrão.
+        ajustesDoSparrow(etapa && etapa.ajustes ? etapa.ajustes : opcoes.ajustes),
+      );
+      avaliar(final, 3);
+      somarEstatisticas();
+      voltasAntes += voltasDaEtapa;
+      avaliacoesAntes = estatisticas ? estatisticas.avaliacoes || 0 : avaliacoesAntes;
+      gasto += tempo;
+      // A próxima etapa continua do melhor até aqui (se houve melhor).
+      if (melhorJson) jsonAtual = melhorJson;
+    }
   } catch (erro) {
     return {
-      resultado: melhor, motivo: `sparrow falhou: ${erro && erro.message ? erro.message : erro}`,
-      relatos, rejeitados, partiu: partida !== null,
+      resultado: melhor, melhorJson, motivo: `sparrow falhou: ${erro && erro.message ? erro.message : erro}`,
+      relatos, rejeitados, partiu: partida !== null || !!partidaExata, estatisticas: estatisticas || lerEstatisticas(),
     };
   }
-  return { resultado: melhor, motivo: melhor ? null : "não encurtou", relatos, rejeitados, partiu: partida !== null };
+  return {
+    resultado: melhor, melhorJson, motivo: melhor ? null : "não encurtou", relatos, rejeitados,
+    partiu: partida !== null || !!partidaExata, estatisticas,
+  };
 }

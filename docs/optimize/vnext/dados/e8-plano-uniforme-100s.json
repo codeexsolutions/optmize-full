@@ -1,0 +1,176 @@
+{
+ "quando": "2026-11-12T13:38:00.290Z",
+ "opcoes": {
+  "trabalhos": [
+   "pedido-uniforme"
+  ],
+  "tempo": 100,
+  "sementes": 2,
+  "paralelo": 5,
+  "rodadas": 3,
+  "trabalhadores": 3,
+  "ajustes": null,
+  "json": "docs/optimize/vnext/dados/e8-plano-uniforme-100s.json",
+  "partidas": "docs/optimize/vnext/dados/partidas.json",
+  "bracos": {
+   "hoje": {
+    "modo": "sozinhos"
+   },
+   "plano": {
+    "modo": "sozinhos",
+    "etapas": [
+     {
+      "fracao": 0.5,
+      "fracaoCompressao": 0,
+      "ajustes": {
+       "poly_simpl_tolerance": 0.01,
+       "quadtree_depth": 6,
+       "expl": {
+        "split_guiado": [
+         0.9,
+         2
+        ]
+       }
+      }
+     },
+     {
+      "ajustes": {
+       "quadtree_depth": 6,
+       "expl": {
+        "split_guiado": [
+         0.9,
+         2
+        ]
+       },
+       "cmpr": {
+        "split_guiado": [
+         0.7,
+         2
+        ]
+       }
+      }
+     }
+    ]
+   },
+   "plano-cooperando": {
+    "modo": "cooperam",
+    "rodadas": [
+     {
+      "fracao": 0.5,
+      "fracaoCompressao": 0,
+      "ajustes": {
+       "poly_simpl_tolerance": 0.01,
+       "quadtree_depth": 6,
+       "expl": {
+        "split_guiado": [
+         0.9,
+         2
+        ]
+       }
+      }
+     },
+     {
+      "ajustes": {
+       "quadtree_depth": 6,
+       "expl": {
+        "split_guiado": [
+         0.9,
+         2
+        ]
+       },
+       "cmpr": {
+        "split_guiado": [
+         0.7,
+         2
+        ]
+       }
+      }
+     }
+    ]
+   }
+  }
+ },
+ "maquina": "AMD Ryzen 5 5600X 6-Core Processor             ",
+ "corridas": [
+  {
+   "trabalho": "pedido-uniforme",
+   "semente": 1,
+   "inicial": 2306.7999999999997,
+   "bracos": {
+    "hoje": {
+     "final": 2238.4,
+     "finais": [
+      2245.4,
+      2243.2,
+      2238.4,
+      2240.7999999999997,
+      2245.4
+     ],
+     "avaliacoes": 26752126,
+     "pares": 0
+    },
+    "plano": {
+     "final": 2217.4,
+     "finais": [
+      2236.4,
+      2217.4,
+      2243,
+      2231.8,
+      2237.4
+     ],
+     "avaliacoes": 80854984,
+     "pares": 0
+    },
+    "plano-cooperando": {
+     "final": 2215,
+     "porRodada": [
+      2220.7999999999997,
+      2215
+     ],
+     "avaliacoes": 82012314,
+     "pares": 0
+    }
+   }
+  },
+  {
+   "trabalho": "pedido-uniforme",
+   "semente": 7920,
+   "inicial": 2306.7999999999997,
+   "bracos": {
+    "plano": {
+     "final": 2223,
+     "finais": [
+      2232,
+      2233,
+      2229.6,
+      2223,
+      2234.2
+     ],
+     "avaliacoes": 80291232,
+     "pares": 0
+    },
+    "plano-cooperando": {
+     "final": 2218.7999999999997,
+     "porRodada": [
+      2227.4,
+      2218.7999999999997
+     ],
+     "avaliacoes": 80472206,
+     "pares": 0
+    },
+    "hoje": {
+     "final": 2233,
+     "finais": [
+      2238.7999999999997,
+      2233,
+      2243,
+      2242,
+      2237.4
+     ],
+     "avaliacoes": 29112312,
+     "pares": 0
+    }
+   }
+  }
+ ]
+}

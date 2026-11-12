@@ -27,6 +27,7 @@ const PARA_A_BANCADA = [
   "motores/encaixeEncolher.js",
   "motores/encaixeRegioes.js",
   "motores/conferenciaDaArte.js",
+  "motores/limitesInferiores.js",
 ];
 
 module.exports = { PARA_A_BANCADA };

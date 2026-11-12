@@ -35,7 +35,8 @@ import {
   buscarMelhorEncaixe, fatiaDoPortfolio, melhorQue, motoresDaFatia, papelDaFatia,
 } from "./encaixeMotor";
 import {
-  ENCOLHER_MINIMO_MS, ENCOLHER_RESERVA_MS, motivoDoTrabalho, motivoParaNaoEncolher, tempoDaBusca,
+  ENCOLHER_FRACAO_COMPRESSAO, ENCOLHER_MINIMO_MS, ENCOLHER_RESERVA_MS, cargaDeVertices, motivoDoTrabalho,
+  motivoParaNaoEncolher, planoDoSparrow, tempoDaBusca,
 } from "./encaixeEncolher";
 import { consumoDoFundo } from "./encaixeMotor";
 import { acharSobreposicao } from "./encaixeSobreposicao";
@@ -415,6 +416,16 @@ export function partidaParaWorker(resultado) {
 const MARGEM_DO_ENCOLHER_MS = 0;
 
 /**
+ * As etapas do plano do sparrow rodam como RODADAS cooperativas (true) ou
+ * dentro de cada worker (false). Medido no E8 (docs/optimize/vnext, 5
+ * workers, o tempo que a tela dá a cada trabalho): cooperando, −0,92%
+ * (misturado, 50 s), −0,84% (uniforme, 100 s) e −0,67% (avulsa, 140 s)
+ * contra o de hoje; por worker, −0,84%, −0,69% e −0,55%. A cooperação foi
+ * melhor em 6 dos 7 pares de semente (o outro empatou).
+ */
+export const PLANO_EM_RODADAS = true;
+
+/**
  * A segunda fase: o sparrow em todos os workers.
  *
  * O WASM roda numa chamada síncrona, então o worker não lê o "parar". O que
@@ -439,14 +450,23 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
   // As voltas que cada sparrow já deu: somadas às tentativas da busca, são o
   // contador da tela nesta fase.
   const voltas = new Array(workers.length).fill(0);
+  // As avaliações geométricas de cada sparrow até agora, e quem achou a última
+  // melhora (exploração ou compressão): é o que o diagnóstico mostra.
+  const avaliacoes = new Array(workers.length).fill(0);
+  let origemDaUltima = null;
   const estados = new Array(workers.length).fill(null);
   const encerrar = new Array(workers.length).fill(null);
   const respondeu = new Array(workers.length).fill(false);
+  // Worker encerrado (pelo vigia ou por erro) não recebe mais tarefa: com as
+  // rodadas da cooperação, mandar a próxima para ele seria esperar para sempre.
+  const morto = new Array(workers.length).fill(false);
   let parouNaMao = false;
   let matouAlguem = false;
   let falhaGeral = null;
   // Por regiões: o pedaço de partida de cada região e qual worker cuida dela.
   let regioes = null;
+  // O plano do sparrow que esta corrida usou (para o diagnóstico).
+  let planoUsado = null;
   /** O rolo inteiro de agora: cada região com o melhor que o worker dela mandou. */
   const emendado = () => emendarRegioes(regioes.pedacos.map((pedaco, r) => {
     // O melhor que algum dos workers desta região mandou.
@@ -473,6 +493,9 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
       modo: null,
       decorridoMs: Date.now() - inicioGeral,
       workers: workers.length,
+      origem: origemDaUltima,
+      plano: planoUsado,
+      sparrow: { avaliacoes: avaliacoes.reduce((soma, v) => soma + v, 0) },
     });
   };
 
@@ -484,6 +507,7 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
     workers.forEach((w, k) => {
       if (respondeu[k]) return;
       respondeu[k] = true;
+      morto[k] = true;
       matouAlguem = true;
       if (!parar) {
         console.warn(`[encaixe] o encolhedor ${k} passou do prazo; encerrando e ficando com o que ele mandou.`);
@@ -565,6 +589,20 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
       && guardada.posicoes.length === base.posicoes.length
       && guardada.consumo < base.consumo - 1e-9
       ? guardada : partidaParaWorker(base);
+    /*
+     * O PLANO DO SPARROW (2026-11-12, ver `planoDoSparrow`, em
+     * encaixeEncolher.js): no rolo longo com avaliação cara, "do grosso para
+     * o fino"; fora dele, nada muda. `encolherPlano: false` desliga; etapas
+     * ou rodadas passadas à mão mandam mais que o plano.
+     */
+    const plano = config.encolherPlano === false || config.encolherEtapas || config.encolherRodadas ? null
+      : planoDoSparrow({ comprimento: base.consumo, larguraTecido: config.larguraTecido, vertices: cargaDeVertices(itens) });
+    // As etapas do plano viram RODADAS em que os workers cooperam (cada troca
+    // de etapa recomeça todos do melhor de todos) ou ficam dentro de cada
+    // worker — ver PLANO_EM_RODADAS.
+    const rodadasDoPlano = plano && PLANO_EM_RODADAS && !regioes ? plano.etapas : null;
+    const etapasDoPlano = plano && !rodadasDoPlano ? plano.etapas : null;
+    if (plano) planoUsado = rodadasDoPlano ? "grosso → fino, em rodadas" : "grosso → fino";
     const configDoSparrow = {
       larguraTecido: config.larguraTecido,
       passo: config.passo,
@@ -575,59 +613,160 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
       tempoMs: tempoDoSparrow,
       trabalhadores: config.encolherTrabalhadores,
       partir: config.encolherPartir !== false,
+      ajustes: config.encolherAjustes,
+      etapas: config.encolherEtapas || etapasDoPlano || undefined,
     };
-    const rodadas = workers.map((w, k) => new Promise((pronto) => {
-      encerrar[k] = pronto;
-      const regiao = regioes ? regioes.doWorker[k] : -1;
-      if (parouNaMao || falhaGeral || !aptos[k] || (regioes && regiao < 0)) { respondeu[k] = true; pronto(); return; }
-      const aoResponder = (evento) => {
-        const msg = evento.data;
-        if (!msg) return;
-        if (msg.tipo === "encolhendo") {
-          voltas[k] = msg.voltas || 0;
-          relatar();
-          return;
-        }
-        if (msg.tipo === "encolhido") {
-          if (regioes) {
-            // Uma região encurtou: a mesa recebe o rolo inteiro, emendado.
-            devolverAsPecas(msg.resultado, itens);
-            ultimos[k] = msg.resultado;
-            relatar();
-            if (config.aoDesenhar) config.aoDesenhar("recorde", emendado());
-            return;
-          }
-          ultimos[k] = msg.resultado;
-          relatar();
-          // O rolo mais curto vai para a mesa como recorde: nesta fase não há
-          // fantasma, e é só por aqui que a animação ganha arranjo novo.
-          if (config.aoDesenhar) config.aoDesenhar("recorde", msg.resultado);
-          return;
-        }
-        if (msg.tipo === "encolheu" || msg.tipo === "falhou") {
-          w.removeEventListener("message", aoResponder);
-          respondeu[k] = true;
-          estados[k] = msg.tipo === "falhou" ? { motivo: `sparrow falhou: ${msg.erro}` } : msg;
-          pronto();
-        }
-      };
-      w.addEventListener("message", aoResponder);
+
+    /*
+     * OS WORKERS QUE COOPERAM (2026-11-12, `config.encolherCooperar`).
+     *
+     * Sem ele (o padrão), cada worker roda o sparrow sozinho o tempo todo e
+     * fica o melhor dos N no fim — como sempre foi. Com `encolherCooperar = R`
+     * (R > 1), o tempo vira R rodadas: ao fim de cada uma, o MELHOR encaixe
+     * entre todos vira a partida de todos na rodada seguinte, cada worker com
+     * outra semente. A partida passa EXATA (o JSON do próprio sparrow, ver "A
+     * PARTIDA EXATA", em encaixeEncolher.js), sem a grade encostar as peças.
+     * As rodadas do meio só exploram; a compressão fina fica para a última.
+     * Medido em `bancada/laboratorio-cooperar.js` (ver
+     * docs/optimize/vnext/RELATORIO.md). Não vale por regiões.
+     */
+    /*
+     * As rodadas podem vir prontas (`config.encolherRodadas`: uma lista de
+     * `{ fracao, ajustes, fracaoCompressao }`, ver `planoDoSparrow`, em
+     * encaixeEncolher.js) — aí cada rodada é também uma ETAPA, com os seus
+     * ajustes (o grosso no começo, o fino no fim), e todos os workers
+     * recomeçam do melhor de todos a cada troca. Ou só um número
+     * (`encolherCooperar`), com rodadas iguais.
+     */
+    const rodadasPedidas = config.encolherRodadas || rodadasDoPlano;
+    const planoDeRodadas = !regioes && Array.isArray(rodadasPedidas) && rodadasPedidas.length > 1
+      ? rodadasPedidas : null;
+    const quantasRodadas = planoDeRodadas ? planoDeRodadas.length
+      : !regioes && Number(config.encolherCooperar) > 1 ? Math.floor(Number(config.encolherCooperar)) : 1;
+    let partidaDaRodada = partida;
+    let jsonDaRodada = null;
+    const ultimoJson = new Array(workers.length).fill(null);
+    // O que cada worker já fez nas rodadas que acabaram: as avaliações do
+    // andamento recomeçam do zero a cada chamada do sparrow.
+    const avaliacoesAntes = new Array(workers.length).fill(0);
+    const voltasAntes = new Array(workers.length).fill(0);
+    workers.forEach((w, k) => {
       w.addEventListener("error", (evento) => {
         console.warn(`[encaixe] o encolhedor ${k} quebrou:`, evento.message);
+        morto[k] = true;
         respondeu[k] = true;
         matouAlguem = true;
-        estados[k] = { motivo: `worker quebrou: ${evento.message}` };
-        pronto();
+        estados[k] = { ...(estados[k] || {}), motivo: `worker quebrou: ${evento.message}` };
+        if (encerrar[k]) encerrar[k]();
       }, { once: true });
-      w.postMessage({
-        tipo: "encolher", k,
-        partida: regioes ? partidaParaWorker(regioes.pedacos[regiao]) : partida,
-        soDaPartida: Boolean(regioes),
-        config: configDoSparrow,
-        semente: sementeDaFatia(config.semente, k),
-      });
-    }));
-    await Promise.all(rodadas);
+    });
+    /** Soma o que uma rodada de um worker relatou ao que ele já tinha. */
+    const acumular = (k, msg) => {
+      const antes = estados[k] || {};
+      const est = msg.estatisticas || null;
+      const somaEst = antes.estatisticas || null;
+      let estatisticas = est;
+      if (est && somaEst) {
+        estatisticas = { ...somaEst };
+        for (const campo of ["avaliacoes", "separacoes", "separacoesResolvidas", "movimentos", "iteracoes"]) {
+          estatisticas[campo] = (somaEst[campo] || 0) + (est[campo] || 0);
+        }
+      }
+      estados[k] = {
+        ...msg,
+        relatos: (antes.relatos || 0) + (msg.relatos || 0),
+        rejeitados: (antes.rejeitados || 0) + (msg.rejeitados || 0),
+        estatisticas: estatisticas || somaEst,
+      };
+    };
+    const inicioDoSparrow = Date.now();
+    for (let rodada = 0; rodada < quantasRodadas; rodada++) {
+      if (parouNaMao || falhaGeral) break;
+      const ultimaRodada = rodada === quantasRodadas - 1;
+      let configDaRodada = configDoSparrow;
+      if (quantasRodadas > 1) {
+        const restante = tempoDoSparrow - (Date.now() - inicioDoSparrow);
+        if (restante < ENCOLHER_MINIMO_MS) break;
+        const daRodada = planoDeRodadas ? planoDeRodadas[rodada] || {} : {};
+        const fracao = planoDeRodadas ? Math.max(0, Math.min(1, Number(daRodada.fracao) || 0)) : 1 / quantasRodadas;
+        configDaRodada = {
+          ...configDoSparrow,
+          tempoMs: ultimaRodada ? restante : Math.min(restante, tempoDoSparrow * fracao),
+          fracaoCompressao: daRodada.fracaoCompressao != null ? daRodada.fracaoCompressao
+            : ultimaRodada ? Math.min(1, ENCOLHER_FRACAO_COMPRESSAO / Math.max(0.05, fracao)) : 0,
+          ...(daRodada.ajustes ? { ajustes: daRodada.ajustes } : {}),
+          // Rodada com etapa própria não encadeia as etapas gerais dentro dela.
+          ...(planoDeRodadas ? { etapas: undefined } : {}),
+          devolverJson: true,
+        };
+      }
+      const rodadas = workers.map((w, k) => new Promise((pronto) => {
+        encerrar[k] = pronto;
+        const regiao = regioes ? regioes.doWorker[k] : -1;
+        if (parouNaMao || falhaGeral || morto[k] || !aptos[k] || (regioes && regiao < 0)) { respondeu[k] = true; pronto(); return; }
+        respondeu[k] = false;
+        const aoResponder = (evento) => {
+          const msg = evento.data;
+          if (!msg) return;
+          if (msg.tipo === "encolhendo") {
+            voltas[k] = voltasAntes[k] + (msg.voltas || 0);
+            if (Number.isFinite(msg.avaliacoes)) avaliacoes[k] = avaliacoesAntes[k] + msg.avaliacoes;
+            relatar();
+            return;
+          }
+          if (msg.tipo === "encolhido") {
+            if (msg.origem) origemDaUltima = regioes ? `${msg.origem} · região ${regiao + 1}` : msg.origem;
+            if (regioes) {
+              // Uma região encurtou: a mesa recebe o rolo inteiro, emendado.
+              devolverAsPecas(msg.resultado, itens);
+              ultimos[k] = msg.resultado;
+              relatar();
+              if (config.aoDesenhar) config.aoDesenhar("recorde", emendado());
+              return;
+            }
+            ultimos[k] = msg.resultado;
+            if (msg.json) ultimoJson[k] = msg.json;
+            relatar();
+            // O rolo mais curto vai para a mesa como recorde: nesta fase não há
+            // fantasma, e é só por aqui que a animação ganha arranjo novo.
+            if (config.aoDesenhar) config.aoDesenhar("recorde", msg.resultado);
+            return;
+          }
+          if (msg.tipo === "encolheu" || msg.tipo === "falhou") {
+            w.removeEventListener("message", aoResponder);
+            respondeu[k] = true;
+            if (msg.tipo === "falhou") {
+              estados[k] = { ...(estados[k] || {}), motivo: `sparrow falhou: ${msg.erro}` };
+            } else {
+              acumular(k, msg);
+              avaliacoesAntes[k] += (msg.estatisticas && msg.estatisticas.avaliacoes) || 0;
+              voltasAntes[k] = voltas[k];
+            }
+            pronto();
+          }
+        };
+        w.addEventListener("message", aoResponder);
+        w.postMessage({
+          tipo: "encolher", k,
+          partida: regioes ? partidaParaWorker(regioes.pedacos[regiao]) : partidaDaRodada,
+          partidaJson: jsonDaRodada,
+          soDaPartida: Boolean(regioes),
+          config: configDaRodada,
+          semente: sementeDaFatia(config.semente, k) + rodada * 7919,
+        });
+      }));
+      await Promise.all(rodadas);
+      if (ultimaRodada || parouNaMao || falhaGeral) break;
+      // Prazo vencido no meio: o vigia já encerrou quem estava rodando.
+      if (Date.now() - inicioGeral > (config.tempoMaximoMs || 20000) || !workers.some((_, k) => aptos[k] && !morto[k])) break;
+      // O melhor entre todos vira a partida de todos.
+      let kMelhor = -1;
+      ultimos.forEach((r, k) => { if (r && (kMelhor < 0 || r.consumo < ultimos[kMelhor].consumo)) kMelhor = k; });
+      if (kMelhor >= 0 && ultimoJson[kMelhor] && ultimos[kMelhor].consumo < partidaDaRodada.consumo - 1e-9) {
+        partidaDaRodada = partidaParaWorker(ultimos[kMelhor]);
+        jsonDaRodada = ultimoJson[kMelhor];
+      }
+    }
   } catch (erro) {
     console.warn("[encaixe] a segunda fase falhou, ficando com o encaixe da busca:", erro);
     matouAlguem = true;
@@ -638,12 +777,20 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
   if (matouAlguem) derrubarPool();
 
   const soma = (campo) => estados.reduce((s, e) => s + ((e && e[campo]) || 0), 0);
+  const somaEst = (campo) => estados.reduce((s, e) => s + ((e && e.estatisticas && e.estatisticas[campo]) || 0), 0);
   const info = {
     antes: base.consumo,
     relatos: soma("relatos"),
     rejeitados: soma("rejeitados"),
     workers: workers.length,
     parou: parouNaMao,
+    // O trabalho de verdade do sparrow (ver "AS ESTATÍSTICAS", em
+    // wasm-encolher/src/lib.rs). Worker encerrado à força não manda as dele;
+    // as avaliações do andamento cobrem esse caso.
+    avaliacoes: Math.max(somaEst("avaliacoes"), avaliacoes.reduce((t, v) => t + v, 0)),
+    plano: planoUsado,
+    separacoes: somaEst("separacoes"),
+    separacoesResolvidas: somaEst("separacoesResolvidas"),
   };
 
   let campeao = null;

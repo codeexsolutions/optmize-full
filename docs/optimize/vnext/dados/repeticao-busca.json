@@ -1,0 +1,125 @@
+{
+ "quando": "2026-11-12T12:20:27.727Z",
+ "saida": [
+  {
+   "trabalho": "producao-avulsa",
+   "tempo": 3,
+   "tentativas": 63,
+   "ordensUnicas": 60,
+   "encaixesUnicos": 54,
+   "consumosUnicos": 53,
+   "silhuetas": 5,
+   "melhorSolucaoMs": 2184,
+   "consumo": 3242.4,
+   "receita": "vaos/solta/familia/fundo/"
+  },
+  {
+   "trabalho": "producao-avulsa",
+   "tempo": 20,
+   "tentativas": 229,
+   "ordensUnicas": 216,
+   "encaixesUnicos": 207,
+   "consumosUnicos": 200,
+   "silhuetas": 5,
+   "melhorSolucaoMs": 4117,
+   "consumo": 3242.4,
+   "receita": "vaos/solta/familia/fundo/"
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "tempo": 3,
+   "tentativas": 2432,
+   "ordensUnicas": 1676,
+   "encaixesUnicos": 1412,
+   "consumosUnicos": 301,
+   "silhuetas": 3,
+   "melhorSolucaoMs": 1439,
+   "consumo": 361,
+   "receita": "contorno/solta/altura/fundo/"
+  },
+  {
+   "trabalho": "camiseta+manga+gola",
+   "tempo": 20,
+   "tentativas": 18151,
+   "ordensUnicas": 11028,
+   "encaixesUnicos": 9305,
+   "consumosUnicos": 513,
+   "silhuetas": 3,
+   "melhorSolucaoMs": 7272,
+   "consumo": 344.5,
+   "receita": "vaos/solta/lado/fundo/"
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "tempo": 3,
+   "tentativas": 372,
+   "ordensUnicas": 314,
+   "encaixesUnicos": 240,
+   "consumosUnicos": 147,
+   "silhuetas": 3,
+   "melhorSolucaoMs": 275,
+   "consumo": 642.6,
+   "receita": "vaos/trio/area/fundo/"
+  },
+  {
+   "trabalho": "pedido-confeccao",
+   "tempo": 20,
+   "tentativas": 2322,
+   "ordensUnicas": 1898,
+   "encaixesUnicos": 1557,
+   "consumosUnicos": 575,
+   "silhuetas": 3,
+   "melhorSolucaoMs": 276,
+   "consumo": 642.6,
+   "receita": "vaos/trio/area/fundo/"
+  },
+  {
+   "trabalho": "giro-livre",
+   "tempo": 3,
+   "tentativas": 2302,
+   "ordensUnicas": 1651,
+   "encaixesUnicos": 1290,
+   "consumosUnicos": 330,
+   "silhuetas": 3,
+   "melhorSolucaoMs": 2937,
+   "consumo": 351,
+   "receita": "vaos/solta/lado/fundo/"
+  },
+  {
+   "trabalho": "giro-livre",
+   "tempo": 20,
+   "tentativas": 14857,
+   "ordensUnicas": 9340,
+   "encaixesUnicos": 6943,
+   "consumosUnicos": 632,
+   "silhuetas": 3,
+   "melhorSolucaoMs": 4310,
+   "consumo": 349.5,
+   "receita": "vaos/solta/area/fundo/"
+  },
+  {
+   "trabalho": "producao-misturada",
+   "tempo": 3,
+   "tentativas": 30,
+   "ordensUnicas": 30,
+   "encaixesUnicos": 27,
+   "consumosUnicos": 27,
+   "silhuetas": 12,
+   "melhorSolucaoMs": 387,
+   "consumo": 3266.6,
+   "receita": "vaos/dupla/area/fundo/"
+  },
+  {
+   "trabalho": "producao-misturada",
+   "tempo": 20,
+   "tentativas": 180,
+   "ordensUnicas": 177,
+   "encaixesUnicos": 170,
+   "consumosUnicos": 156,
+   "silhuetas": 12,
+   "melhorSolucaoMs": 369,
+   "consumo": 3266.6,
+   "receita": "vaos/dupla/area/fundo/"
+  }
+ ]
+}

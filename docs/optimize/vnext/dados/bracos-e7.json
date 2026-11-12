@@ -1,0 +1,13 @@
+{
+  "base": {},
+  "q6": { "ajustes": { "quadtree_depth": 6 } },
+  "grosso-fino": { "etapas": [
+    { "fracao": 0.5, "ajustes": { "poly_simpl_tolerance": 0.01, "quadtree_depth": 6 }, "fracaoCompressao": 0 },
+    { "ajustes": { "quadtree_depth": 6 } }
+  ] },
+  "grosso-medio-fino": { "etapas": [
+    { "fracao": 0.4, "ajustes": { "poly_simpl_tolerance": 0.01, "quadtree_depth": 6 }, "fracaoCompressao": 0 },
+    { "fracao": 0.3, "ajustes": { "poly_simpl_tolerance": 0.003, "quadtree_depth": 6 }, "fracaoCompressao": 0 },
+    { "ajustes": { "quadtree_depth": 6 } }
+  ] }
+}

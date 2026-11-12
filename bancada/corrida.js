@@ -177,6 +177,12 @@ async function buscarComoAProducao(motor, trabalho,
     let rejeitados = 0;
     let partiu = false;
     const motivos = new Set();
+    // O mesmo plano da produção (ver `planoDoSparrow`, em encaixeEncolher.js):
+    // a bancada mede o que a loja roda. `--extra encolherPlano=false` desliga.
+    const plano = extra.encolherPlano === false || extra.encolherPlano === "false" ? null
+      : motor.planoDoSparrow({
+        comprimento: campeao.consumo, larguraTecido: receita.larguraTecido, vertices: motor.cargaDeVertices(itens),
+      });
     for (let k = 0; k < fatias; k++) {
       const r = motor.encolherEncaixe(itens, campeao, config, {
         // O sparrow fica com o que sobrou depois da fatia mais lenta, como na
@@ -185,6 +191,7 @@ async function buscarComoAProducao(motor, trabalho,
         semente: sementeDaFatia(semente, k, true),
         trabalhadores: extra.encolherTrabalhadores,
         partir: extra.encolherPartir !== false,
+        etapas: plano ? plano.etapas : undefined,
         // P7: `--extra sparrowExato=false` mede o casco em escada de antes.
         ...(extra.sparrowExato === false || extra.sparrowExato === "false" ? { exato: false } : {}),
       });
@@ -199,7 +206,7 @@ async function buscarComoAProducao(motor, trabalho,
     if (melhorEncolhido && melhorEncolhido.consumo < campeao.consumo) {
       campeao = { ...campeao, ...melhorEncolhido, receita: `encolher/${campeao.receita}` };
     }
-    encolhimento = { antes, depois: campeao.consumo, relatos, rejeitados, partiu, motivos: [...motivos] };
+    encolhimento = { antes, depois: campeao.consumo, relatos, rejeitados, partiu, motivos: [...motivos], plano: !!plano };
   }
 
   // A mídia que o trabalho consome, que com bancada é o comprimento do PDF e não

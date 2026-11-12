@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Bancada — o painel "Diagnóstico do motor"</title>
+<!--
+  Só para conferir o DESENHO do painel (src/telas/DiagnosticoDoEncaixe.tsx)
+  fora da tela de Encaixe, que exige login. O retrato abaixo é um exemplo de
+  bancada, montado à mão com números do laboratório — na tela de verdade quem
+  manda o retrato é o controlador, com os números da corrida.
+    Sobe pelo Vite e abra /bancada/diagnostico-no-navegador.html
+-->
+</head>
+<body style="margin:0">
+<div id="raiz" style="height:100vh"></div>
+<script type="module">
+import "/estilo/entrada.css";
+import { createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { BotaoDiagnosticoDoEncaixe } from "/src/telas/DiagnosticoDoEncaixe.tsx";
+
+try { localStorage.setItem("optmize:diagnostico-do-encaixe-aberto", "1"); } catch {}
+createRoot(document.getElementById("raiz")).render(createElement("div", { className: "p-4" }, createElement(BotaoDiagnosticoDoEncaixe)));
+
+// Um retrato de bancada (pedido de produção, 175 peças, números do laboratório).
+const retrato = {
+  rodando: true, fase: "Compactando", estrategia: "compactação (sparrow) · 5 núcleo(s)",
+  decorridoMs: 61200, totalMs: 158000, workers: 5,
+  consumo: 3178.6, consumoDaBusca: 3242.4, aproveitamento: 0.8231,
+  limite: { limite: 2643.8, area: 2616.4, bm: 2643.8, peca: 77.8 },
+  tentativas: 229,
+  sparrow: { avaliacoes: 6123400, separacoes: 0, resolvidas: 0, relatos: 0, rejeitados: 0 },
+  historico: [
+    { ms: 60, consumo: 3659.8, origem: "busca · contorno/solta/area/fundo" },
+    { ms: 1100, consumo: 3258.0, origem: "busca · vaos/solta/altura/fundo" },
+    { ms: 1500, consumo: 3242.4, origem: "busca · vaos/solta/altura/fundo" },
+    { ms: 25100, consumo: 3221.0, origem: "sparrow · exploração" },
+    { ms: 40300, consumo: 3196.2, origem: "sparrow · exploração" },
+    { ms: 61200, consumo: 3178.6, origem: "sparrow · exploração" },
+  ],
+};
+setTimeout(() => window.dispatchEvent(new CustomEvent("encaixe:diagnostico", { detail: retrato })), 300);
+window.bancadaPronta = true;
+</script>
+</body>
+</html>
