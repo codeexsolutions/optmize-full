@@ -63,9 +63,9 @@ function gravarPendentes(lista) {
   fs.writeFileSync(ARQUIVO_PENDENTE, JSON.stringify(lista), { mode: 0o600 });
 }
 
-function anotarPendente(metros, metrosCaixa) {
+function anotarPendente(metros, metrosCaixa, nome = null) {
   const lista = lerPendentes();
-  lista.push({ metros, metrosCaixa, quando: new Date().toISOString() });
+  lista.push({ metros, metrosCaixa, nome, quando: new Date().toISOString() });
   gravarPendentes(lista);
 }
 
@@ -124,8 +124,11 @@ setInterval(() => void enviarPendentes(), 60 * 60 * 1000).unref();
  * `metrosCaixa` é a metragem que o mesmo arquivo daria encaixado pela caixa
  * (ver `metragemPelaCaixa`, no motor). Não decide nada: vai junto só para o
  * servidor somar a economia da empresa. `null` quando não houve como medir.
+ *
+ * `nome` é o nome do arquivo que a pessoa salvou (sem o .pdf): vai para o
+ * relatório do painel, para a CodeEx ver QUAL produção saiu, e não só metros.
  */
-async function permitirExportacao(metrosPedidos, metrosCaixa = null) {
+async function permitirExportacao(metrosPedidos, metrosCaixa = null, nome = null) {
   const metros = Number(metrosPedidos);
   /*
     SEM METRAGEM CONHECIDA, LIBERA.
@@ -141,17 +144,21 @@ async function permitirExportacao(metrosPedidos, metrosCaixa = null) {
   await enviarPendentes();
 
   const caixa = Number.isFinite(metrosCaixa) && metrosCaixa >= metros ? metrosCaixa : null;
+  const nomeDoArquivo = typeof nome === "string" && nome.trim() ? nome.trim().slice(0, 200) : null;
+  const corpo = { metros };
+  if (caixa !== null) corpo.metrosCaixa = caixa;
+  if (nomeDoArquivo) corpo.nome = nomeDoArquivo;
 
   let resposta;
   try {
     resposta = await pedirComToken("/uso/exportacao", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(caixa !== null ? { metros, metrosCaixa: caixa } : { metros }),
+      body: JSON.stringify(corpo),
     });
   } catch {
     // Sem rede: exporta, e fica na fila para ser descontada depois.
-    anotarPendente(metros, caixa);
+    anotarPendente(metros, caixa, nomeDoArquivo);
     return { permitido: true, offline: true };
   }
 
@@ -186,7 +193,7 @@ async function permitirExportacao(metrosPedidos, metrosCaixa = null) {
 
   if (!resposta.ok) {
     // Servidor com problema não é cota estourada: exporta, e desconta depois.
-    if (resposta.status >= 500) anotarPendente(metros, caixa);
+    if (resposta.status >= 500) anotarPendente(metros, caixa, nomeDoArquivo);
     return { permitido: true, falhou: true };
   }
 

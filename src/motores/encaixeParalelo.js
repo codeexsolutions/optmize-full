@@ -248,6 +248,8 @@ export function configParaWorker(config) {
   // linha faz o `postMessage` estourar com "could not be cloned".
   delete copia.aoDesenhar;
   delete copia.fatia;
+  // A partida guardada é só da segunda fase, e vai na mensagem dela.
+  delete copia.partidaGuardada;
   return copia;
 }
 
@@ -549,7 +551,20 @@ export async function encolherEmParalelo(itens, base, config, restoMs, inicioGer
       });
     }
     // 2) Cada worker encolhe com a sua semente (ou a sua região).
-    const partida = partidaParaWorker(base);
+    /*
+     * O MELHOR JÁ CONSEGUIDO VIRA A PARTIDA (2026-11-10). Quando este trabalho
+     * exato já tem um encaixe guardado mais curto que o da busca de agora
+     * (`config.partidaGuardada`, montado pela tela), o sparrow continua DELE,
+     * e não recomeça do zero: cada Optmizar do mesmo trabalho sai melhor que
+     * o anterior. Não vale por regiões (os pedaços saem da busca), e o
+     * campeão continua tendo de ser mais curto que a busca — se o sparrow não
+     * passar do guardado, a tela já volta para o guardado sozinha.
+     */
+    const guardada = config.partidaGuardada;
+    const partida = guardada && Array.isArray(guardada.posicoes)
+      && guardada.posicoes.length === base.posicoes.length
+      && guardada.consumo < base.consumo - 1e-9
+      ? guardada : partidaParaWorker(base);
     const configDoSparrow = {
       larguraTecido: config.larguraTecido,
       passo: config.passo,

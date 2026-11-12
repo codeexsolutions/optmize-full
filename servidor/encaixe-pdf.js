@@ -1643,7 +1643,7 @@ router.post("/pdf", async (req, res) => {
     }, destino);
     await concluido;
     andar({ fase: "conferindo" });
-    const cota = await permitirExportacao(comprimentoCm / 100, metrosCaixa);
+    const cota = await permitirExportacao(comprimentoCm / 100, metrosCaixa, nome);
     if (!cota.permitido) {
       return res.status(402).json({
         error: cota.motivo,

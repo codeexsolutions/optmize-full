@@ -372,7 +372,7 @@ router.post("/memoria", (req, res) => {
     const quadrado = Array.isArray(medidas)
       ? consumoNoQuadrado(medidas, larguraTecido, espaco, espacoY == null ? espaco : espacoY)
       : null;
-    db.prepare(`
+    return db.prepare(`
       INSERT INTO encaixe_historico
         (assinatura, largura_tecido, pecas, consumo, aproveitamento, receita, tentativas, criado_em,
          features, placar, features_versao, consumo_quadrado, espaco)
@@ -383,10 +383,12 @@ router.post("/memoria", (req, res) => {
       Array.isArray(features) ? JSON.stringify(features) : null,
       Array.isArray(placar) && placar.length > 0 ? JSON.stringify(placar) : null,
       Array.isArray(features) ? versao : null,
-      quadrado, Number(espaco) >= 0 ? Number(espaco) : null);
+      quadrado, Number(espaco) >= 0 ? Number(espaco) : null).lastInsertRowid;
   });
 
-  anotar();
+  // O id volta para a tela: na exportação, ela diz ao relatório qual busca
+  // virou arquivo (ver `anotarExportacao`, em encaixe-relatorio.js).
+  const historicoId = Number(anotar());
 
   // A rede é um acelerador, não um requisito — a mesma regra do resto da
   // memória (ver a nota no topo do arquivo): um treino que falhasse não pode
@@ -398,7 +400,7 @@ router.post("/memoria", (req, res) => {
 
   const encaixesDoTipo = db.prepare(
     "SELECT COUNT(*) AS total FROM encaixe_historico WHERE assinatura = ?").get(assinatura).total;
-  res.json({ ok: true, encaixesDoTipo });
+  res.json({ ok: true, encaixesDoTipo, historicoId });
 });
 
 // ==================== O MELHOR ENCAIXE JÁ CONSEGUIDO ====================

@@ -77,11 +77,136 @@ function proximoDia(texto) {
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1).toISOString();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * O QUE ENTRA NA CONTA: o que foi EXPORTADO, uma vez por pedido
+ * ---------------------------------------------------------------------------
+ *
+ * Pedido do dono (2026-11-11): o relatório contava cada BUSCA, e quem roda o
+ * encaixe mais de uma vez — ou exporta o mesmo pedido duas vezes sem querer,
+ * como aconteceu com um pedido de cliente — via o mesmo trabalho contado em
+ * dobro. Agora cada exportação é anotada em `encaixe_exportacoes`, com o nome
+ * do arquivo que a pessoa salvou, e o relatório conta:
+ *
+ *   - só o que saiu em arquivo (busca que ninguém exportou não é trabalho);
+ *   - o mesmo encaixe exportado de novo (PNG e PDF, ou o PDF duas vezes) uma
+ *     vez só;
+ *   - o mesmo NOME de pedido uma vez só no período — fica a exportação mais
+ *     recente, e a linha diz quantas vezes ele saiu.
+ *
+ * A ligação com a busca (`historico_id`) vem da tela; exportação de antes
+ * desta versão, que só ficou na Reposição, é ligada à busca parecida (mesma
+ * largura, mesmas peças, a metragem mais perto, até 12 h antes).
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS encaixe_exportacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trabalho_id INTEGER UNIQUE,
+    historico_id INTEGER,
+    nome TEXT NOT NULL,
+    largura_tecido REAL,
+    consumo REAL,
+    pecas INTEGER,
+    criado_em TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_encaixe_exportacoes_criado ON encaixe_exportacoes (criado_em);
+`);
+
+const DOZE_HORAS = 12 * 60 * 60 * 1000;
+
+function buscaParecida({ larguraTecido, consumoCm, pecas, quando }) {
+  const ate = String(quando);
+  const instante = new Date(ate).getTime();
+  if (!Number.isFinite(instante)) return null;
+  const desde = new Date(instante - DOZE_HORAS).toISOString();
+  const largura = Number(larguraTecido) || null;
+  const total = Number(pecas) || null;
+  return db.prepare(`
+    SELECT id FROM encaixe_historico
+     WHERE consumo > 0 AND criado_em <= ? AND criado_em >= ?
+       AND (? IS NULL OR largura_tecido IS NULL OR ABS(largura_tecido - ?) < 0.5)
+       AND (? IS NULL OR pecas IS NULL OR pecas = ?)
+     ORDER BY ABS(consumo - ?) ASC, criado_em DESC
+     LIMIT 1
+  `).get(ate, desde, largura, largura, total, total, Number(consumoCm) || 0) || null;
+}
+
+/**
+ * Anota uma exportação (chamada pela Reposição, que recebe todo encaixe
+ * exportado). Nunca derruba quem chamou: falhou, fica no console.
+ */
+function anotarExportacao({ trabalhoId, historicoId, nome, larguraTecido, consumoCm, pecas, quando }) {
+  try {
+    let historico = null;
+    if (Number(historicoId) > 0) {
+      historico = db.prepare("SELECT id FROM encaixe_historico WHERE id = ?").get(Number(historicoId)) || null;
+    }
+    if (!historico) historico = buscaParecida({ larguraTecido, consumoCm, pecas, quando });
+    db.prepare(`
+      INSERT OR IGNORE INTO encaixe_exportacoes
+        (trabalho_id, historico_id, nome, largura_tecido, consumo, pecas, criado_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(trabalhoId ?? null, historico ? historico.id : null, String(nome || "Sem nome"),
+      Number(larguraTecido) || null, Number(consumoCm) || null, Number(pecas) || null, String(quando));
+  } catch (erro) {
+    console.warn("[relatório] a exportação não foi anotada:", erro);
+  }
+}
+
+/** As exportações de antes desta versão: estão na Reposição, sem a anotação. */
+function anotarExportacoesAntigas() {
+  let faltam = [];
+  try {
+    faltam = db.prepare(`
+      SELECT t.id, t.nome, t.largura_tecido, t.consumo_cm, t.total_pecas, t.criado_em
+        FROM reposicao_trabalhos t
+       WHERE NOT EXISTS (SELECT 1 FROM encaixe_exportacoes e WHERE e.trabalho_id = t.id)
+    `).all();
+  } catch {
+    return; // a Reposição ainda não criou a tabela dela
+  }
+  for (const t of faltam) {
+    anotarExportacao({
+      trabalhoId: t.id, nome: t.nome, larguraTecido: t.largura_tecido,
+      consumoCm: t.consumo_cm, pecas: t.total_pecas, quando: t.criado_em,
+    });
+  }
+}
+
+/**
+ * A chave do pedido: o nome sem a extensão, sem o "(1)" que a caixa de salvar
+ * põe na segunda cópia, sem "- Cópia", sem acento, caixa ou espaço sobrando.
+ */
+function chaveDoNome(nome) {
+  return String(nome || "")
+    .replace(/\.(pdf|png)$/i, "")
+    .replace(/\s*-\s*c[oó]pia(\s*\(\d+\))?\s*$/i, "")
+    .replace(/\s*\(\d+\)\s*$/, "")
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * A impressão digital de uma exportação: largura do rolo, metragem ao
+ * milímetro e peças. `null` quando falta qualquer um dos três — sem os três,
+ * dois pedidos diferentes poderiam colidir.
+ */
+function impressaoDigital(e) {
+  const ligada = e.historico_id != null && e.consumo > 0;
+  const largura = Number((ligada && e.largura_tecido) || e.e_largura);
+  const consumo = Number(ligada ? e.consumo : e.e_consumo);
+  const pecas = Number((ligada && e.pecas) || e.e_pecas);
+  if (!(largura > 0) || !(consumo > 0) || !(pecas > 0)) return null;
+  return `${Math.round(largura * 10)}|${Math.round(consumo * 10)}|${pecas}`;
+}
+
 /**
  * GET /api/encaixe/relatorio?de=AAAA-MM-DD&ate=AAAA-MM-DD
  *
- * Os dois dias entram inteiros, no fuso da máquina. Sem datas: do dia 1 do
- * mês até hoje.
+ * Os dois dias entram inteiros, no fuso da máquina, pela hora da exportação.
+ * Sem datas: do dia 1 do mês até hoje.
  */
 router.get("/relatorio", (req, res) => {
   const hoje = new Date();
@@ -94,41 +219,77 @@ router.get("/relatorio", (req, res) => {
     return res.status(400).json({ error: "Período inválido." });
   }
 
-  const linhas = db.prepare(`
-    SELECT id, assinatura, largura_tecido, pecas, consumo, aproveitamento, criado_em,
-           consumo_quadrado, espaco
-      FROM encaixe_historico
-     WHERE criado_em >= ? AND criado_em < ? AND consumo > 0
-     ORDER BY criado_em DESC
+  anotarExportacoesAntigas();
+
+  const exportacoes = db.prepare(`
+    SELECT e.id, e.nome, e.criado_em, e.historico_id,
+           e.largura_tecido AS e_largura, e.consumo AS e_consumo, e.pecas AS e_pecas,
+           h.assinatura, h.largura_tecido, h.pecas, h.consumo, h.aproveitamento,
+           h.consumo_quadrado
+      FROM encaixe_exportacoes e
+      LEFT JOIN encaixe_historico h ON h.id = e.historico_id
+     WHERE e.criado_em >= ? AND e.criado_em < ?
+     ORDER BY e.criado_em DESC, e.id DESC
   `).all(desde, antesDe);
 
-  // Para as linhas de antes desta versão: as peças do trabalho guardado com a
-  // mesma assinatura e a mesma metragem.
+  // Uma linha por pedido: a exportação mais recente fica, as outras só somam
+  // no "saiu N vezes". O mesmo encaixe exportado de novo cai na mesma linha
+  // mesmo com outro nome.
+  //
+  // A IMPRESSÃO DIGITAL (2026-11-12): quem roda o encaixe de novo gera OUTRA
+  // busca (outro `historico_id`) e pode salvar com OUTRO nome — e o mesmo
+  // trabalho passava duas vezes. Mesma largura de rolo, mesma metragem (ao
+  // milímetro) e mesmo número de peças é o mesmo trabalho.
+  const porChave = new Map();
+  const unicas = [];
+  for (const e of exportacoes) {
+    const chaves = [`n:${chaveDoNome(e.nome)}`];
+    if (e.historico_id) chaves.push(`h:${e.historico_id}`);
+    const digital = impressaoDigital(e);
+    if (digital) chaves.push(`f:${digital}`);
+    const ja = chaves.map((c) => porChave.get(c)).find(Boolean);
+    if (ja) {
+      ja.vezes += 1;
+      chaves.forEach((c) => porChave.set(c, ja));
+      continue;
+    }
+    const linha = { e, vezes: 1 };
+    chaves.forEach((c) => porChave.set(c, linha));
+    unicas.push(linha);
+  }
+
+  // Para as buscas de antes da versão do quadrado: as peças do trabalho
+  // guardado com a mesma assinatura e a mesma metragem.
   const guardado = db.prepare(`
     SELECT pecas, espaco, largura_tecido FROM encaixe_guardados
      WHERE assinatura = ? AND ABS(consumo - ?) < 0.01
      LIMIT 1
   `);
 
-  const saida = linhas.map((l) => {
-    let quadrado = l.consumo_quadrado > 0 ? l.consumo_quadrado : null;
-    if (quadrado === null) {
-      const g = guardado.get(l.assinatura, l.consumo);
+  const saida = unicas.map(({ e, vezes }) => {
+    const ligada = e.historico_id != null && e.consumo > 0;
+    const contorno = ligada ? e.consumo : e.e_consumo;
+    const largura = (ligada && e.largura_tecido) || e.e_largura;
+    let quadrado = ligada && e.consumo_quadrado > 0 ? e.consumo_quadrado : null;
+    if (quadrado === null && ligada) {
+      const g = guardado.get(e.assinatura, e.consumo);
       const medidas = g && medidasDasPecasGuardadas(g.pecas);
-      if (medidas) quadrado = consumoNoQuadrado(medidas, l.largura_tecido || g.largura_tecido, g.espaco);
+      if (medidas) quadrado = consumoNoQuadrado(medidas, largura || g.largura_tecido, g.espaco);
     }
     // O contorno nunca perde para o quadrado: se a conta das fileiras sair
     // menor (peça muito comprida, por exemplo), o quadrado fica no contorno.
-    quadrado = quadradoParaComparar(quadrado, l.consumo);
+    quadrado = contorno > 0 ? quadradoParaComparar(quadrado, contorno) : null;
     return {
-      id: l.id,
-      quando: l.criado_em,
-      pecas: l.pecas,
-      larguraTecido: l.largura_tecido,
-      contornoCm: l.consumo,
+      id: e.id,
+      nome: String(e.nome || "").replace(/\.(pdf|png)$/i, ""),
+      vezes,
+      quando: e.criado_em,
+      pecas: (ligada && e.pecas) || e.e_pecas,
+      larguraTecido: largura || null,
+      contornoCm: contorno || 0,
       quadradoCm: quadrado,
-      economiaCm: quadrado === null ? null : quadrado - l.consumo,
-      aproveitamento: l.aproveitamento,
+      economiaCm: quadrado === null ? null : quadrado - contorno,
+      aproveitamento: ligada ? e.aproveitamento : null,
     };
   });
 
@@ -140,6 +301,7 @@ router.get("/relatorio", (req, res) => {
     de,
     ate,
     encaixes: saida.length,
+    repetidos: exportacoes.length - saida.length,
     totais: {
       contornoCm: soma(saida, "contornoCm"),
       pecas: soma(saida, "pecas"),
@@ -158,3 +320,6 @@ router.get("/relatorio", (req, res) => {
 module.exports = router;
 module.exports.consumoNoQuadrado = consumoNoQuadrado;
 module.exports.medidasDasPecasGuardadas = medidasDasPecasGuardadas;
+module.exports.anotarExportacao = anotarExportacao;
+module.exports.chaveDoNome = chaveDoNome;
+module.exports.impressaoDigital = impressaoDigital;

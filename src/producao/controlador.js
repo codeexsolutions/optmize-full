@@ -2776,6 +2776,47 @@ function guardadoPelaCaixa(guardado) {
  * refeitos aqui a partir do que está na tabela agora — por isso a chave exige
  * que as peças sejam as mesmas.
  */
+/**
+ * O encaixe guardado no formato da partida do sparrow (o mesmo de
+ * `partidaParaWorker`): o endereço de cada peça na tabela de HOJE, posição,
+ * medida e giro. `null` quando não há guardado, ou ele não se remonta.
+ */
+function partidaDoGuardado(guardado, passo) {
+  if (!guardado) return null;
+  const paraHoje = traduzirIndicesDoGuardado(guardado.pecas, pecasEncaixe);
+  if (!paraHoje) return null;
+  const posicoes = [];
+  for (const p of guardado.posicoes) {
+    const indice = paraHoje[p.indice];
+    const peca = indice == null ? null : pecasEncaixe[indice];
+    if (!peca) return null;
+    const deitada = p.rot === 90 || p.rot === 270;
+    posicoes.push({
+      item: { indice, copia: p.copia },
+      x: p.x, y: p.y,
+      largura: deitada ? peca.altura : peca.largura,
+      altura: deitada ? peca.largura : peca.altura,
+      rot: p.rot || 0, girado: deitada, passo, bancada: p.bancada || 0,
+    });
+  }
+  return { consumo: guardado.consumo, posicoes };
+}
+
+/**
+ * A posição guardada de volta na célula exata da grade.
+ *
+ * O banco guarda x e y com três casas (`posicoesParaGuardar`), e a peça do
+ * motor mora em `coluna × passo − offX`. Duas peças que se encostam na grade
+ * podiam voltar 0,0005 cm uma dentro da outra, e a trava de sobreposição, que
+ * compara em centímetro contínuo, recusava o melhor encaixe já conseguido —
+ * calada, e a tela ficava com o da procura de agora. Peça sem máscara (pela
+ * caixa) fica como veio.
+ */
+function naGrade(valor, off, passo) {
+  if (!(passo > 0) || !Number.isFinite(off)) return valor;
+  return Math.round((valor + off) / passo) * passo - off;
+}
+
 async function usarEncaixeGuardado(guardado) {
   const larguraTecido = Number(encaixeLarguraInput.value);
   const espaco = folgaPedida();
@@ -2815,15 +2856,17 @@ async function usarEncaixeGuardado(guardado) {
     if (!peca) return null; // a tabela mudou: o guardado não serve mais
     const deitada = p.rot === 90 || p.rot === 270;
     const mascaras = peca._cacheMascaras;
+    const mascara = p.comMascara && mascaras ? mascaras.rotacoes[p.rot] : null;
     posicoes.push({
       item: { ...peca, indice, copia: p.copia, mascaras },
-      x: p.x,
-      y: p.y,
+      // De volta à célula exata da grade (ver `naGrade`).
+      x: naGrade(p.x, mascara && mascara.offX, passo),
+      y: naGrade(p.y, mascara && mascara.offY, passo),
       largura: deitada ? peca.altura : peca.largura,
       altura: deitada ? peca.largura : peca.altura,
       rot: p.rot,
       girado: deitada,
-      mascara: p.comMascara && mascaras ? mascaras.rotacoes[p.rot] : null,
+      mascara,
       passo,
       bancada: p.bancada || 0,
     });
@@ -3827,6 +3870,9 @@ async function optmizar({
     const itensDaBusca = largas.length > 0 ? itens.filter((it) => cabeNaMidia(it, larguraTecido)) : itens;
     const doMotor = itensDaBusca.length === 0 ? resultadoSemBusca() : await buscarMelhorEncaixeEmParalelo(itensDaBusca, {
       larguraTecido, espaco, comprimentoBancada, passo, raio, alturaMax, motores,
+      // O melhor encaixe deste trabalho exato, para a compactação continuar
+      // dele (ver "O MELHOR JÁ CONSEGUIDO VIRA A PARTIDA", em encaixeParalelo.js).
+      partidaGuardada: largas.length === 0 ? partidaDoGuardado(guardadoAntes, passo) : null,
       memoria: aprendido ? aprendido.memoria : null,
       // O RECORDE VEM DA CHAVE EXATA, NÃO DO BALDE.
       //
@@ -4012,6 +4058,8 @@ async function optmizar({
       featuresVersao: REDE_VERSAO_FEATURES,
     });
 
+    // Qual busca foi esta, para o relatório saber o que virou arquivo.
+    if (anotado && anotado.historicoId) ultimoResultado.historicoId = anotado.historicoId;
     mostrarResumoDaBusca(ultimoResultado, aprendido, anotado, guardadoAntes);
     // O aviso do refeito também é do motor: vai para o console, com o resumo.
     if (avisoDoRefeito) console.info("[encaixe]", avisoDoRefeito);
@@ -4572,6 +4620,8 @@ async function guardarParaReposicao(r, nomeDoArquivo) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nome: String(nomeDoArquivo || "").replace(/\.(pdf|png)$/i, ""),
+        // A busca que deu este risco: o relatório do encaixe conta por ela.
+        historicoId: r.historicoId || null,
         larguraTecido: r.larguraTecido,
         consumoCm: r.consumo,
         aproveitamento: r.larguraTecido > 0 && r.consumo > 0 ? (area / (r.larguraTecido * r.consumo)) * 100 : null,

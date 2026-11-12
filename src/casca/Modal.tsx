@@ -41,10 +41,15 @@ interface Props {
   rodape?: ReactNode;
   /** A largura máxima da caixa, em px (padrão 440). */
   largura?: number;
+  /**
+   * Caixa de TELA: cantos mais retos e a altura quase toda da janela, mesmo
+   * com pouco dentro — para relatórios e listas que crescem.
+   */
+  cheio?: boolean;
   children: ReactNode;
 }
 
-export function Modal({ aberto, aoFechar, titulo, subtitulo, icone, rodape, largura = 440, children }: Props) {
+export function Modal({ aberto, aoFechar, titulo, subtitulo, icone, rodape, largura = 440, cheio = false, children }: Props) {
   const veu = useCliqueNoVeu(aoFechar);
   useEffect(() => {
     if (!aberto) return;
@@ -66,7 +71,9 @@ export function Modal({ aberto, aoFechar, titulo, subtitulo, icone, rodape, larg
         aria-label={titulo}
         onClick={(evento) => evento.stopPropagation()}
         style={{ maxWidth: largura }}
-        className="modal-caixa relative flex max-h-[calc(100vh-32px)] w-full flex-col overflow-hidden rounded-[20px] border border-[var(--border-hairline)]"
+        className={`modal-caixa relative flex max-h-[calc(100vh-32px)] w-full flex-col overflow-hidden border border-[var(--border-hairline)] ${
+          cheio ? "h-[calc(100vh-48px)] rounded-[10px]" : "rounded-[20px]"
+        }`}
       >
         <div className="flex items-center gap-3.5 px-[22px] pt-[22px] pb-[18px]">
           {icone && (
@@ -88,7 +95,7 @@ export function Modal({ aberto, aoFechar, titulo, subtitulo, icone, rodape, larg
           </button>
         </div>
 
-        <div className="min-h-0 overflow-y-auto px-[22px] pb-[22px] text-sm text-tinta-fraca">{children}</div>
+        <div className={`min-h-0 overflow-y-auto px-[22px] pb-[22px] text-sm text-tinta-fraca ${cheio ? "flex-1" : ""}`}>{children}</div>
 
         {rodape && <div className="modal-caixa-rodape flex gap-2.5 px-[22px] pt-4 pb-[18px]">{rodape}</div>}
       </div>

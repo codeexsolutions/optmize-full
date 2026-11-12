@@ -14,9 +14,18 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { Modal } from "../casca/Modal";
+import { SeletorDeData } from "../casca/SeletorDeData";
+import { Paginacao } from "../casca/Paginacao";
+
+const POR_PAGINA = 15;
 
 interface Linha {
   id: number;
+  /** O nome do arquivo que a pessoa salvou, sem a extensão. */
+  nome: string;
+  /** Quantas vezes este pedido foi exportado no período (conta uma só). */
+  vezes: number;
   quando: string;
   pecas: number | null;
   larguraTecido: number | null;
@@ -86,6 +95,7 @@ function RelatorioDoEncaixe({ aoFechar }: { aoFechar: () => void }) {
   const [dados, setDados] = useState<Relatorio | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [pagina, setPagina] = useState(1);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -103,59 +113,36 @@ function RelatorioDoEncaixe({ aoFechar }: { aoFechar: () => void }) {
   }, [de, ate]);
 
   useEffect(() => { void carregar(); }, [carregar]);
-
-  useEffect(() => {
-    const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") aoFechar(); };
-    window.addEventListener("keydown", tecla);
-    return () => window.removeEventListener("keydown", tecla);
-  }, [aoFechar]);
+  // Outro período, outra lista: volta para a primeira página.
+  useEffect(() => { setPagina(1); }, [de, ate]);
 
   const t = dados?.totais;
   const semQuadrado = dados ? dados.encaixes - dados.totais.comparaveis : 0;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="relatorio-encaixe-titulo"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) aoFechar(); }}
+    <Modal
+      aberto
+      aoFechar={aoFechar}
+      titulo="Relatório do encaixe"
+      subtitulo={dados ? `De ${dataPorExtenso(dados.de)} a ${dataPorExtenso(dados.ate)}` : "Contorno contra quadrado"}
+      icone="icones.svg#file-text"
+      largura={1100}
+      cheio
     >
-      <div className="flex max-h-[calc(100vh-32px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-linha bg-painel shadow-2xl">
-        <div className="flex flex-wrap items-center gap-3 border-b border-linha bg-painel-suave px-5 py-4">
-          <div className="min-w-0 flex-1">
-            <h3 id="relatorio-encaixe-titulo" className="m-0 font-titulo text-lg text-tinta">
-              Relatório do encaixe
-            </h3>
-            <p className="m-0 text-[12.5px] text-tinta-fraca">
-              {dados ? `De ${dataPorExtenso(dados.de)} a ${dataPorExtenso(dados.ate)}` : "Contorno contra quadrado"}
-            </p>
-          </div>
-          <label className="flex items-center gap-1.5 text-[12px] text-tinta-fraca">
-            De
-            <input type="date" value={de} max={ate} onChange={(e) => e.target.value && setDe(e.target.value)}
-              className="rounded-md border border-linha bg-painel px-2 py-1 text-[12px] text-tinta" />
-          </label>
-          <label className="flex items-center gap-1.5 text-[12px] text-tinta-fraca">
+          <div className="mb-4 flex items-center gap-2 text-[12.5px] text-tinta-apagada">
+            <SeletorDeData valor={de} maximo={ate} rotulo="Data inicial" aoMudar={setDe} />
             até
-            <input type="date" value={ate} min={de} onChange={(e) => e.target.value && setAte(e.target.value)}
-              className="rounded-md border border-linha bg-painel px-2 py-1 text-[12px] text-tinta" />
-          </label>
-          <button type="button" onClick={aoFechar} aria-label="Fechar"
-            className="grid size-8 place-items-center rounded-md text-tinta-fraca transition-colors hover:bg-painel hover:text-tinta">
-            ×
-          </button>
-        </div>
+            <SeletorDeData valor={ate} minimo={de} maximo={diaLocal(new Date())} rotulo="Data final" aoMudar={setAte} />
+          </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {erro && <p className="m-0 mb-4 text-[13px] text-[var(--danger)]">{erro}</p>}
 
           {t && (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <Cartao rotulo="Encaixes" valor={String(dados!.encaixes)} nota={`${t.pecas} peças`} />
-              <Cartao rotulo="Pelo contorno" valor={metros(t.contornoComparavelCm)} nota="o que o Optmize usou" />
-              <Cartao rotulo="Pelo quadrado" valor={metros(t.quadradoCm)} nota="como seria no retângulo" />
-              <Cartao rotulo="Economizado" valor={metros(t.economiaCm)} nota={porcento(t.economiaPercentual) + " de tecido"} destaque />
+              <Cartao rotulo="Optmize" valor={metros(t.contornoComparavelCm)} />
+              <Cartao rotulo="Quadrado" valor={metros(t.quadradoCm)} />
+              <Cartao rotulo="Economizado" valor={metros(t.economiaCm)} nota={porcento(t.economiaPercentual)} destaque />
             </div>
           )}
 
@@ -174,26 +161,40 @@ function RelatorioDoEncaixe({ aoFechar }: { aoFechar: () => void }) {
             <table className="mt-5 w-full border-collapse text-[12.5px]">
               <thead>
                 <tr className="border-b border-linha text-left text-[11px] uppercase tracking-wide text-tinta-apagada">
+                  <th className="py-2 pr-3 font-normal">Pedido</th>
                   <th className="py-2 pr-3 font-normal">Quando</th>
                   <th className="py-2 pr-3 text-right font-normal">Peças</th>
                   <th className="py-2 pr-3 text-right font-normal">Rolo</th>
-                  <th className="py-2 pr-3 text-right font-normal">Contorno</th>
+                  <th className="py-2 pr-3 text-right font-normal">Optmize</th>
                   <th className="py-2 pr-3 text-right font-normal">Quadrado</th>
-                  <th className="py-2 text-right font-normal">Economia</th>
+                  <th className="py-2 pr-3 text-right font-normal">Economia</th>
+                  <th className="py-2 text-right font-normal">%</th>
                 </tr>
               </thead>
               <tbody>
-                {dados.linhas.map((l) => (
+                {dados.linhas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA).map((l) => (
                   <tr key={l.id} className="border-b border-linha/60 text-tinta">
-                    <td className="py-2 pr-3 text-tinta-fraca">{quandoCurto(l.quando)}</td>
+                    <td className="max-w-[320px] py-2 pr-3">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate" title={l.nome}>{l.nome}</span>
+                        {l.vezes > 1 && (
+                          <span
+                            className="shrink-0 rounded-[5px] border border-linha px-1.5 font-mono text-[10.5px] text-tinta-apagada"
+                            title={`Exportado ${l.vezes} vezes no período — conta uma só`}
+                          >
+                            {l.vezes}×
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-tinta-fraca">{quandoCurto(l.quando)}</td>
                     <td className="py-2 pr-3 text-right font-mono">{l.pecas ?? "—"}</td>
                     <td className="py-2 pr-3 text-right font-mono">{l.larguraTecido ? `${l.larguraTecido} cm` : "—"}</td>
                     <td className="py-2 pr-3 text-right font-mono">{metros(l.contornoCm)}</td>
                     <td className="py-2 pr-3 text-right font-mono text-tinta-fraca">{metros(l.quadradoCm)}</td>
+                    <td className="py-2 pr-3 text-right font-mono text-ambar">{metros(l.economiaCm)}</td>
                     <td className="py-2 text-right font-mono text-ambar">
-                      {l.economiaCm == null || l.quadradoCm == null
-                        ? "—"
-                        : `${metros(l.economiaCm)} · ${porcento((l.economiaCm / l.quadradoCm) * 100)}`}
+                      {l.economiaCm == null || !l.quadradoCm ? "—" : porcento((l.economiaCm / l.quadradoCm) * 100)}
                     </td>
                   </tr>
                 ))}
@@ -201,22 +202,17 @@ function RelatorioDoEncaixe({ aoFechar }: { aoFechar: () => void }) {
             </table>
           )}
 
-          <p className="m-0 mt-5 text-[11.5px] leading-relaxed text-tinta-apagada">
-            O quadrado é o mesmo trabalho com cada peça ocupando o retângulo inteiro dela (mais a folga), arrumado em
-            fileiras no rolo e arredondado para cima de 10 em 10 cm — a conta sempre erra para mais, nunca para menos.
-          </p>
-        </div>
-      </div>
-    </div>
+          {dados && <Paginacao pagina={pagina} total={dados.linhas.length} porPagina={POR_PAGINA} aoMudar={setPagina} />}
+    </Modal>
   );
 }
 
-function Cartao({ rotulo, valor, nota, destaque }: { rotulo: string; valor: string; nota: string; destaque?: boolean }) {
+function Cartao({ rotulo, valor, nota, destaque }: { rotulo: string; valor: string; nota?: string; destaque?: boolean }) {
   return (
     <div className={`rounded-xl border p-3 ${destaque ? "border-[var(--accent-line)] bg-[var(--accent-soft)]" : "border-linha bg-painel-suave"}`}>
       <p className="m-0 text-[11px] uppercase tracking-wide text-tinta-apagada">{rotulo}</p>
       <p className={`m-0 mt-1 font-titulo text-xl ${destaque ? "text-ambar" : "text-tinta"}`}>{valor}</p>
-      <p className="m-0 mt-0.5 text-[11.5px] text-tinta-fraca">{nota}</p>
+      {nota && <p className="m-0 mt-0.5 text-[11.5px] text-tinta-fraca">{nota}</p>}
     </div>
   );
 }

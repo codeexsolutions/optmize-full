@@ -182,7 +182,21 @@ router.post("/trabalhos", (req, res) => {
     return { id, pecas: idsDasPecas };
   });
 
-  res.json(criar());
+  const criado = criar();
+  // O relatório do encaixe conta o que foi exportado, com o nome do arquivo
+  // (ver `encaixe-relatorio.js`). Pedido aqui dentro: o relatório lê a tabela
+  // desta rota, e as duas se carregam em qualquer ordem.
+  const t = db.prepare("SELECT nome, largura_tecido, consumo_cm, total_pecas, criado_em FROM reposicao_trabalhos WHERE id = ?").get(criado.id);
+  require("./encaixe-relatorio").anotarExportacao({
+    trabalhoId: criado.id,
+    historicoId: corpo.historicoId,
+    nome: t.nome,
+    larguraTecido: t.largura_tecido,
+    consumoCm: t.consumo_cm,
+    pecas: t.total_pecas,
+    quando: t.criado_em,
+  });
+  res.json(criado);
 });
 
 /** A arte de uma peça, em bytes crus. */
