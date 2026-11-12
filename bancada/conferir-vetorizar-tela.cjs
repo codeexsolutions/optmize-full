@@ -127,7 +127,10 @@ const portaLivre = () => new Promise((ok) => {
     const pastaDoPdf = fs.mkdtempSync(path.join(os.tmpdir(), "vetorizar-pdf-"));
     const cdp = await p.target().createCDPSession();
     await cdp.send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: pastaDoPdf });
-    const larguraCm = await p.evaluate(() => Number(document.querySelector('input[type="number"]').value));
+    // A tela não mostra mais a largura: o PDF sai com a da imagem a 300 ppp,
+    // no mínimo 10 cm (ver `abrir`, em Vetorizar.tsx).
+    const larguraPx = await p.evaluate(() => Number((document.body.innerText.match(/(\d+) × \d+ px/) || [])[1]));
+    const larguraCm = Math.max(10, Math.round(((larguraPx / 300) * 2.54) * 10) / 10);
     await p.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "PDF").click());
     let arquivoPdf = null;
     for (let t = 0; t < 100 && !arquivoPdf; t++) {

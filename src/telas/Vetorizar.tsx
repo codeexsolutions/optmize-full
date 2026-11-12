@@ -244,7 +244,6 @@ export function Vetorizar() {
   const [svgUrl, setSvgUrl] = useState<string | null>(null);
   const [andamento, setAndamento] = useState<{ texto: string; fracao: number } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [avisoIa, setAvisoIa] = useState<string | null>(null);
   const [motivoSemIa, setMotivoSemIa] = useState<string | null>("Conferindo a rede de ampliação…");
   const [arquivoEmCima, setArquivoEmCima] = useState(false);
   const [divisao, setDivisao] = useState(50);
@@ -274,7 +273,6 @@ export function Vetorizar() {
       });
       ampliacao.current?.sinal.abort();
       ampliacao.current = null;
-      setAvisoIa(null);
       // A IA fica sempre ligada: a falha de uma imagem não passa para a próxima.
       setOpcoes((o) => (o.ia ? o : { ...o, ia: true }));
       setResultado(null);
@@ -332,7 +330,7 @@ export function Vetorizar() {
             if (!vivo || (e as Error).name === "AbortError") return;
             // A IA falhou: o vetor segue sem ela (desligar a IA vetoriza de
             // novo), e o aviso fica junto da opção até a próxima imagem.
-            setAvisoIa(`A IA não conseguiu ampliar (${e instanceof Error ? e.message : "erro desconhecido"}); o vetor saiu sem ela.`);
+            console.warn("Vetora: a IA não ampliou; o vetor sai sem ela.", e);
             setAndamento(null);
             setOpcoes((o) => ({ ...o, ia: false }));
             return;
@@ -386,7 +384,6 @@ export function Vetorizar() {
     setResultado(null);
     setAndamento(null);
     setErro(null);
-    setAvisoIa(null);
     setOpcoes((o) => (o.ia ? o : { ...o, ia: true }));
   }
 
@@ -421,7 +418,7 @@ export function Vetorizar() {
         <Cartao
           titulo={imagem ? imagem.nome : "Nova vetorização"}
           icone="icones.svg#pen-tool"
-          apoio={imagem ? `${imagem.largura} × ${imagem.altura} px · arraste a divisória para comparar o original com o vetor` : undefined}
+          apoio={imagem ? `${imagem.largura} × ${imagem.altura} px` : undefined}
           preencher
           acao={imagem ? (
             <div className="flex gap-2">
@@ -450,10 +447,10 @@ export function Vetorizar() {
             }}
           />
           <div className="flex h-full min-h-[320px] flex-col">
-          {(erro || avisoIa) && (
+          {erro && (
             <p className="mt-0 mb-3 flex items-start gap-2 text-[0.85rem] text-[var(--danger)]">
               <Icone referencia="icones.svg#triangle-alert" className="mt-0.5 size-4 shrink-0" />
-              <span>{erro || avisoIa}</span>
+              <span>{erro}</span>
             </p>
           )}
           {!imagem ? (
@@ -597,17 +594,6 @@ export function Vetorizar() {
                   </div>
                 ))}
               </div>
-              <p className="m-0 text-[12px] text-tinta-apagada">
-                SVG de {(resultado.estatisticas.bytes / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} KB · feito em {(resultado.estatisticas.ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s
-              </p>
-              <label className="flex items-center justify-between gap-3 text-[12.5px]">
-                <span className="text-tinta-fraca">Largura no PDF</span>
-                <span className="flex items-center gap-1.5">
-                  <input type="number" min={1} step={0.5} value={larguraCm} onChange={(e) => setLarguraCm(Math.max(1, Number(e.target.value) || 1))}
-                    className="w-20 rounded-md border border-linha bg-painel-suave px-2 py-1 text-right font-mono text-tinta" />
-                  <span className="text-tinta-fraca">cm</span>
-                </span>
-              </label>
               <div className="flex flex-col gap-2">
                 <Botao jeito="primario" icone={<Icone referencia="icones.svg#download" className="size-4" />}
                   onClick={() => imagem && baixar(new Blob([resultado.svg], { type: "image/svg+xml" }), `${imagem.nome}-vetor.svg`)}>
