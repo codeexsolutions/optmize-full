@@ -47,6 +47,7 @@ import {
 } from "./pedidos";
 import { normalizarSigla, siglaDaPeca } from "../motores/siglaDoPedido";
 import { tempoSugerido } from "./tempoSugerido";
+import { bordaDoCampo, comBorda, contornoVetorialDaBorda } from "../motores/bordaDaPeca";
 export function montarProducao(raiz, irPara) {
 const escopo = criarEscopo(raiz);
 try {
@@ -264,6 +265,9 @@ function folgaPedida() {
 const encaixeLarguraInput = document.getElementById("encaixe-largura");
 const encaixeEspacoInput = document.getElementById("encaixe-espaco");
 const encaixeEspacoYInput = document.getElementById("encaixe-espaco-y");
+// O contorno em volta das peças, em mm (ver motores/bordaDaPeca.js).
+const encaixeBordaInput = document.getElementById("encaixe-borda");
+const bordaPedida = () => bordaDoCampo(encaixeBordaInput?.value);
 const encaixeComprimentoInput = document.getElementById("encaixe-comprimento");
 const encaixeTempoInput = document.getElementById("encaixe-tempo");
 const COMPRIMENTO_DO_BLOCO_CM = 500;
@@ -1449,6 +1453,7 @@ function retratoDaArea() {
       largura: encaixeLarguraInput?.value,
       espaco: encaixeEspacoInput?.value,
       espacoY: encaixeEspacoYInput?.value,
+      borda: encaixeBordaInput?.value,
       comprimento: encaixeComprimentoInput?.value,
       giro: encaixeGiroTodasSelect?.value,
       sentido: sentidoUnico,
@@ -1470,6 +1475,7 @@ function vestirArea(estado) {
     voltar(encaixeLarguraInput, estado.campos.largura);
     voltar(encaixeEspacoInput, estado.campos.espaco);
     voltar(encaixeEspacoYInput, estado.campos.espacoY);
+    voltar(encaixeBordaInput, estado.campos.borda);
     voltar(encaixeComprimentoInput, bancadaGuardada(estado.campos.comprimento));
     voltar(encaixeGiroTodasSelect, estado.campos.giro);
     if (SENTIDOS.includes(estado.campos.sentido)) sentidoUnico = estado.campos.sentido;
@@ -3779,9 +3785,17 @@ async function optmizar({
   // desenhoDoEncaixe.js). Não se espera por elas: a busca leva mais.
   prepararPrevias(pecasEncaixe.map((peca) => peca.img));
 
+  /*
+   * O CONTORNO EM VOLTA DAS PEÇAS (ver motores/bordaDaPeca.js): com borda, o
+   * encaixe recebe cada peça embrulhada — caixa maior e a faixa preta já na
+   * imagem. A lista (`pecasEncaixe`) continua com a peça de verdade.
+   */
+  const bordaMm = bordaPedida();
+  const pecasNoEncaixe = pecasEncaixe.map((peca) => comBorda(peca, bordaMm));
+
   // Expande pela quantidade: cada cópia é uma peça independente no encaixe.
   const itens = [];
-  pecasEncaixe.forEach((peca, indice) => {
+  pecasNoEncaixe.forEach((peca, indice) => {
     if (!(peca.largura > 0) || !(peca.altura > 0)) return;
     for (let i = 0; i < peca.qtd; i++) {
       itens.push({ ...peca, indice, copia: i + 1 });
@@ -3820,7 +3834,7 @@ async function optmizar({
       detalhe: `${pecasEncaixe.length} peça(s) · criando o contorno para o cálculo`,
       progresso: 5,
     });
-    await prepararMascarasEmParalelo(pecasEncaixe, passo, raio, (prontas, total) => {
+    await prepararMascarasEmParalelo(pecasNoEncaixe, passo, raio, (prontas, total) => {
       atualizarCarregamento({
         detalhe: `${prontas} de ${total} · criando o contorno para o cálculo`,
         progresso: 5 + (prontas / Math.max(1, total)) * 20,
@@ -3833,25 +3847,27 @@ async function optmizar({
       finalizarCarregamento("interrompido");
       return;
     }
-    pecasEncaixe.forEach((peca) => { peca.ocupacao = peca._cacheMascaras.ocupacao; });
-    itens.forEach((item) => { item.mascaras = pecasEncaixe[item.indice]._cacheMascaras; });
+    pecasEncaixe.forEach((peca, i) => { peca.ocupacao = pecasNoEncaixe[i]._cacheMascaras.ocupacao; });
+    itens.forEach((item) => { item.mascaras = pecasNoEncaixe[item.indice]._cacheMascaras; });
     // Agora a área é a da silhueta: a sugestão pode mudar (arte em prancheta
     // grande que era tira). Ver src/producao/tempoSugerido.js.
     if (!tempoAjustadoPeloUsuario) encaixeTempoInput.value = tempoSugerido(pecasEncaixe);
 
-    const assinatura = assinaturaDoTrabalho(pecasEncaixe, larguraTecido);
+    const assinatura = assinaturaDoTrabalho(pecasNoEncaixe, larguraTecido);
     // O mesmo formato que vira a assinatura, mas sem arredondar para caber
     // num texto de balde — é o que a rede das receitas usa para generalizar
     // (ver src/motores/encaixeRede.mjs e a nota em cima de `buscarMelhorEncaixe`).
-    const vetorTrabalho = vetorDoTrabalho(pecasEncaixe, larguraTecido);
-    const chave = chaveDoTrabalho(pecasEncaixe, larguraTecido, espaco, comprimentoBancada);
+    const vetorTrabalho = vetorDoTrabalho(pecasNoEncaixe, larguraTecido);
+    const chave = chaveDoTrabalho(pecasNoEncaixe, larguraTecido, espaco, comprimentoBancada);
     atualizarCarregamento({
       etapa: "Consultando histórico",
       titulo: "Procurando um encaixe anterior",
       detalhe: "Se este mesmo trabalho já foi feito, o melhor resultado será reaproveitado.",
       progresso: 27,
     });
-    const recebido = await encaixeApi.guardado(chave);
+    // Com contorno não se usa nem se grava o encaixe guardado: ele é remontado
+    // a partir das peças da lista, que não têm a borda.
+    const recebido = bordaMm > 0 ? null : await encaixeApi.guardado(chave);
     const indicesGuardados = recebido && traduzirIndicesDoGuardado(recebido.pecas, pecasEncaixe);
     // Um recorde que a caixa venceu, de antes de ela sair da disputa, não
     // volta: seria a tela trocando o contorno pelos retângulos de novo.
@@ -4031,8 +4047,9 @@ async function optmizar({
     // Só vale para o risco com todas as peças: com peça de fora, `midiaPelaCaixa`
     // responde `null` sozinha.
     if (ultimoResultado.naoEncaixadas.length === 0) ultimoResultado.midiaCaixa = midiaCaixa;
-    ultimoResultado.areaReal = ultimoResultado.posicoes.reduce(
-      (soma, pos) => soma + pecasEncaixe[pos.item.indice]._cacheMascaras.areaReal, 0);
+    ultimoResultado.areaReal = ultimoResultado.posicoes.reduce((soma, pos) =>
+      soma + ((pos.item.mascaras || pecasEncaixe[pos.item.indice]._cacheMascaras)?.areaReal || 0), 0);
+    ultimoResultado.bordaMm = bordaMm;
     ultimoResultado.areaCaixas = ultimoResultado.posicoes.reduce(
       (soma, pos) => soma + pos.largura * pos.altura, 0);
     ultimoResultado.larguraTecido = larguraTecido;
@@ -4116,7 +4133,7 @@ async function optmizar({
       detalhe: "Na próxima vez este mesmo trabalho poderá abrir mais rápido.",
       progresso: 96,
     });
-    await encaixeApi.guardar({
+    if (!(bordaMm > 0)) await encaixeApi.guardar({
       chave, assinatura, larguraTecido, espaco, comprimentoBancada,
       consumo: ultimoResultado.consumo,
       aproveitamento,
@@ -5188,6 +5205,23 @@ async function baixarEncaixeEmPdf() {
     }
     if (subiram === 0 && artes.size > 0) andamento.jaEnviadas(artes.size);
 
+    /*
+     * O CONTORNO EM VOLTA DAS PEÇAS (ver motores/bordaDaPeca.js): a faixa preta
+     * de cada peça vai em VETOR, dentro do próprio pedido (`bordas`), uma vez
+     * por arte. O servidor a desenha como caminho na caixa inteira e põe a arte
+     * original por cima, encolhida a borda de cada lado (ver "A BORDA DA PEÇA",
+     * em servidor/encaixe-pdf.js).
+     */
+    const bordas = {};
+    for (const p of r.posicoes) {
+      if (!(p.item.bordaCm > 0) || !p.item.imgSemBorda) continue;
+      const chaveBorda = `${chaveDaArte(p.item)}.__borda${p.item.bordaMm}`;
+      if (!bordas[chaveBorda]) {
+        bordas[chaveBorda] = contornoVetorialDaBorda(p.item);
+        await respirarNaTela();
+      }
+    }
+
     // `recorte` diz ao servidor que esta arte tem fundo removido nESTE export.
     // Sem a marca, um recorte antigo guardado na sessão seria aplicado de novo
     // mesmo com a remoção de fundo já desligada.
@@ -5202,6 +5236,10 @@ async function baixarEncaixeEmPdf() {
       y: p.y - deslocamento,
       largura: p.largura,
       altura: p.altura,
+      // O contorno em volta da peça, em cm, e a imagem da faixa (ver acima).
+      ...(p.item.bordaCm > 0 && p.item.imgSemBorda
+        ? { borda: p.item.bordaCm, bordaChave: `${chaveDaArte(p.item)}.__borda${p.item.bordaMm}` }
+        : {}),
       // A bancada vai junto: é ela que vira página no servidor
       // (`paginasDoEncaixe`, em encaixe-pdf.js).
       bancada: p.bancada || 0,
@@ -5217,6 +5255,7 @@ async function baixarEncaixeEmPdf() {
         consumo: r.consumo,
         nome,
         imagens,
+        bordas,
         razaoCaixa,
         posicoes: r.posicoes.map((p) => daPeca(p, 0)),
         // As artes ficam para a próxima exportação (ver `sessaoDasArtes`).
@@ -5249,6 +5288,7 @@ async function baixarEncaixeEmPdf() {
         consumo: faixa.fundo - faixa.topo,
         nome: arquivo.replace(/\.pdf$/i, ""),
         imagens,
+        bordas,
         razaoCaixa,
         posicoes,
         // As artes ficam no servidor para os outros arquivos e para a próxima
@@ -5928,7 +5968,9 @@ async function procurarComplemento() {
     }
 
     avisarNoComplemento("Lendo o contorno das peças…");
-    await prepararMascarasEmParalelo(candidatos.map((c) => c.peca), config.passo, config.raio);
+    // O complemento entra com o mesmo contorno do risco (ver motores/bordaDaPeca.js).
+    const bordaDoRisco = r.bordaMm || 0;
+    await prepararMascarasEmParalelo(candidatos.map((c) => comBorda(c.peca, bordaDoRisco)), config.passo, config.raio);
     await respirarNaTela();
 
     const mapa = prepararComplemento(r.posicoes, config);
@@ -5941,11 +5983,12 @@ async function procurarComplemento() {
     // hora de complementar, quando elas entram na lista.
     let proximo = pecasEncaixe.length;
     candidatos.forEach((c) => {
+      const noEncaixe = comBorda(c.peca, bordaDoRisco);
       c.item = {
-        ...c.peca,
+        ...noEncaixe,
         indice: c.daGaleria ? proximo++ : c.indice,
         copia: 0,
-        mascaras: c.peca._cacheMascaras,
+        mascaras: noEncaixe._cacheMascaras,
       };
     });
 
@@ -6417,6 +6460,7 @@ function guardarAjustes() {
     largura: Number(encaixeLarguraInput.value),
     espaco: Number(encaixeEspacoInput.value),
     espacoY: Number(encaixeEspacoYInput.value),
+    borda: bordaPedida(),
     giro: encaixeGiroTodasSelect.value,
     sentido: sentidoUnico,
     comprimento: Number(encaixeComprimentoInput.value) || 0,
@@ -6445,6 +6489,7 @@ async function lerAjustesGuardados() {
   if (ajustes.largura) encaixeLarguraInput.value = ajustes.largura;
   if (ajustes.espaco !== undefined) encaixeEspacoInput.value = ajustes.espaco;
   if (ajustes.espacoY !== undefined) encaixeEspacoYInput.value = ajustes.espacoY;
+  if (ajustes.borda !== undefined && encaixeBordaInput) encaixeBordaInput.value = ajustes.borda;
   if (ajustes.comprimento !== undefined) encaixeComprimentoInput.value = bancadaGuardada(ajustes.comprimento) || "";
   if (SENTIDOS.includes(ajustes.sentido)) sentidoUnico = ajustes.sentido;
   if (ajustes.giro) encaixeGiroTodasSelect.value = ajustes.giro;

@@ -625,6 +625,30 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </div>
 
+{/*
+  CONTORNO EM VOLTA DAS PEÇAS (pedido do dono, 2026-11-16): uma faixa preta
+  desta grossura colada por fora de cada peça. Sai na mesa e no PDF, e o
+  encaixe reserva o espaço dela. 0 ou vazio = sem contorno. Ver
+  motores/bordaDaPeca.js.
+*/}
+<label className="campo-medida" title="Faixa preta em volta de cada peça. Sai impressa e o encaixe reserva o espaço dela. 0 = sem contorno.">
+
+<span className="campo-rotulo">
+{"Contorno em volta das peças"}
+</span>
+
+<span className="campo-caixa">
+
+<input type="number" id="encaixe-borda" min="0" max="20" step="0.5" defaultValue="0" placeholder="0" />
+
+<span className="campo-unidade">
+{"mm"}
+</span>
+
+</span>
+
+</label>
+
 
 
 

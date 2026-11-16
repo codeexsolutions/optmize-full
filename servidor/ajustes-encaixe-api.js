@@ -44,6 +44,8 @@ function limpar(cru) {
     largura: numero(a.largura, 10, 10_000),
     espaco: numero(a.espaco, 0, 10),
     espacoY: numero(a.espacoY, 0, 10),
+    // O contorno em volta das peças, em mm (ver src/motores/bordaDaPeca.js).
+    borda: numero(a.borda, 0, 20),
     giro: GIROS.has(String(a.giro)) ? String(a.giro) : null,
     sentido: SENTIDOS.has(a.sentido) ? a.sentido : null,
     // 0 é "sem limite", que é o campo vazio na tela.

@@ -1061,6 +1061,33 @@ function desenharImagem(doc, imagem, giro, x, y, w, h) {
   doc.restore();
 }
 
+/**
+ * A faixa do "Contorno em volta das peças", em vetor (ver
+ * src/motores/bordaDaPeca.js). `voltas` são caminhos fechados com `u`, `v` de
+ * 0 a 1 na caixa da peça de pé (y para baixo); a matriz é a mesma da imagem,
+ * então o giro sai igual ao da arte. Par-ímpar: pinta só o anel.
+ */
+function desenharBordaVetorial(doc, voltas, giro, x, y, w, h) {
+  doc.save();
+  doc.transform(...matrizDoVetor(QUADRADO_DA_IMAGEM, giro, x, y, w, h));
+  // De (u, v) com y para baixo ao quadrado da imagem, que tem y para cima.
+  doc.transform(1, 0, 0, -1, 0, 1);
+  let algum = false;
+  for (const volta of voltas) {
+    if (!Array.isArray(volta) || volta.length < 6) continue;
+    const n = (i) => {
+      const v = Number(volta[i]);
+      return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
+    };
+    doc.moveTo(n(0), n(1));
+    for (let i = 2; i + 1 < volta.length; i += 2) doc.lineTo(n(i), n(i + 1));
+    doc.closePath();
+    algum = true;
+  }
+  if (algum) doc.fill("#000000", "even-odd");
+  doc.restore();
+}
+
 /** Abre a arte do jeito que o formato dela pede, sempre de pé. */
 async function abrirArte(doc, bytes, cache, recorteBytes, ladoMaximo = null) {
   // O recorte é da imagem; o PDF de arte entra como vetor e ignora o recorte
@@ -1230,7 +1257,7 @@ function escreverMarca(doc, marca, topoDaPagina) {
  */
 async function montarPdf({
   larguraTecido, consumo, posicoes, buffers, lerArte, podeTerTransparencia, fonteDaSigla = FONTE_DA_SIGLA,
-  giros, giroDe, versaoMinima, aoAndar, cacheDe, recorteDe, recortes, dpiMaximo = DPI_MAXIMO,
+  giros, giroDe, versaoMinima, aoAndar, cacheDe, recorteDe, recortes, dpiMaximo = DPI_MAXIMO, bordas = null,
 }, destino) {
   const paginas = paginasDoEncaixe(posicoes, consumo);
   const larguraPt = larguraTecido * PT_POR_CM;
@@ -1419,10 +1446,26 @@ async function montarPdf({
         try {
           // O `y` da peça é medido no rolo inteiro; na página ele conta a partir
           // do começo da bancada.
-          const x = pos.x * PT_POR_CM;
-          const y = (pos.y - pagina.topo) * PT_POR_CM;
-          const w = pos.largura * PT_POR_CM;
-          const h = pos.altura * PT_POR_CM;
+          let x = pos.x * PT_POR_CM;
+          let y = (pos.y - pagina.topo) * PT_POR_CM;
+          let w = pos.largura * PT_POR_CM;
+          let h = pos.altura * PT_POR_CM;
+          /*
+           * A BORDA DA PEÇA (o "Contorno em volta das peças" do Optmizar, ver
+           * src/motores/bordaDaPeca.js). A caixa da posição já inclui a borda:
+           * a faixa preta, em VETOR (`bordas[bordaChave]`), ocupa a caixa
+           * inteira, e a arte original entra por cima, encolhida a borda de
+           * cada lado. Encolher igual dos quatro lados serve para qualquer giro.
+           */
+          const voltas = pos.bordaChave && bordas ? bordas[pos.bordaChave] : null;
+          const borda = Number(pos.borda) > 0 && Array.isArray(voltas) ? Number(pos.borda) * PT_POR_CM : 0;
+          if (borda > 0 && borda * 2 < Math.min(w, h)) {
+            desenharBordaVetorial(doc, voltas, giroDaPeca(pos), x, y, w, h);
+            x += borda;
+            y += borda;
+            w -= 2 * borda;
+            h -= 2 * borda;
+          }
           if (desenho.vetor) desenharVetor(doc, desenho, giroDaPeca(pos), x, y, w, h);
           else desenharImagem(doc, desenho, giroDaPeca(pos), x, y, w, h);
           desenhadas++;
@@ -1483,6 +1526,8 @@ router.post("/pdf", async (req, res) => {
   const pedido = String(req.body && req.body.pedido || "");
   const andar = (estado) => { if (pedido) andamentos.set(pedido, estado); };
   const { larguraTecido, consumo, imagens, posicoes, nome } = req.body || {};
+  // As faixas do "Contorno em volta das peças", em vetor (ver `desenharBordaVetorial`).
+  const bordas = req.body && req.body.bordas && typeof req.body.bordas === "object" ? req.body.bordas : null;
 
   if (!(larguraTecido > 0) || !(consumo > 0) || !Array.isArray(posicoes) || posicoes.length === 0) {
     return res.status(400).json({ error: "Encaixe inválido para gerar o PDF." });
@@ -1637,7 +1682,7 @@ router.post("/pdf", async (req, res) => {
     concluido.catch(() => {});
     andar({ fase: "montando", feitas: 0, total: posicoes.length });
     await montarPdf({
-      larguraTecido, consumo, posicoes, lerArte, recorteDe, podeTerTransparencia, giroDe, versaoMinima,
+      larguraTecido, consumo, posicoes, lerArte, recorteDe, podeTerTransparencia, giroDe, versaoMinima, bordas,
       aoAndar: (feitas, total) => andar({ fase: "montando", feitas, total }),
       cacheDe: guardadas ? (chave) => cacheDaArte(guardadas, chave) : null,
     }, destino);
