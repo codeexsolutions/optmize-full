@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>Bancada — a tela Vetorizar sozinha</title>
+<!--
+  A tela Vetorizar (src/telas/Vetorizar.tsx) fora da casca do programa, que
+  exige login: o mesmo componente, o mesmo worker e o mesmo motor, com os
+  estilos do programa. O driver é bancada/conferir-vetorizar-tela.cjs.
+-->
+</head>
+<body style="margin:0;height:100vh;display:flex;flex-direction:column">
+<div id="raiz" class="flex min-h-0 flex-1 flex-col p-4"></div>
+<script type="module">
+import "/estilo/entrada.css";
+import { createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { Vetorizar } from "/src/telas/Vetorizar.tsx";
+createRoot(document.getElementById("raiz")).render(createElement(Vetorizar));
+
+// O PDF que o botão baixou, desenhado pelo pdf.js (o mesmo do programa), contra
+// o SVG da prévia no mesmo tamanho: a fração de pixels iguais (diferença de
+// até 48 em cada canal, a folga do antisserrilhado de cada um).
+window.compararPdfComSvg = async (base64) => {
+  const [pdfjs, { default: Trabalhador }] = await Promise.all([
+    import("pdfjs-dist"),
+    import("pdfjs-dist/build/pdf.worker.mjs?worker"),
+  ]);
+  pdfjs.GlobalWorkerOptions.workerPort = new Trabalhador();
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const pagina = await (await pdfjs.getDocument({ data: bytes }).promise).getPage(1);
+  const LARGURA = 640;
+  const vista = pagina.getViewport({ scale: LARGURA / pagina.getViewport({ scale: 1 }).width });
+  const W = Math.round(vista.width), H = Math.round(vista.height);
+  const tela = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, w, h); return [c, x]; };
+  const [c1, x1] = tela(W, H);
+  await pagina.render({ canvas: c1, canvasContext: x1, viewport: vista }).promise;
+  // O SVG do modelo escolhido: a miniatura dele é o próprio SVG.
+  const img = new Image();
+  img.src = document.querySelector('[role="radio"][aria-checked="true"] img').getAttribute("src");
+  await img.decode();
+  const [, x2] = tela(W, H);
+  x2.drawImage(img, 0, 0, W, H);
+  const a = x1.getImageData(0, 0, W, H).data, b = x2.getImageData(0, 0, W, H).data;
+  // A tinta de cada um (pixel que não é branco): os dois em branco também
+  // dariam 100% iguais, e a bancada não pode aprovar o nada.
+  let iguais = 0, tintaPdf = 0, tintaSvg = 0;
+  for (let i = 0; i < a.length; i += 4) {
+    if (Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2])) <= 48) iguais++;
+    if (a[i] + a[i + 1] + a[i + 2] < 720) tintaPdf++;
+    if (b[i] + b[i + 1] + b[i + 2] < 720) tintaSvg++;
+  }
+  const n = W * H;
+  return { iguais: iguais / n, tintaPdf: tintaPdf / n, tintaSvg: tintaSvg / n, W, H, pontos: [pagina.view[2], pagina.view[3]] };
+};
+window.bancadaPronta = true;
+</script>
+</body>
+</html>

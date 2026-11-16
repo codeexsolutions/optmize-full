@@ -12,7 +12,7 @@ servidor, o `dados.db` e a casca da tela, e mais nada: nenhuma função de uma
 
 ---
 
-## As quatro telas que preparam o trabalho
+## As telas que preparam o trabalho
 
 | Tela | O que faz | Arquivos |
 |---|---|---|
@@ -21,6 +21,7 @@ servidor, o `dados.db` e a casca da tela, e mais nada: nenhuma função de uma
 | **Projetos** | Guarda a **arte já aplicada** — a estampa na camisa, na bandeira. Vai direto para o encaixe. | `projetos.js`, `projetos-api.js` |
 | **Encaixe** | Põe as peças no tecido gastando o mínimo. | `encaixe.js` (tela), `encaixe-motor.js` (o cálculo), + os módulos de apoio abaixo |
 | **Extrator** | A foto da camisa (ou o mockup) vira cada logo, texto e estampa separados: o clique acha o elemento com a rede de recorte (família Segment Anything, no servidor), o jeito Chapado sai em SVG, EPS e PNG de 4K pelo `vetor.js` da antiga tela Vetor, e o jeito Foto amplia com o Real-ESRGAN da antiga tela Imagem. Tudo no computador. | `src/telas/Extrator.tsx` + `src/telas/extrator/`, `src/api/extrator.ts`, `src/motores/{extrator,perspectiva,recorte,vetor,vetorParaArquivo,extratorTarefas,extratorWorker}.js`, `servidor/extrator-{api,rede,ampliar}.js` |
+| **Vetora** (rota `vetorizar`) | A imagem que já é arte (logo, estampa, arquivo de cliente em PNG ou JPG) vira **três vetores** para escolher — Fiel, Equilibrado e Limpo —, em SVG ou PDF. A rede neural própria olha a imagem e escolhe os ajustes de cada um (inclusive se a imagem passa antes pela IA de ampliação, o Real-ESRGAN do Extrator); o motor próprio vetoriza (paleta perceptual com as cores dos traços finos, mapa planar sem fresta, borda no subpixel, retas, curvas e elipses de verdade). Visor com zoom até 64× e os nós do vetor; o Equilibrado aprende o gosto de quem usa. Medições em `docs/optimize/vetorizador.md` e `docs/optimize/vetora-rede.md`. | `src/telas/Vetorizar.tsx` + `src/telas/vetora/`, `src/motores/vetorizador/{index,paleta,regioes,mapa,curvas,montar,pdf}.js`, `src/motores/vetorizador/rede/`, `src/motores/vetorizadorWorker.js`, `bancada/vetora/`, `bancada/conferir-vetorizador.mjs`, `bancada/conferir-vetorizar-tela.cjs` |
 
 **Moldes e Projetos não são a mesma coisa.** É a confusão mais fácil de
 cometer neste código. Molde guarda geometria (para aplicar arte depois);

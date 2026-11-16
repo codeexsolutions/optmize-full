@@ -58,6 +58,8 @@
     "bancada:guardados": "node bancada/medir-guardados.js",
     "medir:recorte": "node bancada/medir-recorte.mjs",
     "bancada:extrator": "node bancada/conferir-extrator.mjs",
+    "bancada:vetorizador": "node bancada/conferir-vetorizador.mjs",
+    "bancada:vetorizar-tela": "node bancada/conferir-vetorizar-tela.cjs",
     "bancada:extrator-rede": "node bancada/conferir-extrator-rede.mjs",
     "bancada:extrator-tela": "node bancada/conferir-extrator-tela.cjs",
     "bancada:pecas-rede": "node bancada/conferir-pecas-rede.mjs",

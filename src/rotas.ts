@@ -64,13 +64,14 @@ const Digitalizar = lazy(() => import("./telas/Digitalizar").then((m) => ({ defa
 const Montagem = lazy(() => import("./telas/Montagem").then((m) => ({ default: m.Montagem })));
 const Extrator = lazy(() => import("./telas/Extrator").then((m) => ({ default: m.Extrator })));
 const Reposicao = lazy(() => import("./telas/Reposicao").then((m) => ({ default: m.Reposicao })));
+const Vetorizar = lazy(() => import("./telas/Vetorizar").then((m) => ({ default: m.Vetorizar })));
 const Sobre = lazy(() => import("./telas/Sobre").then((m) => ({ default: m.Sobre })));
 const Conta = lazy(() => import("./telas/Conta").then((m) => ({ default: m.Conta })));
 const Painel = lazy(() => import("./telas/Painel").then((m) => ({ default: m.Painel })));
 
 export type NomeDeTela =
   | "moldes" | "projetos" | "encaixe" | "digitalizar" | "montagem" | "extrator"
-  | "reposicao"
+  | "reposicao" | "vetorizar"
   // As duas do PÉ da barra. Não pertencem a assunto nenhum da lista: são o
   // programa falando de si mesmo e da conta, não trabalho de produção.
   | "sobre" | "conta"
@@ -257,6 +258,22 @@ export const TELAS: readonly Tela[] = [
     icone: "icones.svg#wand-sparkles",
     escopo: "extrator",
     Componente: Extrator,
+  },
+  {
+    /*
+     * Logo depois do Extrator: os dois transformam imagem em arte. O Extrator
+     * separa o que está numa FOTO; o Vetorizar pega uma imagem que já é arte
+     * (logo, estampa, arquivo de cliente em PNG ou JPG) e devolve o vetor,
+     * com o motor próprio do programa (`src/motores/vetorizador`) e a IA de
+     * ampliação na entrada. Sem escopo: aberto a todos os planos.
+     */
+    nome: "vetorizar",
+    grupo: "producao",
+    rotulo: "Vetora",
+    apoioMenu: "A imagem vira vetor",
+    apoioTopo: "Mande um PNG ou JPG — logo, estampa, arte de cliente — e receba o vetor em SVG ou PDF, com IA para limpar e ampliar.",
+    icone: "icones.svg#pen-tool",
+    Componente: Vetorizar,
   },
 
   /*

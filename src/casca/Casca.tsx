@@ -132,7 +132,7 @@ export function Casca() {
 
   const bancada = tela.nome === "encaixe" || tela.nome === "projetos"
     || tela.nome === "moldes" || tela.nome === "montagem" || tela.nome === "reposicao"
-    || tela.nome === "digitalizar";
+    || tela.nome === "digitalizar" || tela.nome === "vetorizar";
 
   /*
    * ===========================================================================
