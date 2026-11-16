@@ -1067,7 +1067,7 @@ function desenharImagem(doc, imagem, giro, x, y, w, h) {
  * 0 a 1 na caixa da peça de pé (y para baixo); a matriz é a mesma da imagem,
  * então o giro sai igual ao da arte. Par-ímpar: pinta só o anel.
  */
-function desenharBordaVetorial(doc, voltas, giro, x, y, w, h) {
+function desenharBordaVetorial(doc, voltas, giro, x, y, w, h, cor = "#000000") {
   doc.save();
   doc.transform(...matrizDoVetor(QUADRADO_DA_IMAGEM, giro, x, y, w, h));
   // De (u, v) com y para baixo ao quadrado da imagem, que tem y para cima.
@@ -1084,7 +1084,7 @@ function desenharBordaVetorial(doc, voltas, giro, x, y, w, h) {
     doc.closePath();
     algum = true;
   }
-  if (algum) doc.fill("#000000", "even-odd");
+  if (algum) doc.fill(cor, "even-odd");
   doc.restore();
 }
 
@@ -1460,7 +1460,9 @@ async function montarPdf({
           const voltas = pos.bordaChave && bordas ? bordas[pos.bordaChave] : null;
           const borda = Number(pos.borda) > 0 && Array.isArray(voltas) ? Number(pos.borda) * PT_POR_CM : 0;
           if (borda > 0 && borda * 2 < Math.min(w, h)) {
-            desenharBordaVetorial(doc, voltas, giroDaPeca(pos), x, y, w, h);
+            // Só cor lisa em hexadecimal passa; o resto vira preto.
+            const cor = /^#[0-9a-f]{6}$/i.test(String(pos.bordaCor || "")) ? String(pos.bordaCor) : "#000000";
+            desenharBordaVetorial(doc, voltas, giroDaPeca(pos), x, y, w, h, cor);
             x += borda;
             y += borda;
             w -= 2 * borda;

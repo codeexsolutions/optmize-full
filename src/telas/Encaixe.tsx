@@ -649,6 +649,32 @@ export const Encaixe = memo(function Encaixe() { return <><div className="page h
 
 </label>
 
+{/*
+  A COR DO CONTORNO: só as cores da lista (`CORES_DA_BORDA`, em
+  motores/bordaDaPeca.js). Quem marca o botão escolhido é
+  producao/controlador.js ("A COR DO CONTORNO").
+*/}
+<div className="campo-bloco">
+<span className="campo-rotulo">
+{"Cor do contorno"}
+</span>
+<div className="flex flex-wrap gap-2" role="group" aria-label="Cor do contorno">
+{[
+  { nome: "Preto", cor: "#000000" },
+  { nome: "Azul", cor: "#0047FF" },
+  { nome: "Vermelho", cor: "#E00000" },
+  { nome: "Verde limão", cor: "#32CD32" },
+  { nome: "Branco", cor: "#FFFFFF" },
+].map(({ nome, cor }) => (
+<button key={cor} type="button" data-borda-cor={cor} aria-pressed={cor === "#000000" ? "true" : "false"} title={nome} aria-label={`Contorno ${nome.toLowerCase()}`}
+  className="borda-cor-op flex items-center gap-1.5 rounded-lg border border-linha bg-painel px-2 py-1 text-[11px] text-tinta aria-pressed:border-[var(--accent-line)] aria-pressed:ring-2 aria-pressed:ring-[var(--accent-line)]">
+<span aria-hidden="true" className="inline-block size-4 rounded-full border border-linha" style={{ background: cor }}></span>
+{nome}
+</button>
+))}
+</div>
+</div>
+
 
 
 

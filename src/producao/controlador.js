@@ -47,7 +47,7 @@ import {
 } from "./pedidos";
 import { normalizarSigla, siglaDaPeca } from "../motores/siglaDoPedido";
 import { tempoSugerido } from "./tempoSugerido";
-import { bordaDoCampo, comBorda, contornoVetorialDaBorda } from "../motores/bordaDaPeca";
+import { bordaDoCampo, comBorda, contornoVetorialDaBorda, corDaBorda } from "../motores/bordaDaPeca";
 export function montarProducao(raiz, irPara) {
 const escopo = criarEscopo(raiz);
 try {
@@ -268,6 +268,20 @@ const encaixeEspacoYInput = document.getElementById("encaixe-espaco-y");
 // O contorno em volta das peças, em mm (ver motores/bordaDaPeca.js).
 const encaixeBordaInput = document.getElementById("encaixe-borda");
 const bordaPedida = () => bordaDoCampo(encaixeBordaInput?.value);
+/*
+ * A COR DO CONTORNO: um dos botões de cor do modal (`data-borda-cor`), só as
+ * cores de `CORES_DA_BORDA`. Preto até alguém escolher outra.
+ */
+let corDaBordaEscolhida = corDaBorda();
+function marcarCorDaBorda() {
+  document.querySelectorAll("[data-borda-cor]").forEach((botao) => {
+    botao.setAttribute("aria-pressed", String(corDaBorda(botao.dataset.bordaCor) === corDaBordaEscolhida));
+  });
+}
+function escolherCorDaBorda(cor) {
+  corDaBordaEscolhida = corDaBorda(cor);
+  marcarCorDaBorda();
+}
 const encaixeComprimentoInput = document.getElementById("encaixe-comprimento");
 const encaixeTempoInput = document.getElementById("encaixe-tempo");
 const COMPRIMENTO_DO_BLOCO_CM = 500;
@@ -1454,6 +1468,7 @@ function retratoDaArea() {
       espaco: encaixeEspacoInput?.value,
       espacoY: encaixeEspacoYInput?.value,
       borda: encaixeBordaInput?.value,
+      bordaCor: corDaBordaEscolhida,
       comprimento: encaixeComprimentoInput?.value,
       giro: encaixeGiroTodasSelect?.value,
       sentido: sentidoUnico,
@@ -1476,6 +1491,7 @@ function vestirArea(estado) {
     voltar(encaixeEspacoInput, estado.campos.espaco);
     voltar(encaixeEspacoYInput, estado.campos.espacoY);
     voltar(encaixeBordaInput, estado.campos.borda);
+    if (estado.campos.bordaCor) escolherCorDaBorda(estado.campos.bordaCor);
     voltar(encaixeComprimentoInput, bancadaGuardada(estado.campos.comprimento));
     voltar(encaixeGiroTodasSelect, estado.campos.giro);
     if (SENTIDOS.includes(estado.campos.sentido)) sentidoUnico = estado.campos.sentido;
@@ -3791,7 +3807,8 @@ async function optmizar({
    * imagem. A lista (`pecasEncaixe`) continua com a peça de verdade.
    */
   const bordaMm = bordaPedida();
-  const pecasNoEncaixe = pecasEncaixe.map((peca) => comBorda(peca, bordaMm));
+  const bordaCor = corDaBordaEscolhida;
+  const pecasNoEncaixe = pecasEncaixe.map((peca) => comBorda(peca, bordaMm, bordaCor));
 
   // Expande pela quantidade: cada cópia é uma peça independente no encaixe.
   const itens = [];
@@ -4050,6 +4067,7 @@ async function optmizar({
     ultimoResultado.areaReal = ultimoResultado.posicoes.reduce((soma, pos) =>
       soma + ((pos.item.mascaras || pecasEncaixe[pos.item.indice]._cacheMascaras)?.areaReal || 0), 0);
     ultimoResultado.bordaMm = bordaMm;
+    ultimoResultado.bordaCor = bordaCor;
     ultimoResultado.areaCaixas = ultimoResultado.posicoes.reduce(
       (soma, pos) => soma + pos.largura * pos.altura, 0);
     ultimoResultado.larguraTecido = larguraTecido;
@@ -5238,7 +5256,7 @@ async function baixarEncaixeEmPdf() {
       altura: p.altura,
       // O contorno em volta da peça, em cm, e a imagem da faixa (ver acima).
       ...(p.item.bordaCm > 0 && p.item.imgSemBorda
-        ? { borda: p.item.bordaCm, bordaChave: `${chaveDaArte(p.item)}.__borda${p.item.bordaMm}` }
+        ? { borda: p.item.bordaCm, bordaCor: p.item.bordaCor, bordaChave: `${chaveDaArte(p.item)}.__borda${p.item.bordaMm}` }
         : {}),
       // A bancada vai junto: é ela que vira página no servidor
       // (`paginasDoEncaixe`, em encaixe-pdf.js).
@@ -5990,7 +6008,7 @@ async function procurarComplemento() {
     avisarNoComplemento("Lendo o contorno das peças…");
     // O complemento entra com o mesmo contorno do risco (ver motores/bordaDaPeca.js).
     const bordaDoRisco = r.bordaMm || 0;
-    await prepararMascarasEmParalelo(candidatos.map((c) => comBorda(c.peca, bordaDoRisco)), config.passo, config.raio);
+    await prepararMascarasEmParalelo(candidatos.map((c) => comBorda(c.peca, bordaDoRisco, r.bordaCor)), config.passo, config.raio);
     await respirarNaTela();
 
     const mapa = prepararComplemento(r.posicoes, config);
@@ -6003,7 +6021,7 @@ async function procurarComplemento() {
     // hora de complementar, quando elas entram na lista.
     let proximo = pecasEncaixe.length;
     candidatos.forEach((c) => {
-      const noEncaixe = comBorda(c.peca, bordaDoRisco);
+      const noEncaixe = comBorda(c.peca, bordaDoRisco, r.bordaCor);
       c.item = {
         ...noEncaixe,
         indice: c.daGaleria ? proximo++ : c.indice,
@@ -6454,6 +6472,10 @@ for (const op of sentidoOpcoes) {
  * dito na tela.
  */
 escopo.ouvir(encaixeGiroTodasSelect, "change", marcarGiro);
+document.querySelectorAll("[data-borda-cor]").forEach((botao) => {
+  escopo.ouvir(botao, "click", () => escolherCorDaBorda(botao.dataset.bordaCor));
+});
+marcarCorDaBorda();
 
 marcarGiro();
 
@@ -6481,6 +6503,7 @@ function guardarAjustes() {
     espaco: Number(encaixeEspacoInput.value),
     espacoY: Number(encaixeEspacoYInput.value),
     borda: bordaPedida(),
+    bordaCor: corDaBordaEscolhida,
     giro: encaixeGiroTodasSelect.value,
     sentido: sentidoUnico,
     comprimento: Number(encaixeComprimentoInput.value) || 0,
@@ -6510,6 +6533,7 @@ async function lerAjustesGuardados() {
   if (ajustes.espaco !== undefined) encaixeEspacoInput.value = ajustes.espaco;
   if (ajustes.espacoY !== undefined) encaixeEspacoYInput.value = ajustes.espacoY;
   if (ajustes.borda !== undefined && encaixeBordaInput) encaixeBordaInput.value = ajustes.borda;
+  if (ajustes.bordaCor) escolherCorDaBorda(ajustes.bordaCor);
   if (ajustes.comprimento !== undefined) encaixeComprimentoInput.value = bancadaGuardada(ajustes.comprimento) || "";
   if (SENTIDOS.includes(ajustes.sentido)) sentidoUnico = ajustes.sentido;
   if (ajustes.giro) encaixeGiroTodasSelect.value = ajustes.giro;

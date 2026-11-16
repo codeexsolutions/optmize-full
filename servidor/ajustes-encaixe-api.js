@@ -28,6 +28,9 @@ const GIROS = new Set(["livre", "180", "fixa"]);
 /** O lado do sentido único: 0 cima, 90 direita, 180 baixo, 270 esquerda. */
 const SENTIDOS = new Set([0, 90, 180, 270]);
 
+// As cores da borda (as mesmas de `CORES_DA_BORDA`, em src/motores/bordaDaPeca.js).
+const CORES_DA_BORDA = new Set(["#000000", "#0047FF", "#E00000", "#32CD32", "#FFFFFF"]);
+
 /** Número dentro da faixa, ou `null` — nunca um valor que a tela recusaria. */
 function numero(valor, min, max) {
   const n = Number(valor);
@@ -46,6 +49,7 @@ function limpar(cru) {
     espacoY: numero(a.espacoY, 0, 10),
     // O contorno em volta das peças, em mm (ver src/motores/bordaDaPeca.js).
     borda: numero(a.borda, 0, 20),
+    bordaCor: CORES_DA_BORDA.has(String(a.bordaCor || "").toUpperCase()) ? String(a.bordaCor).toUpperCase() : null,
     giro: GIROS.has(String(a.giro)) ? String(a.giro) : null,
     sentido: SENTIDOS.has(a.sentido) ? a.sentido : null,
     // 0 é "sem limite", que é o campo vazio na tela.

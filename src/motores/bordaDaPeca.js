@@ -7,7 +7,8 @@
  * colocar um contorno em volta das peças, onde eu ponho em MM, tipo 3 mm de
  * borda ou 4 mm".
  *
- * É uma faixa PRETA, da grossura escolhida, colada POR FORA da silhueta da
+ * É uma faixa de cor lisa (preta, azul, vermelha, verde limão ou branca —
+ * `CORES_DA_BORDA`), da grossura escolhida, colada POR FORA da silhueta da
  * peça (e por dentro dos furos dela). Ela sai impressa: na mesa, no PDF e no
  * espaço que o encaixe reserva.
  *
@@ -16,7 +17,7 @@
  * O encaixe inteiro (grade, máscaras, conferência pela arte, desenho da mesa)
  * fala com `peca.img`, `peca.largura` e `peca.altura`. Então, com borda, ele
  * recebe uma PEÇA EMBRULHADA (`comBorda`): a mesma peça, com a caixa crescida
- * `2 × borda` em cada eixo e uma imagem nova — a faixa preta mais a arte no
+ * `2 × borda` em cada eixo e uma imagem nova — a faixa colorida mais a arte no
  * meio. Tudo que vem depois vê a peça maior e se comporta certo sozinho.
  *
  * A peça da lista (`pecasEncaixe`) NUNCA é trocada: a tabela continua
@@ -24,14 +25,32 @@
  * embrulho fica guardado na própria peça (`_borda`) só para não refazer a
  * imagem e as máscaras a cada clique.
  *
- * NO PDF a arte vai como sempre foi (o original, intocado). A faixa vai como
- * uma imagem à parte — preta com transparência, só o anel — e o servidor a
- * desenha na caixa inteira e a arte encolhida `borda` de cada lado, por cima
- * (ver "A BORDA DA PEÇA", em servidor/encaixe-pdf.js).
+ * NO PDF a arte vai como sempre foi (o original, intocado). A faixa vai em
+ * VETOR, só o anel, na cor escolhida (`contornoVetorialDaBorda`), e o
+ * servidor a desenha na caixa inteira com a arte encolhida `borda` de cada
+ * lado, por cima (ver "A BORDA DA PEÇA", em servidor/encaixe-pdf.js).
  */
 
 /** O maior valor aceito no campo, em mm. */
 export const BORDA_MAXIMA_MM = 20;
+
+/**
+ * As cores que a borda pode ter (pedido do dono, 2026-11-16): só estas, para
+ * a produção não precisar acertar cor à mão. A primeira é a de sempre.
+ */
+export const CORES_DA_BORDA = [
+  { nome: "Preto", cor: "#000000" },
+  { nome: "Azul", cor: "#0047FF" },
+  { nome: "Vermelho", cor: "#E00000" },
+  { nome: "Verde limão", cor: "#32CD32" },
+  { nome: "Branco", cor: "#FFFFFF" },
+];
+
+/** A cor pedida, se for uma das da lista; senão, preto. */
+export function corDaBorda(cor) {
+  const pedida = String(cor || "").toUpperCase();
+  return CORES_DA_BORDA.some((c) => c.cor === pedida) ? pedida : CORES_DA_BORDA[0].cor;
+}
 
 /** O valor do campo, já limpo: mm entre 0 e o máximo; vazio ou inválido é 0. */
 export function bordaDoCampo(valor) {
@@ -56,7 +75,7 @@ const alturaDe = (img) => img.naturalHeight || img.height;
  * do círculo, mais dois círculos menores para as pontas finas, o resultado é
  * a soma de Minkowski com o disco, que é a faixa de grossura constante.
  */
-function desenharBorda(img, larguraCm, alturaCm, bordaCm, { ladoMaximo, ppcmMaximo, soAnel, paraVetor }) {
+function desenharBorda(img, larguraCm, alturaCm, bordaCm, { ladoMaximo, ppcmMaximo, soAnel, paraVetor, cor = "#000000" }) {
   const pxW = larguraDe(img);
   const pxH = alturaDe(img);
   const totalW = larguraCm + 2 * bordaCm;
@@ -80,7 +99,7 @@ function desenharBorda(img, larguraCm, alturaCm, bordaCm, { ladoMaximo, ppcmMaxi
   const cs = silhueta.getContext("2d");
   cs.drawImage(img, 0, 0, artW, artH);
   cs.globalCompositeOperation = "source-in";
-  cs.fillStyle = "#000";
+  cs.fillStyle = cor;
   cs.fillRect(0, 0, artW, artH);
 
   const tela = document.createElement("canvas");
@@ -119,14 +138,15 @@ function desenharBorda(img, larguraCm, alturaCm, bordaCm, { ladoMaximo, ppcmMaxi
  * mudar a borda refaz a máscara sozinho; trocar a arte refaz a imagem e
  * esquece a máscara aqui.
  */
-export function comBorda(peca, mm) {
+export function comBorda(peca, mm, corPedida) {
   if (!(mm > 0) || !peca || !peca.img || !(peca.largura > 0) || !(peca.altura > 0)) return peca;
   const bordaCm = mm / 10;
   let guardado = peca._borda;
-  const chaveImg = `${mm}|${peca.largura}|${peca.altura}`;
+  const cor = corDaBorda(corPedida);
+  const chaveImg = `${mm}|${cor}|${peca.largura}|${peca.altura}`;
   if (!guardado || guardado.img !== peca.img || guardado.chave !== chaveImg) {
     const imagem = desenharBorda(peca.img, peca.largura, peca.altura, bordaCm,
-      { ladoMaximo: 3000, ppcmMaximo: 60, soAnel: false });
+      { ladoMaximo: 3000, ppcmMaximo: 60, soAnel: false, cor });
     guardado = { img: peca.img, chave: chaveImg, imagem, embrulho: guardado ? guardado.embrulho : {} };
     delete guardado.embrulho._cacheMascaras;
     Object.defineProperty(peca, "_borda", { value: guardado, writable: true, configurable: true, enumerable: false });
@@ -141,6 +161,7 @@ export function comBorda(peca, mm) {
     altura: peca.altura + 2 * bordaCm,
     bordaMm: mm,
     bordaCm,
+    bordaCor: cor,
     // A arte e a medida SEM a borda: é delas que sai a faixa do PDF.
     imgSemBorda: peca.img,
     larguraSemBorda: peca.largura,
