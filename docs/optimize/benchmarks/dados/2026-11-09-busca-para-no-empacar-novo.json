@@ -1,0 +1,426 @@
+{
+  "quando": "2026-11-09T17:41:21.605Z",
+  "maquina": {
+    "cpu": "AMD Ryzen 5 5600X 6-Core Processor",
+    "nucleos": 12,
+    "node": "v24.18.0"
+  },
+  "opcoes": {
+    "tempo": 60,
+    "sementes": 1,
+    "fatias": 5,
+    "trabalhos": [
+      "producao-avulsa",
+      "camiseta+manga+gola"
+    ],
+    "encolher": true,
+    "json": "docs/optimize/benchmarks/dados/2026-11-09-busca-para-no-empacar-novo.json",
+    "marcos": [
+      5,
+      10,
+      15,
+      20,
+      30,
+      45,
+      60
+    ],
+    "extra": {
+      "motores": "contorno+vaos+faixas"
+    }
+  },
+  "trabalhos": {
+    "producao-avulsa": {
+      "itens": 175,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "passo": 0.2,
+      "folgaReal": 0.4,
+      "corridas": [
+        {
+          "semente": 1,
+          "consumoFinal": 3176.8,
+          "consumoDaCurva": 3176.8,
+          "sobraram": 0,
+          "receita": "encolher/vaos/solta/altura/fundo/",
+          "tentativas": 356,
+          "tempoBuscaMs": 2928,
+          "primeira": {
+            "t": 61,
+            "consumo": 3570
+          },
+          "melhor": {
+            "t": 59439,
+            "consumo": 3176.8,
+            "fase": "sparrow"
+          },
+          "fimDaBusca": 3241.2,
+          "encolhimento": {
+            "antes": 3258,
+            "depois": 3176.8,
+            "relatos": 143,
+            "rejeitados": 0,
+            "partiu": true,
+            "motivos": []
+          },
+          "marcos": {
+            "5": 3258,
+            "10": 3241.2,
+            "15": 3224,
+            "20": 3215.6,
+            "30": 3206.4,
+            "45": 3187.2,
+            "60": 3176.8
+          },
+          "melhorias": 40,
+          "curva": [
+            {
+              "t": 61,
+              "consumo": 3570,
+              "fase": "busca"
+            },
+            {
+              "t": 67,
+              "consumo": 3519.2,
+              "fase": "busca"
+            },
+            {
+              "t": 71,
+              "consumo": 3514.8,
+              "fase": "busca"
+            },
+            {
+              "t": 74,
+              "consumo": 3492.2,
+              "fase": "busca"
+            },
+            {
+              "t": 106,
+              "consumo": 3311.4,
+              "fase": "busca"
+            },
+            {
+              "t": 117,
+              "consumo": 3285.8,
+              "fase": "busca"
+            },
+            {
+              "t": 197,
+              "consumo": 3276.8,
+              "fase": "busca"
+            },
+            {
+              "t": 265,
+              "consumo": 3259.6,
+              "fase": "busca"
+            },
+            {
+              "t": 289,
+              "consumo": 3258,
+              "fase": "busca"
+            },
+            {
+              "t": 7332,
+              "consumo": 3256.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 7452,
+              "consumo": 3253.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 7676,
+              "consumo": 3251,
+              "fase": "sparrow"
+            },
+            {
+              "t": 8050,
+              "consumo": 3247.6,
+              "fase": "sparrow"
+            },
+            {
+              "t": 8206,
+              "consumo": 3244.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 8772,
+              "consumo": 3241.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 10781,
+              "consumo": 3240.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 10950,
+              "consumo": 3237,
+              "fase": "sparrow"
+            },
+            {
+              "t": 11288,
+              "consumo": 3233.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 11428,
+              "consumo": 3230.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 13072,
+              "consumo": 3228.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 14814,
+              "consumo": 3227.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 14991,
+              "consumo": 3224,
+              "fase": "sparrow"
+            },
+            {
+              "t": 16603,
+              "consumo": 3222,
+              "fase": "sparrow"
+            },
+            {
+              "t": 16771,
+              "consumo": 3218.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 16930,
+              "consumo": 3215.6,
+              "fase": "sparrow"
+            },
+            {
+              "t": 27278,
+              "consumo": 3212.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 27938,
+              "consumo": 3209.6,
+              "fase": "sparrow"
+            },
+            {
+              "t": 28051,
+              "consumo": 3206.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 31598,
+              "consumo": 3203,
+              "fase": "sparrow"
+            },
+            {
+              "t": 31913,
+              "consumo": 3199.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 31992,
+              "consumo": 3196.6,
+              "fase": "sparrow"
+            },
+            {
+              "t": 33275,
+              "consumo": 3193.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 34245,
+              "consumo": 3190.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 36934,
+              "consumo": 3187.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 54824,
+              "consumo": 3184,
+              "fase": "sparrow"
+            },
+            {
+              "t": 55387,
+              "consumo": 3182.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 55462,
+              "consumo": 3180.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 55918,
+              "consumo": 3179.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 59129,
+              "consumo": 3177.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 59439,
+              "consumo": 3176.8,
+              "fase": "sparrow"
+            }
+          ],
+          "paredeMs": 312272
+        }
+      ]
+    },
+    "camiseta+manga+gola": {
+      "itens": 32,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "folgaReal": 1,
+      "corridas": [
+        {
+          "semente": 1,
+          "consumoFinal": 337.5,
+          "consumoDaCurva": 337.5,
+          "sobraram": 0,
+          "receita": "encolher/vaos/solta/lado/fundo/",
+          "tentativas": 16716,
+          "tempoBuscaMs": 3739,
+          "primeira": {
+            "t": 6,
+            "consumo": 523
+          },
+          "melhor": {
+            "t": 49739,
+            "consumo": 337.5,
+            "fase": "sparrow"
+          },
+          "fimDaBusca": 339.5,
+          "encolhimento": {
+            "antes": 344.5,
+            "depois": 337.5,
+            "relatos": 143,
+            "rejeitados": 0,
+            "partiu": true,
+            "motivos": []
+          },
+          "marcos": {
+            "5": 343,
+            "10": 338,
+            "15": 338,
+            "20": 338,
+            "30": 338,
+            "45": 338,
+            "60": 337.5
+          },
+          "melhorias": 19,
+          "curva": [
+            {
+              "t": 6,
+              "consumo": 523,
+              "fase": "busca"
+            },
+            {
+              "t": 8,
+              "consumo": 361.5,
+              "fase": "busca"
+            },
+            {
+              "t": 58,
+              "consumo": 361,
+              "fase": "busca"
+            },
+            {
+              "t": 467,
+              "consumo": 358.5,
+              "fase": "busca"
+            },
+            {
+              "t": 715,
+              "consumo": 344.5,
+              "fase": "busca"
+            },
+            {
+              "t": 4496,
+              "consumo": 344,
+              "fase": "sparrow"
+            },
+            {
+              "t": 4529,
+              "consumo": 343.5,
+              "fase": "sparrow"
+            },
+            {
+              "t": 4562,
+              "consumo": 343,
+              "fase": "sparrow"
+            },
+            {
+              "t": 5800,
+              "consumo": 342.5,
+              "fase": "sparrow"
+            },
+            {
+              "t": 6416,
+              "consumo": 342,
+              "fase": "sparrow"
+            },
+            {
+              "t": 6504,
+              "consumo": 341.5,
+              "fase": "sparrow"
+            },
+            {
+              "t": 6697,
+              "consumo": 341,
+              "fase": "sparrow"
+            },
+            {
+              "t": 6845,
+              "consumo": 340.5,
+              "fase": "sparrow"
+            },
+            {
+              "t": 8655,
+              "consumo": 340,
+              "fase": "sparrow"
+            },
+            {
+              "t": 8696,
+              "consumo": 339.5,
+              "fase": "sparrow"
+            },
+            {
+              "t": 9013,
+              "consumo": 339,
+              "fase": "sparrow"
+            },
+            {
+              "t": 9220,
+              "consumo": 338.5,
+              "fase": "sparrow"
+            },
+            {
+              "t": 9839,
+              "consumo": 338,
+              "fase": "sparrow"
+            },
+            {
+              "t": 49739,
+              "consumo": 337.5,
+              "fase": "sparrow"
+            }
+          ],
+          "paredeMs": 300129
+        }
+      ]
+    }
+  }
+}

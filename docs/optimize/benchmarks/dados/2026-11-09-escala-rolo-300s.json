@@ -1,0 +1,76 @@
+{
+  "quando": "2026-11-09T17:13:46.871Z",
+  "opcoes": {
+    "teste": "rolo",
+    "tempo": 300,
+    "fatias": 1,
+    "sementes": 1,
+    "json": "docs/optimize/benchmarks/dados/2026-11-09-escala-rolo-300s.json",
+    "vezes": [
+      4,
+      6
+    ]
+  },
+  "corridas": [
+    {
+      "teste": "rolo",
+      "vezes": 4,
+      "semente": 1,
+      "pecas": 700,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "comprimentoBancada": 0,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "consumo": 12927.400000000001,
+      "midia": 12927.400000000001,
+      "aproveitamento": 0.8095679671509695,
+      "sobraram": 0,
+      "linhasDoRolo": 64637,
+      "encolhimento": {
+        "antes": 13064.400000000001,
+        "depois": 12927.400000000001,
+        "relatos": 25,
+        "rejeitados": 0,
+        "partiu": true,
+        "motivos": []
+      },
+      "paredeMs": 302864,
+      "guarda": {
+        "pares": 0,
+        "conferidas": 700
+      }
+    },
+    {
+      "teste": "rolo",
+      "vezes": 6,
+      "semente": 1,
+      "pecas": 1050,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "comprimentoBancada": 0,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "consumo": 19406,
+      "midia": 19406,
+      "aproveitamento": 0.8089463778120759,
+      "sobraram": 0,
+      "linhasDoRolo": 97030,
+      "encolhimento": {
+        "antes": 19542,
+        "depois": 19406,
+        "relatos": 29,
+        "rejeitados": 0,
+        "partiu": true,
+        "motivos": []
+      },
+      "paredeMs": 304198,
+      "guarda": {
+        "pares": 0,
+        "conferidas": 1050
+      }
+    }
+  ]
+}

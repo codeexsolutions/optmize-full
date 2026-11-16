@@ -308,6 +308,70 @@ export function resolucaoQueCabe(largura, altura, dpr) {
   return Math.min(dpr, peloLado, pelaArea);
 }
 
+/*
+ * ===========================================================================
+ * A JANELA DO RISCO (2026-11-09)
+ * ===========================================================================
+ *
+ * O teto de cima resolveu o canvas em branco baixando a resolução do desenho
+ * INTEIRO. Num rolo longo isso cobra caro, e cobra justamente de quem aproxima:
+ * medido com `resolucaoQueCabe` na caixa de uma tela 1080p, uma linha de 1 px
+ * vira 0,45 px de verdade num rolo de 60 m a 8x, 0,21 px num de 127 m a 8x e
+ * 0,09 px num de 300 m a 8x. A linha some e o contorno se quebra em
+ * pontilhado: quanto mais se aproxima, menos se vê. E o canvas chega ao teto
+ * de área, 256 milhões de pixels (~1 GB de bitmap), a cada redesenho.
+ *
+ * Com `janela`, o canvas passa a ter só o tamanho da parte VISÍVEL da caixa,
+ * na resolução cheia da tela, e o desenho é o mesmo de sempre deslocado para
+ * onde a rolagem está. O rolo inteiro continua existindo para a rolagem: a
+ * caixa vira uma grade de uma célula do tamanho do risco, e o canvas gruda
+ * (`sticky`) dentro dela. É a célula da grade, e não a caixa, que contém o
+ * canvas — por isso ele gruda também na horizontal, o que um filho comum de
+ * uma caixa estreita não faz. Rolar é redesenhar a janela (quem escuta a
+ * rolagem é o controlador).
+ *
+ * A geometria não muda em nada: as peças, a escala e a vista são as mesmas; a
+ * vista só ganha `origem`, o canto da janela em pixels do risco inteiro, para
+ * o clique continuar virando centímetro de tecido.
+ */
+function abrirJanela(canvas, pai, larguraTotal, alturaTotal) {
+  const estilo = getComputedStyle(pai);
+  const padE = parseFloat(estilo.paddingLeft) || 0;
+  const padD = parseFloat(estilo.paddingRight) || 0;
+  const padC = parseFloat(estilo.paddingTop) || 0;
+  const padB = parseFloat(estilo.paddingBottom) || 0;
+  pai.dataset.janelaDoRisco = "1";
+  pai.style.display = "grid";
+  pai.style.gridTemplateColumns = `${larguraTotal}px`;
+  pai.style.gridTemplateRows = `${alturaTotal}px`;
+  Object.assign(canvas.style, {
+    position: "sticky", left: "0px", top: "0px", justifySelf: "start", alignSelf: "start",
+  });
+  const larguraVista = Math.max(1, Math.min(larguraTotal, Math.floor(pai.clientWidth - padE - padD)));
+  const alturaVista = Math.max(1, Math.min(alturaTotal, Math.floor(pai.clientHeight - padC - padB)));
+  // O tamanho entra ANTES da medida: perto do fim do rolo o `sticky` para
+  // encostado no fim da célula, e o quanto ele anda depende da largura dele.
+  canvas.style.width = `${larguraVista}px`;
+  canvas.style.height = `${alturaVista}px`;
+  // Onde o canvas grudou, em pixels do risco inteiro. Pela posição medida, e
+  // não pela conta da rolagem: assim vale qualquer que seja a regra do
+  // navegador para o `sticky` dentro de uma caixa com padding.
+  const caixa = pai.getBoundingClientRect();
+  const tela = canvas.getBoundingClientRect();
+  const origemX = caixa.left + pai.clientLeft + padE - pai.scrollLeft;
+  const origemY = caixa.top + pai.clientTop + padC - pai.scrollTop;
+  const jx = Math.min(Math.max(0, Math.round(tela.left - origemX)), Math.max(0, larguraTotal - larguraVista));
+  const jy = Math.min(Math.max(0, Math.round(tela.top - origemY)), Math.max(0, alturaTotal - alturaVista));
+  return { jx, jy, larguraVista, alturaVista };
+}
+
+/** Desfaz a janela: o canvas volta a ser o risco inteiro, num bloco comum. */
+function soltarJanela(canvas, pai) {
+  delete pai.dataset.janelaDoRisco;
+  for (const p of ["display", "gridTemplateColumns", "gridTemplateRows"]) pai.style[p] = "";
+  for (const p of ["position", "left", "top", "justifySelf", "alignSelf"]) canvas.style[p] = "";
+}
+
 /**
  * Desenha o risco.
  *
@@ -365,6 +429,11 @@ export function desenharEncaixe(canvas, r, {
   selecao = SEM_SELECAO,
   /** O retorno de `marcasDoRisco` (src/producao/pedidos.js), ou null com um pedido só. */
   pedidos = null,
+  /**
+   * Desenhar só a parte visível da caixa, na resolução cheia (ver "A JANELA DO
+   * RISCO", acima). Só vale para a tela: com `escala` o arquivo sai inteiro.
+   */
+  janela = false,
 } = {}) {
   const REGUA = 34; // faixa com as marcas de metro
   const pai = canvas.parentElement;
@@ -395,21 +464,63 @@ export function desenharEncaixe(canvas, r, {
   const alturaCanvas = deitar
     ? Math.round(r.larguraTecido * px) + REGUA
     : Math.round(r.consumo * px);
-  const dpr = resolucaoQueCabe(larguraCanvas, alturaCanvas, escala ? 1 : (window.devicePixelRatio || 1));
+  // A parte do risco que este canvas mostra: o risco inteiro, ou só a janela
+  // visível da caixa (ver "A JANELA DO RISCO", acima).
+  const comJanela = Boolean(janela && !escala && pai);
+  let jx = 0;
+  let jy = 0;
+  let larguraVista = larguraCanvas;
+  let alturaVista = alturaCanvas;
+  if (comJanela) {
+    ({ jx, jy, larguraVista, alturaVista } = abrirJanela(canvas, pai, larguraCanvas, alturaCanvas));
+  } else if (pai && pai.dataset && pai.dataset.janelaDoRisco) {
+    soltarJanela(canvas, pai);
+  }
+  const dpr = resolucaoQueCabe(larguraVista, alturaVista, escala ? 1 : (window.devicePixelRatio || 1));
 
   // A escala do desenho NA TELA é o que traduz pixel do mouse em centímetro de
   // tecido. Só vale para o desenho da tela: o PNG e o PDF vêm com `escala`
-  // própria, e guardar a deles faria a seleção mirar no lugar errado.
-  const vista = escala ? null : { px, regua: REGUA, deitado: deitar, larguraTecido: r.larguraTecido };
+  // própria, e guardar a deles faria a seleção mirar no lugar errado. A
+  // `origem` é o canto da janela no risco inteiro (zero sem janela).
+  const vista = escala ? null
+    : { px, regua: REGUA, deitado: deitar, larguraTecido: r.larguraTecido, origem: { x: jx, y: jy } };
 
-  canvas.width = Math.floor(larguraCanvas * dpr);
-  canvas.height = Math.floor(alturaCanvas * dpr);
-  canvas.style.width = `${larguraCanvas}px`;
-  canvas.style.height = `${alturaCanvas}px`;
+  canvas.width = Math.floor(larguraVista * dpr);
+  canvas.height = Math.floor(alturaVista * dpr);
+  canvas.style.width = `${larguraVista}px`;
+  canvas.style.height = `${alturaVista}px`;
 
   const ctx = canvas.getContext("2d");
   ctx.scale(dpr, dpr);
+  // Daqui para baixo tudo é desenhado em pixels do risco INTEIRO, como sempre;
+  // com janela, o deslocamento leva o pedaço visível para dentro do canvas.
+  if (comJanela) ctx.translate(-jx, -jy);
   ctx.textBaseline = "middle";
+
+  /*
+   * O que cai dentro da janela, na folha EM PÉ (antes do giro da tela), com
+   * uma margem para o traço e a sigla. Sem janela, tudo cai. Deitado, o giro
+   * leva (X, Y) da folha em pé para (Y, REGUA + largura × px − X) na tela.
+   */
+  const MARGEM_DA_JANELA = 12;
+  const topoDaFolha = REGUA + r.larguraTecido * px;
+  const visivel = !comJanela
+    ? { x0: -Infinity, x1: Infinity, y0: -Infinity, y1: Infinity }
+    : deitar
+      ? {
+        y0: jx - MARGEM_DA_JANELA, y1: jx + larguraVista + MARGEM_DA_JANELA,
+        x0: topoDaFolha - (jy + alturaVista) - MARGEM_DA_JANELA, x1: topoDaFolha - jy + MARGEM_DA_JANELA,
+      }
+      : {
+        x0: jx - MARGEM_DA_JANELA, x1: jx + larguraVista + MARGEM_DA_JANELA,
+        y0: jy - MARGEM_DA_JANELA, y1: jy + alturaVista + MARGEM_DA_JANELA,
+      };
+  const naJanela = (x, y, w, h) => x < visivel.x1 && x + w > visivel.x0 && y < visivel.y1 && y + h > visivel.y0;
+  /** Os centímetros do rolo (eixo do comprimento) que a janela mostra. */
+  const cmVisiveis = {
+    de: Math.max(0, Math.floor(Math.max(0, visivel.y0) / px / 10) * 10),
+    ate: Math.min(r.consumo, Number.isFinite(visivel.y1) ? visivel.y1 / px : r.consumo),
+  };
 
   // Na tela, as cores do tema; no arquivo (`escala`), as de sempre.
   const tema = escala ? null : coresDaTela();
@@ -478,7 +589,11 @@ export function desenharEncaixe(canvas, r, {
         ctx.moveTo(ex, 0);
         ctx.lineTo(ex, mesa);
       }
-      for (let y = comeco; y < mesa; y += espacamento) {
+      // Só as linhas da janela: num rolo de 300 m a malha de 5 cm são 6 mil
+      // linhas, e a rolagem redesenha a cada quadro.
+      const inicioY = comeco + Math.max(0, Math.floor((visivel.y0 - comeco) / espacamento)) * espacamento;
+      const fimY = Math.min(mesa, visivel.y1);
+      for (let y = inicioY; y < fimY; y += espacamento) {
         const ey = Math.round(y) + 0.5;
         ctx.moveTo(REGUA, ey);
         ctx.lineTo(REGUA + larguraDoTecido, ey);
@@ -509,7 +624,7 @@ export function desenharEncaixe(canvas, r, {
     ctx.fillStyle = cor.numero;
     ctx.font = "10px system-ui, sans-serif";
     ctx.lineWidth = 1;
-    for (let cm = 0; cm <= r.consumo; cm += 10) {
+    for (let cm = cmVisiveis.de; cm <= cmVisiveis.ate; cm += 10) {
       const y = Math.round(cm * px) + 0.5;
       const metro = cm % 100 === 0;
       ctx.beginPath();
@@ -526,6 +641,8 @@ export function desenharEncaixe(canvas, r, {
     const y = p.y * px;
     const w = p.largura * px;
     const h = p.altura * px;
+    // Peça fora da janela não é desenhada (sem janela, todas estão nela).
+    if (!naJanela(x, y, w, h)) return;
     const pedido = pedidos ? pedidos.pedidos[i] : null;
     const cor = pedido ? corDoPedido(pedido) : corDaPeca(p.item.indice);
 
@@ -626,7 +743,7 @@ export function desenharEncaixe(canvas, r, {
     ctx.fillStyle = cor.numero;
     ctx.font = "10px system-ui, sans-serif";
     ctx.lineWidth = 1;
-    for (let cm = 0; cm <= r.consumo; cm += 10) {
+    for (let cm = cmVisiveis.de; cm <= cmVisiveis.ate; cm += 10) {
       const x = Math.round(cm * px) + 0.5;
       const metro = cm % 100 === 0;
       ctx.beginPath();
@@ -646,6 +763,8 @@ export function desenharEncaixe(canvas, r, {
         const y = (r.larguraTecido - p.x - p.largura) * px;
         const w = p.altura * px;
         const h = p.largura * px;
+        // Já na tela deitada: fora da janela, o nome não aparece.
+        if (comJanela && (x > jx + larguraVista || x + w < jx || y > jy + alturaVista || y + h < jy)) return;
         if (w > 46 && h > 18) escreverNome(ctx, p, x, y, w, h, pedidos ? pedidos.pedidos[i] : null);
       });
     }

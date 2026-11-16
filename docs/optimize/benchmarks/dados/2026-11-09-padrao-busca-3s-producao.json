@@ -1,0 +1,217 @@
+{
+  "quando": "2026-11-09T16:00:37.480Z",
+  "opcoes": {
+    "tempo": 3,
+    "sementes": 3,
+    "fatias": 5,
+    "trabalhos": [
+      "camiseta+manga+gola",
+      "so-camiseta",
+      "calca-bolso",
+      "misturado-pequeno",
+      "giro-livre",
+      "tamanhos-extremos"
+    ],
+    "json": "docs/optimize/benchmarks/dados/2026-11-09-padrao-busca-3s-producao.json",
+    "contra": null,
+    "meta": 0,
+    "wasm": true,
+    "rodadas": 1,
+    "espalharSemente": true,
+    "extra": {
+      "motores": [
+        "contorno",
+        "vaos",
+        "faixas"
+      ]
+    }
+  },
+  "trabalhos": {
+    "camiseta+manga+gola": {
+      "nome": "camiseta+manga+gola",
+      "consumo": 344.5,
+      "mediana": 344.5,
+      "melhor": 344.5,
+      "pior": 344.5,
+      "desvio": 0,
+      "aproveitamento": 0.7633526850507982,
+      "tentativas": 37451,
+      "tentPorSegundo": 2487,
+      "sobraram": 0,
+      "receita": "vaos/solta/lado/fundo/",
+      "pecas": 32,
+      "corridas": [
+        {
+          "consumo": 344.5,
+          "receita": "vaos/solta/lado/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 344.5,
+          "receita": "vaos/solta/lado/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 344.5,
+          "receita": "vaos/solta/lado/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "so-camiseta": {
+      "nome": "so-camiseta",
+      "consumo": 279,
+      "mediana": 279,
+      "melhor": 279,
+      "pior": 279,
+      "desvio": 0,
+      "aproveitamento": 0.6961768219832735,
+      "tentativas": 204113,
+      "tentPorSegundo": 13600,
+      "sobraram": 0,
+      "receita": "contorno/solta/lado/fundo/",
+      "pecas": 12,
+      "corridas": [
+        {
+          "consumo": 279,
+          "receita": "contorno/solta/lado/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 279,
+          "receita": "contorno/solta/lado/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 279,
+          "receita": "contorno/solta/lado/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "calca-bolso": {
+      "nome": "calca-bolso",
+      "consumo": 225.5,
+      "mediana": 225.5,
+      "melhor": 225.5,
+      "pior": 225.5,
+      "desvio": 0,
+      "aproveitamento": 0.7823170731707317,
+      "tentativas": 84813,
+      "tentPorSegundo": 5651,
+      "sobraram": 0,
+      "receita": "vaos/dupla/area/fundo/",
+      "pecas": 24,
+      "corridas": [
+        {
+          "consumo": 225.5,
+          "receita": "vaos/dupla/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 225.5,
+          "receita": "vaos/dupla/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 225.5,
+          "receita": "vaos/dupla/area/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "misturado-pequeno": {
+      "nome": "misturado-pequeno",
+      "consumo": 213.83333333333334,
+      "mediana": 214,
+      "melhor": 213,
+      "pior": 214.5,
+      "desvio": 0.6236095644623235,
+      "aproveitamento": 0.7606300149764674,
+      "tentativas": 74235,
+      "tentPorSegundo": 4934,
+      "sobraram": 0,
+      "receita": "vaos/solta/area/fundo/",
+      "pecas": 25,
+      "corridas": [
+        {
+          "consumo": 214.5,
+          "receita": "vaos/solta/lado/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 213,
+          "receita": "vaos/solta/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 214,
+          "receita": "vaos/solta/altura/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "giro-livre": {
+      "nome": "giro-livre",
+      "consumo": 348.1666666666667,
+      "mediana": 348,
+      "melhor": 347,
+      "pior": 349.5,
+      "desvio": 1.0274023338281628,
+      "aproveitamento": 0.7553201196908689,
+      "tentativas": 24092,
+      "tentPorSegundo": 1598,
+      "sobraram": 0,
+      "receita": "vaos/solta/area/fundo/",
+      "pecas": 32,
+      "corridas": [
+        {
+          "consumo": 347,
+          "receita": "vaos/solta/altura/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 349.5,
+          "receita": "vaos/solta/lado/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 348,
+          "receita": "vaos/solta/area/fundo/",
+          "encolhimento": null
+        }
+      ]
+    },
+    "tamanhos-extremos": {
+      "nome": "tamanhos-extremos",
+      "consumo": 209,
+      "mediana": 209,
+      "melhor": 209,
+      "pior": 209,
+      "desvio": 0,
+      "aproveitamento": 0.805308014354067,
+      "tentativas": 46376,
+      "tentPorSegundo": 3088,
+      "sobraram": 0,
+      "receita": "vaos/dupla/area/fundo/",
+      "pecas": 48,
+      "corridas": [
+        {
+          "consumo": 209,
+          "receita": "vaos/dupla/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 209,
+          "receita": "vaos/dupla/area/fundo/",
+          "encolhimento": null
+        },
+        {
+          "consumo": 209,
+          "receita": "vaos/dupla/area/fundo/",
+          "encolhimento": null
+        }
+      ]
+    }
+  }
+}

@@ -4598,7 +4598,7 @@ function renderResultado() {
 
   encaixeResultado.classList.remove("hidden");
   vistaDoRisco = desenharEncaixe(encaixeCanvas, r,
-    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(r) });
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(r), janela: true });
 
   // A barra de rolagem só aparece depois que o desenho entra na caixa, e ela
   // come alguns pixels da medida que decidiu a escala. Deitado quem manda é a
@@ -4608,7 +4608,7 @@ function renderResultado() {
   const sobrou = wrap && (wrap.scrollHeight > wrap.clientHeight + 1);
   if (sobrou) {
     vistaDoRisco = desenharEncaixe(encaixeCanvas, r,
-    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(r) });
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(r), janela: true });
   }
 }
 
@@ -5378,7 +5378,7 @@ function redesenharEncaixe() {
     return;
   }
   vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
-    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(ultimoResultado) });
+    { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(ultimoResultado), janela: true });
 }
 
 // Redesenha ao mudar o tamanho da janela para o encaixe continuar cabendo.
@@ -5485,7 +5485,7 @@ function avisarSemSigla(visao) {
 function redesenharRisco() {
   if (ultimoResultado) {
     vistaDoRisco = desenharEncaixe(encaixeCanvas, ultimoResultado,
-      { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(ultimoResultado) });
+      { escala: null, comLegenda: true, zoom: zoomDoRisco, selecao: selecaoNoRisco, pedidos: visaoDosPedidos(ultimoResultado), janela: true });
   }
 }
 
@@ -5518,6 +5518,10 @@ escopo.ouvir(encaixeCanvas, "pointerdown", (evento) => {
   const caixaDoRisco = encaixeCanvas.getBoundingClientRect();
   const wrap = encaixeCanvas.parentElement;
   const caixaDoWrap = wrap.getBoundingClientRect();
+  // O canto da janela do risco quando o clique começou (ver "A JANELA DO
+  // RISCO", em desenhoDoEncaixe.js). Rolar no meio do arrasto muda a janela, e
+  // cada ponta do arrasto é medida com a janela do seu momento.
+  const origemNaPartida = { ...(vistaDoRisco.origem || { x: 0, y: 0 }) };
 
   const partida = { x: evento.clientX, y: evento.clientY };
   let chegada = partida;
@@ -5551,16 +5555,17 @@ escopo.ouvir(encaixeCanvas, "pointerdown", (evento) => {
      * anti-horário, então o começo da largura fica embaixo.
      */
     const { px, regua, deitado, larguraTecido } = vistaDoRisco;
-    const emCm = (clientX, clientY) => {
-      const cx = clientX - caixaDoRisco.left;
-      const cy = clientY - caixaDoRisco.top;
+    // O pixel do canvas mais o canto da janela é o pixel do risco inteiro.
+    const emCm = (clientX, clientY, origem) => {
+      const cx = clientX - caixaDoRisco.left + origem.x;
+      const cy = clientY - caixaDoRisco.top + origem.y;
       return deitado
         ? { x: larguraTecido - cy / px, y: cx / px }
         : { x: (cx - regua) / px, y: cy / px };
     };
 
-    const a = emCm(partida.x, partida.y);
-    const b = emCm(e.clientX, e.clientY);
+    const a = emCm(partida.x, partida.y, origemNaPartida);
+    const b = emCm(e.clientX, e.clientY, vistaDoRisco.origem || { x: 0, y: 0 });
     const arrastou = Math.abs(e.clientX - partida.x) > 4 || Math.abs(e.clientY - partida.y) > 4;
 
     // Clique seco vira uma caixinha de meio centímetro: pega a peça debaixo do
@@ -5617,6 +5622,21 @@ escopo.ouvir(encaixeCanvas.parentElement, "wheel", (evento) => {
   wrap.scrollLeft += evento.deltaY;
   evento.preventDefault();
 }, { passive: false });
+
+/*
+ * A JANELA ANDA COM A ROLAGEM. O canvas do risco tem só o tamanho da parte
+ * visível da caixa (ver "A JANELA DO RISCO", em desenhoDoEncaixe.js); rolar é
+ * redesenhar essa parte. Um quadro por vez: a rolagem dispara bem mais
+ * eventos do que a tela mostra.
+ */
+let quadroDaRolagem = 0;
+escopo.ouvir(encaixeCanvas.parentElement, "scroll", () => {
+  if (quadroDaRolagem || !ultimoResultado) return;
+  quadroDaRolagem = requestAnimationFrame(() => {
+    quadroDaRolagem = 0;
+    redesenharRisco();
+  });
+});
 
 if (btnZoomMenos) escopo.ouvir(btnZoomMenos, "click", () => mexerNoZoom(1 / ZOOM_PASSO));
 if (btnZoomMais) escopo.ouvir(btnZoomMais, "click", () => mexerNoZoom(ZOOM_PASSO));

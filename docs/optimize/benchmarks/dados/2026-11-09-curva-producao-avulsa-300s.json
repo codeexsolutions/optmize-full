@@ -1,0 +1,331 @@
+{
+  "quando": "2026-11-09T16:26:28.446Z",
+  "maquina": {
+    "cpu": "AMD Ryzen 5 5600X 6-Core Processor",
+    "nucleos": 12,
+    "node": "v24.18.0"
+  },
+  "opcoes": {
+    "tempo": 300,
+    "sementes": 1,
+    "fatias": 5,
+    "trabalhos": [
+      "producao-avulsa"
+    ],
+    "encolher": true,
+    "json": "docs/optimize/benchmarks/dados/2026-11-09-curva-producao-avulsa-300s.json",
+    "marcos": [
+      1,
+      3,
+      5,
+      10,
+      20,
+      30,
+      60,
+      120,
+      300,
+      600
+    ],
+    "extra": {
+      "motores": "contorno+vaos+faixas"
+    }
+  },
+  "trabalhos": {
+    "producao-avulsa": {
+      "itens": 175,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "passo": 0.2,
+      "folgaReal": 0.4,
+      "corridas": [
+        {
+          "semente": 1,
+          "consumoFinal": 3151,
+          "consumoDaCurva": 3151,
+          "sobraram": 0,
+          "receita": "encolher/vaos/solta/familia/fundo/",
+          "tentativas": 3005,
+          "tempoBuscaMs": 20000,
+          "primeira": {
+            "t": 58,
+            "consumo": 3659.8
+          },
+          "melhor": {
+            "t": 292403,
+            "consumo": 3151,
+            "fase": "sparrow"
+          },
+          "fimDaBusca": 3242.6,
+          "encolhimento": {
+            "antes": 3242.6,
+            "depois": 3151,
+            "relatos": 176,
+            "rejeitados": 0,
+            "partiu": true,
+            "motivos": []
+          },
+          "marcos": {
+            "1": 3258,
+            "3": 3242.6,
+            "5": 3242.6,
+            "10": 3242.6,
+            "20": 3242.6,
+            "30": 3221,
+            "60": 3182.6,
+            "120": 3172.2,
+            "300": 3151
+          },
+          "melhorias": 49,
+          "curva": [
+            {
+              "t": 58,
+              "consumo": 3659.8,
+              "fase": "busca"
+            },
+            {
+              "t": 64,
+              "consumo": 3570,
+              "fase": "busca"
+            },
+            {
+              "t": 72,
+              "consumo": 3514.8,
+              "fase": "busca"
+            },
+            {
+              "t": 75,
+              "consumo": 3492.2,
+              "fase": "busca"
+            },
+            {
+              "t": 104,
+              "consumo": 3285.8,
+              "fase": "busca"
+            },
+            {
+              "t": 198,
+              "consumo": 3277,
+              "fase": "busca"
+            },
+            {
+              "t": 297,
+              "consumo": 3259.6,
+              "fase": "busca"
+            },
+            {
+              "t": 682,
+              "consumo": 3258,
+              "fase": "busca"
+            },
+            {
+              "t": 1529,
+              "consumo": 3242.6,
+              "fase": "busca"
+            },
+            {
+              "t": 25096,
+              "consumo": 3240.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 25607,
+              "consumo": 3237.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 25759,
+              "consumo": 3237.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 25887,
+              "consumo": 3234.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 26189,
+              "consumo": 3234,
+              "fase": "sparrow"
+            },
+            {
+              "t": 26732,
+              "consumo": 3230.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 27052,
+              "consumo": 3227.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 28031,
+              "consumo": 3224.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 28685,
+              "consumo": 3221,
+              "fase": "sparrow"
+            },
+            {
+              "t": 30207,
+              "consumo": 3217.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 30997,
+              "consumo": 3214.6,
+              "fase": "sparrow"
+            },
+            {
+              "t": 31658,
+              "consumo": 3211.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 32082,
+              "consumo": 3208.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 35710,
+              "consumo": 3207,
+              "fase": "sparrow"
+            },
+            {
+              "t": 35724,
+              "consumo": 3205,
+              "fase": "sparrow"
+            },
+            {
+              "t": 35910,
+              "consumo": 3201.6,
+              "fase": "sparrow"
+            },
+            {
+              "t": 40462,
+              "consumo": 3198.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 42632,
+              "consumo": 3195.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 43121,
+              "consumo": 3192,
+              "fase": "sparrow"
+            },
+            {
+              "t": 44163,
+              "consumo": 3191,
+              "fase": "sparrow"
+            },
+            {
+              "t": 46167,
+              "consumo": 3187.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 51172,
+              "consumo": 3184.6,
+              "fase": "sparrow"
+            },
+            {
+              "t": 54840,
+              "consumo": 3182.6,
+              "fase": "sparrow"
+            },
+            {
+              "t": 63936,
+              "consumo": 3179.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 89503,
+              "consumo": 3178.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 90025,
+              "consumo": 3175.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 102340,
+              "consumo": 3172.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 122769,
+              "consumo": 3169,
+              "fase": "sparrow"
+            },
+            {
+              "t": 140246,
+              "consumo": 3165.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 141280,
+              "consumo": 3162.6,
+              "fase": "sparrow"
+            },
+            {
+              "t": 200072,
+              "consumo": 3159.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 235347,
+              "consumo": 3156.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 255363,
+              "consumo": 3154.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 266884,
+              "consumo": 3154.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 284406,
+              "consumo": 3153.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 285822,
+              "consumo": 3152.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 290494,
+              "consumo": 3152.2,
+              "fase": "sparrow"
+            },
+            {
+              "t": 291899,
+              "consumo": 3151.8,
+              "fase": "sparrow"
+            },
+            {
+              "t": 292300,
+              "consumo": 3151.4,
+              "fase": "sparrow"
+            },
+            {
+              "t": 292403,
+              "consumo": 3151,
+              "fase": "sparrow"
+            }
+          ],
+          "paredeMs": 1517425
+        }
+      ]
+    }
+  }
+}

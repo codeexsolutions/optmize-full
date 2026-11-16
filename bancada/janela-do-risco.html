@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Bancada do desenho — a janela do risco</title>
+<!--
+  A JANELA DO RISCO, MEDIDA NO NAVEGADOR (ver "A JANELA DO RISCO", em
+  src/motores/desenhoDoEncaixe.js).
+
+  Sobe pelo Vite (`npx vite --port 5191`) e abre /bancada/janela-do-risco.html.
+  A página desenha um risco sintético com o `desenharEncaixe` de verdade,
+  numa caixa com o mesmo CSS da tela do Encaixe, e expõe `window.bancada`:
+
+    montar(metros)                  um rolo de 179 cm com peças de 25 × 20 cm
+    desenhar({ zoom, janela })      desenha como a tela desenha
+    rolarPara(cm)                   rola a caixa até aquele ponto do rolo
+    medir()                         a resolução efetiva, o contraste da linha e
+                                    a conta do clique (pixel → centímetro)
+
+  O contraste é lido nos PIXELS do canvas: numa linha que atravessa as bordas
+  das peças visíveis, quanto da cor do traço chega ao pixel, de 0 a 1. Com o
+  canvas na resolução cheia, a borda pinta pixel inteiro (perto de 1); com a
+  resolução rebaixada pelo teto, o traço vira uma fração de pixel.
+-->
+<style>
+  :root {
+    --bg: #101315; --card-bg: #1a1f22; --card-bg-soft: #15191b; --border: #2e363a;
+    --text-faint: #7c878c; --text: #e8ecee; --accent: #ff7a1a;
+  }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 12px system-ui, sans-serif; }
+  #caixa { width: 1200px; height: 620px; display: flex; flex-direction: column; padding: 12px; box-sizing: border-box; }
+  .encaixe-canvas-wrap {
+    position: relative; flex: 1; min-height: 0; padding: 10px; background: var(--card-bg-soft);
+    border: 1px solid var(--border); border-radius: 10px; overflow: auto; scrollbar-gutter: stable;
+  }
+  .encaixe-canvas-wrap canvas { display: block; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="caixa"><div class="encaixe-canvas-wrap"><canvas id="risco"></canvas></div></div>
+<script type="module">
+import { desenharEncaixe } from "/src/motores/desenhoDoEncaixe.js";
+
+const canvas = document.getElementById("risco");
+const wrap = canvas.parentElement;
+const W = 179;
+const PECA = { largura: 25, altura: 20, folga: 2 };
+let r = null;
+let vista = null;
+let opcoes = { zoom: 1, janela: true };
+
+// A "arte" de cada peça é transparente: o que aparece é só o traço da borda
+// sobre a mesa, que é o que se quer medir.
+const arte = document.createElement("canvas");
+arte.width = 8;
+arte.height = 8;
+
+function montar(metros) {
+  const posicoes = [];
+  const colunas = Math.floor((W + PECA.folga) / (PECA.largura + PECA.folga));
+  const consumo = metros * 100;
+  let k = 0;
+  for (let y = 0; y + PECA.altura <= consumo; y += PECA.altura + PECA.folga) {
+    for (let c = 0; c < colunas; c++) {
+      posicoes.push({
+        item: { indice: k % 12, nome: `p${k}`, qtd: 1, copia: 1, img: arte },
+        x: c * (PECA.largura + PECA.folga), y, largura: PECA.largura, altura: PECA.altura, rot: 0, bancada: 0,
+      });
+      k++;
+    }
+  }
+  r = { larguraTecido: W, consumo, posicoes };
+  return posicoes.length;
+}
+
+function desenhar(o = {}) {
+  opcoes = { ...opcoes, ...o };
+  vista = desenharEncaixe(canvas, r, {
+    escala: null, comLegenda: false, zoom: opcoes.zoom, janela: opcoes.janela,
+  });
+  return { css: { w: canvas.clientWidth, h: canvas.clientHeight }, buffer: { w: canvas.width, h: canvas.height } };
+}
+
+function rolarPara(cm) {
+  wrap.scrollLeft = Math.max(0, cm * vista.px - 50);
+  desenhar();   // o que o controlador faz no "scroll" (um quadro depois)
+  return wrap.scrollLeft;
+}
+
+/** Luminância de um pixel RGBA do buffer. */
+const lum = (d, i) => 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+
+function medir() {
+  const ctx = canvas.getContext("2d");
+  const dprEfetivo = canvas.width / canvas.clientWidth;
+  const origem = vista.origem || { x: 0, y: 0 };
+  const caixa = canvas.getBoundingClientRect();
+  // O que está VISÍVEL na caixa, em pixels do risco inteiro: ao longo do rolo
+  // (x da tela deitada) e ao longo da largura do tecido (y da tela).
+  const visivel = { de: wrap.scrollLeft, ate: wrap.scrollLeft + wrap.clientWidth - 20 };
+  const vTopo = wrap.scrollTop;
+  const vBase = wrap.scrollTop + wrap.clientHeight - 20;
+  // Na largura, os centímetros visíveis: y da tela = (W − x) × px.
+  const xCmDe = W - vBase / vista.px;
+  const xCmAte = W - vTopo / vista.px;
+  // Uma faixa de peça (na largura) que cruza a parte visível; a linha de
+  // leitura e o clique passam pelo meio do pedaço visível dela.
+  const passoX = PECA.largura + PECA.folga;
+  let xCm = null;
+  for (let c = 0; c * passoX < W; c++) {
+    const a = Math.max(c * passoX + 1, xCmDe + 1);
+    const b = Math.min(c * passoX + PECA.largura - 1, xCmAte - 1);
+    if (b > a) { xCm = (a + b) / 2; break; }
+  }
+  if (xCm == null) return { erro: "nenhuma faixa de peça visível na largura" };
+  const yTela = (W - xCm) * vista.px;                              // y no risco inteiro
+  const yBuffer = Math.round((yTela - origem.y) * dprEfetivo);
+  const linha = ctx.getImageData(0, Math.min(canvas.height - 1, Math.max(0, yBuffer)), canvas.width, 1).data;
+  // O fundo: a mediana da linha (é quase toda mesa); o traço: o pixel mais
+  // distante dele perto de cada borda esperada.
+  const lums = [];
+  for (let i = 0; i < linha.length; i += 4) lums.push(lum(linha, i));
+  const fundo = [...lums].sort((a, b) => a - b)[Math.floor(lums.length / 2)];
+  const contrastes = [];
+  for (let y = 0; y < r.consumo; y += PECA.altura + PECA.folga) {
+    for (const borda of [y, y + PECA.altura]) {
+      const xRisco = borda * vista.px;
+      if (xRisco < visivel.de + 4 || xRisco > visivel.ate - 4) continue;
+      const xBuffer = (xRisco - origem.x) * dprEfetivo;
+      let maior = 0;
+      for (let dx = -3; dx <= 3; dx++) {
+        const b = Math.round(xBuffer + dx);
+        if (b >= 0 && b < lums.length) maior = Math.max(maior, Math.abs(lums[b] - fundo));
+      }
+      contrastes.push(maior);
+      if (contrastes.length >= 40) break;
+    }
+    if (contrastes.length >= 40) break;
+  }
+  contrastes.sort((a, b) => a - b);
+  const mediana = contrastes.length ? contrastes[Math.floor(contrastes.length / 2)] : null;
+
+  // A conta do clique: o centro de uma peça visível, em pixel de tela, volta
+  // a centímetro pela MESMA fórmula do controlador (`emCm`), e tem de cair
+  // dentro dessa peça.
+  // A peça da faixa escolhida cujo pedaço no rolo cruza a parte visível; o
+  // ponto do clique fica no meio do pedaço visível dela.
+  const alvo = r.posicoes.find((p) => xCm > p.x && xCm < p.x + p.largura
+    && (p.y + 1) * vista.px < visivel.ate - 4 && (p.y + p.altura - 1) * vista.px > visivel.de + 4);
+  let clique = null;
+  if (alvo) {
+    const yCmDe = Math.max(alvo.y + 1, (visivel.de + 4) / vista.px);
+    const yCmAte = Math.min(alvo.y + alvo.altura - 1, (visivel.ate - 4) / vista.px);
+    const xRisco = ((yCmDe + yCmAte) / 2) * vista.px;            // deitado: comprimento → x
+    const yRisco = (W - xCm) * vista.px;                          // largura → y, invertida
+    const clientX = caixa.left + (xRisco - origem.x);
+    const clientY = caixa.top + (yRisco - origem.y);
+    const cx = clientX - caixa.left + origem.x;
+    const cy = clientY - caixa.top + origem.y;
+    const cm = { x: W - cy / vista.px, y: cx / vista.px };
+    const dentro = r.posicoes.find((p) => cm.x > p.x && cm.x < p.x + p.largura && cm.y > p.y && cm.y < p.y + p.altura);
+    // E o pixel debaixo do clique, na tela de verdade, tem de ser do canvas.
+    const debaixo = document.elementFromPoint(clientX, clientY);
+    clique = { alvo: alvo.item.nome, achou: dentro ? dentro.item.nome : null, noCanvas: debaixo === canvas };
+  }
+  return {
+    pecas: r.posicoes.length,
+    px: vista.px,
+    dprPedido: window.devicePixelRatio,
+    dprEfetivo: Number(dprEfetivo.toFixed(3)),
+    bufferMegapixels: Number((canvas.width * canvas.height / 1e6).toFixed(1)),
+    origem,
+    rolagem: wrap.scrollLeft,
+    bordasMedidas: contrastes.length,
+    contrasteMediano: mediana == null ? null : Number(mediana.toFixed(1)),
+    clique,
+  };
+}
+
+window.bancada = { montar, desenhar, rolarPara, medir };
+window.bancadaPronta = true;
+</script>
+</body>
+</html>

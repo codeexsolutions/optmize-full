@@ -1,0 +1,1205 @@
+{
+  "grade": [
+    {
+      "larguraTecido": 100,
+      "folgaPedida": 0.2,
+      "passo": 0.1,
+      "raio": 1,
+      "folgaReal": 0.2,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 100,
+      "folgaPedida": 0.3,
+      "passo": 0.15,
+      "raio": 1,
+      "folgaReal": 0.3,
+      "colunas": 667
+    },
+    {
+      "larguraTecido": 100,
+      "folgaPedida": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "colunas": 500
+    },
+    {
+      "larguraTecido": 100,
+      "folgaPedida": 0.5,
+      "passo": 0.25,
+      "raio": 1,
+      "folgaReal": 0.5,
+      "colunas": 400
+    },
+    {
+      "larguraTecido": 100,
+      "folgaPedida": 1,
+      "passo": 0.25,
+      "raio": 2,
+      "folgaReal": 1,
+      "colunas": 400
+    },
+    {
+      "larguraTecido": 150,
+      "folgaPedida": 0.2,
+      "passo": 0.15,
+      "raio": 1,
+      "folgaReal": 0.3,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 150,
+      "folgaPedida": 0.3,
+      "passo": 0.15,
+      "raio": 1,
+      "folgaReal": 0.3,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 150,
+      "folgaPedida": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "colunas": 750
+    },
+    {
+      "larguraTecido": 150,
+      "folgaPedida": 0.5,
+      "passo": 0.25,
+      "raio": 1,
+      "folgaReal": 0.5,
+      "colunas": 600
+    },
+    {
+      "larguraTecido": 150,
+      "folgaPedida": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "folgaReal": 1,
+      "colunas": 300
+    },
+    {
+      "larguraTecido": 160,
+      "folgaPedida": 0.2,
+      "passo": 0.16,
+      "raio": 1,
+      "folgaReal": 0.32,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 160,
+      "folgaPedida": 0.3,
+      "passo": 0.16,
+      "raio": 1,
+      "folgaReal": 0.32,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 160,
+      "folgaPedida": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "colunas": 800
+    },
+    {
+      "larguraTecido": 160,
+      "folgaPedida": 0.5,
+      "passo": 0.25,
+      "raio": 1,
+      "folgaReal": 0.5,
+      "colunas": 640
+    },
+    {
+      "larguraTecido": 160,
+      "folgaPedida": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "folgaReal": 1,
+      "colunas": 320
+    },
+    {
+      "larguraTecido": 179,
+      "folgaPedida": 0.2,
+      "passo": 0.179,
+      "raio": 1,
+      "folgaReal": 0.358,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 179,
+      "folgaPedida": 0.3,
+      "passo": 0.179,
+      "raio": 1,
+      "folgaReal": 0.358,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 179,
+      "folgaPedida": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "colunas": 895
+    },
+    {
+      "larguraTecido": 179,
+      "folgaPedida": 0.5,
+      "passo": 0.25,
+      "raio": 1,
+      "folgaReal": 0.5,
+      "colunas": 716
+    },
+    {
+      "larguraTecido": 179,
+      "folgaPedida": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "folgaReal": 1,
+      "colunas": 358
+    },
+    {
+      "larguraTecido": 200,
+      "folgaPedida": 0.2,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 200,
+      "folgaPedida": 0.3,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 200,
+      "folgaPedida": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "folgaReal": 0.4,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 200,
+      "folgaPedida": 0.5,
+      "passo": 0.25,
+      "raio": 1,
+      "folgaReal": 0.5,
+      "colunas": 800
+    },
+    {
+      "larguraTecido": 200,
+      "folgaPedida": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "folgaReal": 1,
+      "colunas": 400
+    },
+    {
+      "larguraTecido": 250,
+      "folgaPedida": 0.2,
+      "passo": 0.25,
+      "raio": 1,
+      "folgaReal": 0.5,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 250,
+      "folgaPedida": 0.3,
+      "passo": 0.25,
+      "raio": 1,
+      "folgaReal": 0.5,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 250,
+      "folgaPedida": 0.4,
+      "passo": 0.25,
+      "raio": 1,
+      "folgaReal": 0.5,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 250,
+      "folgaPedida": 0.5,
+      "passo": 0.25,
+      "raio": 1,
+      "folgaReal": 0.5,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 250,
+      "folgaPedida": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "folgaReal": 1,
+      "colunas": 500
+    },
+    {
+      "larguraTecido": 320,
+      "folgaPedida": 0.2,
+      "passo": 0.32,
+      "raio": 1,
+      "folgaReal": 0.64,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 320,
+      "folgaPedida": 0.3,
+      "passo": 0.32,
+      "raio": 1,
+      "folgaReal": 0.64,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 320,
+      "folgaPedida": 0.4,
+      "passo": 0.32,
+      "raio": 1,
+      "folgaReal": 0.64,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 320,
+      "folgaPedida": 0.5,
+      "passo": 0.32,
+      "raio": 1,
+      "folgaReal": 0.64,
+      "colunas": 1000
+    },
+    {
+      "larguraTecido": 320,
+      "folgaPedida": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "folgaReal": 1,
+      "colunas": 640
+    }
+  ],
+  "pecas": {
+    "179 cm · 4 mm (producao-*)": {
+      "camiseta": {
+        "nome": "camiseta",
+        "largura": 56,
+        "altura": 70,
+        "areaVerdadeira": 2856.1537407407404,
+        "perimetro": 245.27041680433808,
+        "areaDaTela": 2879.1600000000003,
+        "areaRaster": 2879.1600000000008,
+        "areaEngordada": 2934.7600000000007,
+        "engordadaIdealBM": 2894.1695015371456,
+        "engordadaIdealSteiner": 2905.3334878077517,
+        "pegadas": {
+          "0": 3186.7200000000007,
+          "90": 3025.1600000000008,
+          "180": 3186.7200000000007,
+          "270": 3025.1600000000008
+        }
+      },
+      "manga": {
+        "nome": "manga",
+        "largura": 46,
+        "altura": 30,
+        "areaVerdadeira": 1004.2515555555556,
+        "perimetro": 120.12964058757427,
+        "areaDaTela": 1016.3200000000002,
+        "areaRaster": 1016.3200000000002,
+        "areaEngordada": 1046.0000000000002,
+        "engordadaIdealBM": 1026.8447934406422,
+        "engordadaIdealSteiner": 1028.403147379214,
+        "pegadas": {
+          "0": 1046.0000000000002,
+          "90": 1046.0000000000002,
+          "180": 1046.0000000000002,
+          "270": 1046.0000000000002
+        }
+      },
+      "gola": {
+        "nome": "gola",
+        "largura": 55,
+        "altura": 9,
+        "areaVerdadeira": 247.50000000000003,
+        "perimetro": 119.48559140186524,
+        "areaDaTela": 259,
+        "areaRaster": 259.00000000000006,
+        "areaEngordada": 284.76000000000005,
+        "engordadaIdealBM": 258.7794553969614,
+        "engordadaIdealSteiner": 271.5227819865167,
+        "pegadas": {
+          "0": 284.76000000000005,
+          "90": 360.1600000000001,
+          "180": 284.76000000000005,
+          "270": 360.1600000000001
+        }
+      },
+      "calca": {
+        "nome": "calca",
+        "largura": 52,
+        "altura": 104,
+        "areaVerdadeira": 3006.3860666666674,
+        "perimetro": 269.7752190922249,
+        "areaDaTela": 3029.2800000000007,
+        "areaRaster": 3029.2800000000007,
+        "areaEngordada": 3087.3600000000006,
+        "engordadaIdealBM": 3045.385557827065,
+        "engordadaIdealSteiner": 3060.4667741912563,
+        "pegadas": {
+          "0": 3178.7600000000007,
+          "90": 3087.3600000000006,
+          "180": 3178.7600000000007,
+          "270": 3087.3600000000006
+        }
+      },
+      "regata": {
+        "nome": "regata",
+        "largura": 48,
+        "altura": 66,
+        "areaVerdadeira": 2132.3631999999993,
+        "perimetro": 219.09937642933528,
+        "areaDaTela": 2151.0400000000004,
+        "areaRaster": 2151.0400000000004,
+        "areaEngordada": 2200.8000000000006,
+        "engordadaIdealBM": 2165.227871788625,
+        "engordadaIdealSteiner": 2176.30873899201,
+        "pegadas": {
+          "0": 2374.2400000000002,
+          "90": 2302.9600000000005,
+          "180": 2374.2400000000002,
+          "270": 2302.9600000000005
+        }
+      },
+      "bolso": {
+        "nome": "bolso",
+        "largura": 16,
+        "altura": 18,
+        "areaVerdadeira": 217.72799999999995,
+        "perimetro": 57.320997803806605,
+        "areaDaTela": 223.04000000000002,
+        "areaRaster": 223.04000000000005,
+        "areaEngordada": 236.24000000000004,
+        "engordadaIdealBM": 228.31511817695818,
+        "engordadaIdealSteiner": 229.31786326690488,
+        "pegadas": {
+          "0": 236.24000000000004,
+          "90": 236.24000000000004,
+          "180": 236.24000000000004,
+          "270": 236.24000000000004
+        }
+      },
+      "punho": {
+        "nome": "punho",
+        "largura": 24,
+        "altura": 8,
+        "areaVerdadeira": 192,
+        "perimetro": 64,
+        "areaDaTela": 192,
+        "areaRaster": 192.00000000000003,
+        "areaEngordada": 204.96000000000004,
+        "engordadaIdealBM": 201.94960010242986,
+        "engordadaIdealSteiner": 204.9256637061436,
+        "pegadas": {
+          "0": 204.96000000000004,
+          "90": 204.96000000000004,
+          "180": 204.96000000000004,
+          "270": 204.96000000000004
+        }
+      },
+      "uni-costa": {
+        "nome": "uni-costa",
+        "largura": 59.2,
+        "altura": 79.6,
+        "areaVerdadeira": 4260.101774874074,
+        "perimetro": 256.7771922863129,
+        "areaDaTela": 4272.72,
+        "areaRaster": 4272.720000000001,
+        "areaEngordada": 4328.880000000001,
+        "engordadaIdealBM": 4306.502277427244,
+        "engordadaIdealSteiner": 4311.58287703748,
+        "pegadas": {
+          "0": 4328.880000000001,
+          "90": 4381.4400000000005,
+          "180": 4328.880000000001,
+          "270": 4381.4400000000005
+        }
+      },
+      "uni-frente": {
+        "nome": "uni-frente",
+        "largura": 59.2,
+        "altura": 75.6,
+        "areaVerdadeira": 3996.6792252799996,
+        "perimetro": 258.47806977924586,
+        "areaDaTela": 4010.0800000000004,
+        "areaRaster": 4010.080000000001,
+        "areaEngordada": 4067.3600000000006,
+        "engordadaIdealBM": 4041.6262019395035,
+        "engordadaIdealSteiner": 4048.5005029419926,
+        "pegadas": {
+          "0": 4067.3600000000006,
+          "90": 4179.4400000000005,
+          "180": 4067.3600000000006,
+          "270": 4179.4400000000005
+        }
+      },
+      "uni-short": {
+        "nome": "uni-short",
+        "largura": 79.2,
+        "altura": 60.2,
+        "areaVerdadeira": 3974.96251152,
+        "perimetro": 265.4791382914809,
+        "areaDaTela": 3991.4,
+        "areaRaster": 3991.400000000001,
+        "areaEngordada": 4049.600000000001,
+        "engordadaIdealBM": 4019.7875497622344,
+        "engordadaIdealSteiner": 4028.18400288444,
+        "pegadas": {
+          "0": 4082.2000000000007,
+          "90": 4049.600000000001,
+          "180": 4082.2000000000007,
+          "270": 4049.600000000001
+        }
+      },
+      "uni-manga": {
+        "nome": "uni-manga",
+        "largura": 49.2,
+        "altura": 27.2,
+        "areaVerdadeira": 1017.5953540800002,
+        "perimetro": 126.70169739503905,
+        "areaDaTela": 1028,
+        "areaRaster": 1028.0000000000002,
+        "areaEngordada": 1058.3200000000002,
+        "engordadaIdealBM": 1040.3373661693993,
+        "engordadaIdealSteiner": 1043.0613572651516,
+        "pegadas": {
+          "0": 1058.3200000000002,
+          "90": 1058.3200000000002,
+          "180": 1058.3200000000002,
+          "270": 1058.3200000000002
+        }
+      },
+      "uni-gola": {
+        "nome": "uni-gola",
+        "largura": 57.2,
+        "altura": 7.2,
+        "areaVerdadeira": 411.84000000000003,
+        "perimetro": 128.8,
+        "areaDaTela": 411.8400000000001,
+        "areaRaster": 411.8400000000001,
+        "areaEngordada": 437.7600000000001,
+        "engordadaIdealBM": 426.35362266329633,
+        "engordadaIdealSteiner": 437.7256637061436,
+        "pegadas": {
+          "0": 437.7600000000001,
+          "90": 437.7600000000001,
+          "180": 437.7600000000001,
+          "270": 437.7600000000001
+        }
+      },
+      "arte-partida": {
+        "nome": "arte-partida",
+        "largura": 30,
+        "altura": 20,
+        "areaVerdadeira": 367.20000000000005,
+        "perimetro": 112.80000000000001,
+        "areaDaTela": 373.24,
+        "areaRaster": 373.24000000000007,
+        "areaEngordada": 396.2800000000001,
+        "engordadaIdealBM": 380.91149645882064,
+        "engordadaIdealSteiner": 389.88566370614365,
+        "pegadas": {
+          "0": 396.2800000000001,
+          "90": 545.6800000000001,
+          "180": 396.2800000000001,
+          "270": 545.6800000000001
+        }
+      }
+    },
+    "160 cm · 10 mm (camiseta+manga+gola...)": {
+      "camiseta": {
+        "nome": "camiseta",
+        "largura": 56,
+        "altura": 70,
+        "areaVerdadeira": 2856.1537407407404,
+        "perimetro": 245.27041680433808,
+        "areaDaTela": 2913.5,
+        "areaRaster": 2913.5,
+        "areaEngordada": 3054.5,
+        "engordadaIdealBM": 2951.6643816297924,
+        "engordadaIdealSteiner": 2979.574347306307,
+        "pegadas": {
+          "0": 3329.75,
+          "90": 3142,
+          "180": 3329.75,
+          "270": 3142
+        }
+      },
+      "manga": {
+        "nome": "manga",
+        "largura": 46,
+        "altura": 30,
+        "areaVerdadeira": 1004.2515555555556,
+        "perimetro": 120.12964058757427,
+        "areaDaTela": 1034.5,
+        "areaRaster": 1034.5,
+        "areaEngordada": 1110,
+        "engordadaIdealBM": 1061.2058891663112,
+        "engordadaIdealSteiner": 1065.1017740127402,
+        "pegadas": {
+          "0": 1110,
+          "90": 1110,
+          "180": 1110,
+          "270": 1110
+        }
+      },
+      "gola": {
+        "nome": "gola",
+        "largura": 55,
+        "altura": 9,
+        "areaVerdadeira": 247.50000000000003,
+        "perimetro": 119.48559140186524,
+        "areaDaTela": 277,
+        "areaRaster": 277,
+        "areaEngordada": 342,
+        "engordadaIdealBM": 276.16987739044197,
+        "engordadaIdealSteiner": 308.02819386433015,
+        "pegadas": {
+          "0": 342,
+          "90": 408.5,
+          "180": 342,
+          "270": 408.5
+        }
+      },
+      "calca": {
+        "nome": "calca",
+        "largura": 52,
+        "altura": 104,
+        "areaVerdadeira": 3006.3860666666674,
+        "perimetro": 269.7752190922249,
+        "areaDaTela": 3064.25,
+        "areaRaster": 3064.25,
+        "areaEngordada": 3210.25,
+        "engordadaIdealBM": 3104.3560334657013,
+        "engordadaIdealSteiner": 3142.0590743761773,
+        "pegadas": {
+          "0": 3296,
+          "90": 3210.25,
+          "180": 3296,
+          "270": 3210.25
+        }
+      },
+      "regata": {
+        "nome": "regata",
+        "largura": 48,
+        "altura": 66,
+        "areaVerdadeira": 2132.3631999999993,
+        "perimetro": 219.09937642933528,
+        "areaDaTela": 2179.5,
+        "areaRaster": 2179.5,
+        "areaEngordada": 2305,
+        "engordadaIdealBM": 2214.9961183696028,
+        "engordadaIdealSteiner": 2242.6982863780645,
+        "pegadas": {
+          "0": 2467.5,
+          "90": 2396.5,
+          "180": 2467.5,
+          "270": 2396.5
+        }
+      },
+      "bolso": {
+        "nome": "bolso",
+        "largura": 16,
+        "altura": 18,
+        "areaVerdadeira": 217.72799999999995,
+        "perimetro": 57.320997803806605,
+        "areaDaTela": 232,
+        "areaRaster": 232,
+        "areaEngordada": 266,
+        "engordadaIdealBM": 244.66703434043404,
+        "engordadaIdealSteiner": 247.1738970653007,
+        "pegadas": {
+          "0": 266,
+          "90": 266,
+          "180": 266,
+          "270": 266
+        }
+      },
+      "punho": {
+        "nome": "punho",
+        "largura": 24,
+        "altura": 8,
+        "areaVerdadeira": 192,
+        "perimetro": 64,
+        "areaDaTela": 192,
+        "areaRaster": 192,
+        "areaEngordada": 225,
+        "engordadaIdealBM": 217.34523915411316,
+        "engordadaIdealSteiner": 224.78539816339745,
+        "pegadas": {
+          "0": 225,
+          "90": 225,
+          "180": 225,
+          "270": 225
+        }
+      },
+      "uni-costa": {
+        "nome": "uni-costa",
+        "largura": 59.2,
+        "altura": 79.6,
+        "areaVerdadeira": 4260.101774874074,
+        "perimetro": 256.7771922863129,
+        "areaDaTela": 4291.120000000016,
+        "areaRaster": 4329.5,
+        "areaEngordada": 4471.5,
+        "engordadaIdealBM": 4376.574270155038,
+        "engordadaIdealSteiner": 4389.275769180627,
+        "pegadas": {
+          "0": 4471.5,
+          "90": 4522.5,
+          "180": 4471.5,
+          "270": 4522.5
+        }
+      },
+      "uni-frente": {
+        "nome": "uni-frente",
+        "largura": 59.2,
+        "altura": 75.6,
+        "areaVerdadeira": 3996.6792252799996,
+        "perimetro": 258.47806977924586,
+        "areaDaTela": 4030.370000000013,
+        "areaRaster": 4068,
+        "areaEngordada": 4213,
+        "engordadaIdealBM": 4109.5179058267995,
+        "engordadaIdealSteiner": 4126.70365833302,
+        "pegadas": {
+          "0": 4213,
+          "90": 4318.75,
+          "180": 4213,
+          "270": 4318.75
+        }
+      },
+      "uni-short": {
+        "nome": "uni-short",
+        "largura": 79.2,
+        "altura": 60.2,
+        "areaVerdadeira": 3974.96251152,
+        "perimetro": 265.4791382914809,
+        "areaDaTela": 4016.7899999999813,
+        "areaRaster": 4047.75,
+        "areaEngordada": 4194,
+        "engordadaIdealBM": 4087.496346023626,
+        "engordadaIdealSteiner": 4108.487478829137,
+        "pegadas": {
+          "0": 4220.5,
+          "90": 4194,
+          "180": 4220.5,
+          "270": 4194
+        }
+      },
+      "uni-manga": {
+        "nome": "uni-manga",
+        "largura": 49.2,
+        "altura": 27.2,
+        "areaVerdadeira": 1017.5953540800002,
+        "perimetro": 126.70169739503905,
+        "areaDaTela": 1041.7499999999923,
+        "areaRaster": 1056,
+        "areaEngordada": 1133,
+        "engordadaIdealBM": 1074.9216232015358,
+        "engordadaIdealSteiner": 1081.7316009409174,
+        "pegadas": {
+          "0": 1133,
+          "90": 1133,
+          "180": 1133,
+          "270": 1133
+        }
+      },
+      "uni-gola": {
+        "nome": "uni-gola",
+        "largura": 57.2,
+        "altura": 7.2,
+        "areaVerdadeira": 411.84000000000003,
+        "perimetro": 128.8,
+        "areaDaTela": 411.8400000000027,
+        "areaRaster": 431.25,
+        "areaEngordada": 497.25,
+        "engordadaIdealBM": 448.5952955562789,
+        "engordadaIdealSteiner": 477.0253981633975,
+        "pegadas": {
+          "0": 497.25,
+          "90": 497.25,
+          "180": 497.25,
+          "270": 497.25
+        }
+      },
+      "arte-partida": {
+        "nome": "arte-partida",
+        "largura": 30,
+        "altura": 20,
+        "areaVerdadeira": 367.20000000000005,
+        "perimetro": 112.80000000000001,
+        "areaDaTela": 383.25,
+        "areaRaster": 383.25,
+        "areaEngordada": 442.75,
+        "engordadaIdealBM": 401.94998004508966,
+        "engordadaIdealSteiner": 424.3853981633975,
+        "pegadas": {
+          "0": 442.75,
+          "90": 582.75,
+          "180": 442.75,
+          "270": 582.75
+        }
+      }
+    },
+    "320 cm · 4 mm (rolo largo)": {
+      "camiseta": {
+        "nome": "camiseta",
+        "largura": 56,
+        "altura": 70,
+        "areaVerdadeira": 2856.1537407407404,
+        "perimetro": 245.27041680433808,
+        "areaDaTela": 2892.8,
+        "areaRaster": 2896.5888,
+        "areaEngordada": 2986.0864,
+        "engordadaIdealBM": 2894.1695015371456,
+        "engordadaIdealSteiner": 2905.3334878077517,
+        "pegadas": {
+          "0": 3237.8880000000004,
+          "90": 3074.9696000000004,
+          "180": 3237.8880000000004,
+          "270": 3074.9696000000004
+        }
+      },
+      "manga": {
+        "nome": "manga",
+        "largura": 46,
+        "altura": 30,
+        "areaVerdadeira": 1004.2515555555556,
+        "perimetro": 120.12964058757427,
+        "areaDaTela": 1023.2832000000001,
+        "areaRaster": 1025.536,
+        "areaEngordada": 1073.4592,
+        "engordadaIdealBM": 1026.8447934406422,
+        "engordadaIdealSteiner": 1028.403147379214,
+        "pegadas": {
+          "0": 1073.4592,
+          "90": 1073.4592,
+          "180": 1073.4592,
+          "270": 1073.4592
+        }
+      },
+      "gola": {
+        "nome": "gola",
+        "largura": 55,
+        "altura": 9,
+        "areaVerdadeira": 247.50000000000003,
+        "perimetro": 119.48559140186524,
+        "areaDaTela": 266.17440000000005,
+        "areaRaster": 266.54720000000003,
+        "areaEngordada": 308.1216,
+        "engordadaIdealBM": 258.7794553969614,
+        "engordadaIdealSteiner": 271.5227819865167,
+        "pegadas": {
+          "0": 308.1216,
+          "90": 393.8304,
+          "180": 308.1216,
+          "270": 393.8304
+        }
+      },
+      "calca": {
+        "nome": "calca",
+        "largura": 52,
+        "altura": 104,
+        "areaVerdadeira": 3006.3860666666674,
+        "perimetro": 269.7752190922249,
+        "areaDaTela": 3041.6896,
+        "areaRaster": 3041.6896,
+        "areaEngordada": 3134.8736000000004,
+        "engordadaIdealBM": 3045.385557827065,
+        "engordadaIdealSteiner": 3060.4667741912563,
+        "pegadas": {
+          "0": 3236.6592,
+          "90": 3134.8736000000004,
+          "180": 3236.6592,
+          "270": 3134.8736000000004
+        }
+      },
+      "regata": {
+        "nome": "regata",
+        "largura": 48,
+        "altura": 66,
+        "areaVerdadeira": 2132.3631999999993,
+        "perimetro": 219.09937642933528,
+        "areaDaTela": 2162.7648,
+        "areaRaster": 2172.5184,
+        "areaEngordada": 2252.5952,
+        "engordadaIdealBM": 2165.227871788625,
+        "engordadaIdealSteiner": 2176.30873899201,
+        "pegadas": {
+          "0": 2421.3504000000003,
+          "90": 2350.6944000000003,
+          "180": 2421.3504000000003,
+          "270": 2350.6944000000003
+        }
+      },
+      "bolso": {
+        "nome": "bolso",
+        "largura": 16,
+        "altura": 18,
+        "areaVerdadeira": 217.72799999999995,
+        "perimetro": 57.320997803806605,
+        "areaDaTela": 225.9456,
+        "areaRaster": 226.09920000000002,
+        "areaEngordada": 247.60320000000002,
+        "engordadaIdealBM": 228.31511817695818,
+        "engordadaIdealSteiner": 229.31786326690488,
+        "pegadas": {
+          "0": 247.60320000000002,
+          "90": 247.60320000000002,
+          "180": 247.60320000000002,
+          "270": 247.60320000000002
+        }
+      },
+      "punho": {
+        "nome": "punho",
+        "largura": 24,
+        "altura": 8,
+        "areaVerdadeira": 192,
+        "perimetro": 64,
+        "areaDaTela": 192,
+        "areaRaster": 192,
+        "areaEngordada": 212.8896,
+        "engordadaIdealBM": 201.94960010242986,
+        "engordadaIdealSteiner": 204.9256637061436,
+        "pegadas": {
+          "0": 212.8896,
+          "90": 212.8896,
+          "180": 212.8896,
+          "270": 212.8896
+        }
+      },
+      "uni-costa": {
+        "nome": "uni-costa",
+        "largura": 59.2,
+        "altura": 79.6,
+        "areaVerdadeira": 4260.101774874074,
+        "perimetro": 256.7771922863129,
+        "areaDaTela": 4280.192,
+        "areaRaster": 4284.928,
+        "areaEngordada": 4375.04,
+        "engordadaIdealBM": 4306.502277427244,
+        "engordadaIdealSteiner": 4311.58287703748,
+        "pegadas": {
+          "0": 4375.04,
+          "90": 4424.0896,
+          "180": 4375.04,
+          "270": 4424.0896
+        }
+      },
+      "uni-frente": {
+        "nome": "uni-frente",
+        "largura": 59.2,
+        "altura": 75.6,
+        "areaVerdadeira": 3996.6792252799996,
+        "perimetro": 258.47806977924586,
+        "areaDaTela": 4018.2016000000003,
+        "areaRaster": 4032.4096000000004,
+        "areaEngordada": 4124.5696,
+        "engordadaIdealBM": 4041.6262019395035,
+        "engordadaIdealSteiner": 4048.5005029419926,
+        "pegadas": {
+          "0": 4124.5696,
+          "90": 4235.8784000000005,
+          "180": 4124.5696,
+          "270": 4235.8784000000005
+        }
+      },
+      "uni-short": {
+        "nome": "uni-short",
+        "largura": 79.2,
+        "altura": 60.2,
+        "areaVerdadeira": 3974.96251152,
+        "perimetro": 265.4791382914809,
+        "areaDaTela": 3998.048,
+        "areaRaster": 4024.0128,
+        "areaEngordada": 4117.504,
+        "engordadaIdealBM": 4019.7875497622344,
+        "engordadaIdealSteiner": 4028.18400288444,
+        "pegadas": {
+          "0": 4148.428800000001,
+          "90": 4117.504,
+          "180": 4148.428800000001,
+          "270": 4117.504
+        }
+      },
+      "uni-manga": {
+        "nome": "uni-manga",
+        "largura": 49.2,
+        "altura": 27.2,
+        "areaVerdadeira": 1017.5953540800002,
+        "perimetro": 126.70169739503905,
+        "areaDaTela": 1033.0624,
+        "areaRaster": 1033.4208,
+        "areaEngordada": 1082.1632,
+        "engordadaIdealBM": 1040.3373661693993,
+        "engordadaIdealSteiner": 1043.0613572651516,
+        "pegadas": {
+          "0": 1082.1632,
+          "90": 1082.1632,
+          "180": 1082.1632,
+          "270": 1082.1632
+        }
+      },
+      "uni-gola": {
+        "nome": "uni-gola",
+        "largura": 57.2,
+        "altura": 7.2,
+        "areaVerdadeira": 411.84000000000003,
+        "perimetro": 128.8,
+        "areaDaTela": 411.84000000000003,
+        "areaRaster": 421.5808,
+        "areaEngordada": 463.36,
+        "engordadaIdealBM": 426.35362266329633,
+        "engordadaIdealSteiner": 437.7256637061436,
+        "pegadas": {
+          "0": 463.36,
+          "90": 463.36,
+          "180": 463.36,
+          "270": 463.36
+        }
+      },
+      "arte-partida": {
+        "nome": "arte-partida",
+        "largura": 30,
+        "altura": 20,
+        "areaVerdadeira": 367.20000000000005,
+        "perimetro": 112.80000000000001,
+        "areaDaTela": 375.8336,
+        "areaRaster": 378.7776,
+        "areaEngordada": 416.25600000000003,
+        "engordadaIdealBM": 380.91149645882064,
+        "engordadaIdealSteiner": 389.88566370614365,
+        "pegadas": {
+          "0": 416.25600000000003,
+          "90": 562.7904,
+          "180": 416.25600000000003,
+          "270": 562.7904
+        }
+      }
+    }
+  },
+  "trabalhos": {
+    "camiseta+manga+gola": {
+      "pecas": 32,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 40897.25481481481,
+      "lbArea": 255.6078425925926,
+      "lbBM": 264.8507347752972,
+      "lbModelo": 291.7577639751553
+    },
+    "so-camiseta": {
+      "pecas": 12,
+      "larguraTecido": 180,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 34273.84488888888,
+      "lbArea": 190.41024938271602,
+      "lbBM": 194.6904562406492,
+      "lbModelo": 219.75690607734808
+    },
+    "so-camiseta-avulsa": {
+      "pecas": 12,
+      "larguraTecido": 180,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 34273.84488888889,
+      "lbArea": 190.41024938271605,
+      "lbBM": 194.69045624064916,
+      "lbModelo": 219.75690607734808
+    },
+    "calca-bolso": {
+      "pecas": 24,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 27534.736533333336,
+      "lbArea": 172.09210333333334,
+      "lbBM": 177.56845228057486,
+      "lbModelo": 189.2111801242236
+    },
+    "misturado-pequeno": {
+      "pecas": 25,
+      "larguraTecido": 150,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 23756.47215555555,
+      "lbArea": 158.37648103703702,
+      "lbBM": 164.42030489704496,
+      "lbModelo": 181.06456953642385
+    },
+    "lote-grande": {
+      "pecas": 130,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 152504.1228444444,
+      "lbArea": 953.1507677777776,
+      "lbBM": 991.3444321633185,
+      "lbModelo": 1091.9316770186335
+    },
+    "producao-uniforme": {
+      "pecas": 175,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "somaArea": 466343.4182838519,
+      "lbArea": 2605.2704932058764,
+      "lbBM": 2632.64514128948,
+      "lbModelo": 2663.3458193979936
+    },
+    "arte-partida": {
+      "pecas": 14,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 4662.000000000001,
+      "lbArea": 29.137500000000006,
+      "lbBM": 30.827200683308472,
+      "lbModelo": 34.99689440993789
+    },
+    "quase-retangulo": {
+      "pecas": 50,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 10114.56,
+      "lbArea": 63.215999999999994,
+      "lbBM": 69.89253330082035,
+      "lbModelo": 73.96894409937889
+    },
+    "giro-livre": {
+      "pecas": 32,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 40897.25481481481,
+      "lbArea": 255.6078425925926,
+      "lbBM": 264.8507347752972,
+      "lbModelo": 282.42857142857144
+    },
+    "giro-fixo": {
+      "pecas": 32,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 40897.25481481481,
+      "lbArea": 255.6078425925926,
+      "lbBM": 264.8507347752972,
+      "lbModelo": 291.7577639751553
+    },
+    "tamanhos-extremos": {
+      "pecas": 48,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 26411.052400000004,
+      "lbArea": 165.06907750000002,
+      "lbBM": 173.42545209629074,
+      "lbModelo": 183.583850931677
+    },
+    "tiras": {
+      "pecas": 72,
+      "larguraTecido": 160,
+      "espaco": 1,
+      "passo": 0.5,
+      "raio": 1,
+      "somaArea": 17794.08,
+      "lbArea": 111.21300000000001,
+      "lbBM": 122.20279014654676,
+      "lbModelo": 137.35403726708074
+    },
+    "producao-avulsa": {
+      "pecas": 175,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "somaArea": 466343.4182838532,
+      "lbArea": 2605.2704932058837,
+      "lbBM": 2632.6451412894817,
+      "lbModelo": 2663.3458193979986
+    },
+    "pedido-uniforme": {
+      "pecas": 130,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "somaArea": 333325.1095118815,
+      "lbArea": 1862.1514497870473,
+      "lbBM": 1881.96768773826,
+      "lbModelo": 1903.0492753623193
+    },
+    "pedido-confeccao": {
+      "pecas": 64,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "somaArea": 81794.50962962963,
+      "lbArea": 456.952567763294,
+      "lbBM": 463.96018228007955,
+      "lbModelo": 495.78550724637694
+    },
+    "pedido-miudeza": {
+      "pecas": 82,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "somaArea": 58280.192533333335,
+      "lbArea": 325.5876677839851,
+      "lbBM": 331.66750290327184,
+      "lbModelo": 350.9971014492755
+    },
+    "producao-misturada": {
+      "pecas": 276,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "somaArea": 473399.8116748445,
+      "lbArea": 2644.691685334327,
+      "lbBM": 2678.3953729216114,
+      "lbModelo": 2750.631884057972
+    },
+    "lote-enorme": {
+      "pecas": 260,
+      "larguraTecido": 179,
+      "espaco": 0.4,
+      "passo": 0.2,
+      "raio": 1,
+      "somaArea": 666650.219023763,
+      "lbArea": 3724.3028995740947,
+      "lbBM": 3764.3353754765203,
+      "lbModelo": 3806.498550724639
+    }
+  }
+}
